@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { createBasePostgresOptions } from './typeorm-base.options';
 
 const requiredVariables = [
   'DATABASE_HOST',
@@ -16,13 +17,13 @@ for (const variable of requiredVariables) {
 }
 
 export default new DataSource({
-  type: 'postgres',
-  host: process.env.DATABASE_HOST,
-  port: Number(process.env.DATABASE_PORT),
-  database: process.env.DATABASE_NAME,
-  username: process.env.DATABASE_USER,
-  password: process.env.DATABASE_PASSWORD,
+  ...createBasePostgresOptions({
+    host: process.env.DATABASE_HOST as string,
+    port: Number(process.env.DATABASE_PORT),
+    name: process.env.DATABASE_NAME as string,
+    user: process.env.DATABASE_USER as string,
+    password: process.env.DATABASE_PASSWORD as string,
+  }),
   entities: [`${__dirname}/../**/*.entity{.ts,.js}`],
   migrations: [`${__dirname}/migrations/*{.ts,.js}`],
-  synchronize: false,
 });
