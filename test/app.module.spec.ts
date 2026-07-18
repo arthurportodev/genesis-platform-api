@@ -19,7 +19,12 @@ describe('AppModule', () => {
     const { AppModule } = await import('../src/app.module');
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(DataSource)
-      .useValue({ query: jest.fn() })
+      .useValue({
+        entityMetadatas: [],
+        getRepository: jest.fn(),
+        options: { type: 'postgres' },
+        query: jest.fn(),
+      })
       .compile();
 
     expect(moduleRef).toBeDefined();

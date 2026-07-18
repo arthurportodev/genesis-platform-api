@@ -13,6 +13,7 @@ ENV NODE_ENV=production
 RUN addgroup -S nodejs && adduser -S nestjs -G nodejs
 COPY --from=build --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=build --chown=nestjs:nodejs /app/scripts ./scripts
 COPY --from=build --chown=nestjs:nodejs /app/package.json ./package.json
 USER nestjs
 EXPOSE 3000
