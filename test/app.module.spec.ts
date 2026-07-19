@@ -13,6 +13,17 @@ describe('AppModule', () => {
     process.env.DATABASE_USER = 'genesis';
     process.env.DATABASE_PASSWORD = 'test-only';
     process.env.FRONTEND_URL = 'http://localhost:5173';
+    process.env.TRUST_PROXY_HOPS = '0';
+    process.env.JWT_ACCESS_SECRET =
+      'test-access-secret-that-is-at-least-32-characters';
+    process.env.JWT_ACCESS_EXPIRES_IN = '15m';
+    process.env.REFRESH_TOKEN_EXPIRES_IN_DAYS = '30';
+    process.env.REFRESH_TOKEN_PEPPER =
+      'test-refresh-pepper-that-is-at-least-32-characters';
+    process.env.AUTH_LOGIN_MAX_ATTEMPTS = '5';
+    process.env.AUTH_LOGIN_IP_MAX_ATTEMPTS = '25';
+    process.env.AUTH_LOGIN_MAX_BUCKETS = '10000';
+    process.env.AUTH_LOGIN_WINDOW_SECONDS = '900';
   });
 
   it('initializes the main module', async () => {

@@ -7,6 +7,10 @@ import { Organization } from '../../modules/organizations/entities/organization.
 import { OrganizationStatus } from '../../modules/organizations/enums/organization-status.enum';
 import { User } from '../../modules/users/entities/user.entity';
 import { UserStatus } from '../../modules/users/enums/user-status.enum';
+import {
+  hashPassword,
+  validatePasswordPolicy,
+} from '../../modules/auth/services/password.service';
 
 export interface SeedLogger {
   log(message: string): void;
@@ -16,9 +20,14 @@ export interface InitialTenantSeedResult {
   userCreated: boolean;
   organizationCreated: boolean;
   membershipCreated: boolean;
+  credentialCreated: boolean;
   userId: string;
   organizationId: string;
   membershipId: string;
+}
+
+export interface InitialTenantSeedOptions {
+  initialOwnerPassword?: string;
 }
 
 const INITIAL_USER_EMAIL = 'contato@agenciagenesismkt.com.br';
@@ -29,6 +38,7 @@ const INITIAL_ORGANIZATION_SLUG = 'agencia-genesis';
 export async function seedInitialTenant(
   connection: DataSource,
   logger: SeedLogger = console,
+  options: InitialTenantSeedOptions = {},
 ): Promise<InitialTenantSeedResult> {
   return connection.transaction(async (manager) => {
     const users = manager.getRepository(User);
@@ -36,7 +46,11 @@ export async function seedInitialTenant(
     const memberships = manager.getRepository(Membership);
     const normalizedEmail = INITIAL_USER_EMAIL.trim().toLowerCase();
 
-    let user = await users.findOneBy({ email: normalizedEmail });
+    let user = await users
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.email = :email', { email: normalizedEmail })
+      .getOne();
     let userCreated = false;
     if (user === null) {
       userCreated = true;
@@ -47,6 +61,22 @@ export async function seedInitialTenant(
           status: UserStatus.ACTIVE,
         }),
       );
+    }
+
+    let credentialCreated = false;
+    if (!user.passwordHash) {
+      const initialOwnerPassword =
+        options.initialOwnerPassword ?? process.env.INITIAL_OWNER_PASSWORD;
+      if (initialOwnerPassword === undefined) {
+        throw new Error(
+          'INITIAL_OWNER_PASSWORD is required to create the initial owner credential.',
+        );
+      }
+      validatePasswordPolicy(initialOwnerPassword);
+      user.passwordHash = await hashPassword(initialOwnerPassword);
+      user.passwordChangedAt = new Date();
+      user = await users.save(user);
+      credentialCreated = true;
     }
 
     let organization = await organizations.findOneBy({
@@ -85,6 +115,7 @@ export async function seedInitialTenant(
       userCreated,
       organizationCreated,
       membershipCreated,
+      credentialCreated,
       userId: user.id,
       organizationId: organization.id,
       membershipId: membership.id,
@@ -96,6 +127,7 @@ export async function seedInitialTenant(
         `User: ${userCreated ? 'created' : 'already existed'}.`,
         `Organization: ${organizationCreated ? 'created' : 'already existed'}.`,
         `Membership: ${membershipCreated ? 'created' : 'already existed'}.`,
+        `Credential: ${credentialCreated ? 'created' : 'already existed'}.`,
       ].join(' '),
     );
 

@@ -6,6 +6,7 @@ export interface AppConfig {
   version: string;
   port: number;
   frontendUrl: string;
+  trustProxyHops: number;
 }
 
 export default registerAs('app', (): AppConfig => ({
@@ -14,4 +15,5 @@ export default registerAs('app', (): AppConfig => ({
   version: process.env.APP_VERSION as string,
   port: Number(process.env.PORT ?? 3000),
   frontendUrl: process.env.FRONTEND_URL as string,
+  trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 0),
 }));

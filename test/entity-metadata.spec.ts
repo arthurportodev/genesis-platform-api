@@ -1,4 +1,8 @@
 import { getMetadataArgsStorage } from 'typeorm';
+import { AuthAuditLog } from '../src/modules/auth-sessions/entities/auth-audit-log.entity';
+import { AuthRefreshToken } from '../src/modules/auth-sessions/entities/auth-refresh-token.entity';
+import { AuthSession } from '../src/modules/auth-sessions/entities/auth-session.entity';
+import { AuthRefreshTokenStatus } from '../src/modules/auth-sessions/enums/auth-refresh-token-status.enum';
 import { Membership } from '../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../src/modules/memberships/enums/membership-role.enum';
 import { MembershipStatus } from '../src/modules/memberships/enums/membership-status.enum';
@@ -20,6 +24,15 @@ describe('Multi-tenant entity metadata', () => {
     expect(
       metadata.tables.find((table) => table.target === Membership)?.name,
     ).toBe('memberships');
+    expect(
+      metadata.tables.find((table) => table.target === AuthSession)?.name,
+    ).toBe('auth_sessions');
+    expect(
+      metadata.tables.find((table) => table.target === AuthRefreshToken)?.name,
+    ).toBe('auth_refresh_tokens');
+    expect(
+      metadata.tables.find((table) => table.target === AuthAuditLog)?.name,
+    ).toBe('auth_audit_logs');
 
     const membershipColumns = metadata.columns
       .filter((column) => column.target === Membership)
@@ -37,6 +50,35 @@ describe('Multi-tenant entity metadata', () => {
     );
   });
 
+  it('keeps password and refresh hashes out of default selections', () => {
+    const passwordHash = metadata.columns.find(
+      (column) =>
+        column.target === User && column.propertyName === 'passwordHash',
+    );
+    const refreshTokenHash = metadata.columns.find(
+      (column) =>
+        column.target === AuthRefreshToken &&
+        column.propertyName === 'tokenHash',
+    );
+
+    expect(passwordHash?.options).toMatchObject({
+      name: 'password_hash',
+      nullable: true,
+      select: false,
+    });
+    expect(refreshTokenHash?.options).toMatchObject({
+      name: 'token_hash',
+      select: false,
+    });
+    expect(
+      metadata.columns.find(
+        (column) =>
+          column.target === AuthSession &&
+          column.propertyName === 'refreshTokenHash',
+      ),
+    ).toBeUndefined();
+  });
+
   it('declares unique and query indexes', () => {
     const userIndexes = metadata.indices.filter(
       (index) => index.target === User,
@@ -46,6 +88,9 @@ describe('Multi-tenant entity metadata', () => {
     );
     const membershipIndexes = metadata.indices.filter(
       (index) => index.target === Membership,
+    );
+    const refreshTokenIndexes = metadata.indices.filter(
+      (index) => index.target === AuthRefreshToken,
     );
 
     expect(userIndexes).toEqual(
@@ -67,6 +112,17 @@ describe('Multi-tenant entity metadata', () => {
         'IDX_memberships_user_id',
         'IDX_memberships_organization_id',
         'IDX_memberships_organization_status',
+      ]),
+    );
+    expect(refreshTokenIndexes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'UQ_auth_refresh_tokens_token_hash',
+          unique: true,
+        }),
+        expect.objectContaining({ name: 'IDX_auth_refresh_tokens_session_id' }),
+        expect.objectContaining({ name: 'IDX_auth_refresh_tokens_status' }),
+        expect.objectContaining({ name: 'IDX_auth_refresh_tokens_expires_at' }),
       ]),
     );
   });
@@ -96,11 +152,39 @@ describe('Multi-tenant entity metadata', () => {
     });
   });
 
+  it('declares required, non-eager refresh-token relations', () => {
+    const relations = metadata.relations.filter(
+      (relation) => relation.target === AuthRefreshToken,
+    );
+    const sessionRelation = relations.find(
+      (relation) => relation.propertyName === 'session',
+    );
+    const replacementRelation = relations.find(
+      (relation) => relation.propertyName === 'replacedByToken',
+    );
+
+    expect(sessionRelation?.options).toMatchObject({
+      nullable: false,
+      eager: false,
+      onDelete: 'RESTRICT',
+    });
+    expect(replacementRelation?.options).toMatchObject({
+      nullable: true,
+      eager: false,
+      onDelete: 'SET NULL',
+    });
+  });
+
   it('exports the expected status and role values', () => {
     expect(Object.values(UserStatus)).toEqual(['active', 'inactive']);
     expect(Object.values(OrganizationStatus)).toEqual(['active', 'inactive']);
     expect(Object.values(MembershipStatus)).toEqual(['active', 'inactive']);
     expect(Object.values(MembershipRole)).toEqual(['owner', 'admin', 'member']);
+    expect(Object.values(AuthRefreshTokenStatus)).toEqual([
+      'active',
+      'consumed',
+      'revoked',
+    ]);
   });
 
   it('normalizes user and organization identifiers', () => {
