@@ -6,8 +6,9 @@
 - **Última tarefa de governança concluída:** 0.2.2.3 — Proteção da main e CI obrigatório
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Próxima funcionalidade:** 0.2.3 — Organização ativa e contexto de tenant
-- **Depois:** 0.2.4 — Autorização por papel; 0.2.5 — Convites e gestão de membros
+- **Tarefa funcional em andamento:** 0.2.3 — Organização ativa e contexto de tenant
+- **Próxima tarefa após a conclusão:** 0.2.4 — Autorização por papel
+- **Depois:** 0.2.5 — Convites e gestão de membros
 
 ## Implementado
 
@@ -18,6 +19,14 @@
 - Autenticação por email e senha, sessões persistidas, refresh rotativo e auditoria.
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
 - Testes unitários, E2E e de integração; CI com build Docker.
+
+### Tenant context em implementação
+
+- `TenantContextModule` resolve organização e membership ativas a cada request tenant-scoped.
+- `TenantContextGuard` recebe `X-Organization-Id` após o `AccessTokenGuard` e anexa contexto tipado à request.
+- `TenantContext` contém `userId`, `organizationId`, `membershipId` e papel lido da membership persistida.
+- `CurrentTenant` disponibiliza o contexto validado a controllers tenant-scoped futuros.
+- Não há guard global, endpoint tenant-scoped de produção ou autorização por papel nesta tarefa.
 
 ### Endpoints
 
@@ -47,13 +56,13 @@ Tabelas da aplicação: `users`, `organizations`, `memberships`, `auth_sessions`
 - Migrations são a fonte de verdade do schema.
 - JWT contém usuário e sessão, sem organização ou papel.
 - Sessão e histórico de refresh tokens persistem no PostgreSQL.
-- O contexto planejado de organização será informado por `X-Organization-Id` e validado no backend; implementação pendente na tarefa 0.2.3.
+- O contexto em implementação recebe `X-Organization-Id`, valida organização e membership ativas no banco e não adiciona tenant ou papel ao JWT.
 
 Consulte os [ADRs](decisions/README.md).
 
 ## Limitações conhecidas
 
-- Organização ativa, tenant context e proteção por `organization_id` ainda não existem.
+- Entidades comerciais tenant-scoped com `organization_id` ainda não existem.
 - Autorização por papel e invariantes de membros ainda não existem.
 - Refresh token é retornado em JSON; cookie `HttpOnly` não foi decidido/implementado.
 - Rate limiter é local, não distribuído e perde estado ao reiniciar.

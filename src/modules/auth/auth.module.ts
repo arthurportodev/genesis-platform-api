@@ -6,7 +6,11 @@ import { AuthSession } from '../auth-sessions/entities/auth-session.entity';
 import { User } from '../users/entities/user.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { AccessTokenGuard } from './guards/access-token.guard';
+import {
+  ACCESS_TOKEN_AUTHENTICATOR,
+  AccessTokenGuard,
+  DatabaseAccessTokenAuthenticator,
+} from './guards/access-token.guard';
 import { AuthAuditService } from './services/auth-audit.service';
 import { InMemoryLoginRateLimiter } from './services/in-memory-login-rate-limiter.service';
 import { LoginRateLimiter } from './services/login-rate-limiter.port';
@@ -25,11 +29,17 @@ import { TokenService } from './services/token.service';
     AuthAuditService,
     PasswordService,
     TokenService,
+    DatabaseAccessTokenAuthenticator,
+    {
+      provide: ACCESS_TOKEN_AUTHENTICATOR,
+      useExisting: DatabaseAccessTokenAuthenticator,
+    },
     AccessTokenGuard,
     {
       provide: LoginRateLimiter,
       useClass: InMemoryLoginRateLimiter,
     },
   ],
+  exports: [ACCESS_TOKEN_AUTHENTICATOR, AccessTokenGuard],
 })
 export class AuthModule {}

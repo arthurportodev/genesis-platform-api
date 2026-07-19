@@ -5,6 +5,7 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { TenantContextModule } from './modules/tenant-context/tenant-context.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -16,6 +17,7 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
     OrganizationsModule,
     MembershipsModule,
+    TenantContextModule,
   ],
 })
 export class AppModule {}

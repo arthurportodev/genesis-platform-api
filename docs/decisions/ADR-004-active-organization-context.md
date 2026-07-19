@@ -1,6 +1,6 @@
 # ADR-004 — Contexto de organização ativa
 
-- **Status:** Accepted — implementation pending task 0.2.3
+- **Status:** Accepted — implementation in progress (task 0.2.3)
 - **Data:** 2026-07-19
 
 ## Contexto
@@ -38,4 +38,8 @@ Um user pode participar de várias organizações. Requests de negócio precisar
 
 ## Implementação
 
-**Não implementado.** Não existem hoje header parser, tenant guard, contexto tipado de organização, decorators ou endpoints tenant-scoped. Este ADR orienta a tarefa 0.2.3 e não prova a existência desses componentes.
+**Em andamento.** A branch da tarefa 0.2.3 contém `TenantContextModule`, `TenantContextService`, `TenantContextGuard`, os tipos de contexto/request e o decorator `CurrentTenant`. O `AccessTokenGuard` continua responsável somente pela autenticação e é executado antes do guard de tenant.
+
+O serviço consulta membership e organização ativas em uma operação lógica; o guard valida o header antes do PostgreSQL e usa respostas genéricas. Os testes usam um controller de prova exclusivo de `test/`; nenhum endpoint tenant-scoped foi adicionado à aplicação de produção.
+
+A implementação não está marcada como concluída antes de revisão e merge. Autorização por papel, entidades comerciais tenant-scoped e invariantes de membros permanecem fora deste ADR implementado na tarefa atual.

@@ -57,12 +57,22 @@
 - O histórico deve permanecer linear; force push e exclusão da `main` são bloqueados.
 - Não há bypass permanente configurado para usuário, administrador, aplicação ou time.
 
+## Contexto de organização ativa
+
+- Requests tenant-scoped validam organização e membership ativas no PostgreSQL a cada acesso.
+- `userId` vem do access token validado; `organizationId`, exclusivamente do header `X-Organization-Id` validado como UUID v4.
+- `membershipId` e papel vêm da membership persistida e refletem alterações na request seguinte.
+- Organização inexistente/inativa e membership ausente/inativa usam a mesma negação genérica, sem revelar a causa.
+- Tenant, membership e papel permanecem fora do JWT, da sessão e do user.
+- O contexto não é aceito de body, query ou cookie e não é registrado integralmente em logs.
+- A infraestrutura está em implementação e ainda não há entidades comerciais com `organization_id`.
+
 ## Limitações e decisões abertas
 
 - Refresh token ainda é retornado em JSON; cookie `HttpOnly` não foi implementado.
 - Rate limiter não é distribuído; uma solução compartilhada será necessária com múltiplas réplicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.
 - Rotação operacional de segredos não foi definida.
-- Proteção tenant-scoped por `organization_id` ainda não foi implementada.
+- Entidades comerciais tenant-scoped e seus filtros por `organization_id` ainda não foram implementados.
 - PostgreSQL RLS é possibilidade futura, não uma proteção existente.
 - Recuperação de senha, confirmação de email, MFA e controles de produção não fazem parte do estágio atual.

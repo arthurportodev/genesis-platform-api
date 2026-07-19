@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -11,18 +12,23 @@ import { AuthSessionStatus } from '../../auth-sessions/enums/auth-session-status
 import { UserStatus } from '../../users/enums/user-status.enum';
 import { TokenService } from '../services/token.service';
 import { AuthenticatedRequest } from '../types/auth-request.type';
+import { AuthenticatedUser } from '../types/authenticated-user.type';
+
+export const ACCESS_TOKEN_AUTHENTICATOR = Symbol('ACCESS_TOKEN_AUTHENTICATOR');
+
+export interface AccessTokenAuthenticator {
+  authenticate(token: string): Promise<AuthenticatedUser>;
+}
 
 @Injectable()
-export class AccessTokenGuard implements CanActivate {
+export class DatabaseAccessTokenAuthenticator implements AccessTokenAuthenticator {
   constructor(
     private readonly tokenService: TokenService,
     @InjectRepository(AuthSession)
     private readonly sessions: Repository<AuthSession>,
   ) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const token = this.extractBearerToken(request.headers.authorization);
+  async authenticate(token: string): Promise<AuthenticatedUser> {
     const payload = await this.tokenService.verifyAccessToken(token);
     const session = await this.sessions
       .createQueryBuilder('session')
@@ -40,7 +46,21 @@ export class AccessTokenGuard implements CanActivate {
       throw new UnauthorizedException('Invalid access token.');
     }
 
-    request.user = { userId: payload.sub, sessionId: payload.sessionId };
+    return { userId: payload.sub, sessionId: payload.sessionId };
+  }
+}
+
+@Injectable()
+export class AccessTokenGuard implements CanActivate {
+  constructor(
+    @Inject(ACCESS_TOKEN_AUTHENTICATOR)
+    private readonly authenticator: AccessTokenAuthenticator,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const token = this.extractBearerToken(request.headers.authorization);
+    request.user = await this.authenticator.authenticate(token);
     return true;
   }
 
