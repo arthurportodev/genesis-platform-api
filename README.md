@@ -104,7 +104,36 @@ npm run test:e2e
 npm run test:integration
 ```
 
-Os testes unitários e e2e usam mocks da conexão, portanto não precisam de credenciais nem de um banco real.
+Os testes unitários e o E2E de health check usam mocks da conexão. O E2E de
+autenticação e os testes de integração usam exclusivamente um PostgreSQL
+descartável cujo nome termina em `_test`.
+
+Para reproduzir localmente as mesmas verificações do CI:
+
+```bash
+npm ci
+npm run test:db:up
+npm run format:check
+npm run lint
+npm run build
+npm run test -- --runInBand
+npm run test:e2e -- --runInBand
+npm run test:integration
+docker build --tag genesis-platform-api:ci .
+npm run test:db:down
+```
+
+## Integração contínua
+
+O workflow `CI`, em `.github/workflows/ci.yml`, é executado em Pull Requests
+destinados à `main`, pushes na `main` e por acionamento manual. Ele utiliza
+Node.js 24, cache do npm, instalação limpa com `npm ci` e um service container
+PostgreSQL 17 temporário para executar formatação, lint, build, testes unitários,
+E2E, integração e o build da imagem de produção.
+
+O banco do CI é descartável, não possui volume persistente e utiliza somente
+credenciais de teste. O workflow tem permissão apenas de leitura do conteúdo do
+repositório e não executa seed do proprietário, publicação de imagem ou deploy.
 
 ## Migrations
 
