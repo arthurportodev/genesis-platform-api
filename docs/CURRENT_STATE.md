@@ -2,10 +2,9 @@
 
 - **Última atualização:** 2026-07-19
 - **Fase:** 0.2 — Identidade e multi-tenancy
-- **Última tarefa concluída:** 0.2.2.1 — GitHub Actions CI
-- **Último PR mesclado:** PR #3 — `ci: add backend validation workflow`
-- **CI da `main`:** aprovado; run `29684969945`
-- **Em andamento:** 0.2.2.2 — Memória, documentação e continuidade
+- **Última tarefa funcional concluída:** 0.2.2.1 — GitHub Actions CI
+- **Tarefa documental desta entrega:** 0.2.2.2 — Memória, documentação e continuidade (PR #4)
+- **CI da `main`:** aprovado
 - **Próxima funcionalidade:** 0.2.3 — Organização ativa e contexto de tenant
 - **Depois:** 0.2.4 — Autorização por papel; 0.2.5 — Convites e gestão de membros
 

@@ -38,7 +38,10 @@
 
 ## 0.2.2.2 — Memória e continuidade
 
-**Em andamento na branch `docs/project-continuity`.**
+**Concluído no PR #4.**
 
-- Criação da memória oficial, protocolo de reidratação, documentação arquitetural, segurança, roadmap, histórico, ADRs e template de Pull Request.
-- Nenhuma funcionalidade de produto faz parte desta tarefa.
+- Memória oficial e protocolo de reidratação em `AGENTS.md` e `docs/START_HERE.md`.
+- Estado, roadmap, arquitetura, domínio, segurança, fluxo de desenvolvimento e histórico documentados.
+- Índice de decisões e ADR-001 a ADR-004 criados.
+- Template de Pull Request criado para revisar escopo, testes, segurança e continuidade.
+- Nenhuma funcionalidade de produto, migration, endpoint ou tabela foi alterada.

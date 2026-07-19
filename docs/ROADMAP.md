@@ -11,7 +11,7 @@ Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado
 - ✅ 0.2.1 — Núcleo multi-tenant
 - ✅ 0.2.2 — Autenticação e sessões
 - ✅ 0.2.2.1 — GitHub Actions CI
-- 🚧 0.2.2.2 — Memória, documentação e continuidade
+- ✅ 0.2.2.2 — Memória, documentação e continuidade
 - ⬜ 0.2.3 — Organização ativa e contexto de tenant
 - ⬜ 0.2.4 — Autorização por papel
 - ⬜ 0.2.5 — Convites e gestão de membros
