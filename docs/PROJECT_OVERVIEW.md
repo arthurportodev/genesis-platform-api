@@ -20,9 +20,9 @@ Operações comerciais costumam distribuir leads, atividades, comunicação, aco
 
 **Implementado:** fundação NestJS, PostgreSQL e Docker; usuário global, organizações e memberships com papéis persistidos no vínculo; autenticação e sessões; auditoria; seleção da organização ativa por request; tenant context tipado com `userId`, `organizationId`, `membershipId` e `role`; testes e CI.
 
-Requests tenant-scoped selecionam a organização por `X-Organization-Id`; o backend valida organization e membership ativas no PostgreSQL. O tenant context identifica o acesso validado à organização, enquanto a autorização por papel futura decidirá quais ações esse contexto poderá executar. Os papéis existem na membership e no contexto, mas ainda não são aplicados por `RoleGuard` ou mecanismo equivalente.
+Requests tenant-scoped selecionam a organização por `X-Organization-Id`; o backend valida organization e membership ativas no PostgreSQL. A branch da tarefa 0.2.4 adiciona, ainda em revisão, autorização genérica por listas explícitas de papéis sobre o `TenantContext`, sem nova consulta ao banco.
 
-**Ainda não implementado:** autorização por papel e permissions, proteção do último owner, convites, gestão de membros, entidades comerciais tenant-scoped, frontend, deploy, integrações externas e módulos comerciais. Também não existe endpoint tenant-scoped de produção.
+**Ainda não implementado:** matriz real de capacidades, permissions, proteção do último owner, convites, gestão de membros, entidades comerciais tenant-scoped, frontend, deploy, integrações externas e módulos comerciais. Também não existe endpoint tenant-scoped de produção; a infraestrutura de autorização da branch ainda não foi revisada ou mesclada.
 
 O estágio atual valida identidade, persistência e acesso à organização ativa, mas ainda não é um CRM utilizável em produção.
 
