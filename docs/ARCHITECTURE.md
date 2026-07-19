@@ -26,6 +26,7 @@ flowchart LR
 - `MembershipsModule`: registra o vínculo e o papel por organização.
 - `AuthSessionsModule`: registra sessões, refresh tokens e auditoria.
 - `AuthModule`: login, refresh, logout, usuário atual, tokens, guard, auditoria e rate limit.
+- `TenantContextModule`: em implementação; valida organização e membership para requests tenant-scoped e fornece contexto tipado.
 
 Os módulos de users, organizations e memberships ainda não têm controllers ou serviços de CRUD.
 
@@ -70,14 +71,40 @@ sequenceDiagram
 
 Mais detalhes estão no [ADR-003](decisions/ADR-003-authentication-sessions.md) e em [SECURITY.md](SECURITY.md).
 
-## Contexto de tenant planejado
+### Fronteiras modulares dos guards
 
-**Aceito, mas ainda não implementado:** o frontend enviará `X-Organization-Id`; o backend validará organização e membership ativas e criará contexto tipado com `userId`, `organizationId`, `membershipId` e `role`. Requests tenant-scoped dependerão desse contexto.
+Quando um controller de outro módulo referencia um guard por classe com `@UseGuards(...)`, o NestJS precisa resolver as dependências desse guard no contexto do módulo consumidor. Para permitir essa composição natural sem tornar implementações internas públicas, os módulos exportam guards e portas opacas mínimas:
 
-O JWT não armazenará a organização ativa. Autorização por papel e o invariante de último owner são tarefas posteriores. Hoje não existem header parser, tenant guard, decorator ou contexto de organização. Consulte o [ADR-004](decisions/ADR-004-active-organization-context.md).
+- O `AuthModule` exporta `AccessTokenGuard` e `ACCESS_TOKEN_AUTHENTICATOR`. O guard depende dessa porta, associada por `useExisting` à implementação privada `DatabaseAccessTokenAuthenticator`; `TokenService` e repositories permanecem privados.
+- O `TenantContextModule` exporta `TenantContextGuard` e `TENANT_CONTEXT_RESOLVER`. O guard depende dessa porta, associada por `useExisting` à implementação privada `TenantContextService`; o service e repositories permanecem privados.
+
+`useExisting` preserva uma única instância de cada implementação concreta. As portas expõem somente as capacidades necessárias aos guards, evitam factories, overrides ou manipulação de metadata nos módulos consumidores e não alteram as regras de autenticação ou tenant context.
+
+## Contexto de tenant em implementação
+
+Rotas tenant-scoped usarão `@UseGuards(AccessTokenGuard, TenantContextGuard)`. O primeiro guard autentica user e sessão; o segundo valida `X-Organization-Id`, consulta a membership e anexa `TenantContext` à request. O decorator `CurrentTenant` entrega esse contexto ao controller.
+
+```mermaid
+flowchart LR
+    Request["Request com access token e X-Organization-Id"] --> Auth["AccessTokenGuard"]
+    Auth --> Tenant["TenantContextGuard"]
+    Tenant --> Membership["Membership ativa"]
+    Membership --> Organization["Organization ativa"]
+    Organization --> Context["TenantContext na request"]
+```
+
+- `userId`: vem exclusivamente do access token já validado.
+- `organizationId`: vem exclusivamente do header UUID v4 validado.
+- `membershipId` e `role`: vêm da membership persistida.
+- Header ausente ou malformado resulta em `400`; autenticação ausente resulta em `401`; acesso não disponível resulta em `403` genérico.
+- A validação não é global: rotas públicas e apenas autenticadas continuam sem exigir o header.
+- Não há organização ou papel no JWT, autorização por papel, cache ou endpoint tenant-scoped de produção.
+
+Consulte o [ADR-004](decisions/ADR-004-active-organization-context.md).
 
 ## Fronteiras
 
 - **Implementado:** identidade, persistência multi-tenant básica, autenticação, sessões, auditoria e CI.
-- **Planejado:** tenant context, autorização, membros e módulos comerciais.
+- **Em implementação:** seleção da organização ativa e contexto de tenant por request.
+- **Planejado:** autorização por papel, membros e módulos comerciais.
 - **Fora do estágio atual:** frontend, integrações, deploy e microservices.

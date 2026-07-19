@@ -1,80 +1,85 @@
-import { ExecutionContext } from '@nestjs/common';
-import { Repository } from 'typeorm';
-import { AuthSession } from '../src/modules/auth-sessions/entities/auth-session.entity';
-import { AuthSessionStatus } from '../src/modules/auth-sessions/enums/auth-session-status.enum';
-import { AccessTokenGuard } from '../src/modules/auth/guards/access-token.guard';
-import { TokenService } from '../src/modules/auth/services/token.service';
-import { UserStatus } from '../src/modules/users/enums/user-status.enum';
+import { UnauthorizedException } from '@nestjs/common';
+import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
+import {
+  AccessTokenAuthenticator,
+  AccessTokenGuard,
+} from '../src/modules/auth/guards/access-token.guard';
+import { AuthenticatedRequest } from '../src/modules/auth/types/auth-request.type';
+import { AuthenticatedUser } from '../src/modules/auth/types/authenticated-user.type';
 
 describe('AccessTokenGuard', () => {
-  const request: { headers: { authorization?: string }; user?: unknown } = {
+  const authenticatedUser: AuthenticatedUser = {
+    userId: 'user-id',
+    sessionId: 'session-id',
+  };
+  const request: Pick<AuthenticatedRequest, 'headers' | 'user'> = {
     headers: { authorization: 'Bearer signed-token' },
+    user: authenticatedUser,
   };
-  const context = {
-    switchToHttp: () => ({ getRequest: () => request }),
-  } as unknown as ExecutionContext;
-  const getOne = jest.fn();
-  const queryBuilder = {
-    innerJoinAndSelect: jest.fn(),
-    where: jest.fn(),
-    andWhere: jest.fn(),
-    getOne,
+  const executionContext = new ExecutionContextHost([request]);
+  const authenticate = jest.fn<
+    ReturnType<AccessTokenAuthenticator['authenticate']>,
+    Parameters<AccessTokenAuthenticator['authenticate']>
+  >();
+  const authenticator: jest.Mocked<AccessTokenAuthenticator> = {
+    authenticate,
   };
-  queryBuilder.innerJoinAndSelect.mockReturnValue(queryBuilder);
-  queryBuilder.where.mockReturnValue(queryBuilder);
-  queryBuilder.andWhere.mockReturnValue(queryBuilder);
-  const sessions = {
-    createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
-  } as unknown as Repository<AuthSession>;
-  const tokenService = {
-    verifyAccessToken: jest.fn().mockResolvedValue({
-      sub: 'user-id',
-      sessionId: 'session-id',
-      type: 'access',
-    }),
-  } as unknown as TokenService;
-  const guard = new AccessTokenGuard(tokenService, sessions);
+  const guard = new AccessTokenGuard(authenticator);
 
   beforeEach(() => {
     jest.clearAllMocks();
-    request.headers.authorization = 'Bearer signed-token';
-    delete request.user;
+    request.headers = { authorization: 'Bearer signed-token' };
+    request.user = authenticatedUser;
   });
 
-  it('attaches typed user and session identifiers for an active session', async () => {
-    getOne.mockResolvedValueOnce({
-      status: AuthSessionStatus.ACTIVE,
-      expiresAt: new Date(Date.now() + 60_000),
-      user: { status: UserStatus.ACTIVE },
-    });
+  it.each([
+    ['missing', undefined],
+    ['without a bearer scheme', 'signed-token'],
+    ['using a different scheme', 'Basic signed-token'],
+    ['without a token', 'Bearer'],
+    ['containing extra content', 'Bearer signed-token extra'],
+  ])('rejects an authorization header %s', async (_case, authorization) => {
+    request.headers.authorization = authorization;
 
-    await expect(guard.canActivate(context)).resolves.toBe(true);
+    await expect(guard.canActivate(executionContext)).rejects.toThrow(
+      new UnauthorizedException('Invalid access token.'),
+    );
+    expect(authenticate).not.toHaveBeenCalled();
+  });
+
+  it('passes the exact bearer token to the authenticator', async () => {
+    authenticate.mockResolvedValueOnce(authenticatedUser);
+
+    await guard.canActivate(executionContext);
+
+    expect(authenticate).toHaveBeenCalledTimes(1);
+    expect(authenticate).toHaveBeenCalledWith('signed-token');
+  });
+
+  it('propagates the generic authentication failure', async () => {
+    const authenticationError = new UnauthorizedException(
+      'Invalid access token.',
+    );
+    authenticate.mockRejectedValueOnce(authenticationError);
+
+    await expect(guard.canActivate(executionContext)).rejects.toBe(
+      authenticationError,
+    );
+    expect(authenticate).toHaveBeenCalledWith('signed-token');
+  });
+
+  it('attaches only the authenticated identity and returns true', async () => {
+    authenticate.mockResolvedValueOnce(authenticatedUser);
+
+    await expect(guard.canActivate(executionContext)).resolves.toBe(true);
+
     expect(request.user).toEqual({
       userId: 'user-id',
       sessionId: 'session-id',
     });
-  });
-
-  it.each([
-    {
-      status: AuthSessionStatus.REVOKED,
-      expiresAt: new Date(Date.now() + 60_000),
-      user: { status: UserStatus.ACTIVE },
-    },
-    {
-      status: AuthSessionStatus.ACTIVE,
-      expiresAt: new Date(Date.now() - 60_000),
-      user: { status: UserStatus.ACTIVE },
-    },
-    {
-      status: AuthSessionStatus.ACTIVE,
-      expiresAt: new Date(Date.now() + 60_000),
-      user: { status: UserStatus.INACTIVE },
-    },
-  ])('rejects unavailable sessions', async (session) => {
-    getOne.mockResolvedValueOnce(session);
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      'Invalid access token.',
-    );
+    expect(request.user).not.toHaveProperty('organizationId');
+    expect(request.user).not.toHaveProperty('membershipId');
+    expect(request.user).not.toHaveProperty('role');
+    expect(request.user).not.toHaveProperty('permissions');
   });
 });

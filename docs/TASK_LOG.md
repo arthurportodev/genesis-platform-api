@@ -57,3 +57,15 @@
 - Force push e exclusão da `main` bloqueados.
 - Nenhum bypass permanente configurado.
 - Nenhuma funcionalidade de produto foi alterada.
+
+## 0.2.3 — Organização ativa e contexto de tenant
+
+**Em andamento.**
+
+- Infraestrutura tipada de `TenantContext` por request tenant-scoped.
+- Validação de `X-Organization-Id`, organização ativa e membership ativa.
+- Papel e membership obtidos do PostgreSQL a cada request.
+- Guards separados para autenticação e contexto de tenant.
+- Decorator `CurrentTenant` para controllers tenant-scoped futuros.
+- Testes unitários, de integração e E2E em desenvolvimento.
+- Sem endpoint tenant-scoped de produção, migration ou autorização por papel.

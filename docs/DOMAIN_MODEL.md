@@ -21,7 +21,7 @@ Este documento resume conceitos implementados; as migrations são a fonte do sch
 - **Relações:** possui memberships.
 - **Status:** `active` ou `inactive`.
 - **Constraints:** slug globalmente único em formato minúsculo adequado para URL; nome válido.
-- **Escopo:** raiz do tenant, mas ainda não existe organização ativa por request.
+- **Escopo:** raiz do tenant, selecionada por request pela infraestrutura em implementação.
 
 ## Membership
 
@@ -63,6 +63,15 @@ Este documento resume conceitos implementados; as migrations são a fonte do sch
 - **Relações:** referências opcionais usam `ON DELETE SET NULL` no schema.
 - **Sensível:** metadata é sanitizada e excluída da serialização padrão.
 
+## TenantContext
+
+- **Propósito:** representar, durante uma única request, o acesso validado do user a uma organização ativa.
+- **Natureza:** conceito tipado de request; não é entidade, tabela ou estado persistido.
+- **Campos:** `userId`, `organizationId`, `membershipId` e `role`.
+- **Origem:** user autenticado, header UUID v4 validado e membership atual consultada no PostgreSQL.
+- **Ciclo de vida:** criado pelo `TenantContextGuard` para cada request tenant-scoped e acessado por `CurrentTenant`.
+- **Limite:** não concede autorização por papel e não é armazenado em JWT, sessão ou user.
+
 ## Regra para entidades futuras
 
-Entidades de negócio tenant-scoped deverão conter `organization_id` e depender do contexto validado. Essa regra é arquitetural; tais entidades e o contexto ainda não foram implementados.
+Entidades de negócio tenant-scoped deverão conter `organization_id` e depender do contexto validado. Essa regra é arquitetural; tais entidades ainda não foram implementadas, e a infraestrutura de contexto está em andamento na tarefa 0.2.3.
