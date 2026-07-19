@@ -1,6 +1,6 @@
 # Genesis Platform API
 
-Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant e autenticação com sessões persistidas. A seleção da organização ativa e a autorização por papel continuam fora do escopo.
+Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas e contexto de organização ativa por request. A autorização por papel permanece planejada.
 
 ## Documentação do projeto
 
@@ -204,6 +204,14 @@ Status disponíveis para usuários, organizações e memberships:
 
 Todas as tabelas usam UUID gerado pelo PostgreSQL, `created_at` e `updated_at` com timezone. As foreign keys de membership utilizam `RESTRICT`: usuários ou organizações com vínculos não são removidos acidentalmente. O fluxo futuro deve priorizar desativação por status.
 
+## Contexto de organização ativa
+
+Requests tenant-scoped usam `X-Organization-Id` após a autenticação. O backend valida no PostgreSQL, a cada request, que a organization e a membership do usuário estão ativas e anexa um contexto tipado com `userId`, `organizationId`, `membershipId` e `role`. O identificador da membership e o papel vêm exclusivamente do banco.
+
+Autenticação e tenant context usam guards separados. JWT e sessão permanecem sem tenant ou papel, e a aplicação ainda não expõe endpoint tenant-scoped de produção. Autorização por papel será tratada na tarefa planejada 0.2.4.
+
+Consulte o [estado atual](docs/CURRENT_STATE.md), a [arquitetura](docs/ARCHITECTURE.md), os [controles de segurança](docs/SECURITY.md) e o [ADR-004](docs/decisions/ADR-004-active-organization-context.md).
+
 ## Seed inicial
 
 Após aplicar as migrations, execute manualmente. Na primeira execução, forneça a senha somente ao processo do seed, sem gravá-la no `.env` nem mantê-la no ambiente permanente da API:
@@ -339,10 +347,11 @@ src/
     ├── auth-sessions/
     ├── memberships/
     ├── organizations/
+    ├── tenant-context/
     └── users/
 ```
 
-Não existem controllers, services vazios, DTOs ou repositórios genéricos para esses módulos. Esta etapa implementa somente persistência.
+Os módulos de users, organizations e memberships ainda não expõem CRUD. A infraestrutura de tenant context não adiciona endpoint tenant-scoped de produção.
 
 ## Decisões técnicas
 
@@ -355,7 +364,7 @@ Não existem controllers, services vazios, DTOs ou repositórios genéricos para
 - **Exclusão conservadora:** FKs `RESTRICT` impedem que exclusões de user/organization removam silenciosamente memberships ou entidades do outro lado.
 - **Credenciais:** senhas usam Argon2id; refresh tokens usam HMAC-SHA-256 com pepper e rotação transacional.
 - **Sessões persistidas:** access tokens só são aceitos quando usuário e sessão continuam ativos no PostgreSQL.
-- **Escopo do token:** organização ativa e autorização por papel serão adicionadas somente em tarefas futuras.
+- **Escopo do token:** JWT e sessão permanecem sem tenant ou papel; a organização ativa é selecionada por request, e autorização por papel continua planejada para a tarefa 0.2.4.
 - **Swagger adiado:** será mais útil quando existirem endpoints de negócio e seus DTOs.
 
 ## Problemas comuns
@@ -368,4 +377,4 @@ Não existem controllers, services vazios, DTOs ou repositórios genéricos para
 
 ## Próximos módulos previstos
 
-Em tarefas futuras: escolha da organização ativa, autorização por tenant, convites e, posteriormente, módulos de CRM e integrações. Nenhuma dessas funcionalidades foi antecipada nesta etapa.
+Em tarefas futuras: autorização por papel, convites e gestão de membros e, posteriormente, módulos de CRM e integrações. A próxima tarefa funcional planejada é a 0.2.4 — Autorização por papel.

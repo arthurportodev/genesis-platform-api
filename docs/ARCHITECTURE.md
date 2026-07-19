@@ -26,7 +26,7 @@ flowchart LR
 - `MembershipsModule`: registra o vínculo e o papel por organização.
 - `AuthSessionsModule`: registra sessões, refresh tokens e auditoria.
 - `AuthModule`: login, refresh, logout, usuário atual, tokens, guard, auditoria e rate limit.
-- `TenantContextModule`: em implementação; valida organização e membership para requests tenant-scoped e fornece contexto tipado.
+- `TenantContextModule`: valida organização e membership para requests tenant-scoped e fornece contexto tipado.
 
 Os módulos de users, organizations e memberships ainda não têm controllers ou serviços de CRUD.
 
@@ -80,9 +80,9 @@ Quando um controller de outro módulo referencia um guard por classe com `@UseGu
 
 `useExisting` preserva uma única instância de cada implementação concreta. As portas expõem somente as capacidades necessárias aos guards, evitam factories, overrides ou manipulação de metadata nos módulos consumidores e não alteram as regras de autenticação ou tenant context.
 
-## Contexto de tenant em implementação
+## Contexto de tenant implementado
 
-Rotas tenant-scoped usarão `@UseGuards(AccessTokenGuard, TenantContextGuard)`. O primeiro guard autentica user e sessão; o segundo valida `X-Organization-Id`, consulta a membership e anexa `TenantContext` à request. O decorator `CurrentTenant` entrega esse contexto ao controller.
+O contrato implementado para rotas tenant-scoped usa `@UseGuards(AccessTokenGuard, TenantContextGuard)`. O primeiro guard autentica user e sessão; o segundo valida `X-Organization-Id`, consulta a membership e anexa `TenantContext` à request. O decorator `CurrentTenant` entrega esse contexto ao controller.
 
 ```mermaid
 flowchart LR
@@ -104,7 +104,6 @@ Consulte o [ADR-004](decisions/ADR-004-active-organization-context.md).
 
 ## Fronteiras
 
-- **Implementado:** identidade, persistência multi-tenant básica, autenticação, sessões, auditoria e CI.
-- **Em implementação:** seleção da organização ativa e contexto de tenant por request.
-- **Planejado:** autorização por papel, membros e módulos comerciais.
+- **Implementado:** identidade, persistência multi-tenant básica, autenticação, sessões, auditoria, CI, seleção da organização ativa por request e contexto de tenant.
+- **Planejado:** autorização por papel, invariantes e gestão de membros e módulos comerciais.
 - **Fora do estágio atual:** frontend, integrações, deploy e microservices.

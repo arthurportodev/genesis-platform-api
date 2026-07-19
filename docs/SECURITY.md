@@ -65,7 +65,8 @@
 - Organização inexistente/inativa e membership ausente/inativa usam a mesma negação genérica, sem revelar a causa.
 - Tenant, membership e papel permanecem fora do JWT, da sessão e do user.
 - O contexto não é aceito de body, query ou cookie e não é registrado integralmente em logs.
-- A infraestrutura está em implementação e ainda não há entidades comerciais com `organization_id`.
+- Não há cache ou estado compartilhado de tenant; a validação ocorre novamente a cada request tenant-scoped.
+- A infraestrutura está implementada, mas ainda não há entidades comerciais com `organization_id` nem autorização por papel.
 
 ## Limitações e decisões abertas
 
