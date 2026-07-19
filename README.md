@@ -1,6 +1,6 @@
 # Genesis Platform API
 
-Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas e contexto de organização ativa por request. A autorização por papel permanece planejada.
+Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas e contexto de organização ativa por request. A infraestrutura de autorização por papel está em implementação e revisão na Tarefa 0.2.4.
 
 ## Documentação do projeto
 
@@ -208,9 +208,15 @@ Todas as tabelas usam UUID gerado pelo PostgreSQL, `created_at` e `updated_at` c
 
 Requests tenant-scoped usam `X-Organization-Id` após a autenticação. O backend valida no PostgreSQL, a cada request, que a organization e a membership do usuário estão ativas e anexa um contexto tipado com `userId`, `organizationId`, `membershipId` e `role`. O identificador da membership e o papel vêm exclusivamente do banco.
 
-Autenticação e tenant context usam guards separados. JWT e sessão permanecem sem tenant ou papel, e a aplicação ainda não expõe endpoint tenant-scoped de produção. Autorização por papel será tratada na tarefa planejada 0.2.4.
+Autenticação e tenant context usam guards separados. JWT e sessão permanecem sem tenant ou papel, e a aplicação ainda não expõe endpoint tenant-scoped de produção.
 
 Consulte o [estado atual](docs/CURRENT_STATE.md), a [arquitetura](docs/ARCHITECTURE.md), os [controles de segurança](docs/SECURITY.md) e o [ADR-004](docs/decisions/ADR-004-active-organization-context.md).
+
+## Autorização por papel em implementação
+
+A branch da tarefa 0.2.4 adiciona `AuthorizationModule`, `@Roles` e `RoleGuard`. Rotas tenant-scoped futuras poderão compor autenticação, tenant context e autorização, declarando listas explícitas de `owner`, `admin` e `member`. O guard usa somente o papel persistido já presente no `TenantContext`, sem nova consulta, cache ou papel vindo do cliente.
+
+A implementação ainda está em revisão. Não há endpoint tenant-scoped de produção, matriz real de capacidades, hierarquia implícita, permissions, autorização por recurso, regra de último owner ou gestão de membros. Consulte o [ADR-005](docs/decisions/ADR-005-role-based-authorization.md).
 
 ## Seed inicial
 
@@ -345,6 +351,7 @@ src/
 └── modules/
     ├── auth/
     ├── auth-sessions/
+    ├── authorization/
     ├── memberships/
     ├── organizations/
     ├── tenant-context/
@@ -364,7 +371,8 @@ Os módulos de users, organizations e memberships ainda não expõem CRUD. A inf
 - **Exclusão conservadora:** FKs `RESTRICT` impedem que exclusões de user/organization removam silenciosamente memberships ou entidades do outro lado.
 - **Credenciais:** senhas usam Argon2id; refresh tokens usam HMAC-SHA-256 com pepper e rotação transacional.
 - **Sessões persistidas:** access tokens só são aceitos quando usuário e sessão continuam ativos no PostgreSQL.
-- **Escopo do token:** JWT e sessão permanecem sem tenant ou papel; a organização ativa é selecionada por request, e autorização por papel continua planejada para a tarefa 0.2.4.
+- **Escopo do token:** JWT e sessão permanecem sem tenant ou papel; a organização ativa e o papel atual são validados no PostgreSQL por request.
+- **Autorização explícita:** a infraestrutura em revisão aceita somente papéis listados por rota, sem hierarquia ou permissions.
 - **Swagger adiado:** será mais útil quando existirem endpoints de negócio e seus DTOs.
 
 ## Problemas comuns
@@ -377,4 +385,4 @@ Os módulos de users, organizations e memberships ainda não expõem CRUD. A inf
 
 ## Próximos módulos previstos
 
-Em tarefas futuras: autorização por papel, convites e gestão de membros e, posteriormente, módulos de CRM e integrações. A próxima tarefa funcional planejada é a 0.2.4 — Autorização por papel.
+Após a conclusão e revisão da infraestrutura de autorização por papel em andamento, a próxima tarefa planejada é 0.2.5 — Convites e gestão de membros. Módulos de CRM e integrações permanecem futuros.

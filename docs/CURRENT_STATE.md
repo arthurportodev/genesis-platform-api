@@ -6,8 +6,8 @@
 - **Última tarefa de governança concluída:** 0.2.2.3 — Proteção da main e CI obrigatório
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Próxima tarefa funcional planejada:** 0.2.4 — Autorização por papel
-- **Depois:** 0.2.5 — Convites e gestão de membros
+- **Tarefa funcional em andamento:** 0.2.4 — Autorização por papel
+- **Próxima tarefa após a conclusão:** 0.2.5 — Convites e gestão de membros
 
 ## Implementado
 
@@ -25,7 +25,15 @@
 - `TenantContextGuard` recebe `X-Organization-Id` após o `AccessTokenGuard` e anexa contexto tipado à request.
 - `TenantContext` contém `userId`, `organizationId`, `membershipId` e papel lido da membership persistida.
 - `CurrentTenant` disponibiliza o contexto validado a controllers tenant-scoped futuros.
-- Não há guard global ou endpoint tenant-scoped de produção; autorização por papel permanece planejada para a tarefa 0.2.4.
+- Não há guard global ou endpoint tenant-scoped de produção.
+
+### Autorização por papel em implementação
+
+- `AuthorizationModule` fornece `RoleGuard` sem acesso ao banco ou estado compartilhado.
+- `@Roles` declara listas explícitas de `owner`, `admin` e `member` em controllers ou handlers; metadata do handler prevalece.
+- O guard consome exclusivamente o papel já validado no `TenantContext` e usa negação `403` genérica.
+- Não há hierarquia implícita, permissions, policy engine, autorização por recurso ou matriz real de capacidades.
+- A infraestrutura existe na branch da tarefa 0.2.4, ainda em revisão e não disponível na `main`.
 
 ### Endpoints
 
@@ -62,7 +70,7 @@ Consulte os [ADRs](decisions/README.md).
 ## Limitações conhecidas
 
 - Entidades comerciais tenant-scoped com `organization_id` ainda não existem.
-- Autorização por papel e invariantes de membros ainda não existem.
+- A infraestrutura genérica de autorização por papel está em implementação; permissions, matriz real de capacidades e invariantes de membros ainda não existem.
 - Refresh token é retornado em JSON; cookie `HttpOnly` não foi decidido/implementado.
 - Rate limiter é local, não distribuído e perde estado ao reiniciar.
 - Não há política de retenção para sessões e auditoria.

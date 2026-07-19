@@ -66,7 +66,18 @@
 - Tenant, membership e papel permanecem fora do JWT, da sessão e do user.
 - O contexto não é aceito de body, query ou cookie e não é registrado integralmente em logs.
 - Não há cache ou estado compartilhado de tenant; a validação ocorre novamente a cada request tenant-scoped.
-- A infraestrutura está implementada, mas ainda não há entidades comerciais com `organization_id` nem autorização por papel.
+- A infraestrutura de tenant context está implementada, mas ainda não há entidades comerciais com `organization_id`; a autorização por papel está em implementação conforme a seção seguinte.
+
+## Autorização por papel em implementação
+
+- A cadeia tenant-scoped em revisão executa `AccessTokenGuard`, `TenantContextGuard` e `RoleGuard`, nessa ordem.
+- O papel vem somente da membership persistida e chega pelo `TenantContext`; JWT, sessão e entradas do cliente não fornecem papel.
+- `@Roles` declara todos os papéis aceitos explicitamente, sem hierarquia implícita.
+- Metadata inválida e tenant context ausente falham com `500`, evitando política permissiva por erro de configuração.
+- Papel insuficiente reutiliza `403 Organization access denied.` sem revelar papel atual, lista permitida, organization, membership ou política.
+- O `RoleGuard` não executa consulta adicional, não cria cache e não altera o contexto.
+- Permissions, policy engine, autorização por recurso, matriz real de capacidades e proteção do último owner permanecem fora da tarefa 0.2.4.
+- A implementação está em revisão e não adiciona endpoint tenant-scoped de produção.
 
 ## Limitações e decisões abertas
 

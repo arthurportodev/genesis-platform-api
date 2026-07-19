@@ -27,6 +27,7 @@ flowchart LR
 - `AuthSessionsModule`: registra sessões, refresh tokens e auditoria.
 - `AuthModule`: login, refresh, logout, usuário atual, tokens, guard, auditoria e rate limit.
 - `TenantContextModule`: valida organização e membership para requests tenant-scoped e fornece contexto tipado.
+- `AuthorizationModule`: em implementação; fornece `RoleGuard` para listas explícitas de papéis, sem persistência ou estado.
 
 Os módulos de users, organizations e memberships ainda não têm controllers ou serviços de CRUD.
 
@@ -102,8 +103,17 @@ flowchart LR
 
 Consulte o [ADR-004](decisions/ADR-004-active-organization-context.md).
 
+## Autorização por papel em implementação
+
+A tarefa 0.2.4 adiciona `@Roles` e `RoleGuard` em módulo separado. Módulos consumidores compõem `@UseGuards(AccessTokenGuard, TenantContextGuard, RoleGuard)`: autenticação anexa o user, tenant context relê membership e organization ativas, e autorização compara `TenantContext.role` com a lista explicitamente permitida.
+
+Metadata no handler substitui metadata do controller. Ausência, lista vazia ou valor inválido são erros de configuração `500`; tenant context ausente também falha explicitamente. Papel não listado recebe `403 Organization access denied.` sem revelar a política.
+
+O `RoleGuard` depende somente de `Reflector` e da request. Não consulta repository, não adiciona query, não aceita papel do cliente e não implementa hierarquia, permissions ou autorização por recurso. A infraestrutura ainda está em revisão, não possui endpoint tenant-scoped de produção e não define matriz real de capacidades. Consulte o [ADR-005](decisions/ADR-005-role-based-authorization.md).
+
 ## Fronteiras
 
 - **Implementado:** identidade, persistência multi-tenant básica, autenticação, sessões, auditoria, CI, seleção da organização ativa por request e contexto de tenant.
-- **Planejado:** autorização por papel, invariantes e gestão de membros e módulos comerciais.
+- **Em implementação:** infraestrutura genérica de autorização por papel, sem consumidor de produção.
+- **Planejado:** invariantes e gestão de membros, matriz de capacidades de endpoints futuros e módulos comerciais.
 - **Fora do estágio atual:** frontend, integrações, deploy e microservices.

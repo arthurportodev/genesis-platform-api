@@ -69,3 +69,15 @@
 - Testes unitários, E2E e de integração; CI do PR e CI pós-merge aprovadas.
 - Nenhuma migration ou dependência nova.
 - Sem endpoint tenant-scoped de produção ou autorização por papel.
+
+## 0.2.4 — Autorização por papel
+
+**Em andamento.**
+
+- `AuthorizationModule`, decorator tipado `@Roles` e `RoleGuard` em implementação.
+- Lista explícita de papéis, sem hierarquia, permissions ou policy engine.
+- Papel consumido exclusivamente do `TenantContext`, sem consulta adicional ao PostgreSQL.
+- Metadata do handler substitui a do controller; configuração inválida falha explicitamente.
+- Testes unitários e E2E com controller exclusivo de teste em desenvolvimento.
+- ADR-005 registra a decisão arquitetural.
+- Sem endpoint tenant-scoped de produção, migration, dependência ou regra de gestão de membros.
