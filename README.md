@@ -2,6 +2,12 @@
 
 Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant e autenticação com sessões persistidas. A seleção da organização ativa e a autorização por papel continuam fora do escopo.
 
+## Documentação do projeto
+
+A memória oficial começa em [`docs/START_HERE.md`](docs/START_HERE.md). Consulte também o [estado atual](docs/CURRENT_STATE.md), o [roadmap](docs/ROADMAP.md), a [arquitetura](docs/ARCHITECTURE.md) e os [ADRs](docs/decisions/README.md).
+
+O arquivo [`AGENTS.md`](AGENTS.md) define o protocolo obrigatório de reidratação e continuidade para agentes e desenvolvedores.
+
 ## Pré-requisitos
 
 - Node.js 24 (consulte `.nvmrc`)
