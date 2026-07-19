@@ -60,12 +60,12 @@
 
 ## 0.2.3 — Organização ativa e contexto de tenant
 
-**Em andamento.**
+**Concluído no PR #6.**
 
-- Infraestrutura tipada de `TenantContext` por request tenant-scoped.
+- `TenantContextModule`, `TenantContextGuard`, `TenantContextService`, decorator `CurrentTenant` e tipos de request/contexto.
 - Validação de `X-Organization-Id`, organização ativa e membership ativa.
-- Papel e membership obtidos do PostgreSQL a cada request.
-- Guards separados para autenticação e contexto de tenant.
-- Decorator `CurrentTenant` para controllers tenant-scoped futuros.
-- Testes unitários, de integração e E2E em desenvolvimento.
-- Sem endpoint tenant-scoped de produção, migration ou autorização por papel.
+- Papel e membership ID obtidos do PostgreSQL a cada request tenant-scoped.
+- Separação entre autenticação e contexto de tenant, com portas modulares opacas para resolução natural dos guards.
+- Testes unitários, E2E e de integração; CI do PR e CI pós-merge aprovadas.
+- Nenhuma migration ou dependência nova.
+- Sem endpoint tenant-scoped de produção ou autorização por papel.

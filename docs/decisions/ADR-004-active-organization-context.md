@@ -1,6 +1,6 @@
 # ADR-004 — Contexto de organização ativa
 
-- **Status:** Accepted — implementation in progress (task 0.2.3)
+- **Status:** Accepted — implemented in task 0.2.3
 - **Data:** 2026-07-19
 
 ## Contexto
@@ -38,8 +38,8 @@ Um user pode participar de várias organizações. Requests de negócio precisar
 
 ## Implementação
 
-**Em andamento.** A branch da tarefa 0.2.3 contém `TenantContextModule`, `TenantContextService`, `TenantContextGuard`, os tipos de contexto/request e o decorator `CurrentTenant`. O `AccessTokenGuard` continua responsável somente pela autenticação e é executado antes do guard de tenant.
+**Concluído na Tarefa 0.2.3, PR #6.**
 
-O serviço consulta membership e organização ativas em uma operação lógica; o guard valida o header antes do PostgreSQL e usa respostas genéricas. Os testes usam um controller de prova exclusivo de `test/`; nenhum endpoint tenant-scoped foi adicionado à aplicação de produção.
+O `TenantContextGuard` valida `X-Organization-Id` como UUID v4 antes do acesso ao PostgreSQL. O `TenantContextService` consulta organization e membership ativas a cada request e cria o contexto tipado com `userId`, `organizationId`, `membershipId` e `role`. O `AccessTokenGuard` permanece responsável somente pela autenticação e é executado antes do guard de tenant; falhas de acesso usam resposta `403` genérica.
 
-A implementação não está marcada como concluída antes de revisão e merge. Autorização por papel, entidades comerciais tenant-scoped e invariantes de membros permanecem fora deste ADR implementado na tarefa atual.
+`AuthModule` e `TenantContextModule` exportam guards e portas modulares opacas por `useExisting`, preservando services e repositories privados. Testes unitários, E2E e de integração validam o contrato com um controller de prova exclusivo de `test/`; nenhum endpoint tenant-scoped foi adicionado à aplicação de produção. Autorização por papel, entidades comerciais tenant-scoped e invariantes de membros permanecem fora da tarefa.
