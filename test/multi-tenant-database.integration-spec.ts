@@ -1,5 +1,7 @@
 import { DataSource } from 'typeorm';
+import { randomBytes } from 'node:crypto';
 import { seedInitialTenant } from '../src/database/seeds/initial-tenant.seed';
+import { verifyPassword } from '../src/modules/auth/services/password.service';
 import { Membership } from '../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../src/modules/memberships/enums/membership-role.enum';
 import { MembershipStatus } from '../src/modules/memberships/enums/membership-status.enum';
@@ -19,6 +21,7 @@ interface CountRow {
 
 describe('Multi-tenant database integration', () => {
   let connection: DataSource;
+  const initialOwnerPassword = randomBytes(24).toString('base64url');
 
   beforeAll(async () => {
     connection = createIntegrationDataSource();
@@ -50,6 +53,15 @@ describe('Multi-tenant database integration', () => {
     ]);
 
     await connection.undoLastMigration();
+    const authTablesAfterRollback = await connection.query<CountRow[]>(`
+      SELECT count(*)::text AS count
+      FROM pg_tables
+      WHERE schemaname = 'public'
+        AND tablename IN ('auth_sessions', 'auth_refresh_tokens', 'auth_audit_logs')
+    `);
+    expect(authTablesAfterRollback[0]?.count).toBe('0');
+
+    await connection.undoLastMigration();
     const tablesAfterRollback = await connection.query<CountRow[]>(`
       SELECT count(*)::text AS count
       FROM pg_tables
@@ -66,6 +78,14 @@ describe('Multi-tenant database integration', () => {
         AND tablename IN ('users', 'organizations', 'memberships')
     `);
     expect(tablesAfterRerun[0]?.count).toBe('3');
+
+    const authTablesAfterRerun = await connection.query<CountRow[]>(`
+      SELECT count(*)::text AS count
+      FROM pg_tables
+      WHERE schemaname = 'public'
+        AND tablename IN ('auth_sessions', 'auth_refresh_tokens', 'auth_audit_logs')
+    `);
+    expect(authTablesAfterRerun[0]?.count).toBe('3');
   });
 
   it('creates enums, foreign keys, unique constraints, and indexes', async () => {
@@ -76,11 +96,13 @@ describe('Multi-tenant database integration', () => {
         'user_status_enum',
         'organization_status_enum',
         'membership_role_enum',
-        'membership_status_enum'
+        'membership_status_enum',
+        'auth_session_status_enum',
+        'auth_refresh_token_status_enum'
       )
       ORDER BY typname
     `);
-    expect(enumTypes).toHaveLength(4);
+    expect(enumTypes).toHaveLength(6);
 
     const constraints = await connection.query<NameRow[]>(`
       SELECT conname AS name
@@ -173,18 +195,30 @@ describe('Multi-tenant database integration', () => {
 
   it('seeds the initial tenant idempotently', async () => {
     const logger = { log: jest.fn() };
-    const firstRun = await seedInitialTenant(connection, logger);
+    const firstRun = await seedInitialTenant(connection, logger, {
+      initialOwnerPassword,
+    });
+    const passwordHashAfterFirstRun = await connection
+      .getRepository(User)
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.email = :email', {
+        email: 'contato@agenciagenesismkt.com.br',
+      })
+      .getOneOrFail();
     const secondRun = await seedInitialTenant(connection, logger);
 
     expect(firstRun).toMatchObject({
       userCreated: true,
       organizationCreated: true,
       membershipCreated: true,
+      credentialCreated: true,
     });
     expect(secondRun).toMatchObject({
       userCreated: false,
       organizationCreated: false,
       membershipCreated: false,
+      credentialCreated: false,
     });
 
     const user = await connection.getRepository(User).findOneByOrFail({
@@ -211,5 +245,23 @@ describe('Multi-tenant database integration', () => {
       role: MembershipRole.OWNER,
       status: MembershipStatus.ACTIVE,
     });
+    const storedPasswordHash = passwordHashAfterFirstRun.passwordHash;
+    expect(storedPasswordHash).toMatch(/^\$argon2id\$/);
+    if (storedPasswordHash === null) {
+      throw new Error('Expected the seed to create a password hash.');
+    }
+    await expect(
+      verifyPassword(storedPasswordHash, initialOwnerPassword),
+    ).resolves.toBe(true);
+
+    const passwordHashAfterSecondRun = await connection
+      .getRepository(User)
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.id = :userId', { userId: user.id })
+      .getOneOrFail();
+    expect(passwordHashAfterSecondRun.passwordHash).toBe(
+      passwordHashAfterFirstRun.passwordHash,
+    );
   });
 });

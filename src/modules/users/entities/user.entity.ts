@@ -10,6 +10,8 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
+import { AuthSession } from '../../auth-sessions/entities/auth-session.entity';
 import { Membership } from '../../memberships/entities/membership.entity';
 import { UserStatus } from '../enums/user-status.enum';
 
@@ -39,6 +41,23 @@ export class User {
   })
   status!: UserStatus;
 
+  @Exclude({ toPlainOnly: true })
+  @Column({
+    name: 'password_hash',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    select: false,
+  })
+  passwordHash!: string | null;
+
+  @Column({
+    name: 'password_changed_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  passwordChangedAt!: Date | null;
+
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamptz',
@@ -55,6 +74,9 @@ export class User {
 
   @OneToMany(() => Membership, (membership) => membership.user)
   memberships!: Membership[];
+
+  @OneToMany(() => AuthSession, (session) => session.user)
+  authSessions!: AuthSession[];
 
   @BeforeInsert()
   @BeforeUpdate()
