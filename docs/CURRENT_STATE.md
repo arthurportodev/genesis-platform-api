@@ -3,8 +3,9 @@
 - **Última atualização:** 2026-07-19
 - **Fase:** 0.2 — Identidade e multi-tenancy
 - **Última tarefa funcional concluída:** 0.2.2.1 — GitHub Actions CI
-- **Tarefa documental desta entrega:** 0.2.2.2 — Memória, documentação e continuidade (PR #4)
+- **Última tarefa de governança concluída:** 0.2.2.3 — Proteção da main e CI obrigatório
 - **CI da `main`:** aprovado
+- **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
 - **Próxima funcionalidade:** 0.2.3 — Organização ativa e contexto de tenant
 - **Depois:** 0.2.4 — Autorização por papel; 0.2.5 — Convites e gestão de membros
 
