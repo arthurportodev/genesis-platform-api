@@ -43,6 +43,11 @@ jobs:
       TEST_DATABASE_NAME: genesis_platform_test
       TEST_DATABASE_USER: genesis_test
       TEST_DATABASE_PASSWORD: test-only
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5433
+      DATABASE_NAME: genesis_platform_test
+      DATABASE_USER: genesis_test
+      DATABASE_PASSWORD: test-only
 
     steps:
       - name: Checkout repository
