@@ -6,6 +6,8 @@ export interface AuthConfig {
   refreshTokenExpiresInDays: number;
   refreshTokenPepper: string;
   loginMaxAttempts: number;
+  loginIpMaxAttempts: number;
+  loginMaxBuckets: number;
   loginWindowSeconds: number;
 }
 
@@ -45,5 +47,7 @@ export default registerAs('auth', (): AuthConfig => ({
   ),
   refreshTokenPepper: process.env.REFRESH_TOKEN_PEPPER as string,
   loginMaxAttempts: Number(process.env.AUTH_LOGIN_MAX_ATTEMPTS ?? 5),
+  loginIpMaxAttempts: Number(process.env.AUTH_LOGIN_IP_MAX_ATTEMPTS ?? 25),
+  loginMaxBuckets: Number(process.env.AUTH_LOGIN_MAX_BUCKETS ?? 10_000),
   loginWindowSeconds: Number(process.env.AUTH_LOGIN_WINDOW_SECONDS ?? 900),
 }));

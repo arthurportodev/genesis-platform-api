@@ -1,10 +1,12 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { randomBytes } from 'node:crypto';
 import { Server } from 'node:http';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { seedInitialTenant } from '../src/database/seeds/initial-tenant.seed';
+import { configureTrustProxy } from '../src/config/trust-proxy';
 import { AuthAuditLog } from '../src/modules/auth-sessions/entities/auth-audit-log.entity';
 import { AuthRefreshToken } from '../src/modules/auth-sessions/entities/auth-refresh-token.entity';
 import { AuthSession } from '../src/modules/auth-sessions/entities/auth-session.entity';
@@ -12,6 +14,7 @@ import { AuthAuditEventType } from '../src/modules/auth-sessions/enums/auth-audi
 import { AuthRefreshTokenStatus } from '../src/modules/auth-sessions/enums/auth-refresh-token-status.enum';
 import { AuthSessionStatus } from '../src/modules/auth-sessions/enums/auth-session-status.enum';
 import { AuthTokenResponse } from '../src/modules/auth/auth.service';
+import { LoginRateLimiter } from '../src/modules/auth/services/login-rate-limiter.port';
 import { User } from '../src/modules/users/entities/user.entity';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
 import { createIntegrationDataSource } from './support/integration-data-source';
@@ -36,11 +39,14 @@ describe('Authentication endpoints (e2e)', () => {
     process.env.DATABASE_PASSWORD =
       process.env.TEST_DATABASE_PASSWORD ?? 'test-only';
     process.env.FRONTEND_URL = 'http://localhost:5173';
+    process.env.TRUST_PROXY_HOPS = '1';
     process.env.JWT_ACCESS_SECRET = randomBytes(48).toString('base64url');
     process.env.JWT_ACCESS_EXPIRES_IN = '15m';
     process.env.REFRESH_TOKEN_EXPIRES_IN_DAYS = '30';
     process.env.REFRESH_TOKEN_PEPPER = randomBytes(48).toString('base64url');
-    process.env.AUTH_LOGIN_MAX_ATTEMPTS = '5';
+    process.env.AUTH_LOGIN_MAX_ATTEMPTS = '2';
+    process.env.AUTH_LOGIN_IP_MAX_ATTEMPTS = '4';
+    process.env.AUTH_LOGIN_MAX_BUCKETS = '100';
     process.env.AUTH_LOGIN_WINDOW_SECONDS = '900';
 
     const { AppModule } = await import('../src/app.module');
@@ -60,7 +66,10 @@ describe('Authentication endpoints (e2e)', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
-    app = moduleRef.createNestApplication();
+    const expressApp =
+      moduleRef.createNestApplication<NestExpressApplication>();
+    configureTrustProxy(expressApp, 1);
+    app = expressApp;
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(
       new ValidationPipe({
@@ -345,6 +354,7 @@ describe('Authentication endpoints (e2e)', () => {
   it('uses generic login errors and blocks inactive users', async () => {
     const unknownUser = await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('X-Forwarded-For', '198.51.100.101')
       .send({
         email: 'unknown@example.com',
         password: randomBytes(24).toString('base64url'),
@@ -352,6 +362,7 @@ describe('Authentication endpoints (e2e)', () => {
       .expect(401);
     const wrongPassword = await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('X-Forwarded-For', '198.51.100.102')
       .send({
         email: ownerEmail,
         password: randomBytes(24).toString('base64url'),
@@ -369,11 +380,98 @@ describe('Authentication endpoints (e2e)', () => {
       .update({ email: ownerEmail }, { status: UserStatus.INACTIVE });
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('X-Forwarded-For', '198.51.100.103')
       .send({ email: ownerEmail, password: initialOwnerPassword })
       .expect(401);
     await connection
       .getRepository(User)
       .update({ email: ownerEmail }, { status: UserStatus.ACTIVE });
+  });
+
+  it('returns 429 for the configured IP and email limit', async () => {
+    const server = app.getHttpServer() as Server;
+    const credentials = {
+      email: 'rate-limited@example.com',
+      password: randomBytes(24).toString('base64url'),
+    };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await request(server)
+        .post('/api/v1/auth/login')
+        .set('X-Forwarded-For', '198.51.100.110')
+        .send(credentials)
+        .expect(401);
+    }
+
+    await request(server)
+      .post('/api/v1/auth/login')
+      .set('X-Forwarded-For', '198.51.100.110')
+      .send(credentials)
+      .expect(429);
+  });
+
+  it('cannot evade the aggregate IP limit by alternating emails', async () => {
+    const server = app.getHttpServer() as Server;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await request(server)
+        .post('/api/v1/auth/login')
+        .set('X-Forwarded-For', '198.51.100.111')
+        .send({
+          email: `rotating-${attempt}@example.com`,
+          password: randomBytes(24).toString('base64url'),
+        })
+        .expect(401);
+    }
+
+    await request(server)
+      .post('/api/v1/auth/login')
+      .set('X-Forwarded-For', '198.51.100.111')
+      .send({
+        email: 'rotating-final@example.com',
+        password: randomBytes(24).toString('base64url'),
+      })
+      .expect(429);
+  });
+
+  it('uses the same trusted proxy IP for rate limiting and audit logs', async () => {
+    const limiter = app.get(LoginRateLimiter);
+    const assertAllowed = jest.spyOn(limiter, 'assertAllowed');
+    const email = 'proxy-audit@example.com';
+    const ipAddress = '2001:db8::112';
+    const userAgent = 'proxy-audit-e2e';
+
+    await request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/login')
+      .set('X-Forwarded-For', ipAddress)
+      .set('User-Agent', userAgent)
+      .send({
+        email,
+        password: randomBytes(24).toString('base64url'),
+      })
+      .expect(401);
+
+    expect(assertAllowed).toHaveBeenLastCalledWith(ipAddress, email);
+    const auditLog = await connection
+      .getRepository(AuthAuditLog)
+      .findOneByOrFail({
+        eventType: AuthAuditEventType.LOGIN_FAILED,
+        userAgent,
+      });
+    expect(auditLog.ipAddress).toBe(ipAddress);
+    assertAllowed.mockRestore();
+  });
+
+  it('persists IPv4 and IPv6 client addresses in PostgreSQL', async () => {
+    const ipv4Tokens = (await login('203.0.113.120')).body as AuthTokenResponse;
+    const ipv6Tokens = (await login('2001:db8::120')).body as AuthTokenResponse;
+
+    const ipv4Session = await connection
+      .getRepository(AuthSession)
+      .findOneByOrFail({ id: getSessionId(ipv4Tokens.refreshToken) });
+    const ipv6Session = await connection
+      .getRepository(AuthSession)
+      .findOneByOrFail({ id: getSessionId(ipv6Tokens.refreshToken) });
+    expect(ipv4Session.ipAddress).toBe('203.0.113.120');
+    expect(ipv6Session.ipAddress).toBe('2001:db8::120');
   });
 
   it('rejects expired sessions for access and refresh', async () => {
@@ -418,10 +516,13 @@ describe('Authentication endpoints (e2e)', () => {
     return refreshToken.split('.')[0];
   }
 
-  async function login() {
-    return request(app.getHttpServer() as Server)
+  async function login(ipAddress?: string) {
+    const loginRequest = request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
-      .send({ email: ownerEmail, password: initialOwnerPassword })
-      .expect(200);
+      .send({ email: ownerEmail, password: initialOwnerPassword });
+    if (ipAddress !== undefined) {
+      loginRequest.set('X-Forwarded-For', ipAddress);
+    }
+    return loginRequest.expect(200);
   }
 });

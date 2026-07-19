@@ -11,6 +11,8 @@ describe('TokenService', () => {
     refreshTokenExpiresInDays: 30,
     refreshTokenPepper: randomBytes(48).toString('base64url'),
     loginMaxAttempts: 5,
+    loginIpMaxAttempts: 25,
+    loginMaxBuckets: 10_000,
     loginWindowSeconds: 900,
   };
   const configService = {

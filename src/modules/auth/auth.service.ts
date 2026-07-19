@@ -50,8 +50,7 @@ export class AuthService {
     context: AuthRequestContext,
   ): Promise<AuthTokenResponse> {
     const email = credentials.email.trim().toLowerCase();
-    const rateLimitKey = `${context.ipAddress ?? 'unknown'}:${email}`;
-    this.rateLimiter.assertAllowed(rateLimitKey);
+    this.rateLimiter.assertAllowed(context.ipAddress, email);
 
     const user = await this.users
       .createQueryBuilder('user')
@@ -64,7 +63,7 @@ export class AuthService {
     );
 
     if (user === null || !passwordValid || user.status !== UserStatus.ACTIVE) {
-      this.rateLimiter.recordFailure(rateLimitKey);
+      this.rateLimiter.recordFailure(context.ipAddress, email);
       await this.auditService.record({
         ...context,
         eventType: AuthAuditEventType.LOGIN_FAILED,
@@ -74,7 +73,7 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
     }
 
-    this.rateLimiter.reset(rateLimitKey);
+    this.rateLimiter.resetCredential(context.ipAddress, email);
     const sessionId = randomUUID();
     const refreshToken = this.tokenService.generateRefreshToken(sessionId);
     const access = await this.tokenService.issueAccessToken(user.id, sessionId);

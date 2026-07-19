@@ -14,20 +14,64 @@ describe('Authentication configuration', () => {
     DATABASE_USER: 'genesis_test',
     DATABASE_PASSWORD: 'test-only',
     FRONTEND_URL: 'http://localhost:5173',
+    TRUST_PROXY_HOPS: 0,
     JWT_ACCESS_SECRET: randomBytes(48).toString('base64url'),
     JWT_ACCESS_EXPIRES_IN: '15m',
     REFRESH_TOKEN_EXPIRES_IN_DAYS: 30,
     REFRESH_TOKEN_PEPPER: randomBytes(48).toString('base64url'),
     AUTH_LOGIN_MAX_ATTEMPTS: 5,
+    AUTH_LOGIN_IP_MAX_ATTEMPTS: 25,
+    AUTH_LOGIN_MAX_BUCKETS: 10_000,
     AUTH_LOGIN_WINDOW_SECONDS: 900,
   };
 
   it('accepts strong secrets and parses configured durations', () => {
-    expect(environmentValidationSchema.validate(validEnvironment).error).toBe(
-      undefined,
-    );
+    const validation = environmentValidationSchema.validate(validEnvironment);
+    expect(validation.error).toBeUndefined();
+    expect(validation.value).toMatchObject({
+      TRUST_PROXY_HOPS: 0,
+      AUTH_LOGIN_IP_MAX_ATTEMPTS: 25,
+      AUTH_LOGIN_MAX_BUCKETS: 10_000,
+    });
     expect(parseDurationSeconds('15m')).toBe(900);
     expect(parseDurationSeconds('2h')).toBe(7_200);
+  });
+
+  it('does not require the seed-only initial owner password at runtime', () => {
+    const withoutSeedPassword = { ...validEnvironment };
+    delete (withoutSeedPassword as Record<string, unknown>)
+      .INITIAL_OWNER_PASSWORD;
+
+    expect(
+      environmentValidationSchema.validate(withoutSeedPassword).error,
+    ).toBeUndefined();
+    expect(
+      environmentValidationSchema.validate({
+        ...validEnvironment,
+        INITIAL_OWNER_PASSWORD: '',
+      }).error,
+    ).toBeDefined();
+  });
+
+  it('rejects invalid trust-proxy and limiter bounds', () => {
+    expect(
+      environmentValidationSchema.validate({
+        ...validEnvironment,
+        TRUST_PROXY_HOPS: 6,
+      }).error,
+    ).toBeDefined();
+    expect(
+      environmentValidationSchema.validate({
+        ...validEnvironment,
+        TRUST_PROXY_HOPS: -1,
+      }).error,
+    ).toBeDefined();
+    expect(
+      environmentValidationSchema.validate({
+        ...validEnvironment,
+        AUTH_LOGIN_MAX_BUCKETS: 1,
+      }).error,
+    ).toBeDefined();
   });
 
   it('rejects missing, short, or placeholder secrets', () => {

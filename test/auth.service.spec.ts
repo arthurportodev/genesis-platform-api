@@ -24,16 +24,15 @@ describe('AuthService', () => {
   } as unknown as Repository<User>;
   const verifyForLogin = jest.fn();
   const passwordService = { verifyForLogin } as unknown as PasswordService;
-  const auditService = {
-    record: jest.fn().mockResolvedValue(undefined),
-  } as unknown as AuthAuditService;
+  const recordAudit = jest.fn().mockResolvedValue(undefined);
+  const auditService = { record: recordAudit } as unknown as AuthAuditService;
   const assertAllowed = jest.fn();
   const recordFailure = jest.fn();
-  const reset = jest.fn();
+  const resetCredential = jest.fn();
   const rateLimiter = {
     assertAllowed,
     recordFailure,
-    reset,
+    resetCredential,
   } as unknown as LoginRateLimiter;
   const service = new AuthService(
     users,
@@ -67,6 +66,17 @@ describe('AuthService', () => {
     );
 
     expect(recordFailure).toHaveBeenCalledTimes(2);
+    expect(assertAllowed).toHaveBeenCalledWith(
+      context.ipAddress,
+      credentials.email,
+    );
+    expect(recordFailure).toHaveBeenCalledWith(
+      context.ipAddress,
+      credentials.email,
+    );
+    expect(recordAudit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ ipAddress: context.ipAddress }),
+    );
   });
 
   it('rejects an inactive user with the generic credential error', async () => {

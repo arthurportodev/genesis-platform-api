@@ -32,7 +32,10 @@ Variáveis de autenticação:
 | `REFRESH_TOKEN_PEPPER` | segredo aleatório usado no HMAC do refresh token |
 | `INITIAL_OWNER_PASSWORD` | senha local usada somente quando o seed ainda precisa criar a credencial inicial |
 | `AUTH_LOGIN_MAX_ATTEMPTS` | falhas permitidas por combinação de IP e email |
+| `AUTH_LOGIN_IP_MAX_ATTEMPTS` | falhas agregadas permitidas por IP, independentemente do email |
+| `AUTH_LOGIN_MAX_BUCKETS` | limite total de contadores mantidos em memória |
 | `AUTH_LOGIN_WINDOW_SECONDS` | janela do limitador de login |
+| `TRUST_PROXY_HOPS` | quantidade de proxies reversos confiáveis entre o cliente e a API (`0` por padrão) |
 
 Substitua todos os placeholders antes de iniciar. Gere segredos independentes e fortes; nunca reutilize valores de desenvolvimento em produção. `INITIAL_OWNER_PASSWORD` nunca deve ser versionada, impressa em logs ou mantida com valor padrão.
 
@@ -67,6 +70,8 @@ npm run docker:down
 ```
 
 Para apagar também os dados locais do PostgreSQL, execute conscientemente `docker compose down -v`.
+
+`TRUST_PROXY_HOPS=0` ignora `X-Forwarded-For` e é o padrão seguro quando a API é acessada diretamente. Em uma implantação com um único Traefik confiável na frente da API, use `TRUST_PROXY_HOPS=1` e bloqueie o acesso externo direto à porta da API; nunca configure confiança irrestrita em proxies.
 
 ## Health check
 
@@ -166,10 +171,10 @@ Todas as tabelas usam UUID gerado pelo PostgreSQL, `created_at` e `updated_at` c
 
 ## Seed inicial
 
-Após aplicar as migrations, execute manualmente:
+Após aplicar as migrations, execute manualmente. Na primeira execução, forneça a senha somente ao processo do seed, sem gravá-la no `.env` nem mantê-la no ambiente permanente da API:
 
 ```bash
-npm run seed
+docker compose exec -e INITIAL_OWNER_PASSWORD="<defina-localmente>" api npm run seed
 ```
 
 O seed cria, dentro de uma transação:
@@ -184,7 +189,7 @@ Se o usuário inicial ainda não possuir credencial, o seed também exige `INITI
 
 Nunca execute o seed em produção com senha padrão. Defina a senha inicial por um canal seguro, execute o seed, confirme o acesso e substitua a credencial conforme a política operacional da equipe.
 
-No container, execute o mesmo script:
+Quando a credencial inicial já existir, novas execuções idempotentes não exigem a variável e não substituem o hash existente:
 
 ```bash
 docker compose exec api npm run seed
@@ -254,7 +259,7 @@ curl -X POST http://localhost:3000/api/v1/auth/logout-all \
 
 Payload inválido retorna `400`; credencial ou token inválido retorna `401`; excesso de tentativas retorna `429`. `403` não é usado para substituir falhas de autenticação e `503` permanece reservado à indisponibilidade real de dependências.
 
-O limitador atual mantém contadores em memória por IP e email normalizado. Ele é adequado somente à primeira versão e aos testes: os contadores não são compartilhados entre réplicas e são perdidos ao reiniciar. Uma implantação com múltiplas instâncias deverá substituir a implementação pela mesma abstração usando Redis ou armazenamento equivalente.
+O limitador atual mantém contadores separados para cada combinação de IP e email normalizado e para o total agregado por IP. Buckets expirados são removidos periodicamente e o total em memória é limitado; ao atingir a capacidade, novas chaves são recusadas com `429` sem ampliar o uso de memória. Um login bem-sucedido limpa apenas o contador específico de IP e email, preservando a proteção agregada do IP. A implementação é adequada somente a uma instância: os contadores não são compartilhados entre réplicas e são perdidos ao reiniciar. Uma implantação com múltiplas instâncias deverá substituir a implementação pela mesma abstração usando armazenamento compartilhado.
 
 Os tokens são retornados em JSON nesta etapa. O frontend poderá futuramente armazenar o refresh token em cookie `HttpOnly`, após decisão arquitetural conjunta. O backend não assume `localStorage` nem define agora a estratégia final de cookies.
 

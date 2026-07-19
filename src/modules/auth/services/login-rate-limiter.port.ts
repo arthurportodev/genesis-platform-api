@@ -1,5 +1,14 @@
 export abstract class LoginRateLimiter {
-  abstract assertAllowed(key: string): void;
-  abstract recordFailure(key: string): void;
-  abstract reset(key: string): void;
+  abstract assertAllowed(
+    ipAddress: string | null,
+    normalizedEmail: string,
+  ): void;
+  abstract recordFailure(
+    ipAddress: string | null,
+    normalizedEmail: string,
+  ): void;
+  abstract resetCredential(
+    ipAddress: string | null,
+    normalizedEmail: string,
+  ): void;
 }
