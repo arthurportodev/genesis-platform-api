@@ -50,6 +50,13 @@
 - O CI tem apenas `contents: read`, usa PostgreSQL `_test` descartável e credenciais `test-only`; não executa seed, deploy ou publicação de imagem.
 - Testes de integração recusam banco cujo nome não termine em `_test`.
 
+## Integridade do repositório
+
+- A `main` é protegida por ruleset ativo e alterações entram obrigatoriamente por Pull Request.
+- O check `Validate backend` deve passar com a branch atualizada, e conversas de revisão devem estar resolvidas.
+- O histórico deve permanecer linear; force push e exclusão da `main` são bloqueados.
+- Não há bypass permanente configurado para usuário, administrador, aplicação ou time.
+
 ## Limitações e decisões abertas
 
 - Refresh token ainda é retornado em JSON; cookie `HttpOnly` não foi implementado.

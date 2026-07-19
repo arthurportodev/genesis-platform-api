@@ -53,12 +53,15 @@ Padrão aprovado pelo Product Owner:
 
 ## Convenções Git atuais
 
-- `main` deve permanecer estável.
+- `main` é protegida por um ruleset ativo e deve permanecer estável.
 - Uma branch por tarefa.
-- Toda consolidação usa Pull Request e busca CI aprovado.
+- Alterações na `main` entram obrigatoriamente por Pull Request; push direto e force push são bloqueados.
+- O check `Validate backend` deve passar e a branch do Pull Request deve estar atualizada com a `main`.
+- Todas as conversas de revisão devem ser resolvidas antes do merge.
+- Nenhuma aprovação humana é obrigatória nesta fase.
 - Integração normal por squash merge.
+- O histórico deve permanecer linear e a exclusão da `main` é bloqueada.
 - Branches são excluídas após sincronização e comprovação de incorporação.
-- Force push somente em caso excepcional e explicitamente autorizado.
 - Segredos, `.env`, dependências, builds, logs e temporários nunca são versionados.
 
 ## Responsabilidades

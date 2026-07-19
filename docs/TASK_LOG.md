@@ -45,3 +45,15 @@
 - Índice de decisões e ADR-001 a ADR-004 criados.
 - Template de Pull Request criado para revisar escopo, testes, segurança e continuidade.
 - Nenhuma funcionalidade de produto, migration, endpoint ou tabela foi alterada.
+
+## 0.2.2.3 — Proteção da main
+
+**Concluído.**
+
+- Ruleset `Protect main` ativo e limitado à default branch.
+- Pull Request obrigatório, sem aprovação humana obrigatória nesta fase.
+- Check `Validate backend` obrigatório e branch atualizada com a `main`.
+- Resolução de conversas e histórico linear obrigatórios.
+- Force push e exclusão da `main` bloqueados.
+- Nenhum bypass permanente configurado.
+- Nenhuma funcionalidade de produto foi alterada.
