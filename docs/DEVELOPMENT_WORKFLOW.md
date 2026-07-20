@@ -58,6 +58,15 @@ Branch, SHAs transitórios, run IDs, job IDs, timestamps, comentários e convers
 
 Squash-only e exclusão automática de branch estão aplicados nas configurações do repositório. O ruleset `Protect main` permanece inalterado: Gate 3 continua obrigatório, e CI verde não autoriza merge automaticamente.
 
+## Fim de linha
+
+- `.gitattributes` é a fonte canônica e define `* text=auto eol=lf`.
+- Não altere `core.autocrlf` local ou global para aplicar a política do projeto.
+- Arquivos textuais tracked e novos arquivos textuais usam LF; toda exceção real deve ser declarada no próprio `.gitattributes`. Não há exceção atual.
+- `text=auto` mantém arquivos detectados como binários fora da conversão de texto. Uma regra específica só deve ser adicionada diante de um caso real.
+- Novos checkouts e arquivos adicionados devem respeitar os atributos; uma renormalização futura deve ser auditada antes da integração.
+- Verificações de EOL e de diff usam o checkout real. Não copie arquivos para uma árvore artificial para produzir um resultado diferente do que Git, build e testes consomem.
+
 ## Responsabilidades institucionais
 
 - **Arthur:** produto, prioridades, decisões de negócio, validação e aprovação dos gates.
