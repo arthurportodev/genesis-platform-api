@@ -58,6 +58,19 @@
 - Nenhum bypass permanente configurado.
 - Nenhuma funcionalidade de produto foi alterada.
 
+## 0.2.2.4 — Sistema Operacional de Desenvolvimento Multiagente
+
+**Concluído como tarefa Normal de governança.**
+
+- Classificação Simple, Normal e Critical adotada; um único gatilho crítico eleva toda a tarefa.
+- Gate 1 aprova arquitetura quando exigida, Gate 2 aprova implementação e Gate 3 autoriza merge.
+- Coordenador, builder, verifier e operador de entrega têm fronteiras e handoffs explícitos.
+- Ownership exclusivo por arquivo; writers paralelos exigem branches e worktrees isolados, e operações Git remotas permanecem serializadas.
+- Findings baixos e uma iteração de finding médio estritamente dentro do contrato podem ser corrigidos e reverificados; segurança, tenant, dados, schema, API, ownership, finding alto ou expansão de escopo interrompem a execução.
+- Código, testes e documentação durável integram um Pull Request por tarefa; metadados transitórios permanecem no GitHub.
+- As Skills `genesis-project-context` e `genesis-task-classification` foram adiadas até que pilotos comprovem procedimentos estáveis.
+- Normalização de EOL foi definida como primeiro piloto planejado; nenhuma configuração GitHub ou funcionalidade da API foi alterada.
+
 ## 0.2.3 — Organização ativa e contexto de tenant
 
 **Concluído no PR #6.**
@@ -81,8 +94,6 @@
 - Testes unitários e E2E cobrem os três papéis, composição natural do NestJS, precedência de metadata, negação genérica, mudanças persistidas de papel e ausência de vazamento de política.
 - Dois findings baixos foram corrigidos com rejeição explícita de arrays esparsos e índices de array herdados.
 - ADR-005 registra a decisão arquitetural como implementada pela Tarefa 0.2.4.
-- Implementação funcional no PR #8; commit da branch `ba2661b39a0dd8fa4c65674ba8ed139c8c4107b1`; squash commit `7fb67525fd9301292fcd5bbe063fd3339a09a563`.
-- CI do PR, run `29708366038` (`Validate backend`, job `88248886316`), e CI pós-merge da `main`, run `29708662917` (job `88249569684`), aprovadas.
-- Nenhuma aprovação humana era obrigatória, nenhuma thread ficou pendente e a branch funcional foi removida após o merge.
+- Implementação funcional incorporada pelo PR #8, com validações do PR e pós-merge aprovadas e nenhum finding pendente.
 - Limites preservados: sem endpoint tenant-scoped de produção, matriz real de capacidades, permissions, hierarquia, policy engine, autorização por recurso, regra de último owner, gestão de membros, migration ou dependência nova.
 - Próxima tarefa funcional planejada: 0.2.5 — Convites e gestão de membros; ainda não iniciada.

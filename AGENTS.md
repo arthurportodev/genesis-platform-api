@@ -13,11 +13,13 @@ Antes de planejar ou implementar:
 3. [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md)
 4. [docs/ROADMAP.md](docs/ROADMAP.md)
 5. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-6. [ADRs relacionados](docs/decisions/README.md)
-7. migrations relacionadas
-8. último Pull Request mesclado
-9. Pull Requests e Issues abertos
-10. código e testes relacionados à tarefa
+6. [classificação da tarefa](docs/TASK_CLASSIFICATION.md)
+7. [modelo operacional multiagente](docs/MULTI_AGENT_OPERATING_MODEL.md)
+8. [ADRs relacionados](docs/decisions/README.md)
+9. migrations relacionadas
+10. último Pull Request mesclado
+11. Pull Requests e Issues abertos
+12. código e testes relacionados à tarefa
 
 ## Hierarquia das fontes
 
@@ -33,7 +35,15 @@ Em caso de divergência, prevalecem:
 
 Não corrija uma divergência por suposição. Identifique a fonte autoritativa e registre a decisão persistente.
 
-## Papéis
+## Operação por tarefa
+
+Toda tarefa deve ser classificada como Simple, Normal ou Critical antes da escrita. A execução usa quatro papéis: coordenador, builder, verifier e operador de entrega. Um único writer é owner de cada arquivo em cada fase; writers paralelos exigem worktrees isolados.
+
+Os gates são: Gate 1 para arquitetura quando exigida, Gate 2 para aprovação da implementação e Gate 3 para autorização explícita do merge. Interrompa quando surgir decisão ausente, elevação de classe, expansão material de escopo ou correção fora da autonomia aprovada.
+
+Consulte [TASK_CLASSIFICATION.md](docs/TASK_CLASSIFICATION.md) para classes e gates, [MULTI_AGENT_OPERATING_MODEL.md](docs/MULTI_AGENT_OPERATING_MODEL.md) para papéis, ownership e autonomia, e [PROMPT_TEMPLATES.md](docs/PROMPT_TEMPLATES.md) para execução parametrizada.
+
+## Papéis institucionais
 
 ### Arthur
 
@@ -66,6 +76,7 @@ Não corrija uma divergência por suposição. Identifique a fonte autoritativa 
 ## Regras obrigatórias
 
 - Nenhuma tarefa começa sem reidratação.
+- Nenhuma escrita começa sem classificação e ownership definidos.
 - Nenhuma decisão importante fica somente em conversa.
 - Nenhuma tarefa termina com documentação afetada desatualizada.
 - Não implementar código especulativo nem antecipar tarefas futuras.
