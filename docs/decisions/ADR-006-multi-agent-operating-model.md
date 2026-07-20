@@ -45,7 +45,7 @@ O projeto precisa permitir colaboração entre agentes sem escrita concorrente, 
 - O modelo não substitui decisões do Product Owner nem garante que todo ambiente ofereça subagentes ou worktrees automáticos.
 - Operações de produção, dados irreversíveis, mudanças no ruleset e decisões de produto exigem autorização própria.
 - Não há aprovação humana obrigatória no ruleset enquanto não existir segundo mantenedor humano elegível.
-- Squash-only e exclusão automática de branch são configurações desejadas, ainda não aplicadas no GitHub.
+- Squash-only e exclusão automática de branches foram aplicados na tarefa 0.2.2.5; nenhuma aprovação obrigatória foi adicionada e o ruleset `Protect main` permaneceu inalterado.
 - As Skills `genesis-project-context` e `genesis-task-classification` são candidatas futuras; este ADR não as cria.
 
 ## Relações
@@ -58,4 +58,4 @@ O projeto precisa permitir colaboração entre agentes sem escrita concorrente, 
 
 ## Implementação
 
-Implementado documentalmente na Tarefa de Governança 0.2.2.4. A adoção começa por governança e pilotos controlados; normalização de EOL é o primeiro piloto planejado. Nenhuma Skill, configuração do GitHub ou funcionalidade da API foi criada por esta decisão.
+Implementado documentalmente na Tarefa de Governança 0.2.2.4. A Tarefa 0.2.2.5 aplicou squash-only e exclusão automática de branches sem alterar o ruleset ou adicionar aprovação obrigatória. A adoção continua por pilotos controlados; normalização de EOL é o próximo piloto planejado, e as Skills permanecem adiadas. Nenhuma funcionalidade da API foi criada por estas tarefas de governança.

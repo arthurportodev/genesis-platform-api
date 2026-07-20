@@ -3,7 +3,7 @@
 - **Última atualização:** 2026-07-20
 - **Fase:** 0.2 — Identidade e multi-tenancy
 - **Última tarefa funcional concluída:** 0.2.4 — Autorização por papel
-- **Última tarefa de governança concluída:** 0.2.2.4 — Sistema Operacional de Desenvolvimento Multiagente
+- **Última tarefa de governança concluída:** 0.2.2.5 — Padronização do merge e limpeza automática de branches
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
 - **Próxima tarefa funcional planejada:** 0.2.5 — Convites e gestão de membros; ainda não iniciada
@@ -26,7 +26,7 @@
 - Findings baixos e uma iteração de finding médio estritamente dentro do contrato podem ser corrigidos e reverificados; riscos de segurança, tenant, dados, schema, API, ownership ou expansão material interrompem o trabalho.
 - Código, testes e documentação durável devem integrar um único Pull Request por tarefa; evidências transitórias permanecem no GitHub.
 - As Skills `genesis-project-context` e `genesis-task-classification` são candidatas futuras e ainda não foram criadas.
-- Squash-only e exclusão automática da branch são configurações desejadas, ainda não aplicadas no GitHub. Nenhuma aprovação obrigatória é prevista enquanto não houver segundo mantenedor humano elegível.
+- O GitHub permite somente squash merge; merge commits e rebase merges estão desabilitados, e branches remotas incorporadas são excluídas automaticamente. Nenhuma aprovação obrigatória é prevista enquanto não houver segundo mantenedor humano elegível.
 - A normalização de EOL permanece como primeiro piloto planejado do modelo.
 
 ### Tenant context implementado
