@@ -1,6 +1,6 @@
 # ADR-005 — Autorização por papel
 
-- **Status:** Accepted — implementation in progress (task 0.2.4)
+- **Status:** Accepted — implemented in task 0.2.4
 - **Data:** 2026-07-19
 
 ## Contexto
@@ -50,6 +50,8 @@ Ainda não existem endpoints de negócio ou matriz real de capacidades. A infrae
 
 ## Implementação
 
-**Em andamento na tarefa 0.2.4.**
+**Implementado na Tarefa 0.2.4, PR #8, squash commit `7fb6752`.**
 
-A branch contém `AuthorizationModule`, `@Roles`, `RoleGuard` e testes unitários/E2E com controller exclusivo de teste. Não há consumidor tenant-scoped de produção, permissions, hierarquia, policy engine, migration, dependência ou acesso adicional ao banco. Este ADR não declara a tarefa concluída antes de revisão e merge.
+`AuthorizationModule`, `@Roles` e `RoleGuard` estão disponíveis na `main`, com testes unitários e E2E e CI do PR/pós-merge aprovadas. O módulo exporta o guard sem TypeORM ou porta opaca; o guard consome o papel do `TenantContext`, não adiciona consulta e falha fechado para metadata inválida, incluindo arrays esparsos e índices herdados.
+
+Permanecem fora do escopo endpoint tenant-scoped de produção, permissions, hierarquia, policy engine, autorização por recurso, proteção do último owner, gestão de membros, migration, dependência e consulta adicional ao banco.

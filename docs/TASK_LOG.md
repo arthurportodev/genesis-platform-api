@@ -72,12 +72,17 @@
 
 ## 0.2.4 — Autorização por papel
 
-**Em andamento.**
+**Status: concluída.**
 
-- `AuthorizationModule`, decorator tipado `@Roles` e `RoleGuard` em implementação.
-- Lista explícita de papéis, sem hierarquia, permissions ou policy engine.
-- Papel consumido exclusivamente do `TenantContext`, sem consulta adicional ao PostgreSQL.
-- Metadata do handler substitui a do controller; configuração inválida falha explicitamente.
-- Testes unitários e E2E com controller exclusivo de teste em desenvolvimento.
-- ADR-005 registra a decisão arquitetural.
-- Sem endpoint tenant-scoped de produção, migration, dependência ou regra de gestão de membros.
+- Objetivo entregue: autorização genérica por papel para rotas tenant-scoped futuras, separada de autenticação e resolução do tenant.
+- `AuthorizationModule`, decorator tipado `@Roles` e `RoleGuard` implementados; o módulo exporta somente o guard e não usa TypeORM, entidade, repository, service, controller, migration, estado compartilhado ou porta opaca.
+- Cadeia `AccessTokenGuard` → `TenantContextGuard` → `RoleGuard`, com listas explícitas e papel consumido exclusivamente do `TenantContext`, sem consulta adicional ao PostgreSQL.
+- Metadata do handler substitui a do controller; configuração ausente, vazia ou malformada e tenant context ausente falham fechados.
+- Testes unitários e E2E cobrem os três papéis, composição natural do NestJS, precedência de metadata, negação genérica, mudanças persistidas de papel e ausência de vazamento de política.
+- Dois findings baixos foram corrigidos com rejeição explícita de arrays esparsos e índices de array herdados.
+- ADR-005 registra a decisão arquitetural como implementada pela Tarefa 0.2.4.
+- Implementação funcional no PR #8; commit da branch `ba2661b39a0dd8fa4c65674ba8ed139c8c4107b1`; squash commit `7fb67525fd9301292fcd5bbe063fd3339a09a563`.
+- CI do PR, run `29708366038` (`Validate backend`, job `88248886316`), e CI pós-merge da `main`, run `29708662917` (job `88249569684`), aprovadas.
+- Nenhuma aprovação humana era obrigatória, nenhuma thread ficou pendente e a branch funcional foi removida após o merge.
+- Limites preservados: sem endpoint tenant-scoped de produção, matriz real de capacidades, permissions, hierarquia, policy engine, autorização por recurso, regra de último owner, gestão de membros, migration ou dependência nova.
+- Próxima tarefa funcional planejada: 0.2.5 — Convites e gestão de membros; ainda não iniciada.

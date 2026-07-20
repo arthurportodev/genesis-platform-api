@@ -2,18 +2,17 @@
 
 - **Última atualização:** 2026-07-19
 - **Fase:** 0.2 — Identidade e multi-tenancy
-- **Última tarefa funcional concluída:** 0.2.3 — Organização ativa e contexto de tenant
+- **Última tarefa funcional concluída:** 0.2.4 — Autorização por papel
 - **Última tarefa de governança concluída:** 0.2.2.3 — Proteção da main e CI obrigatório
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Tarefa funcional em andamento:** 0.2.4 — Autorização por papel
-- **Próxima tarefa após a conclusão:** 0.2.5 — Convites e gestão de membros
+- **Próxima tarefa funcional planejada:** 0.2.5 — Convites e gestão de membros; ainda não iniciada
 
 ## Implementado
 
 - Fundação NestJS 11, Node.js 24, TypeScript estrito e API sob `/api/v1`.
 - Configuração validada com Joi, PostgreSQL 17, TypeORM com `synchronize: false`, Docker e health check.
-- Módulos de configuração, banco, health, users, organizations, memberships, auth, auth-sessions e tenant-context.
+- Módulos de configuração, banco, health, users, organizations, memberships, auth, auth-sessions, tenant-context e authorization.
 - Usuários globais, organizações e memberships com papéis `owner`, `admin` e `member`.
 - Autenticação por email e senha, sessões persistidas, refresh rotativo e auditoria.
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
@@ -27,13 +26,15 @@
 - `CurrentTenant` disponibiliza o contexto validado a controllers tenant-scoped futuros.
 - Não há guard global ou endpoint tenant-scoped de produção.
 
-### Autorização por papel em implementação
+### Autorização por papel implementada
 
 - `AuthorizationModule` fornece `RoleGuard` sem acesso ao banco ou estado compartilhado.
 - `@Roles` declara listas explícitas de `owner`, `admin` e `member` em controllers ou handlers; metadata do handler prevalece.
-- O guard consome exclusivamente o papel já validado no `TenantContext` e usa negação `403` genérica.
+- O guard consome exclusivamente o papel já validado no `TenantContext`, não modifica a request, não adiciona consulta e usa negação `403` genérica.
+- Metadata ausente, vazia ou malformada, incluindo arrays esparsos e índices herdados, falha fechada com `500`; tenant context ausente também falha explicitamente.
 - Não há hierarquia implícita, permissions, policy engine, autorização por recurso ou matriz real de capacidades.
-- A infraestrutura existe na branch da tarefa 0.2.4, ainda em revisão e não disponível na `main`.
+- A infraestrutura foi incorporada à `main` pelo PR #8, squash commit `7fb6752`; a CI do PR e a CI pós-merge foram aprovadas.
+- Ainda não existe consumidor tenant-scoped de produção.
 
 ### Endpoints
 
@@ -70,7 +71,7 @@ Consulte os [ADRs](decisions/README.md).
 ## Limitações conhecidas
 
 - Entidades comerciais tenant-scoped com `organization_id` ainda não existem.
-- A infraestrutura genérica de autorização por papel está em implementação; permissions, matriz real de capacidades e invariantes de membros ainda não existem.
+- A infraestrutura genérica de autorização por papel está implementada; permissions, matriz real de capacidades, autorização por recurso e invariantes de membros ainda não existem.
 - Refresh token é retornado em JSON; cookie `HttpOnly` não foi decidido/implementado.
 - Rate limiter é local, não distribuído e perde estado ao reiniciar.
 - Não há política de retenção para sessões e auditoria.
