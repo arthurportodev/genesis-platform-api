@@ -1,9 +1,9 @@
 # Estado atual
 
-- **Última atualização:** 2026-07-19
+- **Última atualização:** 2026-07-20
 - **Fase:** 0.2 — Identidade e multi-tenancy
 - **Última tarefa funcional concluída:** 0.2.4 — Autorização por papel
-- **Última tarefa de governança concluída:** 0.2.2.3 — Proteção da main e CI obrigatório
+- **Última tarefa de governança concluída:** 0.2.2.4 — Sistema Operacional de Desenvolvimento Multiagente
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
 - **Próxima tarefa funcional planejada:** 0.2.5 — Convites e gestão de membros; ainda não iniciada
@@ -17,6 +17,17 @@
 - Autenticação por email e senha, sessões persistidas, refresh rotativo e auditoria.
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
 - Testes unitários, E2E e de integração; CI com build Docker.
+
+### Governança multiagente adotada
+
+- Toda tarefa é classificada como Simple, Normal ou Critical antes da escrita; um único gatilho crítico eleva toda a tarefa.
+- O ciclo operacional usa coordenador, builder, verifier e operador de entrega, com ownership exclusivo por arquivo e worktrees para writers paralelos.
+- Gate 1 aprova arquitetura quando exigida, Gate 2 aprova a implementação e Gate 3 autoriza explicitamente o merge.
+- Findings baixos e uma iteração de finding médio estritamente dentro do contrato podem ser corrigidos e reverificados; riscos de segurança, tenant, dados, schema, API, ownership ou expansão material interrompem o trabalho.
+- Código, testes e documentação durável devem integrar um único Pull Request por tarefa; evidências transitórias permanecem no GitHub.
+- As Skills `genesis-project-context` e `genesis-task-classification` são candidatas futuras e ainda não foram criadas.
+- Squash-only e exclusão automática da branch são configurações desejadas, ainda não aplicadas no GitHub. Nenhuma aprovação obrigatória é prevista enquanto não houver segundo mantenedor humano elegível.
+- A normalização de EOL permanece como primeiro piloto planejado do modelo.
 
 ### Tenant context implementado
 
@@ -33,7 +44,7 @@
 - O guard consome exclusivamente o papel já validado no `TenantContext`, não modifica a request, não adiciona consulta e usa negação `403` genérica.
 - Metadata ausente, vazia ou malformada, incluindo arrays esparsos e índices herdados, falha fechada com `500`; tenant context ausente também falha explicitamente.
 - Não há hierarquia implícita, permissions, policy engine, autorização por recurso ou matriz real de capacidades.
-- A infraestrutura foi incorporada à `main` pelo PR #8, squash commit `7fb6752`; a CI do PR e a CI pós-merge foram aprovadas.
+- A infraestrutura foi incorporada à `main` pelo PR #8, com validações do PR e pós-merge aprovadas.
 - Ainda não existe consumidor tenant-scoped de produção.
 
 ### Endpoints

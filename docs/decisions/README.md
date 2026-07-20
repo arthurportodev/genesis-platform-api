@@ -38,3 +38,4 @@ Crie ADR quando a decisão afetar múltiplas tarefas, segurança, dados, isolame
 - [ADR-003 — Autenticação e sessões](ADR-003-authentication-sessions.md) — Accepted
 - [ADR-004 — Contexto de organização ativa](ADR-004-active-organization-context.md) — Accepted; implementado na tarefa 0.2.3
 - [ADR-005 — Autorização por papel](ADR-005-role-based-authorization.md) — Accepted; implementado na tarefa 0.2.4
+- [ADR-006 — Modelo operacional multiagente](ADR-006-multi-agent-operating-model.md) — Accepted; implementado na tarefa 0.2.2.4
