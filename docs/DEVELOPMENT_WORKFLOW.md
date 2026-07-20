@@ -51,12 +51,12 @@ Branch, SHAs transitórios, run IDs, job IDs, timestamps, comentários e convers
 - O check `Validate backend` deve passar e a branch do Pull Request deve estar atualizada com a `main`.
 - Todas as conversas de revisão devem ser resolvidas antes do merge.
 - Nenhuma aprovação humana é obrigatória enquanto não existir segundo mantenedor humano elegível.
-- Integração normal por squash merge.
+- Somente squash merge é permitido; merge commits e rebase merges estão desabilitados.
 - O histórico deve permanecer linear e a exclusão da `main` é bloqueada.
-- A branch incorporada é removida após sincronização e comprovação do merge.
+- A branch remota incorporada é excluída automaticamente pelo GitHub; a branch local ainda é removida após sincronização e comprovação do merge.
 - Segredos, `.env`, dependências, builds, logs e temporários nunca são versionados.
 
-Squash-only e exclusão automática de branch são configurações desejadas, mas ainda não aplicadas no GitHub. A política documentada não deve ser confundida com enforcement existente.
+Squash-only e exclusão automática de branch estão aplicados nas configurações do repositório. O ruleset `Protect main` permanece inalterado: Gate 3 continua obrigatório, e CI verde não autoriza merge automaticamente.
 
 ## Responsabilidades institucionais
 

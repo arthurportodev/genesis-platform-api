@@ -71,6 +71,16 @@
 - As Skills `genesis-project-context` e `genesis-task-classification` foram adiadas até que pilotos comprovem procedimentos estáveis.
 - Normalização de EOL foi definida como primeiro piloto planejado; nenhuma configuração GitHub ou funcionalidade da API foi alterada.
 
+## 0.2.2.5 — Padronização do merge e limpeza automática de branches
+
+**Concluído como tarefa Normal de governança.**
+
+- Somente squash merge é permitido; merge commits e rebase merges foram desabilitados.
+- A exclusão automática de branches remotas incorporadas foi ativada; branches locais continuam sendo removidas após sincronização e comprovação.
+- O ruleset `Protect main` foi preservado, sem aprovação humana obrigatória enquanto não houver segundo mantenedor humano elegível.
+- Nenhuma funcionalidade, workflow, código, teste, migration ou dependência foi alterada.
+- A normalização de EOL permanece como próximo piloto planejado.
+
 ## 0.2.3 — Organização ativa e contexto de tenant
 
 **Concluído no PR #6.**
