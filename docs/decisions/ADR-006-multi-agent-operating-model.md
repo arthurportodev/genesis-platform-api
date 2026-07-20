@@ -58,4 +58,4 @@ O projeto precisa permitir colaboração entre agentes sem escrita concorrente, 
 
 ## Implementação
 
-Implementado documentalmente na Tarefa de Governança 0.2.2.4. A Tarefa 0.2.2.5 aplicou squash-only e exclusão automática de branches sem alterar o ruleset ou adicionar aprovação obrigatória. A adoção continua por pilotos controlados; normalização de EOL é o próximo piloto planejado, e as Skills permanecem adiadas. Nenhuma funcionalidade da API foi criada por estas tarefas de governança.
+Implementado documentalmente na Tarefa de Governança 0.2.2.4. A Tarefa 0.2.2.5 aplicou squash-only e exclusão automática de branches sem alterar o ruleset ou adicionar aprovação obrigatória. A Tarefa 0.2.2.6 concluiu a normalização de EOL como primeiro piloto: coordenador, um único builder e verifier independente atuaram de forma sequencial, com ownership e handoffs aplicados. A decisão original permaneceu inalterada, e as Skills continuam adiadas. Nenhuma funcionalidade da API foi criada por estas tarefas de governança.

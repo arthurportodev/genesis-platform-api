@@ -3,7 +3,7 @@
 - **Última atualização:** 2026-07-20
 - **Fase:** 0.2 — Identidade e multi-tenancy
 - **Última tarefa funcional concluída:** 0.2.4 — Autorização por papel
-- **Última tarefa de governança concluída:** 0.2.2.5 — Padronização do merge e limpeza automática de branches
+- **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
 - **Próxima tarefa funcional planejada:** 0.2.5 — Convites e gestão de membros; ainda não iniciada
@@ -27,7 +27,9 @@
 - Código, testes e documentação durável devem integrar um único Pull Request por tarefa; evidências transitórias permanecem no GitHub.
 - As Skills `genesis-project-context` e `genesis-task-classification` são candidatas futuras e ainda não foram criadas.
 - O GitHub permite somente squash merge; merge commits e rebase merges estão desabilitados, e branches remotas incorporadas são excluídas automaticamente. Nenhuma aprovação obrigatória é prevista enquanto não houver segundo mantenedor humano elegível.
-- A normalização de EOL permanece como primeiro piloto planejado do modelo.
+- `.gitattributes` define `* text=auto eol=lf`: arquivos textuais tracked usam LF canônico e binários detectados permanecem sem conversão de texto.
+- O inventário atual não exige exceção CRLF nem regra binária específica; falsos diffs `Delete-CR` foram eliminados sem alterar `core.autocrlf`.
+- A Tarefa 0.2.2.6 concluiu o primeiro piloto do modelo multiagente. As Skills continuam ausentes e a 0.2.5 permanece planejada e não iniciada.
 
 ### Tenant context implementado
 

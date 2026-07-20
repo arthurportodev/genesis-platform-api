@@ -81,6 +81,17 @@
 - Nenhuma funcionalidade, workflow, código, teste, migration ou dependência foi alterada.
 - A normalização de EOL permanece como próximo piloto planejado.
 
+## 0.2.2.6 — Normalização de EOL
+
+**Concluído como tarefa Normal de governança e infraestrutura.**
+
+- `.gitattributes` adotou a política mínima `* text=auto eol=lf`; arquivos textuais tracked foram materializados em LF canônico.
+- Não existe exceção CRLF nem regra binária específica, pois o inventário não identificou caso real; `text=auto` preserva binários fora da conversão de texto.
+- A prova byte a byte confirmou zero mudança semântica acidental nos arquivos normalizados.
+- Formatação, lint, build, testes unitários, E2E e de integração e build Docker foram aprovados na mesma rodada completa.
+- O primeiro piloto multiagente usou ownership exclusivo, handoffs completos e verifier independente; as Skills permanecem adiadas.
+- Nenhuma funcionalidade da API foi alterada, e a Tarefa 0.2.5 continua planejada e não iniciada.
+
 ## 0.2.3 — Organização ativa e contexto de tenant
 
 **Concluído no PR #6.**

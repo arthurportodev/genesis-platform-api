@@ -15,6 +15,7 @@ Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado
 - ✅ 0.2.2.3 — Proteção da main e CI obrigatório
 - ✅ 0.2.2.4 — Sistema Operacional de Desenvolvimento Multiagente
 - ✅ 0.2.2.5 — Padronização do merge e limpeza automática de branches
+- ✅ 0.2.2.6 — Normalização de EOL
 - ✅ 0.2.3 — Organização ativa e contexto de tenant
 - ✅ 0.2.4 — Autorização por papel
 - ⬜ 0.2.5 — Convites e gestão de membros
