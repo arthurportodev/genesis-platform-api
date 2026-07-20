@@ -1,6 +1,6 @@
 # Genesis Platform API
 
-Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas e contexto de organização ativa por request. A infraestrutura de autorização por papel está em implementação e revisão na Tarefa 0.2.4.
+Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas, contexto de organização ativa por request e infraestrutura genérica de autorização por papel. A Tarefa 0.2.4 foi incorporada à `main` pelo PR #8; a próxima tarefa funcional planejada é a 0.2.5 — Convites e gestão de membros, ainda não iniciada.
 
 ## Documentação do projeto
 
@@ -212,11 +212,11 @@ Autenticação e tenant context usam guards separados. JWT e sessão permanecem 
 
 Consulte o [estado atual](docs/CURRENT_STATE.md), a [arquitetura](docs/ARCHITECTURE.md), os [controles de segurança](docs/SECURITY.md) e o [ADR-004](docs/decisions/ADR-004-active-organization-context.md).
 
-## Autorização por papel em implementação
+## Autorização por papel implementada
 
-A branch da tarefa 0.2.4 adiciona `AuthorizationModule`, `@Roles` e `RoleGuard`. Rotas tenant-scoped futuras poderão compor autenticação, tenant context e autorização, declarando listas explícitas de `owner`, `admin` e `member`. O guard usa somente o papel persistido já presente no `TenantContext`, sem nova consulta, cache ou papel vindo do cliente.
+A Tarefa 0.2.4 implementou `AuthorizationModule`, `@Roles` e `RoleGuard`. Rotas tenant-scoped futuras poderão compor autenticação, tenant context e autorização, declarando listas explícitas de `owner`, `admin` e `member`. O guard usa somente o papel persistido já presente no `TenantContext`, sem nova consulta, cache ou papel vindo do cliente. Metadata do handler substitui a do controller, e configuração ausente, vazia ou malformada falha fechada.
 
-A implementação ainda está em revisão. Não há endpoint tenant-scoped de produção, matriz real de capacidades, hierarquia implícita, permissions, autorização por recurso, regra de último owner ou gestão de membros. Consulte o [ADR-005](docs/decisions/ADR-005-role-based-authorization.md).
+Não há endpoint tenant-scoped de produção, matriz real de capacidades, hierarquia implícita, permissions, autorização por recurso, regra de último owner ou gestão de membros. Consulte o [ADR-005](docs/decisions/ADR-005-role-based-authorization.md).
 
 ## Seed inicial
 
@@ -372,7 +372,7 @@ Os módulos de users, organizations e memberships ainda não expõem CRUD. A inf
 - **Credenciais:** senhas usam Argon2id; refresh tokens usam HMAC-SHA-256 com pepper e rotação transacional.
 - **Sessões persistidas:** access tokens só são aceitos quando usuário e sessão continuam ativos no PostgreSQL.
 - **Escopo do token:** JWT e sessão permanecem sem tenant ou papel; a organização ativa e o papel atual são validados no PostgreSQL por request.
-- **Autorização explícita:** a infraestrutura em revisão aceita somente papéis listados por rota, sem hierarquia ou permissions.
+- **Autorização explícita:** a infraestrutura implementada aceita somente papéis listados por rota, sem hierarquia ou permissions.
 - **Swagger adiado:** será mais útil quando existirem endpoints de negócio e seus DTOs.
 
 ## Problemas comuns
@@ -385,4 +385,4 @@ Os módulos de users, organizations e memberships ainda não expõem CRUD. A inf
 
 ## Próximos módulos previstos
 
-Após a conclusão e revisão da infraestrutura de autorização por papel em andamento, a próxima tarefa planejada é 0.2.5 — Convites e gestão de membros. Módulos de CRM e integrações permanecem futuros.
+A próxima tarefa funcional planejada é a 0.2.5 — Convites e gestão de membros. Ela ainda não foi iniciada; módulos de CRM e integrações permanecem futuros.

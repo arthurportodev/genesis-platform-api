@@ -66,18 +66,20 @@
 - Tenant, membership e papel permanecem fora do JWT, da sessão e do user.
 - O contexto não é aceito de body, query ou cookie e não é registrado integralmente em logs.
 - Não há cache ou estado compartilhado de tenant; a validação ocorre novamente a cada request tenant-scoped.
-- A infraestrutura de tenant context está implementada, mas ainda não há entidades comerciais com `organization_id`; a autorização por papel está em implementação conforme a seção seguinte.
+- A infraestrutura de tenant context e a autorização genérica por papel estão implementadas, mas ainda não há entidades comerciais com `organization_id` ou endpoint tenant-scoped de produção.
 
-## Autorização por papel em implementação
+## Autorização por papel implementada
 
-- A cadeia tenant-scoped em revisão executa `AccessTokenGuard`, `TenantContextGuard` e `RoleGuard`, nessa ordem.
+- A cadeia tenant-scoped implementada executa `AccessTokenGuard`, `TenantContextGuard` e `RoleGuard`, nessa ordem.
 - O papel vem somente da membership persistida e chega pelo `TenantContext`; JWT, sessão e entradas do cliente não fornecem papel.
 - `@Roles` declara todos os papéis aceitos explicitamente, sem hierarquia implícita.
-- Metadata inválida e tenant context ausente falham com `500`, evitando política permissiva por erro de configuração.
+- Metadata ausente, vazia ou malformada falha com `500`; a validação também rejeita arrays esparsos e índices herdados, evitando política permissiva por erro de configuração.
+- Tenant context ausente falha com `500`, pois indica composição incorreta da cadeia.
 - Papel insuficiente reutiliza `403 Organization access denied.` sem revelar papel atual, lista permitida, organization, membership ou política.
-- O `RoleGuard` não executa consulta adicional, não cria cache e não altera o contexto.
+- O `RoleGuard` não aceita papel de body, query, header, cookie ou `request.user`; não executa consulta adicional, não cria cache e não altera o contexto.
 - Permissions, policy engine, autorização por recurso, matriz real de capacidades e proteção do último owner permanecem fora da tarefa 0.2.4.
-- A implementação está em revisão e não adiciona endpoint tenant-scoped de produção.
+- Não há endpoint tenant-scoped de produção.
+- O papel é um snapshot validado por request. Uma alteração concorrente posterior à criação do contexto será observada na request seguinte; operações críticas futuras poderão exigir revalidação transacional própria.
 
 ## Limitações e decisões abertas
 

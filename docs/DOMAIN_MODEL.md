@@ -70,9 +70,9 @@ Este documento resume conceitos implementados; as migrations são a fonte do sch
 - **Campos:** `userId`, `organizationId`, `membershipId` e `role`.
 - **Origem:** user autenticado, header UUID v4 validado e membership atual consultada no PostgreSQL.
 - **Ciclo de vida:** criado pelo `TenantContextGuard` para cada request tenant-scoped e acessado por `CurrentTenant`.
-- **Autorização em implementação:** o `RoleGuard` consome `role` exclusivamente deste contexto e compara com listas explícitas declaradas por `@Roles`, sem consultar o banco novamente.
+- **Autorização:** o `RoleGuard` implementado consome `role` exclusivamente deste contexto e compara com listas explícitas declaradas por `@Roles`, sem consultar o banco novamente ou modificar o contexto.
 - **Limite:** não é armazenado em JWT, sessão ou user; não representa permissions, hierarquia de papéis ou autorização por recurso.
 
 ## Regra para entidades futuras
 
-Entidades de negócio tenant-scoped deverão conter `organization_id` e depender do contexto validado. Essa regra é arquitetural; tais entidades, seus endpoints e a matriz real de capacidades ainda não existem. A infraestrutura genérica de autorização por papel está em implementação e revisão na tarefa 0.2.4.
+Entidades de negócio tenant-scoped deverão conter `organization_id` e depender do contexto validado. Essa regra é arquitetural; a infraestrutura genérica de autorização por papel está implementada, mas tais entidades, seus endpoints e a matriz real de capacidades ainda não existem.
