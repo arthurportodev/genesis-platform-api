@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { parseDurationSeconds } from '../src/config/auth.config';
+import { assertRuntimeDatabaseIdentity } from '../src/config/database.config';
 import { environmentValidationSchema } from '../src/config/environment.validation';
 
 describe('Authentication configuration', () => {
@@ -11,8 +12,9 @@ describe('Authentication configuration', () => {
     DATABASE_HOST: 'localhost',
     DATABASE_PORT: 5432,
     DATABASE_NAME: 'genesis_platform_test',
-    DATABASE_USER: 'genesis_test',
+    DATABASE_USER: 'genesis_runtime_test',
     DATABASE_PASSWORD: 'test-only',
+    DATABASE_RUNTIME_ROLE: 'genesis_runtime_test',
     FRONTEND_URL: 'http://localhost:5173',
     TRUST_PROXY_HOPS: 0,
     JWT_ACCESS_SECRET: randomBytes(48).toString('base64url'),
@@ -35,6 +37,18 @@ describe('Authentication configuration', () => {
     });
     expect(parseDurationSeconds('15m')).toBe(900);
     expect(parseDurationSeconds('2h')).toBe(7_200);
+  });
+
+  it('fails startup unless the connection user is the configured runtime role', () => {
+    expect(() =>
+      assertRuntimeDatabaseIdentity(
+        validEnvironment.DATABASE_USER,
+        validEnvironment.DATABASE_RUNTIME_ROLE,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertRuntimeDatabaseIdentity('migration_owner', 'genesis_runtime_test'),
+    ).toThrow('DATABASE_USER must equal DATABASE_RUNTIME_ROLE');
   });
 
   it('does not require the seed-only initial owner password at runtime', () => {
@@ -70,6 +84,12 @@ describe('Authentication configuration', () => {
       environmentValidationSchema.validate({
         ...validEnvironment,
         AUTH_LOGIN_MAX_BUCKETS: 1,
+      }).error,
+    ).toBeDefined();
+    expect(
+      environmentValidationSchema.validate({
+        ...validEnvironment,
+        DATABASE_RUNTIME_ROLE: 'unsafe-role;drop',
       }).error,
     ).toBeDefined();
   });

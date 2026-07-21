@@ -11,6 +11,7 @@ import {
   hashPassword,
   validatePasswordPolicy,
 } from '../../modules/auth/services/password.service';
+import { normalizeEmail } from '../../common/normalization/email.normalizer';
 
 export interface SeedLogger {
   log(message: string): void;
@@ -44,7 +45,7 @@ export async function seedInitialTenant(
     const users = manager.getRepository(User);
     const organizations = manager.getRepository(Organization);
     const memberships = manager.getRepository(Membership);
-    const normalizedEmail = INITIAL_USER_EMAIL.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(INITIAL_USER_EMAIL);
 
     let user = await users
       .createQueryBuilder('user')

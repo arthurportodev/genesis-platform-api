@@ -8,7 +8,10 @@ import { OrganizationStatus } from '../src/modules/organizations/enums/organizat
 import { TenantContextService } from '../src/modules/tenant-context/services/tenant-context.service';
 import { User } from '../src/modules/users/entities/user.entity';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
-import { createIntegrationDataSource } from './support/integration-data-source';
+import {
+  createIntegrationDataSource,
+  prepareIntegrationRuntimeRole,
+} from './support/integration-data-source';
 
 describe('TenantContextService integration', () => {
   let connection: DataSource;
@@ -27,6 +30,7 @@ describe('TenantContextService integration', () => {
   beforeAll(async () => {
     connection = createIntegrationDataSource();
     await connection.initialize();
+    await prepareIntegrationRuntimeRole(connection);
     await connection.dropDatabase();
     await connection.runMigrations();
 

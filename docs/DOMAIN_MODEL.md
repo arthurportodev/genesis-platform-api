@@ -73,6 +73,24 @@ Este documento resume conceitos implementados; as migrations são a fonte do sch
 - **Autorização:** o `RoleGuard` implementado consome `role` exclusivamente deste contexto e compara com listas explícitas declaradas por `@Roles`, sem consultar o banco novamente ou modificar o contexto.
 - **Limite:** não é armazenado em JWT, sessão ou user; não representa permissions, hierarquia de papéis ou autorização por recurso.
 
+## OrganizationInvitation
+
+- **Propósito:** representar um convite tenant-scoped para `member` ou `admin`.
+- **Estados persistidos:** `pending`, `accepted`, `revoked`; `expired` é derivado
+  de `expires_at` com precedência accepted → revoked → expired → pending.
+- **Token:** nonce não selecionado por padrão e versões são persistidos; token,
+  MAC e hash não são persistidos. A MAC HMAC-SHA-256 é regenerável por keyring.
+- **Lifecycle da 0.2.5.1:** create, revoke idempotente e replace com nova linha e
+  relação imutável. Aceitação permanece planejada.
+- **Emissor:** membership imutável. Inativar issuer membership/user revoga
+  pendentes na mesma transação; mudar role não revoga.
+
+## InvitationDeliveryOutbox e OrganizationAuditLog
+
+O outbox contém somente colunas explícitas e referências, sem token/email/link;
+0.2.5.1 produz apenas `queued`/`cancelled`. A auditoria organizacional é
+append-only no PostgreSQL e não reutiliza `AuthAuditLog`.
+
 ## Regra para entidades futuras
 
-Entidades de negócio tenant-scoped deverão conter `organization_id` e depender do contexto validado. Essa regra é arquitetural; a infraestrutura genérica de autorização por papel está implementada, mas tais entidades, seus endpoints e a matriz real de capacidades ainda não existem.
+Entidades de negócio tenant-scoped devem conter `organization_id` e depender do contexto validado. `OrganizationInvitation` e suas rotas administrativas são a primeira aplicação dessa regra; uma matriz geral de capacidades e as demais entidades de negócio ainda não existem.

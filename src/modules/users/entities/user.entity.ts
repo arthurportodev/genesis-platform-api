@@ -11,6 +11,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
+import { normalizeEmail } from '../../../common/normalization/email.normalizer';
 import { AuthSession } from '../../auth-sessions/entities/auth-session.entity';
 import { Membership } from '../../memberships/entities/membership.entity';
 import { UserStatus } from '../enums/user-status.enum';
@@ -81,7 +82,7 @@ export class User {
   @BeforeInsert()
   @BeforeUpdate()
   normalize(): void {
-    this.email = this.email.trim().toLowerCase();
+    this.email = normalizeEmail(this.email);
     this.name = this.name.trim();
   }
 }

@@ -4,6 +4,7 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
+import { InvitationsModule } from './modules/invitations/invitations.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { TenantContextModule } from './modules/tenant-context/tenant-context.module';
 import { UsersModule } from './modules/users/users.module';
@@ -18,6 +19,7 @@ import { UsersModule } from './modules/users/users.module';
     OrganizationsModule,
     MembershipsModule,
     TenantContextModule,
+    InvitationsModule,
   ],
 })
 export class AppModule {}

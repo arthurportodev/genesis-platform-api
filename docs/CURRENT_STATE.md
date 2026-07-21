@@ -6,7 +6,7 @@
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Próxima tarefa funcional planejada:** 0.2.5 — Convites e gestão de membros; ainda não iniciada
+- **Tarefa funcional em implementação:** 0.2.5.1 — Domínio e administração de convites
 
 ## Implementado
 
@@ -57,8 +57,28 @@
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/auth/logout-all`
 - `GET /api/v1/auth/me`
+- `POST /api/v1/invitations` (`503` fixo até 0.2.5.2)
+- `GET /api/v1/invitations`
+- `GET /api/v1/invitations/:invitationId`
+- `POST /api/v1/invitations/:invitationId/revoke`
+- `POST /api/v1/invitations/:invitationId/replace` (`503` fixo até 0.2.5.2)
 
 Não existem endpoints de CRUD para usuários, organizações ou memberships.
+
+### Convites em implementação
+
+- `OrganizationInvitation` e as tabelas separadas de audit, idempotência e
+  outbox implementam o domínio e a administração tenant-scoped da 0.2.5.1.
+- Owner administra invitations de `member` e `admin`; admin administra somente
+  invitations de `member`, sempre com a cadeia completa de guards e revalidação
+  transacional.
+- As rotas create/list/get/revoke/replace estão registradas. Create e replace
+  permanecem bloqueadas por readiness fixa com `503` até a 0.2.5.2 entregar
+  provider e worker; nenhuma flag de ambiente pode habilitá-las nesta etapa.
+- O outbox só acumula eventos `queued` quando readiness é substituída em testes;
+  não existe envio, worker ou retry real.
+- Aceitação, ativação, criação de users e gestão de memberships continuam
+  planejadas para as subtarefas seguintes.
 
 ### Schema
 
@@ -66,8 +86,9 @@ Migrations existentes:
 
 - [`1784400000000-CreateMultiTenantCore.ts`](../src/database/migrations/1784400000000-CreateMultiTenantCore.ts)
 - [`1784486400000-CreateAuthSessions.ts`](../src/database/migrations/1784486400000-CreateAuthSessions.ts)
+- [`1785004800000-CreateOrganizationInvitations.ts`](../src/database/migrations/1785004800000-CreateOrganizationInvitations.ts)
 
-Tabelas da aplicação: `users`, `organizations`, `memberships`, `auth_sessions`, `auth_refresh_tokens` e `auth_audit_logs`.
+Tabelas da aplicação: `users`, `organizations`, `memberships`, `auth_sessions`, `auth_refresh_tokens`, `auth_audit_logs`, `organization_invitations`, `organization_audit_logs`, `organization_command_idempotency` e `invitation_delivery_outbox`.
 
 ## Decisões adotadas
 
@@ -83,7 +104,7 @@ Consulte os [ADRs](decisions/README.md).
 
 ## Limitações conhecidas
 
-- Entidades comerciais tenant-scoped com `organization_id` ainda não existem.
+- `OrganizationInvitation` é a primeira entidade de domínio tenant-scoped; as demais entidades comerciais ainda não existem.
 - A infraestrutura genérica de autorização por papel está implementada; permissions, matriz real de capacidades, autorização por recurso e invariantes de membros ainda não existem.
 - Refresh token é retornado em JSON; cookie `HttpOnly` não foi decidido/implementado.
 - Rate limiter é local, não distribuído e perde estado ao reiniciar.

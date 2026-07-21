@@ -21,7 +21,17 @@
 - Refresh token opaco: `sessionId` + segredo aleatório de 32 bytes em base64url.
 - O banco armazena somente HMAC-SHA-256 com `REFRESH_TOKEN_PEPPER`.
 - Cada login cria sessão persistida e token `active`; validade padrão de 30 dias.
-- Rotação é transacional, bloqueia o registro e mantém histórico `active`/`consumed`/`revoked`.
+- Rotação é transacional e mantém histórico `active`/`consumed`/`revoked`. Uma
+  pré-leitura sem lock localiza apenas os IDs pelo par exato sessão/hash; ela
+  não decide autorização. A transação adquire locks separados na ordem `User`
+  -> `AuthSession` -> `AuthRefreshToken`, relê o estado completo e executa todas
+  as validações somente depois dos locks.
+- O lock do user usa exclusivamente
+  `app_private.lock_auth_refresh_user(uuid)`, sem conceder `UPDATE` em `users` à
+  role runtime. A função não retorna dados nem escreve e usa `FOR NO KEY
+  UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
+  commit/rollback, enquanto inserts de auditoria que dependem de `KEY SHARE`
+  continuam livres e não formam ciclo com logout/logout-all.
 - Reapresentar um token `consumed` comprova reutilização e revoga sessão e tokens ativos.
 - Um segredo aleatório cujo hash nunca existiu retorna `401` e auditoria de falha, sem revogar a sessão indicada pelo identificador público.
 - Logout revoga a sessão atual; logout-all revoga todas as sessões ativas do user.
@@ -66,7 +76,7 @@
 - Tenant, membership e papel permanecem fora do JWT, da sessão e do user.
 - O contexto não é aceito de body, query ou cookie e não é registrado integralmente em logs.
 - Não há cache ou estado compartilhado de tenant; a validação ocorre novamente a cada request tenant-scoped.
-- A infraestrutura de tenant context e a autorização genérica por papel estão implementadas, mas ainda não há entidades comerciais com `organization_id` ou endpoint tenant-scoped de produção.
+- A infraestrutura de tenant context e a autorização genérica por papel protegem as rotas administrativas de invitations, primeira entidade de domínio com `organization_id`.
 
 ## Autorização por papel implementada
 
@@ -78,7 +88,7 @@
 - Papel insuficiente reutiliza `403 Organization access denied.` sem revelar papel atual, lista permitida, organization, membership ou política.
 - O `RoleGuard` não aceita papel de body, query, header, cookie ou `request.user`; não executa consulta adicional, não cria cache e não altera o contexto.
 - Permissions, policy engine, autorização por recurso, matriz real de capacidades e proteção do último owner permanecem fora da tarefa 0.2.4.
-- Não há endpoint tenant-scoped de produção.
+- As rotas administrativas de invitations são o primeiro consumidor tenant-scoped; a regra de papel também é revalidada no service.
 - O papel é um snapshot validado por request. Uma alteração concorrente posterior à criação do contexto será observada na request seguinte; operações críticas futuras poderão exigir revalidação transacional própria.
 
 ## Limitações e decisões abertas
@@ -87,6 +97,47 @@
 - Rate limiter não é distribuído; uma solução compartilhada será necessária com múltiplas réplicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.
 - Rotação operacional de segredos não foi definida.
-- Entidades comerciais tenant-scoped e seus filtros por `organization_id` ainda não foram implementados.
-- PostgreSQL RLS é possibilidade futura, não uma proteção existente.
+- Outras entidades comerciais tenant-scoped e seus filtros por `organization_id` ainda não foram implementados.
+- PostgreSQL RLS com `FORCE` protege a auditoria organizacional append-only;
+  RLS geral para as demais tabelas continua uma possibilidade futura.
 - Recuperação de senha, confirmação de email, MFA e controles de produção não fazem parte do estágio atual.
+
+## Convites administrativos
+
+- Toda rota usa a cadeia de guards existente e listas explícitas owner/admin.
+  Create, replace e revoke relêem user, organization, membership e role dentro
+  da transação; list/get são leituras tenant-filtered e revalidam o actor sem
+  abrir transação de escrita.
+- Admin é hard-filtered para `member`; IDs cross-tenant ou invitations de admin
+  usam `404` uniforme.
+- Create/replace falham com `503` antes de qualquer transação enquanto a
+  readiness fixa estiver desabilitada.
+- Owner invitation é impossível no DTO, enum do banco e service.
+- Token bruto, MAC, chave e nonce nunca entram em API, audit, outbox,
+  idempotência ou logs. O nonce é a única matéria do token persistida e não é
+  selecionada por padrão.
+- Quotas por actor, organização, email e pendentes são verificadas sob lock da
+  organização; revoke não consome quota e replay não escreve novamente.
+- Triggers cobrem inativação direta de issuer membership/user; simples mudança
+  de role não revoga invitations.
+- `organization_audit_logs` permite somente `SELECT`/`INSERT` por policy e
+  grants explícitos; a verificação efetiva também nega `UPDATE`, `DELETE`,
+  `TRUNCATE`, `REFERENCES`, `TRIGGER` e `MAINTAIN`, inclusive por herança, e
+  triggers mantêm a defesa contra mutação para o owner.
+  Como em qualquer RLS PostgreSQL, superusers e roles com `BYPASSRLS` permanecem
+  uma exceção operacional residual e não devem ser usados pelo runtime.
+- A role de runtime é preexistente e configurada por `DATABASE_RUNTIME_ROLE`;
+  deve ser LOGIN, idêntica a `DATABASE_USER` e distinta do owner de migrations,
+  cujas credenciais `DATABASE_MIGRATION_*` não são carregadas pela API. A
+  migration não cria role, concede ACL mínima por tabela e falha fechada também
+  ao detectar qualquer privilégio efetivo/herdado fora de `SELECT`/`INSERT` na
+  auditoria organizacional.
+- Create pré-resolve os IDs e bloqueia organization, users, memberships e
+  invitations nessa ordem; coleções usam UUID crescente para evitar deadlock
+  inclusive em convites recíprocos entre tenants. Depois dos locks, todos os
+  IDs e atributos de recipient são relidos apenas para comparação; divergência
+  aborta e reinicia a transação, enquanto decisões usam somente o snapshot
+  bloqueado.
+- O resultado persistido de replace contém somente invitation anterior/nova e
+  os snapshots fixos `pending`/`queued`; metadata da resposta/replay permanece
+  separada e nunca adiciona campos ao payload público.

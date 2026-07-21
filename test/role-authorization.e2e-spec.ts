@@ -29,7 +29,11 @@ import { OrganizationStatus } from '../src/modules/organizations/enums/organizat
 import { TenantContextGuard } from '../src/modules/tenant-context/guards/tenant-context.guard';
 import { TenantContextModule } from '../src/modules/tenant-context/tenant-context.module';
 import { User } from '../src/modules/users/entities/user.entity';
-import { createIntegrationDataSource } from './support/integration-data-source';
+import {
+  configureIntegrationRuntimeEnvironment,
+  createIntegrationDataSource,
+  prepareIntegrationRuntimeRole,
+} from './support/integration-data-source';
 
 @Controller('test/role-authorization')
 @UseGuards(AccessTokenGuard, TenantContextGuard, RoleGuard)
@@ -84,10 +88,7 @@ describe('Role authorization (e2e)', () => {
     process.env.DATABASE_PORT = process.env.TEST_DATABASE_PORT ?? '5433';
     process.env.DATABASE_NAME =
       process.env.TEST_DATABASE_NAME ?? 'genesis_platform_test';
-    process.env.DATABASE_USER =
-      process.env.TEST_DATABASE_USER ?? 'genesis_test';
-    process.env.DATABASE_PASSWORD =
-      process.env.TEST_DATABASE_PASSWORD ?? 'test-only';
+    configureIntegrationRuntimeEnvironment();
     process.env.FRONTEND_URL = 'http://localhost:5173';
     process.env.TRUST_PROXY_HOPS = '0';
     process.env.JWT_ACCESS_SECRET = randomBytes(48).toString('base64url');
@@ -101,6 +102,7 @@ describe('Role authorization (e2e)', () => {
 
     connection = createIntegrationDataSource();
     await connection.initialize();
+    await prepareIntegrationRuntimeRole(connection);
     await connection.dropDatabase();
     await connection.runMigrations();
     await seedInitialTenant(

@@ -118,3 +118,19 @@
 - Implementação funcional incorporada pelo PR #8, com validações do PR e pós-merge aprovadas e nenhum finding pendente.
 - Limites preservados: sem endpoint tenant-scoped de produção, matriz real de capacidades, permissions, hierarquia, policy engine, autorização por recurso, regra de último owner, gestão de membros, migration ou dependência nova.
 - Próxima tarefa funcional planejada: 0.2.5 — Convites e gestão de membros; ainda não iniciada.
+
+## 0.2.5.1 — Domínio e administração de convites
+
+**Status: implementação em revisão.**
+
+- Domínio persistente de invitations com expiração derivada, revogação,
+  substituição e token HMAC regenerável sem token/hash bruto persistido.
+- Administração tenant-scoped por owner/admin; admin limitado a `member` e
+  owner invitation proibida.
+- Audit organizacional append-only, idempotência de replace, quotas no banco e
+  outbox explícito sem worker/provider.
+- Readiness fixa desabilita create/replace até 0.2.5.2; list/get/revoke continuam
+  disponíveis.
+- Defesas PostgreSQL e porta transacional revogam pendentes quando issuer
+  membership/user é inativado; role change não revoga.
+- Aceitação, email real, users novos, memberships e last-owner permanecem fora.

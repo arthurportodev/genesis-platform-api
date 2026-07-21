@@ -9,7 +9,10 @@ import { Organization } from '../src/modules/organizations/entities/organization
 import { OrganizationStatus } from '../src/modules/organizations/enums/organization-status.enum';
 import { User } from '../src/modules/users/entities/user.entity';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
-import { createIntegrationDataSource } from './support/integration-data-source';
+import {
+  createIntegrationDataSource,
+  prepareIntegrationRuntimeRole,
+} from './support/integration-data-source';
 
 interface NameRow {
   name: string;
@@ -26,6 +29,7 @@ describe('Multi-tenant database integration', () => {
   beforeAll(async () => {
     connection = createIntegrationDataSource();
     await connection.initialize();
+    await prepareIntegrationRuntimeRole(connection);
     await connection.dropDatabase();
   });
 
@@ -51,6 +55,18 @@ describe('Multi-tenant database integration', () => {
       'organizations',
       'users',
     ]);
+
+    await connection.undoLastMigration();
+    const invitationTablesAfterRollback = await connection.query<CountRow[]>(`
+      SELECT count(*)::text AS count
+      FROM pg_tables
+      WHERE schemaname = 'public'
+        AND tablename IN (
+          'organization_invitations', 'organization_audit_logs',
+          'organization_command_idempotency', 'invitation_delivery_outbox'
+        )
+    `);
+    expect(invitationTablesAfterRollback[0]?.count).toBe('0');
 
     await connection.undoLastMigration();
     const authTablesAfterRollback = await connection.query<CountRow[]>(`

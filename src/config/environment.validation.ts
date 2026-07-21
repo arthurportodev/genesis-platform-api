@@ -12,6 +12,9 @@ export const environmentValidationSchema = Joi.object({
   DATABASE_NAME: Joi.string().trim().required(),
   DATABASE_USER: Joi.string().trim().required(),
   DATABASE_PASSWORD: Joi.string().min(1).required(),
+  DATABASE_RUNTIME_ROLE: Joi.string()
+    .pattern(/^[a-z_][a-z0-9_]{0,62}$/)
+    .required(),
   FRONTEND_URL: Joi.string().uri().required(),
   TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(5).default(0),
   JWT_ACCESS_SECRET: Joi.string()
