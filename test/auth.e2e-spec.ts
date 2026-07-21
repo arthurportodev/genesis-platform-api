@@ -13,11 +13,18 @@ import { AuthSession } from '../src/modules/auth-sessions/entities/auth-session.
 import { AuthAuditEventType } from '../src/modules/auth-sessions/enums/auth-audit-event-type.enum';
 import { AuthRefreshTokenStatus } from '../src/modules/auth-sessions/enums/auth-refresh-token-status.enum';
 import { AuthSessionStatus } from '../src/modules/auth-sessions/enums/auth-session-status.enum';
-import { AuthTokenResponse } from '../src/modules/auth/auth.service';
+import {
+  AuthService,
+  AuthTokenResponse,
+} from '../src/modules/auth/auth.service';
 import { LoginRateLimiter } from '../src/modules/auth/services/login-rate-limiter.port';
 import { User } from '../src/modules/users/entities/user.entity';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
-import { createIntegrationDataSource } from './support/integration-data-source';
+import {
+  configureIntegrationRuntimeEnvironment,
+  createIntegrationDataSource,
+  prepareIntegrationRuntimeRole,
+} from './support/integration-data-source';
 
 describe('Authentication endpoints (e2e)', () => {
   let app: INestApplication;
@@ -34,10 +41,7 @@ describe('Authentication endpoints (e2e)', () => {
     process.env.DATABASE_PORT = process.env.TEST_DATABASE_PORT ?? '5433';
     process.env.DATABASE_NAME =
       process.env.TEST_DATABASE_NAME ?? 'genesis_platform_test';
-    process.env.DATABASE_USER =
-      process.env.TEST_DATABASE_USER ?? 'genesis_test';
-    process.env.DATABASE_PASSWORD =
-      process.env.TEST_DATABASE_PASSWORD ?? 'test-only';
+    configureIntegrationRuntimeEnvironment();
     process.env.FRONTEND_URL = 'http://localhost:5173';
     process.env.TRUST_PROXY_HOPS = '1';
     process.env.JWT_ACCESS_SECRET = randomBytes(48).toString('base64url');
@@ -53,6 +57,7 @@ describe('Authentication endpoints (e2e)', () => {
 
     connection = createIntegrationDataSource();
     await connection.initialize();
+    await prepareIntegrationRuntimeRole(connection);
     await connection.dropDatabase();
     await connection.runMigrations();
     await seedInitialTenant(
@@ -168,6 +173,72 @@ describe('Authentication endpoints (e2e)', () => {
     expect(session.lastUsedAt).toBeInstanceOf(Date);
   });
 
+  it('rolls back the refresh protocol atomically when rotation persistence fails', async () => {
+    const tokens = (await login()).body as AuthTokenResponse;
+    const sessionId = getSessionId(tokens.refreshToken);
+    const original = await findRefreshToken(sessionId);
+
+    await connection.query(`
+      CREATE FUNCTION public.reject_test_refresh_rotation()
+      RETURNS trigger LANGUAGE plpgsql AS $function$
+      BEGIN
+        RAISE EXCEPTION 'forced refresh rotation failure';
+      END;
+      $function$
+    `);
+    await connection.query(`
+      CREATE TRIGGER TRG_test_reject_refresh_rotation
+      BEFORE INSERT ON public.auth_refresh_tokens
+      FOR EACH ROW EXECUTE FUNCTION public.reject_test_refresh_rotation()
+    `);
+    try {
+      await request(app.getHttpServer() as Server)
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: tokens.refreshToken })
+        .expect(500);
+
+      expect(
+        await connection
+          .getRepository(AuthRefreshToken)
+          .findOneByOrFail({ id: original.id }),
+      ).toMatchObject({
+        status: AuthRefreshTokenStatus.ACTIVE,
+        consumedAt: null,
+        replacedByTokenId: null,
+      });
+      expect(
+        await connection.getRepository(AuthRefreshToken).countBy({ sessionId }),
+      ).toBe(1);
+      expect(
+        await connection.getRepository(AuthSession).findOneByOrFail({
+          id: sessionId,
+        }),
+      ).toMatchObject({
+        status: AuthSessionStatus.ACTIVE,
+        lastUsedAt: null,
+      });
+      expect(
+        await connection.getRepository(AuthAuditLog).countBy({
+          sessionId,
+          eventType: AuthAuditEventType.REFRESH_SUCCEEDED,
+        }),
+      ).toBe(0);
+    } finally {
+      await connection.query(
+        `DROP TRIGGER IF EXISTS TRG_test_reject_refresh_rotation
+         ON public.auth_refresh_tokens`,
+      );
+      await connection.query(
+        `DROP FUNCTION IF EXISTS public.reject_test_refresh_rotation()`,
+      );
+    }
+
+    await request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken: tokens.refreshToken })
+      .expect(200);
+  });
+
   it('treats a consumed token as proven reuse and revokes its family', async () => {
     const firstTokens = (await login()).body as AuthTokenResponse;
     const sessionId = getSessionId(firstTokens.refreshToken);
@@ -245,6 +316,192 @@ describe('Authentication endpoints (e2e)', () => {
       .send({ refreshToken: tokens.refreshToken })
       .expect(200);
   });
+
+  it('serializes two refreshes of the same token and revokes the family on proven reuse', async () => {
+    for (let repetition = 0; repetition < 5; repetition += 1) {
+      const tokens = (await login()).body as AuthTokenResponse;
+      const sessionId = getSessionId(tokens.refreshToken);
+
+      const [first, second] = await withTimeout(
+        Promise.all([
+          beginRefresh(tokens.refreshToken),
+          beginRefresh(tokens.refreshToken),
+        ]),
+        5_000,
+        `refresh versus refresh repetition ${repetition + 1}`,
+      );
+
+      expect([first.status, second.status].sort()).toEqual([200, 401]);
+      expect(
+        await connection.getRepository(AuthSession).findOneByOrFail({
+          id: sessionId,
+        }),
+      ).toMatchObject({
+        status: AuthSessionStatus.REVOKED,
+        revokeReason: 'refresh_reuse_detected',
+      });
+      expect(
+        await connection.getRepository(AuthRefreshToken).countBy({
+          sessionId,
+          status: AuthRefreshTokenStatus.ACTIVE,
+        }),
+      ).toBe(0);
+      expect(
+        await connection.getRepository(AuthAuditLog).countBy({
+          sessionId,
+          eventType: AuthAuditEventType.REFRESH_REUSE_DETECTED,
+        }),
+      ).toBe(1);
+    }
+  });
+
+  it('lets a committed user inactivation win before refresh without emitting tokens', async () => {
+    const tokens = (await login()).body as AuthTokenResponse;
+    const sessionId = getSessionId(tokens.refreshToken);
+    const user = await connection
+      .getRepository(User)
+      .findOneByOrFail({ email: ownerEmail });
+    const inactivator = connection.createQueryRunner();
+    await inactivator.connect();
+    await inactivator.startTransaction();
+    try {
+      await inactivator.query(
+        `UPDATE public.users SET status = 'inactive' WHERE id = $1`,
+        [user.id],
+      );
+      const refreshAttempt = beginRefresh(tokens.refreshToken);
+      await waitForRuntimeLock('lock_auth_refresh_user');
+      await inactivator.commitTransaction();
+
+      expect((await refreshAttempt).status).toBe(401);
+      expect(
+        await connection.getRepository(AuthRefreshToken).countBy({ sessionId }),
+      ).toBe(1);
+      expect(
+        await connection.getRepository(AuthRefreshToken).countBy({
+          sessionId,
+          status: AuthRefreshTokenStatus.ACTIVE,
+        }),
+      ).toBe(0);
+    } finally {
+      if (inactivator.isTransactionActive)
+        await inactivator.rollbackTransaction();
+      await inactivator.release();
+      await connection
+        .getRepository(User)
+        .update(user.id, { status: UserStatus.ACTIVE });
+    }
+  });
+
+  it('holds the user lock from refresh until commit before concurrent inactivation', async () => {
+    const tokens = (await login()).body as AuthTokenResponse;
+    const sessionId = getSessionId(tokens.refreshToken);
+    const user = await connection
+      .getRepository(User)
+      .findOneByOrFail({ email: ownerEmail });
+    const sessionBlocker = connection.createQueryRunner();
+    const inactivator = connection.createQueryRunner();
+    await sessionBlocker.connect();
+    await inactivator.connect();
+    await sessionBlocker.startTransaction();
+    await inactivator.startTransaction();
+    try {
+      await sessionBlocker.query(
+        `SELECT id FROM public.auth_sessions WHERE id = $1 FOR UPDATE`,
+        [sessionId],
+      );
+      const refreshAttempt = beginRefresh(tokens.refreshToken);
+      await waitForRuntimeLock('FROM public.auth_sessions AS auth_session');
+
+      const inactivation = inactivator.query(
+        `UPDATE public.users SET status = 'inactive' WHERE id = $1`,
+        [user.id],
+      );
+      await waitForDatabaseLock('UPDATE public.users SET status');
+      await sessionBlocker.commitTransaction();
+
+      const refreshResponse = await refreshAttempt;
+      expect(refreshResponse.status).toBe(200);
+      const rotated = refreshResponse.body as AuthTokenResponse;
+      await inactivation;
+      await inactivator.commitTransaction();
+
+      await request(app.getHttpServer() as Server)
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: rotated.refreshToken })
+        .expect(401);
+      expect(
+        await connection.getRepository(AuthRefreshToken).countBy({ sessionId }),
+      ).toBe(2);
+      expect(
+        await connection.getRepository(AuthRefreshToken).countBy({
+          sessionId,
+          status: AuthRefreshTokenStatus.ACTIVE,
+        }),
+      ).toBe(0);
+    } finally {
+      if (sessionBlocker.isTransactionActive)
+        await sessionBlocker.rollbackTransaction();
+      if (inactivator.isTransactionActive)
+        await inactivator.rollbackTransaction();
+      await sessionBlocker.release();
+      await inactivator.release();
+      await connection
+        .getRepository(User)
+        .update(user.id, { status: UserStatus.ACTIVE });
+    }
+  });
+
+  it.each(['logout', 'logout-all'] as const)(
+    'serializes refresh against %s without leaving an active token',
+    async (operation) => {
+      const authService = app.get(AuthService);
+      for (let repetition = 0; repetition < 5; repetition += 1) {
+        const tokens = (await login()).body as AuthTokenResponse;
+        const sessionId = getSessionId(tokens.refreshToken);
+        const currentUser = { userId: tokens.user.id, sessionId };
+        const context = {
+          ipAddress: '127.0.0.1',
+          userAgent: `concurrent-${operation}-${repetition + 1}`,
+        };
+        const logoutOperation =
+          operation === 'logout'
+            ? authService.logout(currentUser, context)
+            : authService.logoutAll(currentUser, context);
+
+        const [refreshOutcome, logoutOutcome] = await withTimeout(
+          Promise.allSettled([
+            authService.refresh(tokens.refreshToken, context),
+            logoutOperation,
+          ]),
+          5_000,
+          `refresh versus ${operation} repetition ${repetition + 1}`,
+        );
+        assertNoDeadlock(refreshOutcome, operation, repetition);
+        assertNoDeadlock(logoutOutcome, operation, repetition);
+        expect(logoutOutcome.status).toBe('fulfilled');
+        if (refreshOutcome.status === 'rejected') {
+          expect(
+            (
+              refreshOutcome.reason as { getStatus?: () => number }
+            ).getStatus?.(),
+          ).toBe(401);
+        }
+
+        expect(
+          await connection.getRepository(AuthSession).findOneByOrFail({
+            id: sessionId,
+          }),
+        ).toMatchObject({ status: AuthSessionStatus.REVOKED });
+        expect(
+          await connection.getRepository(AuthRefreshToken).countBy({
+            sessionId,
+            status: AuthRefreshTokenStatus.ACTIVE,
+          }),
+        ).toBe(0);
+      }
+    },
+  );
 
   it('revokes the current session and its active refresh tokens on logout', async () => {
     const tokens = (await login()).body as AuthTokenResponse;
@@ -510,6 +767,75 @@ describe('Authentication endpoints (e2e)', () => {
       .where('refreshToken.sessionId = :sessionId', { sessionId })
       .orderBy('refreshToken.createdAt', 'ASC')
       .getOneOrFail();
+  }
+
+  function beginRefresh(refreshToken: string) {
+    return request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken })
+      .then((response) => response);
+  }
+
+  function assertNoDeadlock(
+    outcome: PromiseSettledResult<unknown>,
+    operation: string,
+    repetition: number,
+  ): void {
+    if (
+      outcome.status === 'rejected' &&
+      (outcome.reason as { code?: string }).code === '40P01'
+    ) {
+      throw new Error(
+        `Forbidden SQLSTATE 40P01 during refresh versus ${operation} repetition ${repetition + 1}.`,
+      );
+    }
+  }
+
+  async function withTimeout<T>(
+    operation: Promise<T>,
+    timeoutMilliseconds: number,
+    label: string,
+  ): Promise<T> {
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        operation,
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error(`Timed out waiting for ${label}.`)),
+            timeoutMilliseconds,
+          );
+        }),
+      ]);
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
+    }
+  }
+
+  async function waitForRuntimeLock(queryFragment: string): Promise<void> {
+    await waitForDatabaseLock(
+      queryFragment,
+      process.env.DATABASE_RUNTIME_ROLE ?? 'genesis_runtime_test',
+    );
+  }
+
+  async function waitForDatabaseLock(
+    queryFragment: string,
+    databaseUser = process.env.TEST_DATABASE_USER ?? 'genesis_test',
+  ): Promise<void> {
+    for (let attempt = 0; attempt < 150; attempt += 1) {
+      const [{ blocked }] = await connection.query<Array<{ blocked: number }>>(
+        `SELECT count(*)::int AS blocked
+         FROM pg_stat_activity
+         WHERE usename = $1
+           AND wait_event_type = 'Lock'
+           AND position($2 in query) > 0`,
+        [databaseUser, queryFragment],
+      );
+      if (blocked > 0) return;
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    }
+    throw new Error(`Database query did not block at: ${queryFragment}`);
   }
 
   function getSessionId(refreshToken: string): string {

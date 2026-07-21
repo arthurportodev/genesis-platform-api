@@ -14,6 +14,13 @@ A plataforma precisa autenticar usuários, revogar acesso imediatamente e detect
 - Persistir sessões e validar seu estado no banco a cada request protegida.
 - Emitir refresh token opaco; persistir somente HMAC-SHA-256 com pepper.
 - Manter um registro por refresh token e rotacioná-lo em transação.
+- Fazer uma pré-leitura mínima, sem decisão, e serializar refresh na ordem
+  `User` -> `AuthSession` -> `AuthRefreshToken`; reler e validar todo o estado
+  somente depois dos locks.
+- Manter `users` sem `UPDATE` para a role runtime. O lock do user usa somente
+  `app_private.lock_auth_refresh_user(uuid)` com `FOR NO KEY UPDATE`, força que
+  preserva a exclusão mútua com inativação/delete/mudança de chave sem bloquear
+  o `KEY SHARE` das foreign keys de auditoria.
 - Tratar reapresentação de token consumido como replay comprovado e revogar a família.
 - Não revogar uma sessão quando apenas um segredo desconhecido é apresentado.
 - Preservar sessões e auditoria após logout para rastreabilidade.
@@ -31,6 +38,9 @@ A plataforma precisa autenticar usuários, revogar acesso imediatamente e detect
 - Revogação, logout e bloqueio de user têm efeito imediato.
 - Histórico aumenta volume e exige futura política de retenção.
 - Rotação e locking aumentam complexidade, mas distinguem replay real de entrada aleatória.
+- Refresh, logout e logout-all podem progredir concorrentemente sem o ciclo
+  causado por `FOR UPDATE` no user; refresh e inativação global continuam
+  serializados pelo mesmo row lock.
 - A estratégia de entrega do refresh token ao frontend ainda precisa ser definida.
 
 ## Relações
@@ -41,4 +51,7 @@ A plataforma precisa autenticar usuários, revogar acesso imediatamente e detect
 
 ## Implementação
 
-Implementado no `AuthModule`, `AuthSessionsModule`, guard, serviços, entidades, migration e testes da tarefa 0.2.2.
+Implementado no `AuthModule`, `AuthSessionsModule`, guard, serviços, entidades e
+testes da tarefa 0.2.2. A Tarefa 0.2.5.1 acrescentou a fronteira
+least-privilege de lock do user e testes PostgreSQL reais de ACL, força do lock,
+concorrência, reuse e rollback, sem alterar a API pública.

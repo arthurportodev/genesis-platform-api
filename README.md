@@ -1,6 +1,11 @@
 # Genesis Platform API
 
-Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas, contexto de organização ativa por request e infraestrutura genérica de autorização por papel. A Tarefa 0.2.4 foi incorporada à `main` pelo PR #8; a próxima tarefa funcional planejada é a 0.2.5 — Convites e gestão de membros, ainda não iniciada.
+Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas, contexto de organização ativa por request e infraestrutura genérica de autorização por papel. A Tarefa 0.2.5 foi dividida em quatro subtarefas Critical sequenciais, e a 0.2.5.1 — Domínio e administração de convites — está em implementação.
+
+A implementação da 0.2.5.1 adiciona o domínio e as rotas administrativas de
+convites. Por segurança operacional, emissão e substituição permanecem
+desabilitadas com `503` até que a 0.2.5.2 implemente provider e worker de email;
+não há envio ou aceitação nesta etapa.
 
 ## Documentação do projeto
 
@@ -43,6 +48,25 @@ Variáveis de autenticação:
 | `AUTH_LOGIN_WINDOW_SECONDS` | janela do limitador de login |
 | `TRUST_PROXY_HOPS` | quantidade de proxies reversos confiáveis entre o cliente e a API (`0` por padrão) |
 
+Controle de acesso ao banco:
+
+| Variável | Finalidade |
+| --- | --- |
+| `DATABASE_USER` / `DATABASE_PASSWORD` | credenciais de login exclusivas da API runtime |
+| `DATABASE_RUNTIME_ROLE` | role PostgreSQL LOGIN preexistente, idêntica a `DATABASE_USER`, sem `SUPERUSER`/`BYPASSRLS` |
+| `DATABASE_MIGRATION_USER` / `DATABASE_MIGRATION_PASSWORD` | credenciais exclusivas do owner usado por migrations e seed |
+
+`DATABASE_RUNTIME_ROLE` deve ser distinta da role proprietária que executa
+migrations. A migration não cria roles e falha fechada se a role configurada
+não existir, coincidir com o owner da sessão ou possuir `SUPERUSER`/`BYPASSRLS`.
+O startup da API falha se `DATABASE_USER` diferir de `DATABASE_RUNTIME_ROLE`.
+Migrations usam somente `DATABASE_MIGRATION_USER`/`DATABASE_MIGRATION_PASSWORD`,
+concedem o mínimo necessário por tabela e rejeitam qualquer privilégio efetivo
+fora de `SELECT`/`INSERT` na auditoria organizacional, inclusive os recebidos por
+herança. O
+Compose provisiona a role runtime fora da migration, em banco vazio, e executa
+as migrations em um job separado antes de iniciar a API.
+
 Substitua todos os placeholders antes de iniciar. Gere segredos independentes e fortes; nunca reutilize valores de desenvolvimento em produção. `INITIAL_OWNER_PASSWORD` nunca deve ser versionada, impressa em logs ou mantida com valor padrão.
 
 ## Execução sem Docker
@@ -69,7 +93,9 @@ npm run docker:up
 npm run docker:logs
 ```
 
-O Compose constrói a API, inicia PostgreSQL 17 com volume persistente, aguarda o banco ficar saudável e expõe somente a porta da API. Para encerrar:
+O Compose constrói a API, inicia PostgreSQL 17 com volume persistente, provisiona
+as roles distintas de owner/runtime, executa o job de migration e só então
+inicia a API. Somente a porta da API é exposta. Para encerrar:
 
 ```bash
 npm run docker:down
@@ -160,13 +186,20 @@ npm run migration:revert
 npm run migration:show
 ```
 
-Os comandos carregam as variáveis do `.env`. `synchronize` permanece desabilitado: a migration versionada é a única fonte de verdade do schema.
+Os comandos carregam as variáveis do `.env`; o CLI usa exclusivamente as
+credenciais `DATABASE_MIGRATION_*`. `synchronize` permanece desabilitado: a
+migration versionada é a única fonte de verdade do schema.
+
+Antes de `migration:run`, um administrador deve criar a role indicada por
+`DATABASE_RUNTIME_ROLE` como LOGIN sem `SUPERUSER` e sem `BYPASSRLS`. O comando
+de migration usa uma role owner distinta; o rollback exige a mesma configuração
+para remover os grants antes de excluir a tabela.
 
 Os scripts recompilam automaticamente quando as ferramentas de desenvolvimento estão instaladas e reutilizam o artefato já compilado dentro da imagem. Portanto, os mesmos comandos funcionam no container:
 
 ```bash
-docker compose exec api npm run migration:run
-docker compose exec api npm run migration:show
+docker compose run --rm migrate npm run migration:run
+docker compose run --rm migrate npm run migration:show
 ```
 
 ## Modelo multi-tenant
@@ -208,7 +241,7 @@ Todas as tabelas usam UUID gerado pelo PostgreSQL, `created_at` e `updated_at` c
 
 Requests tenant-scoped usam `X-Organization-Id` após a autenticação. O backend valida no PostgreSQL, a cada request, que a organization e a membership do usuário estão ativas e anexa um contexto tipado com `userId`, `organizationId`, `membershipId` e `role`. O identificador da membership e o papel vêm exclusivamente do banco.
 
-Autenticação e tenant context usam guards separados. JWT e sessão permanecem sem tenant ou papel, e a aplicação ainda não expõe endpoint tenant-scoped de produção.
+Autenticação e tenant context usam guards separados. JWT e sessão permanecem sem tenant ou papel. As rotas administrativas de convites são os primeiros consumidores tenant-scoped de produção.
 
 Consulte o [estado atual](docs/CURRENT_STATE.md), a [arquitetura](docs/ARCHITECTURE.md), os [controles de segurança](docs/SECURITY.md) e o [ADR-004](docs/decisions/ADR-004-active-organization-context.md).
 
@@ -216,14 +249,37 @@ Consulte o [estado atual](docs/CURRENT_STATE.md), a [arquitetura](docs/ARCHITECT
 
 A Tarefa 0.2.4 implementou `AuthorizationModule`, `@Roles` e `RoleGuard`. Rotas tenant-scoped futuras poderão compor autenticação, tenant context e autorização, declarando listas explícitas de `owner`, `admin` e `member`. O guard usa somente o papel persistido já presente no `TenantContext`, sem nova consulta, cache ou papel vindo do cliente. Metadata do handler substitui a do controller, e configuração ausente, vazia ou malformada falha fechada.
 
-Não há endpoint tenant-scoped de produção, matriz real de capacidades, hierarquia implícita, permissions, autorização por recurso, regra de último owner ou gestão de membros. Consulte o [ADR-005](docs/decisions/ADR-005-role-based-authorization.md).
+Não há matriz geral de capacidades, hierarquia implícita, permissions, autorização por recurso, regra de último owner ou gestão de membros. Consulte o [ADR-005](docs/decisions/ADR-005-role-based-authorization.md).
+
+## Administração de convites
+
+A Tarefa 0.2.5.1 registra cinco rotas tenant-scoped sob
+`/api/v1/invitations`: criar, listar, consultar, revogar e
+substituir. Todas exigem Bearer access token, `X-Organization-Id`, tenant ativo e
+papel `owner` ou `admin`; admins enxergam e administram apenas convites de
+`member`. Convites de `owner` não podem ser criados.
+
+Criação e substituição retornam `503` por uma readiness fixa nesta subtarefa,
+antes de transação, idempotência, quota, auditoria ou outbox. A ativação será
+feita somente quando a 0.2.5.2 entregar o provider e o worker; não existe flag
+de ambiente que contorne esse bloqueio. Listagem, consulta e revogação já estão
+disponíveis para registros persistidos.
+
+O token assinado não aparece nas respostas administrativas e nunca é persistido
+em forma bruta ou como hash. Consulte o
+[ADR-007](docs/decisions/ADR-007-invitations-memberships-ownership.md).
+
+Replace retorna publicamente somente `previousInvitationId`, `invitationId`,
+`stateAtCreation` e `deliveryStatusAtCreation`. Replay devolve exatamente o
+mesmo resultado; sua indicação adicional existe apenas no header
+`Idempotency-Replayed`.
 
 ## Seed inicial
 
 Após aplicar as migrations, execute manualmente. Na primeira execução, forneça a senha somente ao processo do seed, sem gravá-la no `.env` nem mantê-la no ambiente permanente da API:
 
 ```bash
-docker compose exec -e INITIAL_OWNER_PASSWORD="<defina-localmente>" api npm run seed
+docker compose run --rm -e INITIAL_OWNER_PASSWORD="<defina-localmente>" migrate npm run seed
 ```
 
 O seed cria, dentro de uma transação:
@@ -241,7 +297,7 @@ Nunca execute o seed em produção com senha padrão. Defina a senha inicial por
 Quando a credencial inicial já existir, novas execuções idempotentes não exigem a variável e não substituem o hash existente:
 
 ```bash
-docker compose exec api npm run seed
+docker compose run --rm migrate npm run seed
 ```
 
 ## Autenticação e sessões
@@ -255,7 +311,19 @@ O hash de senha e o hash de refresh token não são selecionados pelo TypeORM po
 
 Cada login cria uma linha em `auth_sessions` e um token `active` em `auth_refresh_tokens`. A tabela de tokens mantém o histórico individual com estados `active`, `consumed` e `revoked`, validade, instante de consumo ou revogação e referência ao token substituto. O hash é único e nunca é carregado por eager loading.
 
-No refresh, o registro exato do hash apresentado é bloqueado dentro de uma transação. Um token `active` válido passa a `consumed`, aponta para um novo token `active` e atualiza `last_used_at` da sessão. A reapresentação de um token `consumed` comprova reutilização: a sessão e todos os tokens ainda ativos da família são revogados, e o evento é auditado. Um hash que nunca existiu retorna o mesmo `401` genérico e registra apenas falha; ele não revoga a sessão indicada pelo `sessionId` público e não gera um falso evento de reutilização.
+No refresh, uma pré-leitura mínima encontra os IDs pelo par exato sessão/hash,
+sem decidir autorização. Na mesma transação, o serviço bloqueia `User`,
+`AuthSession` e `AuthRefreshToken` nessa ordem, relê o estado completo e somente
+então valida e rotaciona. O lock do user passa pela função interna estreita
+`app_private.lock_auth_refresh_user(uuid)` com `FOR NO KEY UPDATE`; assim a role
+runtime mantém `users` sem `UPDATE`, inativação/delete/mudança de chave continuam
+serializados e inserts de auditoria com foreign key podem obter `KEY SHARE`. Um
+token `active` válido passa a `consumed`, aponta para um novo token `active` e
+atualiza `last_used_at` da sessão. A reapresentação de um token `consumed`
+comprova reutilização: a sessão e todos os tokens ainda ativos da família são
+revogados, e o evento é auditado. Um hash que nunca existiu retorna o mesmo
+`401` genérico e registra apenas falha; ele não revoga a sessão indicada pelo
+`sessionId` público e não gera um falso evento de reutilização.
 
 Sessões revogadas, expiradas ou pertencentes a usuário `inactive` não autenticam nem renovam tokens. Logout preserva a linha para auditoria. Uma rotina futura deverá remover sessões e logs antigos segundo uma política de retenção ainda não definida.
 
@@ -358,7 +426,7 @@ src/
     └── users/
 ```
 
-Os módulos de users, organizations e memberships ainda não expõem CRUD. A infraestrutura de tenant context não adiciona endpoint tenant-scoped de produção.
+Os módulos de users, organizations e memberships ainda não expõem CRUD. O módulo de invitations é o primeiro consumidor tenant-scoped de produção.
 
 ## Decisões técnicas
 
@@ -385,4 +453,4 @@ Os módulos de users, organizations e memberships ainda não expõem CRUD. A inf
 
 ## Próximos módulos previstos
 
-A próxima tarefa funcional planejada é a 0.2.5 — Convites e gestão de membros. Ela ainda não foi iniciada; módulos de CRM e integrações permanecem futuros.
+A Tarefa 0.2.5 — Convites e gestão de membros — está em andamento na subtarefa Critical 0.2.5.1. A 0.2.5.2 entregará email e aceitação para user existente, a 0.2.5.3 ativará user novo e a 0.2.5.4 tratará memberships/ownership; módulos de CRM e integrações continuam futuros.

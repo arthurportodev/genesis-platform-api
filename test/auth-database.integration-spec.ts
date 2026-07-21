@@ -8,7 +8,10 @@ import { AuthAuditEventType } from '../src/modules/auth-sessions/enums/auth-audi
 import { AuthRefreshTokenStatus } from '../src/modules/auth-sessions/enums/auth-refresh-token-status.enum';
 import { AuthSessionStatus } from '../src/modules/auth-sessions/enums/auth-session-status.enum';
 import { User } from '../src/modules/users/entities/user.entity';
-import { createIntegrationDataSource } from './support/integration-data-source';
+import {
+  createIntegrationDataSource,
+  prepareIntegrationRuntimeRole,
+} from './support/integration-data-source';
 
 interface NameRow {
   name: string;
@@ -21,6 +24,7 @@ describe('Authentication database integration', () => {
   beforeAll(async () => {
     connection = createIntegrationDataSource();
     await connection.initialize();
+    await prepareIntegrationRuntimeRole(connection);
     await connection.dropDatabase();
     await connection.runMigrations();
   });

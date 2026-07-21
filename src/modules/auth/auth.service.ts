@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { normalizeEmail } from '../../common/normalization/email.normalizer';
 import { AuthRefreshToken } from '../auth-sessions/entities/auth-refresh-token.entity';
 import { AuthSession } from '../auth-sessions/entities/auth-session.entity';
 import { AuthAuditEventType } from '../auth-sessions/enums/auth-audit-event-type.enum';
@@ -31,6 +32,12 @@ export interface AuthTokenResponse {
 type RefreshTransactionResult =
   { ok: true; response: AuthTokenResponse } | { ok: false };
 
+interface RefreshLockTarget {
+  refreshTokenId: string;
+  sessionId: string;
+  userId: string;
+}
+
 const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password.';
 const INVALID_REFRESH_MESSAGE = 'Invalid refresh token.';
 
@@ -49,7 +56,7 @@ export class AuthService {
     credentials: LoginDto,
     context: AuthRequestContext,
   ): Promise<AuthTokenResponse> {
-    const email = credentials.email.trim().toLowerCase();
+    const email = normalizeEmail(credentials.email);
     this.rateLimiter.assertAllowed(context.ipAddress, email);
 
     const user = await this.users
@@ -237,21 +244,68 @@ export class AuthService {
     context: AuthRequestContext,
   ): Promise<RefreshTransactionResult> {
     const refreshTokens = manager.getRepository(AuthRefreshToken);
+    const lockTarget = await refreshTokens
+      .createQueryBuilder('refreshToken')
+      .select('refreshToken.id', 'refreshTokenId')
+      .addSelect('refreshToken.sessionId', 'sessionId')
+      .addSelect('session.userId', 'userId')
+      .innerJoin('refreshToken.session', 'session')
+      .where('refreshToken.tokenHash = :presentedTokenHash', {
+        presentedTokenHash,
+      })
+      .andWhere('refreshToken.sessionId = :presentedSessionId', {
+        presentedSessionId,
+      })
+      .getRawOne<RefreshLockTarget>();
+
+    if (lockTarget === undefined) {
+      await this.auditService.record(
+        {
+          ...context,
+          eventType: AuthAuditEventType.REFRESH_FAILED,
+          metadata: { reason: 'token_not_found' },
+        },
+        manager,
+      );
+      return { ok: false };
+    }
+
+    await manager.query(`SELECT app_private.lock_auth_refresh_user($1::uuid)`, [
+      lockTarget.userId,
+    ]);
+    await manager.query(
+      `SELECT auth_session.id
+       FROM public.auth_sessions AS auth_session
+       WHERE auth_session.id = $1::uuid
+       FOR UPDATE OF auth_session`,
+      [lockTarget.sessionId],
+    );
+    await manager.query(
+      `SELECT locked_refresh_token.id
+       FROM public.auth_refresh_tokens AS locked_refresh_token
+       WHERE locked_refresh_token.id = $1::uuid
+       FOR UPDATE OF locked_refresh_token`,
+      [lockTarget.refreshTokenId],
+    );
+
     const refreshToken = await refreshTokens
       .createQueryBuilder('refreshToken')
       .addSelect('refreshToken.tokenHash')
       .innerJoinAndSelect('refreshToken.session', 'session')
       .innerJoinAndSelect('session.user', 'user')
-      .setLock('pessimistic_write')
-      .where('refreshToken.tokenHash = :presentedTokenHash', {
+      .where('refreshToken.id = :refreshTokenId', {
+        refreshTokenId: lockTarget.refreshTokenId,
+      })
+      .andWhere('refreshToken.tokenHash = :presentedTokenHash', {
         presentedTokenHash,
       })
+      .andWhere('refreshToken.sessionId = :presentedSessionId', {
+        presentedSessionId,
+      })
+      .andWhere('session.userId = :userId', { userId: lockTarget.userId })
       .getOne();
 
-    if (
-      refreshToken === null ||
-      refreshToken.sessionId !== presentedSessionId
-    ) {
+    if (refreshToken === null) {
       await this.auditService.record(
         {
           ...context,

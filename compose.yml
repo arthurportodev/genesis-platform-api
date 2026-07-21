@@ -4,10 +4,13 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-genesis_platform}
-      POSTGRES_USER: ${DATABASE_USER:-genesis}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-change-me}
+      POSTGRES_USER: ${DATABASE_MIGRATION_USER:-genesis_owner}
+      POSTGRES_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:-change-owner-password}
+      DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:-genesis_runtime}
+      DATABASE_RUNTIME_PASSWORD: ${DATABASE_PASSWORD:-change-runtime-password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-runtime-role.sh:/docker-entrypoint-initdb.d/10-runtime-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -17,16 +20,42 @@ services:
     networks:
       - genesis_internal
 
+  migrate:
+    build:
+      context: .
+      target: production
+    restart: "no"
+    command: ["npm", "run", "migration:run"]
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-genesis_platform}
+      DATABASE_MIGRATION_USER: ${DATABASE_MIGRATION_USER:-genesis_owner}
+      DATABASE_MIGRATION_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:-change-owner-password}
+      DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:-genesis_runtime}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - genesis_internal
+
   api:
     build:
       context: .
       target: production
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       NODE_ENV: production
+      PORT: ${PORT:-3000}
+      APP_NAME: ${APP_NAME:-Genesis Platform API}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
       DATABASE_HOST: postgres
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-genesis_platform}
+      DATABASE_USER: ${DATABASE_RUNTIME_ROLE:-genesis_runtime}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-change-runtime-password}
+      DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:-genesis_runtime}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-30}
@@ -39,8 +68,8 @@ services:
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [

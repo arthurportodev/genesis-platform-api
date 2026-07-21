@@ -6,8 +6,9 @@ const requiredVariables = [
   'DATABASE_HOST',
   'DATABASE_PORT',
   'DATABASE_NAME',
-  'DATABASE_USER',
-  'DATABASE_PASSWORD',
+  'DATABASE_MIGRATION_USER',
+  'DATABASE_MIGRATION_PASSWORD',
+  'DATABASE_RUNTIME_ROLE',
 ] as const;
 
 for (const variable of requiredVariables) {
@@ -21,8 +22,8 @@ export default new DataSource({
     host: process.env.DATABASE_HOST as string,
     port: Number(process.env.DATABASE_PORT),
     name: process.env.DATABASE_NAME as string,
-    user: process.env.DATABASE_USER as string,
-    password: process.env.DATABASE_PASSWORD as string,
+    user: process.env.DATABASE_MIGRATION_USER as string,
+    password: process.env.DATABASE_MIGRATION_PASSWORD as string,
   }),
   entities: [`${__dirname}/../**/*.entity{.ts,.js}`],
   migrations: [`${__dirname}/migrations/*{.ts,.js}`],

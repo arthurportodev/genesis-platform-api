@@ -18,7 +18,11 @@ Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado
 - ✅ 0.2.2.6 — Normalização de EOL
 - ✅ 0.2.3 — Organização ativa e contexto de tenant
 - ✅ 0.2.4 — Autorização por papel
-- ⬜ 0.2.5 — Convites e gestão de membros
+- 🚧 0.2.5 — Convites e gestão de membros
+  - 🚧 0.2.5.1 — Domínio e administração de convites
+  - ⬜ 0.2.5.2 — Entrega por email e aceitação para user existente
+  - ⬜ 0.2.5.3 — Ativação de user novo
+  - ⬜ 0.2.5.4 — Gestão de memberships e ownership
 
 ## 0.3 — CRM
 
