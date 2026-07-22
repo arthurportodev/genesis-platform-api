@@ -54,4 +54,51 @@ export const environmentValidationSchema = Joi.object({
     .min(1)
     .max(86_400)
     .default(900),
+  INVITATION_ISSUANCE_READINESS: Joi.string()
+    .valid('true', 'false')
+    .default('false'),
+  INVITATION_ACCEPTANCE_READINESS: Joi.string()
+    .valid('true', 'false')
+    .default('false'),
+  INVITATION_WORKER_ENABLED: Joi.string()
+    .valid('true', 'false')
+    .default('false'),
+  INVITATION_ACCEPTANCE_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
+  INVITATION_EMAIL_FROM: Joi.string().trim().max(320).allow('').default(''),
+  RESEND_API_KEY: Joi.string().min(1).allow('').optional(),
+  RESEND_API_URL: Joi.string()
+    .uri({ scheme: ['https'] })
+    .default('https://api.resend.com/emails'),
+  INVITATION_TOKEN_CURRENT_VERSION: Joi.alternatives()
+    .try(Joi.number().integer().min(1).max(32767), Joi.string().valid(''))
+    .optional(),
+  INVITATION_TOKEN_KEYS: Joi.string().allow('').optional(),
+  INVITATION_RATE_LIMIT_WINDOW_SECONDS: Joi.number()
+    .integer()
+    .min(1)
+    .max(86_400)
+    .default(900),
+  INVITATION_INSPECT_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(10_000)
+    .default(30),
+  INVITATION_ACCEPT_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(10_000)
+    .default(20),
+  INVITATION_ACCEPT_USER_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(10_000)
+    .default(10),
+  INVITATION_RATE_LIMIT_MAX_BUCKETS: Joi.number()
+    .integer()
+    .min(3)
+    .max(1_000_000)
+    .default(10_000),
 });

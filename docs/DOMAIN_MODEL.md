@@ -80,16 +80,26 @@ Este documento resume conceitos implementados; as migrations são a fonte do sch
   de `expires_at` com precedência accepted → revoked → expired → pending.
 - **Token:** nonce não selecionado por padrão e versões são persistidos; token,
   MAC e hash não são persistidos. A MAC HMAC-SHA-256 é regenerável por keyring.
-- **Lifecycle da 0.2.5.1:** create, revoke idempotente e replace com nova linha e
-  relação imutável. Aceitação permanece planejada.
+- **Lifecycle:** a 0.2.5.1 implementou create, revoke idempotente e replace com
+  nova linha e relação imutável; o candidato da 0.2.5.2 implementa aceitação
+  autenticada para usuário existente.
 - **Emissor:** membership imutável. Inativar issuer membership/user revoga
   pendentes na mesma transação; mudar role não revoga.
 
 ## InvitationDeliveryOutbox e OrganizationAuditLog
 
 O outbox contém somente colunas explícitas e referências, sem token/email/link;
-0.2.5.1 produz apenas `queued`/`cancelled`. A auditoria organizacional é
-append-only no PostgreSQL e não reutiliza `AuthAuditLog`.
+o candidato da 0.2.5.2 adiciona worker, retry, fencing e dead-letter sobre os
+estados persistidos. A auditoria organizacional é append-only no PostgreSQL e
+não reutiliza `AuthAuditLog`.
+
+## Acceptance 0.2.5.2
+
+Uma invitation pending e não expirada pode ser inspecionada pelo bearer e
+aceita somente pelo usuário autenticado de email correspondente. O resultado é
+atômico: invitation `accepted`, membership criada/preservada/reativada, outbox
+cancelável cancelada e um audit append-only. Replay do mesmo usuário devolve os
+mesmos IDs sem novos efeitos; membership ativa com papel divergente é conflito.
 
 ## Regra para entidades futuras
 

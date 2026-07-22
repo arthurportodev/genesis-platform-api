@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 import { CreateMultiTenantCore1784400000000 } from '../../src/database/migrations/1784400000000-CreateMultiTenantCore';
 import { CreateAuthSessions1784486400000 } from '../../src/database/migrations/1784486400000-CreateAuthSessions';
 import { CreateOrganizationInvitations1785004800000 } from '../../src/database/migrations/1785004800000-CreateOrganizationInvitations';
+import { DeliverInvitationAcceptance1785087600000 } from '../../src/database/migrations/1785087600000-DeliverInvitationAcceptance';
 import { createBasePostgresOptions } from '../../src/database/typeorm-base.options';
 import { AuthAuditLog } from '../../src/modules/auth-sessions/entities/auth-audit-log.entity';
 import { AuthRefreshToken } from '../../src/modules/auth-sessions/entities/auth-refresh-token.entity';
@@ -53,6 +54,7 @@ export function createIntegrationDataSource(): DataSource {
       CreateMultiTenantCore1784400000000,
       CreateAuthSessions1784486400000,
       CreateOrganizationInvitations1785004800000,
+      DeliverInvitationAcceptance1785087600000,
     ],
     migrationsTableName: 'migrations',
     logging: false,
@@ -73,6 +75,9 @@ export function createIntegrationDataSource(): DataSource {
 
     await typeormDropDatabase();
     await dataSource.query(
+      `DROP FUNCTION IF EXISTS app_private.apply_existing_user_invitation_membership(uuid, uuid)`,
+    );
+    await dataSource.query(
       `DROP FUNCTION IF EXISTS app_private.lock_auth_refresh_user(uuid)`,
     );
     await dataSource.query(
@@ -81,6 +86,9 @@ export function createIntegrationDataSource(): DataSource {
     await dataSource.query(`DROP SCHEMA IF EXISTS app_private`);
     await dataSource.query(
       `DROP FUNCTION IF EXISTS public.reject_organization_audit_mutation()`,
+    );
+    await dataSource.query(
+      `DROP FUNCTION IF EXISTS public.clear_cancelled_invitation_delivery_error()`,
     );
     await dataSource.query(
       `DROP FUNCTION IF EXISTS public.revoke_invitations_for_inactive_membership()`,

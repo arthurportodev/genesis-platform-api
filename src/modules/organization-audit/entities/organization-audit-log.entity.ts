@@ -45,6 +45,18 @@ export class OrganizationAuditLog {
   @Column({ name: 'reason', type: 'varchar', length: 64, nullable: true })
   reason!: InvitationRevocationReason | null;
 
+  @Column({
+    name: 'membership_result',
+    type: 'varchar',
+    length: 32,
+    nullable: true,
+  })
+  membershipResult!:
+    | 'membership_created'
+    | 'membership_preserved'
+    | 'membership_reactivated'
+    | null;
+
   @Column({ name: 'correlation_id', type: 'uuid', nullable: true })
   correlationId!: string | null;
 

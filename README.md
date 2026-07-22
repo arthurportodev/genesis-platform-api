@@ -1,11 +1,11 @@
 # Genesis Platform API
 
-Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas, contexto de organização ativa por request e infraestrutura genérica de autorização por papel. A Tarefa 0.2.5 foi dividida em quatro subtarefas Critical sequenciais, e a 0.2.5.1 — Domínio e administração de convites — está em implementação.
+Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas, contexto de organização ativa por request, autorização por papel e o fluxo de entrega/aceitação de convites para usuários existentes. A 0.2.5.1 foi concluída no PR #13, squash `829cefa4cf06f596d0076e4c422e31c26d31e0a5`, com CI pós-merge 29840864674 aprovada; a 0.2.5.2 está implementada, com Gate 1 e Gate 2 aprovados, mas entrega, Pull Request, CI e Gate 3 permanecem pendentes e ela ainda não foi incorporada à `main`.
 
-A implementação da 0.2.5.1 adiciona o domínio e as rotas administrativas de
-convites. Por segurança operacional, emissão e substituição permanecem
-desabilitadas com `503` até que a 0.2.5.2 implemente provider e worker de email;
-não há envio ou aceitação nesta etapa.
+A 0.2.5.1 adicionou o domínio e as rotas administrativas de convites. A
+implementação da 0.2.5.2 adiciona provider/worker de email e aceitação autenticada
+para usuário existente; em produção, emissão e substituição permanecem
+fail-closed até a 0.2.5.3.
 
 ## Documentação do projeto
 
@@ -35,26 +35,26 @@ Todas as variáveis declaradas no exemplo são validadas na inicialização. A a
 
 Variáveis de autenticação:
 
-| Variável | Finalidade |
-| --- | --- |
-| `JWT_ACCESS_SECRET` | segredo aleatório com pelo menos 32 caracteres para assinar access tokens |
-| `JWT_ACCESS_EXPIRES_IN` | duração curta no formato `15m`, `1h` etc. |
-| `REFRESH_TOKEN_EXPIRES_IN_DAYS` | validade absoluta da sessão/refresh token |
-| `REFRESH_TOKEN_PEPPER` | segredo aleatório usado no HMAC do refresh token |
-| `INITIAL_OWNER_PASSWORD` | senha local usada somente quando o seed ainda precisa criar a credencial inicial |
-| `AUTH_LOGIN_MAX_ATTEMPTS` | falhas permitidas por combinação de IP e email |
-| `AUTH_LOGIN_IP_MAX_ATTEMPTS` | falhas agregadas permitidas por IP, independentemente do email |
-| `AUTH_LOGIN_MAX_BUCKETS` | limite total de contadores mantidos em memória |
-| `AUTH_LOGIN_WINDOW_SECONDS` | janela do limitador de login |
-| `TRUST_PROXY_HOPS` | quantidade de proxies reversos confiáveis entre o cliente e a API (`0` por padrão) |
+| Variável                        | Finalidade                                                                         |
+| ------------------------------- | ---------------------------------------------------------------------------------- |
+| `JWT_ACCESS_SECRET`             | segredo aleatório com pelo menos 32 caracteres para assinar access tokens          |
+| `JWT_ACCESS_EXPIRES_IN`         | duração curta no formato `15m`, `1h` etc.                                          |
+| `REFRESH_TOKEN_EXPIRES_IN_DAYS` | validade absoluta da sessão/refresh token                                          |
+| `REFRESH_TOKEN_PEPPER`          | segredo aleatório usado no HMAC do refresh token                                   |
+| `INITIAL_OWNER_PASSWORD`        | senha local usada somente quando o seed ainda precisa criar a credencial inicial   |
+| `AUTH_LOGIN_MAX_ATTEMPTS`       | falhas permitidas por combinação de IP e email                                     |
+| `AUTH_LOGIN_IP_MAX_ATTEMPTS`    | falhas agregadas permitidas por IP, independentemente do email                     |
+| `AUTH_LOGIN_MAX_BUCKETS`        | limite total de contadores mantidos em memória                                     |
+| `AUTH_LOGIN_WINDOW_SECONDS`     | janela do limitador de login                                                       |
+| `TRUST_PROXY_HOPS`              | quantidade de proxies reversos confiáveis entre o cliente e a API (`0` por padrão) |
 
 Controle de acesso ao banco:
 
-| Variável | Finalidade |
-| --- | --- |
-| `DATABASE_USER` / `DATABASE_PASSWORD` | credenciais de login exclusivas da API runtime |
-| `DATABASE_RUNTIME_ROLE` | role PostgreSQL LOGIN preexistente, idêntica a `DATABASE_USER`, sem `SUPERUSER`/`BYPASSRLS` |
-| `DATABASE_MIGRATION_USER` / `DATABASE_MIGRATION_PASSWORD` | credenciais exclusivas do owner usado por migrations e seed |
+| Variável                                                  | Finalidade                                                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `DATABASE_USER` / `DATABASE_PASSWORD`                     | credenciais de login exclusivas da API runtime                                              |
+| `DATABASE_RUNTIME_ROLE`                                   | role PostgreSQL LOGIN preexistente, idêntica a `DATABASE_USER`, sem `SUPERUSER`/`BYPASSRLS` |
+| `DATABASE_MIGRATION_USER` / `DATABASE_MIGRATION_PASSWORD` | credenciais exclusivas do owner usado por migrations e seed                                 |
 
 `DATABASE_RUNTIME_ROLE` deve ser distinta da role proprietária que executa
 migrations. A migration não cria roles e falha fechada se a role configurada
@@ -259,11 +259,11 @@ substituir. Todas exigem Bearer access token, `X-Organization-Id`, tenant ativo 
 papel `owner` ou `admin`; admins enxergam e administram apenas convites de
 `member`. Convites de `owner` não podem ser criados.
 
-Criação e substituição retornam `503` por uma readiness fixa nesta subtarefa,
-antes de transação, idempotência, quota, auditoria ou outbox. A ativação será
-feita somente quando a 0.2.5.2 entregar o provider e o worker; não existe flag
-de ambiente que contorne esse bloqueio. Listagem, consulta e revogação já estão
-disponíveis para registros persistidos.
+Criação e substituição consultam readiness operacional antes de transação,
+idempotência, quota, auditoria ou outbox. A implementação da 0.2.5.2 inclui provider
+e worker, mas a emissão em produção permanece fail-closed até a 0.2.5.3.
+Listagem, consulta e revogação continuam disponíveis para registros
+persistidos.
 
 O token assinado não aparece nas respostas administrativas e nunca é persistido
 em forma bruta ou como hash. Consulte o
@@ -339,13 +339,13 @@ Senha, tokens, segredos e hashes são removidos dos metadados de auditoria. Erro
 
 Todos usam o prefixo `/api/v1/auth`:
 
-| Método | Caminho | Autenticação | Sucesso |
-| --- | --- | --- | --- |
-| `POST` | `/login` | pública | `200` |
-| `POST` | `/refresh` | refresh token no body | `200` |
-| `POST` | `/logout` | Bearer access token | `204` |
-| `POST` | `/logout-all` | Bearer access token | `204` |
-| `GET` | `/me` | Bearer access token | `200` |
+| Método | Caminho       | Autenticação          | Sucesso |
+| ------ | ------------- | --------------------- | ------- |
+| `POST` | `/login`      | pública               | `200`   |
+| `POST` | `/refresh`    | refresh token no body | `200`   |
+| `POST` | `/logout`     | Bearer access token   | `204`   |
+| `POST` | `/logout-all` | Bearer access token   | `204`   |
+| `GET`  | `/me`         | Bearer access token   | `200`   |
 
 Exemplo de login sem credencial real:
 
@@ -453,4 +453,4 @@ Os módulos de users, organizations e memberships ainda não expõem CRUD. O mó
 
 ## Próximos módulos previstos
 
-A Tarefa 0.2.5 — Convites e gestão de membros — está em andamento na subtarefa Critical 0.2.5.1. A 0.2.5.2 entregará email e aceitação para user existente, a 0.2.5.3 ativará user novo e a 0.2.5.4 tratará memberships/ownership; módulos de CRM e integrações continuam futuros.
+A Tarefa 0.2.5 — Convites e gestão de membros — está em andamento. A 0.2.5.1 foi concluída e a 0.2.5.2, com email e aceitação para user existente, está implementada, com Gate 1 e Gate 2 aprovados; entrega, Pull Request, CI e Gate 3 permanecem pendentes, e ela ainda não foi incorporada à `main`. A 0.2.5.3 ativará user novo e a 0.2.5.4 tratará memberships/ownership; módulos de CRM e integrações continuam futuros.

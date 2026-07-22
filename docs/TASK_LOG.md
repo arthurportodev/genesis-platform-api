@@ -121,7 +121,7 @@
 
 ## 0.2.5.1 — Domínio e administração de convites
 
-**Status: implementação em revisão.**
+**Status: concluída no PR #13, squash `829cefa4cf06f596d0076e4c422e31c26d31e0a5`, com CI pós-merge 29840864674 aprovada.**
 
 - Domínio persistente de invitations com expiração derivada, revogação,
   substituição e token HMAC regenerável sem token/hash bruto persistido.
@@ -134,3 +134,13 @@
 - Defesas PostgreSQL e porta transacional revogam pendentes quando issuer
   membership/user é inativado; role change não revoga.
 - Aceitação, email real, users novos, memberships e last-owner permanecem fora.
+
+## 0.2.5.2 — Entrega por email e aceitação para usuário existente
+
+**Status: implementada; Gate 1 e Gate 2 aprovados; entrega, Pull Request, CI e Gate 3 pendentes; ainda não incorporada à `main`.**
+
+- Provider Resend atrás de porta, outbox transacional e worker separado com idempotência, retry, lease, fencing, recovery e health interno em loopback.
+- `inspect` público mínimo e `accept` autenticado derivam tenant, email, papel e estado exclusivamente do convite e do PostgreSQL.
+- Membership inexistente é criada, ativa igual é preservada, inativa é reativada na mesma linha e ativa divergente falha com conflito.
+- Readiness de acceptance inventaria todas as versões de chave ainda necessárias; falha de chave não chama provider nem morre antes do deadline.
+- Emissão de produção permanece desabilitada até a 0.2.5.3; nenhum email real é executado pelos testes.
