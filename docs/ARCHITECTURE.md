@@ -34,7 +34,9 @@ flowchart LR
 - `OrganizationAuditModule`: registra eventos de organização em tabela
   append-only separada da auditoria de autenticação.
 
-Os módulos de users, organizations e memberships ainda não têm controllers ou serviços de CRUD.
+Users e organizations ainda não têm controllers de CRUD. Memberships expõe
+um diretório paginado e comandos explícitos de papel/ciclo de vida; a mutação
+é centralizada em uma única função privada tipada no PostgreSQL.
 
 ## Persistência e multi-tenancy
 

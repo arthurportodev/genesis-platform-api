@@ -22,9 +22,15 @@ import { MembershipStatus } from '../enums/membership-status.enum';
   ['id', 'userId', 'organizationId'],
   { unique: true },
 )
+@Index('UQ_memberships_id_organization', ['id', 'organizationId'], {
+  unique: true,
+})
 @Index('IDX_memberships_user_id', ['userId'])
 @Index('IDX_memberships_organization_id', ['organizationId'])
 @Index('IDX_memberships_organization_status', ['organizationId', 'status'])
+@Index('IDX_memberships_effective_owner', ['organizationId', 'userId', 'id'], {
+  where: `"status" = 'active' AND "role" = 'owner'`,
+})
 export class Membership {
   @PrimaryGeneratedColumn('uuid', { name: 'id' })
   id!: string;

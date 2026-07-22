@@ -22,7 +22,10 @@ Operações comerciais costumam distribuir leads, atividades, comunicação, aco
 
 Requests tenant-scoped selecionam a organização por `X-Organization-Id`; o backend valida organization e membership ativas no PostgreSQL. Rotas consumidoras podem compor `AccessTokenGuard` → `TenantContextGuard` → `RoleGuard`; a autorização compara o papel persistido no `TenantContext` com listas explícitas, sem nova consulta ao banco.
 
-**Ainda não implementado:** matriz real de capacidades, permissions, autorização por recurso, proteção do último owner, convites, gestão de membros, entidades comerciais tenant-scoped, frontend, deploy, integrações externas e módulos comerciais. Também não existe endpoint tenant-scoped de produção.
+**Ainda não implementado:** matriz geral de capacidades, permissions,
+autorização por recurso, entidades comerciais tenant-scoped adicionais,
+frontend, deploy, integrações externas e módulos comerciais. Convites e gestão
+de memberships já são consumidores tenant-scoped de produção.
 
 O estágio atual valida identidade, persistência e acesso à organização ativa, mas ainda não é um CRM utilizável em produção.
 

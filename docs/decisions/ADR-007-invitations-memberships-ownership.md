@@ -1,8 +1,7 @@
 # ADR-007 — Convites, memberships e invariantes de ownership
 
-- **Status:** Accepted — fundações de convites, entrega, aceitação e ativação de
-  usuário novo implementadas; gestão de memberships e ownership permanece como
-  evolução separada
+- **Status:** Accepted — convites, entrega, aceitação, ativação de usuário novo
+  e gestão de memberships/ownership implementados
 - **Data:** 2026-07-20
 
 ## Contexto
@@ -158,7 +157,9 @@ ausência de DML direto/herdado e impossibilidade de assumir o owner.
 Testes PostgreSQL reais cobrem chamadas diretas sob `search_path` hostil,
 rollback em cada estágio, corrida de email e activate concorrente com
 activate/accept/revoke/replace/inativação de organização. A gestão de
-memberships e ownership permanece planejada. A emenda de refresh adiciona a
+memberships adiciona a função tipada `execute_membership_command`, invariantes
+de owner efetivo com constraint triggers diferidos, auditoria coerente e API
+tenant-scoped. A emenda de refresh adiciona a
 assinatura exclusiva do refresh. Testes reais
 distinguem estruturalmente as forças das duas funções, confirmam `KEY SHARE` por
 insert de audit, bloqueio de inativação/delete/mudança de chave, rollback e

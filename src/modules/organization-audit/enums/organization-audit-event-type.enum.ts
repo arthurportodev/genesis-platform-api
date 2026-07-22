@@ -6,4 +6,12 @@ export enum OrganizationAuditEventType {
   INVITATIONS_REVOKED_ISSUER_USER_INACTIVE = 'organization.invitation.revoked_issuer_user_inactive',
   INVITATION_ACCEPTED = 'organization.invitation.accepted',
   INVITATION_ACTIVATED = 'organization.invitation.activated',
+  MEMBERSHIP_ROLE_CHANGED = 'organization.membership.role_changed',
+  MEMBERSHIP_OWNER_PROMOTED = 'organization.membership.owner_promoted',
+  MEMBERSHIP_OWNER_DEMOTED = 'organization.membership.owner_demoted',
+  MEMBERSHIP_DEACTIVATED = 'organization.membership.deactivated',
+  MEMBERSHIP_REACTIVATED = 'organization.membership.reactivated',
+  MEMBERSHIP_LEFT = 'organization.membership.left',
+  MEMBERSHIP_LAST_OWNER_CHANGE_BLOCKED = 'organization.membership.last_owner_change_blocked',
+  OWNERSHIP_REMEDIATED = 'organization.ownership.remediated',
 }

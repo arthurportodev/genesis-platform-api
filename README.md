@@ -1,6 +1,14 @@
 # Genesis Platform API
 
-Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas, contexto de organização ativa por request, autorização por papel e o fluxo de entrega e acceptance de convites. A 0.2.5.2 foi concluída no PR #14, squash `410f0576a98e373c39bf178f73b80838b40d2924`, com CI pós-merge 29919743498 aprovada. A 0.2.5.3 implementa activation de usuário novo por convite.
+Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa.
+Esta versão contém a fundação técnica, núcleo persistente multi-tenant,
+autenticação, contexto de organização ativa, autorização por papel, convites e
+gestão de memberships/ownership.
+
+A ativação de usuário novo por convite (0.2.5.3) foi concluída no PR #15,
+squash `945142b3103a24104525d825226ff75c9e5e1f9b`, com CI pós-merge
+29933958617 aprovada. A 0.2.5.4 permanece como candidato funcional local até a
+entrega pelo fluxo protegido.
 
 A activation recebe somente token, nome e senha, cria User, credencial e
 Membership atomicamente e não realiza auto-login. Em produção, emissão e
@@ -252,7 +260,10 @@ Consulte o [estado atual](docs/CURRENT_STATE.md), a [arquitetura](docs/ARCHITECT
 
 A Tarefa 0.2.4 implementou `AuthorizationModule`, `@Roles` e `RoleGuard`. Rotas tenant-scoped futuras poderão compor autenticação, tenant context e autorização, declarando listas explícitas de `owner`, `admin` e `member`. O guard usa somente o papel persistido já presente no `TenantContext`, sem nova consulta, cache ou papel vindo do cliente. Metadata do handler substitui a do controller, e configuração ausente, vazia ou malformada falha fechada.
 
-Não há matriz geral de capacidades, hierarquia implícita, permissions, autorização por recurso, regra de último owner ou gestão de membros. Consulte o [ADR-005](docs/decisions/ADR-005-role-based-authorization.md).
+Não há matriz geral de capacidades, hierarquia implícita, permissions ou
+autorização por recurso. Gestão de membros e proteção do último owner são regras
+explícitas da 0.2.5.4. Consulte o
+[ADR-005](docs/decisions/ADR-005-role-based-authorization.md).
 
 ## Administração de convites
 
@@ -277,6 +288,25 @@ Replace retorna publicamente somente `previousInvitationId`, `invitationId`,
 `stateAtCreation` e `deliveryStatusAtCreation`. Replay devolve exatamente o
 mesmo resultado; sua indicação adicional existe apenas no header
 `Idempotency-Replayed`.
+
+## Gestão de memberships e ownership
+
+`/api/v1/members` oferece listagem/consulta e comandos explícitos para papel,
+promoção a owner, desativação, reativação e saída própria. Owner administra
+todos os demais membros; admin enxerga e administra somente `member`; nenhum
+ator usa as rotas de target contra a própria membership.
+
+Uma organização ativa mantém ao menos um owner efetivo: organization, User e
+Membership precisam estar ativos e a Membership precisa ter papel `owner`.
+Constraint triggers diferidos protegem SQL direto e a função privada tipada
+serializa comandos concorrentes. Tentativas de remover o último owner retornam
+`409` e persistem audit; no-op não cria audit. Consulte o
+[runbook operacional](docs/MEMBERSHIP_OWNERSHIP_RUNBOOK.md).
+
+Enquanto os limites de leitura forem process-local,
+`API_PUBLIC_REPLICA_COUNT` deve ser `1`. O nome legado
+`INVITATION_PUBLIC_REPLICA_COUNT` é aceito temporariamente; definir ambos com
+valores diferentes impede a inicialização.
 
 ## Acceptance e activation de convites
 
@@ -470,4 +500,6 @@ Os módulos de users, organizations e memberships ainda não expõem CRUD. O mó
 
 ## Próximos módulos previstos
 
-A Tarefa 0.2.5 — Convites e gestão de membros — está em andamento. A 0.2.5.1 e a 0.2.5.2 estão concluídas; a 0.2.5.3 implementa activation de user novo e a 0.2.5.4 permanece responsável por memberships/ownership. Módulos de CRM e integrações continuam futuros.
+A Tarefa 0.2.5 — Convites e gestão de membros — está em andamento; as quatro
+subtarefas funcionais possuem implementação. Módulos de CRM e integrações
+continuam futuros.

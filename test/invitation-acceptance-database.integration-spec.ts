@@ -170,6 +170,7 @@ describe('Invitation acceptance and delivery database smoke', () => {
     const keys = new Map<number, Buffer>([[7, Buffer.alloc(32, 7)]]);
     const readiness = new OperationalInvitationAcceptanceReadiness(
       true,
+      1,
       {
         currentVersion: () => 999,
         keyFor: (version) => {
@@ -1321,6 +1322,7 @@ describe('Invitation acceptance and delivery database smoke', () => {
   });
 
   it('fails migration rollback before removing activation objects with real data', async () => {
+    await owner.undoLastMigration();
     await expect(owner.undoLastMigration()).rejects.toThrow(
       'Cannot revert invitation activation migration while activation data exists.',
     );
@@ -1645,20 +1647,21 @@ describe('Invitation acceptance and delivery database smoke', () => {
         status: UserStatus.ACTIVE,
       }),
     );
-    const organization = await owner.getRepository(Organization).save(
-      owner.getRepository(Organization).create({
-        name: `Organization ${suffix}`,
-        slug: `${suffix}-${randomUUID()}`,
-        status: OrganizationStatus.ACTIVE,
-      }),
-    );
-    const issuer = await owner.getRepository(Membership).save(
-      owner.getRepository(Membership).create({
-        userId: issuerUser.id,
-        organizationId: organization.id,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      }),
+    const { organization, issuer } = await owner.transaction(
+      async (manager) => {
+        const organization = await manager.getRepository(Organization).save({
+          name: `Organization ${suffix}`,
+          slug: `${suffix}-${randomUUID()}`,
+          status: OrganizationStatus.ACTIVE,
+        });
+        const issuer = await manager.getRepository(Membership).save({
+          userId: issuerUser.id,
+          organizationId: organization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        });
+        return { organization, issuer };
+      },
     );
     return { user, organization, issuer };
   }

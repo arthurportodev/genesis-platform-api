@@ -18,6 +18,10 @@ import {
   AuthTokenResponse,
 } from '../src/modules/auth/auth.service';
 import { LoginRateLimiter } from '../src/modules/auth/services/login-rate-limiter.port';
+import { Membership } from '../src/modules/memberships/entities/membership.entity';
+import { MembershipRole } from '../src/modules/memberships/enums/membership-role.enum';
+import { MembershipStatus } from '../src/modules/memberships/enums/membership-status.enum';
+import { Organization } from '../src/modules/organizations/entities/organization.entity';
 import { User } from '../src/modules/users/entities/user.entity';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
 import {
@@ -67,6 +71,20 @@ describe('Authentication endpoints (e2e)', () => {
         initialOwnerPassword,
       },
     );
+    const organization = await connection
+      .getRepository(Organization)
+      .findOneByOrFail({ slug: 'agencia-genesis' });
+    const guardian = await connection.getRepository(User).save({
+      email: 'auth-owner-guardian@example.com',
+      name: 'Auth owner guardian',
+      status: UserStatus.ACTIVE,
+    });
+    await connection.getRepository(Membership).save({
+      userId: guardian.id,
+      organizationId: organization.id,
+      role: MembershipRole.OWNER,
+      status: MembershipStatus.ACTIVE,
+    });
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],

@@ -29,6 +29,7 @@ import { OrganizationStatus } from '../src/modules/organizations/enums/organizat
 import { TenantContextGuard } from '../src/modules/tenant-context/guards/tenant-context.guard';
 import { TenantContextModule } from '../src/modules/tenant-context/tenant-context.module';
 import { User } from '../src/modules/users/entities/user.entity';
+import { UserStatus } from '../src/modules/users/enums/user-status.enum';
 import {
   configureIntegrationRuntimeEnvironment,
   createIntegrationDataSource,
@@ -323,39 +324,29 @@ describe('Role authorization (e2e)', () => {
     ownerOrganization = await organizations.findOneByOrFail({
       slug: 'agencia-genesis',
     });
-    [
-      adminOrganization,
-      memberOrganization,
-      inactiveOrganization,
-      noMembershipOrganization,
-      inactiveMembershipOrganization,
-    ] = await organizations.save([
-      organizations.create({
-        name: 'Role Admin Organization',
-        slug: 'role-admin-organization',
-        status: OrganizationStatus.ACTIVE,
-      }),
-      organizations.create({
-        name: 'Role Member Organization',
-        slug: 'role-member-organization',
-        status: OrganizationStatus.ACTIVE,
-      }),
+    adminOrganization = await createActiveOrganization(
+      'Role Admin Organization',
+      'role-admin-organization',
+    );
+    memberOrganization = await createActiveOrganization(
+      'Role Member Organization',
+      'role-member-organization',
+    );
+    noMembershipOrganization = await createActiveOrganization(
+      'Role No Membership Organization',
+      'role-no-membership-organization',
+    );
+    inactiveMembershipOrganization = await createActiveOrganization(
+      'Role Inactive Membership Organization',
+      'role-inactive-membership-organization',
+    );
+    inactiveOrganization = await organizations.save(
       organizations.create({
         name: 'Role Inactive Organization',
         slug: 'role-inactive-organization',
         status: OrganizationStatus.INACTIVE,
       }),
-      organizations.create({
-        name: 'Role No Membership Organization',
-        slug: 'role-no-membership-organization',
-        status: OrganizationStatus.ACTIVE,
-      }),
-      organizations.create({
-        name: 'Role Inactive Membership Organization',
-        slug: 'role-inactive-membership-organization',
-        status: OrganizationStatus.ACTIVE,
-      }),
-    ]);
+    );
 
     const memberships = connection.getRepository(Membership);
     await memberships.findOneByOrFail({
@@ -388,6 +379,31 @@ describe('Role authorization (e2e)', () => {
         status: MembershipStatus.INACTIVE,
       }),
     ]);
+  }
+
+  async function createActiveOrganization(
+    name: string,
+    slug: string,
+  ): Promise<Organization> {
+    return connection.transaction(async (manager) => {
+      const guardian = await manager.getRepository(User).save({
+        email: `guardian-${slug}-${randomUUID()}@example.com`,
+        name: `Guardian ${name}`,
+        status: UserStatus.ACTIVE,
+      });
+      const organization = await manager.getRepository(Organization).save({
+        name,
+        slug,
+        status: OrganizationStatus.ACTIVE,
+      });
+      await manager.getRepository(Membership).save({
+        userId: guardian.id,
+        organizationId: organization.id,
+        role: MembershipRole.OWNER,
+        status: MembershipStatus.ACTIVE,
+      });
+      return organization;
+    });
   }
 
   function roleRequest(route: string, organizationId: string, token?: string) {

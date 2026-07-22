@@ -114,11 +114,32 @@ export const environmentValidationSchema = Joi.object({
     .min(1)
     .max(32)
     .default(2),
+  API_PUBLIC_REPLICA_COUNT: Joi.number().integer().min(1).max(100).optional(),
   INVITATION_PUBLIC_REPLICA_COUNT: Joi.number()
     .integer()
     .min(1)
     .max(100)
-    .default(1),
+    .optional(),
+  MEMBERSHIP_RATE_LIMIT_WINDOW_SECONDS: Joi.number()
+    .integer()
+    .min(1)
+    .max(86_400)
+    .default(60),
+  MEMBERSHIP_READ_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(100_000)
+    .default(120),
+  MEMBERSHIP_COMMAND_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(100_000)
+    .default(30),
+  MEMBERSHIP_RATE_LIMIT_MAX_BUCKETS: Joi.number()
+    .integer()
+    .min(1)
+    .max(1_000_000)
+    .default(10_000),
   INVITATION_RATE_LIMIT_MAX_BUCKETS: Joi.number()
     .integer()
     .min(3)

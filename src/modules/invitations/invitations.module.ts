@@ -10,6 +10,7 @@ import { TenantContextModule } from '../tenant-context/tenant-context.module';
 import { InvitationsController } from './controllers/invitations.controller';
 import { InvitationAcceptanceController } from './controllers/invitation-acceptance.controller';
 import { InvitationConfig } from '../../config/invitation.config';
+import { AppConfig } from '../../config/app.config';
 import { InvitationDeliveryOutbox } from './entities/invitation-delivery-outbox.entity';
 import { OrganizationCommandIdempotency } from './entities/organization-command-idempotency.entity';
 import { OrganizationInvitation } from './entities/organization-invitation.entity';
@@ -79,6 +80,7 @@ import { NoStoreInterceptor } from './interceptors/no-store.interceptor';
         const invitation = config.getOrThrow<InvitationConfig>('invitation');
         return new OperationalInvitationAcceptanceReadiness(
           invitation.acceptanceReady,
+          config.getOrThrow<AppConfig>('app').publicReplicaCount,
           keyring,
           dataSource,
         );

@@ -1,4 +1,5 @@
 import { registerAs } from '@nestjs/config';
+import { resolveApiPublicReplicaCount } from './app.config';
 
 export interface InvitationConfig {
   issuanceReady: boolean;
@@ -114,9 +115,7 @@ export default registerAs('invitation', (): InvitationConfig => {
   }
   const acceptanceReady = enabled('INVITATION_ACCEPTANCE_READINESS');
   const activationReady = enabled('INVITATION_ACTIVATION_READINESS');
-  const publicReplicaCount = Number(
-    process.env.INVITATION_PUBLIC_REPLICA_COUNT ?? 1,
-  );
+  const publicReplicaCount = resolveApiPublicReplicaCount();
   const resendApiKey = process.env.RESEND_API_KEY?.trim() || null;
   const emailFrom = process.env.INVITATION_EMAIL_FROM ?? '';
   const workerEnabled = enabled('INVITATION_WORKER_ENABLED');

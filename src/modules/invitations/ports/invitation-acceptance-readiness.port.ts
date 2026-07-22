@@ -32,12 +32,14 @@ export class OperationalInvitationAcceptanceReadiness implements InvitationAccep
 
   constructor(
     private readonly enabled: boolean,
+    private readonly publicReplicaCount: number,
     private readonly keyring: InvitationTokenKeyring,
     private readonly dataSource: DataSource,
   ) {}
 
   async assertReady(): Promise<void> {
     if (!this.enabled) this.unavailable('disabled');
+    if (this.publicReplicaCount !== 1) this.unavailable('replica_count');
     let rows: Array<{ keyVersion: number }>;
     try {
       rows = await this.dataSource.query<Array<{ keyVersion: number }>>(

@@ -114,6 +114,29 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   email, Organization e papel do banco, proíbe owner, tem `PUBLIC EXECUTE`
   revogado e preserva a role runtime sem INSERT/UPDATE amplo em users/memberships.
 
+## Gestão de memberships e ownership
+
+- Rotas `/api/v1/members` exigem autenticação, tenant ativo e papel explícito;
+  owner vê todos os vínculos, admin é hard-filtered para `member` e member só
+  pode sair pela rota dedicada.
+- Alvos cross-tenant, ausentes ou não visíveis retornam `404` uniforme. Comandos
+  de target não aceitam a própria Membership do ator.
+- A função `app_private.execute_membership_command` é a única fronteira de
+  mutação concedida ao runtime. `PUBLIC EXECUTE`, DML direto nas tabelas
+  centrais, `CREATE` no schema e capacidade de assumir o owner são negados.
+- A ordem de lock é Organization → Users ordenados → Memberships ordenadas.
+  O resultado `blocked_last_owner` é auditado e commitado antes da resposta
+  `409`; no-op não cria audit.
+- Constraint triggers diferidos preservam ao menos um owner efetivo por
+  Organization ativa, inclusive para SQL direto e alterações em Organization,
+  User ou Membership. A identidade user/organization da Membership é imutável.
+- Readiness confere a allowlist exata de funções executáveis, metadata de
+  `SECURITY DEFINER`/`search_path`, ACLs e os triggers novos e legados. Qualquer
+  drift fecha as rotas com `503`.
+- `API_PUBLIC_REPLICA_COUNT=1` é obrigatório enquanto rate limits forem
+  process-local. O nome legado é somente compatibilidade temporária e conflito
+  entre ambos falha fechado.
+
 ## Limitações e decisões abertas
 
 - Refresh token ainda é retornado em JSON; cookie `HttpOnly` não foi implementado.

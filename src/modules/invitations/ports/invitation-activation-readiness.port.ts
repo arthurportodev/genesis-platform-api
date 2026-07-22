@@ -1,6 +1,7 @@
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { InvitationTokenKeyring } from './invitation-token-keyring.port';
+import { RUNTIME_EXECUTABLE_FUNCTIONS } from '../../../database/runtime-executable-functions';
 
 export const INVITATION_ACTIVATION_READINESS = Symbol(
   'INVITATION_ACTIVATION_READINESS',
@@ -24,13 +25,6 @@ interface ReadinessRow {
   canMutateMembershipColumn: boolean;
   executableFunctions: string[];
 }
-
-const EXPECTED_EXECUTABLE_FUNCTIONS = [
-  'app_private.activate_new_user_invitation(uuid,text,text,uuid,inet,text)',
-  'app_private.apply_existing_user_invitation_membership(uuid,uuid)',
-  'app_private.lock_auth_refresh_user(uuid)',
-  'app_private.lock_invitation_context(uuid[],uuid[],uuid[])',
-];
 
 export class OperationalInvitationActivationReadiness implements InvitationActivationReadiness {
   private readonly logger = new Logger(
@@ -138,7 +132,7 @@ export class OperationalInvitationActivationReadiness implements InvitationActiv
       schema.canMutateUserColumn ||
       schema.canMutateMembershipColumn ||
       JSON.stringify(schema.executableFunctions) !==
-        JSON.stringify(EXPECTED_EXECUTABLE_FUNCTIONS)
+        JSON.stringify(RUNTIME_EXECUTABLE_FUNCTIONS)
     ) {
       this.unavailable('schema_unavailable');
     }

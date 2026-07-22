@@ -2,8 +2,8 @@ const { createHash } = require('node:crypto');
 const { existsSync, readFileSync } = require('node:fs');
 const { spawnSync } = require('node:child_process');
 
-const expectedBranch = 'feature/invitation-new-user-activation';
-const expectedBase = '410f0576a98e373c39bf178f73b80838b40d2924';
+const expectedBranch = 'feature/membership-management-ownership';
+const expectedBase = '945142b3103a24104525d825226ff75c9e5e1f9b';
 const startedAt = Date.now();
 
 function git(args, print = true) {
@@ -32,7 +32,7 @@ process.stdout.write(diffCheck.stdout ?? '');
 process.stderr.write(diffCheck.stderr ?? '');
 
 const packetTracked = git(
-  ['ls-files', '.codex/task-packets/0.2.5.3.md'],
+  ['ls-files', '.codex/task-packets/0.2.5.4.md'],
   false,
 );
 const untracked = git(['ls-files', '--others', '--exclude-standard'], false)
@@ -52,12 +52,12 @@ const allowed = [
   /^docs\//u,
   /^scripts\//u,
   /^src\/config\//u,
-  /^src\/database\/migrations\/1785174000000-ActivateNewInvitationUser\.ts$/u,
-  /^src\/modules\/auth\/(auth\.module|auth\.service|services\/password\.service)\.ts$/u,
-  /^src\/modules\/credentials\//u,
+  /^src\/database\/migrations\/1785260400000-ManageMembershipOwnership\.ts$/u,
+  /^src\/database\/runtime-executable-functions\.ts$/u,
   /^src\/modules\/invitations\//u,
-  /^src\/modules\/organization-audit\/enums\/organization-audit-event-type\.enum\.ts$/u,
-  /^src\/modules\/users\/entities\/user\.entity\.ts$/u,
+  /^src\/modules\/memberships\//u,
+  /^src\/modules\/organization-audit\//u,
+  /^src\/modules\/tenant-context\/services\/tenant-context\.service\.ts$/u,
   /^test\//u,
 ];
 const fingerprint = createHash('sha256');
@@ -73,12 +73,12 @@ if (sha !== expectedBase) failures.push(`HEAD=${sha}`);
 if (staged !== '') failures.push('stage is not empty');
 if (packetTracked !== '') failures.push('Task Packet is tracked');
 if (diffCheck.status !== 0) failures.push('git diff --check failed');
-if (!existsSync('.codex/task-packets/0.2.5.3.md')) {
+if (!existsSync('.codex/task-packets/0.2.5.4.md')) {
   failures.push('Task Packet is missing');
 }
 const packetIgnored = spawnSync(
   'git',
-  ['check-ignore', '-q', '.codex/task-packets/0.2.5.3.md'],
+  ['check-ignore', '-q', '.codex/task-packets/0.2.5.4.md'],
   { encoding: 'utf8' },
 );
 if (packetIgnored.status !== 0) failures.push('Task Packet is not excluded');
