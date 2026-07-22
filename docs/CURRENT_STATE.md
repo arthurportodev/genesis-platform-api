@@ -1,13 +1,13 @@
 # Estado atual
 
-- **Última atualização:** 2026-07-21
+- **Última atualização:** 2026-07-22
 - **Fase:** 0.2 — Identidade e multi-tenancy
 - **Última tarefa funcional concluída:** 0.2.4 — Autorização por papel
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Última subtarefa funcional concluída:** 0.2.5.1 — Domínio e administração de convites (PR #13, squash `829cefa` e CI aprovados)
-- **Tarefa funcional em implementação:** 0.2.5.2 — Entrega por email e aceitação por usuário existente
+- **Última subtarefa funcional concluída:** 0.2.5.2 — Entrega por email e aceitação para usuário existente (PR #14, squash `410f0576a98e373c39bf178f73b80838b40d2924`, CI pós-merge 29919743498 aprovada)
+- **Tarefa funcional em implementação:** 0.2.5.3 — Ativação de usuário novo por convite
 
 ## Implementado
 
@@ -63,14 +63,18 @@
 - `GET /api/v1/invitations/:invitationId`
 - `POST /api/v1/invitations/:invitationId/revoke`
 - `POST /api/v1/invitations/:invitationId/replace` (readiness operacional; produção fail-closed até 0.2.5.3)
+- `POST /api/v1/invitation-acceptance/inspect`
+- `POST /api/v1/invitation-acceptance/accept`
+- `POST /api/v1/invitation-acceptance/activate`
 
 Não existem endpoints de CRUD para usuários, organizações ou memberships.
 
 ### Convites em implementação
 
 - A 0.2.5.1 foi incorporada à `main` pelo PR #13, squash `829cefa`, com CI do PR e pós-merge aprovadas.
-- A 0.2.5.2 adiciona inspect/accept, membership para usuário existente, adapter Resend, worker separado, retry/fencing, health interno e observabilidade allowlisted.
-- Em produção, emissão continua fail-closed até a 0.2.5.3: `INVITATION_ISSUANCE_READINESS` não habilita create/replace em production.
+- A 0.2.5.2 foi concluída no PR #14, squash `410f0576a98e373c39bf178f73b80838b40d2924`, com CI pós-merge 29919743498 aprovada.
+- A 0.2.5.3 adiciona activation pública para usuário inexistente, credencial Argon2id, Membership, acceptance e auditoria em uma única transação, sem auto-login.
+- Em produção, emissão somente abre quando issuance, acceptance, activation, worker, keyring, delivery e frontend estão explicitamente prontos e a API pública opera com uma réplica.
 
 - `OrganizationInvitation` e as tabelas separadas de audit, idempotência e
   outbox implementam o domínio e a administração tenant-scoped da 0.2.5.1.
@@ -83,9 +87,9 @@ Não existem endpoints de CRUD para usuários, organizações ou memberships.
 - O outbox possui worker separado, claim concorrente, retry, fencing,
   dead-letter, adapter Resend e health interno; o provider não participa da
   transação de aceitação.
-- A aceitação autenticada para usuário existente está implementada no candidato
-  da 0.2.5.2. Ativação/criação de usuário e gestão de memberships/ownership
-  permanecem futuras nas subtarefas 0.2.5.3 e 0.2.5.4.
+- A aceitação autenticada para usuário existente está incorporada. A activation
+  cria somente usuário novo e nunca converte automaticamente para accept;
+  gestão de memberships/ownership permanece na 0.2.5.4.
 
 ### Schema
 
@@ -94,6 +98,8 @@ Migrations existentes:
 - [`1784400000000-CreateMultiTenantCore.ts`](../src/database/migrations/1784400000000-CreateMultiTenantCore.ts)
 - [`1784486400000-CreateAuthSessions.ts`](../src/database/migrations/1784486400000-CreateAuthSessions.ts)
 - [`1785004800000-CreateOrganizationInvitations.ts`](../src/database/migrations/1785004800000-CreateOrganizationInvitations.ts)
+- [`1785087600000-DeliverInvitationAcceptance.ts`](../src/database/migrations/1785087600000-DeliverInvitationAcceptance.ts)
+- [`1785174000000-ActivateNewInvitationUser.ts`](../src/database/migrations/1785174000000-ActivateNewInvitationUser.ts)
 
 Tabelas da aplicação: `users`, `organizations`, `memberships`, `auth_sessions`, `auth_refresh_tokens`, `auth_audit_logs`, `organization_invitations`, `organization_audit_logs`, `organization_command_idempotency` e `invitation_delivery_outbox`.
 

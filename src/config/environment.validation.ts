@@ -60,6 +60,9 @@ export const environmentValidationSchema = Joi.object({
   INVITATION_ACCEPTANCE_READINESS: Joi.string()
     .valid('true', 'false')
     .default('false'),
+  INVITATION_ACTIVATION_READINESS: Joi.string()
+    .valid('true', 'false')
+    .default('false'),
   INVITATION_WORKER_ENABLED: Joi.string()
     .valid('true', 'false')
     .default('false'),
@@ -96,6 +99,26 @@ export const environmentValidationSchema = Joi.object({
     .min(1)
     .max(10_000)
     .default(10),
+  INVITATION_ACTIVATION_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(10_000)
+    .default(20),
+  INVITATION_ACTIVATION_INVITATION_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(10_000)
+    .default(5),
+  INVITATION_ACTIVATION_HASH_CONCURRENCY: Joi.number()
+    .integer()
+    .min(1)
+    .max(32)
+    .default(2),
+  INVITATION_PUBLIC_REPLICA_COUNT: Joi.number()
+    .integer()
+    .min(1)
+    .max(100)
+    .default(1),
   INVITATION_RATE_LIMIT_MAX_BUCKETS: Joi.number()
     .integer()
     .min(3)

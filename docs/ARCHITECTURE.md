@@ -158,11 +158,19 @@ separado, acessa a outbox com `SKIP LOCKED`, lease e fencing, envia pela porta
 Resend e publica health somente em loopback. Membership é aplicada por função
 `SECURITY DEFINER` estreita, preservando a ACL runtime sem escrita direta.
 
+Activation de usuário novo reutiliza o bearer da invitation em uma rota pública,
+mas calcula Argon2id fora da transação e decide autorização novamente sob locks
+Organization → Invitation. Uma função privada completa deriva email, tenant e
+papel da invitation e cria User, Membership, acceptance, cancelamento de outbox
+e auditoria atomicamente. O fluxo não cria sessão e não concede DML amplo à role
+runtime.
+
 ## Administração de convites
 
 As rotas `/api/v1/invitations` compõem `AccessTokenGuard` →
 `TenantContextGuard` → `RoleGuard` e relêem o actor em comandos. Owner pode
 administrar roles `member`/`admin`; admin enxerga e administra somente `member`.
-Create/replace consultam readiness fixa antes da transação e retornam `503`
-enquanto a entrega 0.2.5.2 não existir. Outbox, audit e mutação de domínio são
-atômicos; nenhum token, email payload ou link entra no outbox.
+Create/replace consultam readiness operacional antes da transação. A emissão em
+produção exige delivery, acceptance, activation, keyring, worker, frontend e uma
+única réplica pública explicitamente prontos. Outbox, audit e mutação de domínio
+são atômicos; nenhum token, email payload ou link entra no outbox.

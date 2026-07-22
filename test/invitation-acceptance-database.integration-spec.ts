@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await, @typescript-eslint/unbound-method */
 import { randomBytes, randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
+import { PasswordCredentialsService } from '../src/modules/credentials/services/password-credentials.service';
 import { InvitationDeliveryWorkerService } from '../src/modules/invitations/delivery/invitation-delivery-worker.service';
 import { InvitationEmailDeliveryPort } from '../src/modules/invitations/delivery/invitation-email-delivery.port';
 import { InvitationEmailV1Renderer } from '../src/modules/invitations/delivery/invitation-email-v1.renderer';
@@ -15,9 +16,16 @@ import {
 } from '../src/modules/invitations/enums/invitation.enums';
 import { ConfiguredInvitationAcceptanceReadiness } from '../src/modules/invitations/ports/invitation-acceptance-readiness.port';
 import { OperationalInvitationAcceptanceReadiness } from '../src/modules/invitations/ports/invitation-acceptance-readiness.port';
+import { OperationalInvitationActivationReadiness } from '../src/modules/invitations/ports/invitation-activation-readiness.port';
+import { EnabledInvitationIssuanceReadiness } from '../src/modules/invitations/ports/invitation-issuance-readiness.port';
 import { InvitationTokenKeyring } from '../src/modules/invitations/ports/invitation-token-keyring.port';
 import { InvitationAcceptanceService } from '../src/modules/invitations/services/invitation-acceptance.service';
+import { InvitationActivationHashCapacity } from '../src/modules/invitations/services/invitation-activation-hash-capacity.service';
+import { InvitationActivationService } from '../src/modules/invitations/services/invitation-activation.service';
+import { InvitationActivationObservability } from '../src/modules/invitations/services/invitation-activation-observability.service';
+import { InvitationAcceptanceRateLimiter } from '../src/modules/invitations/services/invitation-acceptance-rate-limiter.service';
 import { InvitationTokenCodec } from '../src/modules/invitations/services/invitation-token-codec.service';
+import { InvitationsService } from '../src/modules/invitations/services/invitations.service';
 import { Membership } from '../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../src/modules/memberships/enums/membership-role.enum';
 import { MembershipStatus } from '../src/modules/memberships/enums/membership-status.enum';
@@ -36,6 +44,7 @@ import {
 describe('Invitation acceptance and delivery database smoke', () => {
   let owner: DataSource;
   let runtime: DataSource;
+  let secondRuntime: DataSource;
   const keyring: InvitationTokenKeyring = {
     currentVersion: () => 2,
     keyFor: (version) => {
@@ -54,9 +63,12 @@ describe('Invitation acceptance and delivery database smoke', () => {
     await owner.runMigrations();
     runtime = createIntegrationRuntimeDataSource();
     await runtime.initialize();
+    secondRuntime = createIntegrationRuntimeDataSource();
+    await secondRuntime.initialize();
   });
 
   afterAll(async () => {
+    if (secondRuntime?.isInitialized) await secondRuntime.destroy();
     if (runtime?.isInitialized) await runtime.destroy();
     if (owner?.isInitialized) {
       await owner.dropDatabase();
@@ -325,6 +337,539 @@ describe('Invitation acceptance and delivery database smoke', () => {
       [attacker.user.id, recipient.organization.id],
     );
     expect(row?.count).toBe(0);
+  });
+
+  it('installs a non-strict hardened activation function with exact runtime execute', async () => {
+    const runtimeRole = process.env.DATABASE_RUNTIME_ROLE as string;
+    const [row] = await owner.query<
+      Array<{
+        securityDefiner: boolean;
+        isStrict: boolean;
+        config: string[];
+        runtimeExecute: boolean;
+        publicExecute: boolean;
+        insertUsers: boolean;
+        insertMemberships: boolean;
+      }>
+    >(
+      `SELECT routine.prosecdef AS "securityDefiner",
+              routine.proisstrict AS "isStrict", routine.proconfig AS config,
+              has_function_privilege(
+                $1,
+                'app_private.activate_new_user_invitation(uuid,text,text,uuid,inet,text)',
+                'EXECUTE'
+              ) AS "runtimeExecute",
+              COALESCE((
+                SELECT bool_or(acl.grantee = 0 AND acl.privilege_type = 'EXECUTE')
+                FROM aclexplode(routine.proacl) AS acl
+              ), false) AS "publicExecute",
+              has_table_privilege($1, 'users', 'INSERT') AS "insertUsers",
+              has_table_privilege($1, 'memberships', 'INSERT') AS "insertMemberships"
+       FROM pg_proc AS routine
+       WHERE routine.oid =
+         'app_private.activate_new_user_invitation(uuid,text,text,uuid,inet,text)'::regprocedure`,
+      [runtimeRole],
+    );
+    expect(row).toMatchObject({
+      securityDefiner: true,
+      isStrict: false,
+      runtimeExecute: true,
+      publicExecute: false,
+      insertUsers: false,
+      insertMemberships: false,
+    });
+    expect(row?.config).toContain(
+      'search_path=pg_catalog, app_private, pg_temp',
+    );
+  });
+
+  it('passes activation readiness only with the real exact runtime ACL boundary', async () => {
+    await expect(
+      new OperationalInvitationActivationReadiness(
+        true,
+        1,
+        {
+          currentVersion: () => 2,
+          keyFor: () => Buffer.alloc(32, 0x27),
+        },
+        runtime,
+      ).assertReady(),
+    ).resolves.toBeUndefined();
+  });
+
+  it('serializes activate x activate with one user, membership, and audit', async () => {
+    const fixture = await createFixture('activate-race');
+    const email = `activate-${randomUUID()}@example.com`;
+    const invitation = await createInvitation(fixture, email);
+    const input = {
+      token: issue(invitation),
+      name: 'New User',
+      password: 'Strong activation password 1!',
+    };
+    const attempts = await Promise.allSettled([
+      activationService().activate(input, {
+        ipAddress: '127.0.0.1',
+        userAgent: 'integration race a',
+      }),
+      activationService().activate(input, {
+        ipAddress: '127.0.0.2',
+        userAgent: 'integration race b',
+      }),
+    ]);
+    expect(
+      attempts.filter((attempt) => attempt.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      attempts.filter((attempt) => attempt.status === 'rejected'),
+    ).toHaveLength(1);
+    expect(
+      (
+        attempts.find(
+          (attempt) => attempt.status === 'rejected',
+        ) as PromiseRejectedResult
+      ).reason,
+    ).toMatchObject({ status: 404 });
+
+    const [state] = await owner.query<
+      Array<{
+        users: number;
+        memberships: number;
+        audits: number;
+        status: string;
+      }>
+    >(
+      `SELECT
+         (SELECT count(*)::int FROM users WHERE email = $1) AS users,
+         (SELECT count(*)::int FROM memberships AS membership
+          JOIN users AS application_user ON application_user.id = membership.user_id
+          WHERE application_user.email = $1 AND membership.organization_id = $2)
+           AS memberships,
+         (SELECT count(*)::int FROM organization_audit_logs
+          WHERE invitation_id = $3
+            AND event_type = 'organization.invitation.activated') AS audits,
+         (SELECT status FROM organization_invitations WHERE id = $3) AS status`,
+      [email, fixture.organization.id, invitation.id],
+    );
+    expect(state).toEqual({
+      users: 1,
+      memberships: 1,
+      audits: 1,
+      status: 'accepted',
+    });
+  });
+
+  it('serializes activate x authenticated accept on separate runtime connections', async () => {
+    const fixture = await createFixture('activate-accept-race');
+    const invitation = await createInvitation(fixture, fixture.user.email);
+    const operations = await Promise.allSettled([
+      activationService(undefined, runtime).activate(
+        {
+          token: issue(invitation),
+          name: 'Must Not Duplicate',
+          password: 'Strong activation password 1!',
+        },
+        { ipAddress: '127.0.0.3', userAgent: 'activate contender' },
+      ),
+      acceptanceService(keyring, secondRuntime).accept(
+        issue(invitation),
+        fixture.user.id,
+        { ipAddress: '127.0.0.4', userAgent: 'accept contender' },
+      ),
+    ]);
+    expect(operations[0]).toMatchObject({ status: 'rejected' });
+    expect(operations[1]).toMatchObject({ status: 'fulfilled' });
+    const [state] = await owner.query<
+      Array<{
+        status: string;
+        acceptedBy: string;
+        users: number;
+        memberships: number;
+        acceptanceAudits: number;
+        activationAudits: number;
+      }>
+    >(
+      `SELECT invitation.status, invitation.accepted_by_user_id AS "acceptedBy",
+              (SELECT count(*)::int FROM users WHERE email = $2) AS users,
+              (SELECT count(*)::int FROM memberships
+               WHERE user_id = $3 AND organization_id = $4) AS memberships,
+              (SELECT count(*)::int FROM organization_audit_logs
+               WHERE invitation_id = $1
+                 AND event_type = 'organization.invitation.accepted')
+                AS "acceptanceAudits",
+              (SELECT count(*)::int FROM organization_audit_logs
+               WHERE invitation_id = $1
+                 AND event_type = 'organization.invitation.activated')
+                AS "activationAudits"
+       FROM organization_invitations AS invitation WHERE invitation.id = $1`,
+      [
+        invitation.id,
+        fixture.user.email,
+        fixture.user.id,
+        fixture.organization.id,
+      ],
+    );
+    expect(state).toEqual({
+      status: 'accepted',
+      acceptedBy: fixture.user.id,
+      users: 1,
+      memberships: 1,
+      acceptanceAudits: 1,
+      activationAudits: 0,
+    });
+  });
+
+  it('serializes activate x revoke on separate runtime connections', async () => {
+    const fixture = await createFixture('activate-revoke-race');
+    const email = `activate-revoke-${randomUUID()}@example.com`;
+    const invitation = await createInvitation(fixture, email);
+    const operations = await Promise.allSettled([
+      activationService(undefined, runtime).activate(
+        {
+          token: issue(invitation),
+          name: 'Activation Contender',
+          password: 'Strong activation password 1!',
+        },
+        { ipAddress: '127.0.0.5', userAgent: 'activate contender' },
+      ),
+      invitationAdminService(secondRuntime).revoke(
+        tenant(fixture),
+        invitation.id,
+        { ipAddress: '127.0.0.6', userAgent: 'revoke contender' },
+      ),
+    ]);
+    expect(
+      operations.filter((item) => item.status === 'fulfilled'),
+    ).toHaveLength(1);
+    const state = await activationCompetitionState(invitation.id, email);
+    expect(['accepted', 'revoked']).toContain(state.status);
+    expect(state).toMatchObject(
+      state.status === 'accepted'
+        ? { users: 1, memberships: 1, activationAudits: 1, revokeAudits: 0 }
+        : { users: 0, memberships: 0, activationAudits: 0, revokeAudits: 1 },
+    );
+  });
+
+  it('serializes activate x replace on separate runtime connections', async () => {
+    const fixture = await createFixture('activate-replace-race');
+    const email = `activate-replace-${randomUUID()}@example.com`;
+    const invitation = await createInvitation(fixture, email);
+    const operations = await Promise.allSettled([
+      activationService(undefined, runtime).activate(
+        {
+          token: issue(invitation),
+          name: 'Activation Contender',
+          password: 'Strong activation password 1!',
+        },
+        { ipAddress: '127.0.0.7', userAgent: 'activate contender' },
+      ),
+      invitationAdminService(secondRuntime).replace(
+        tenant(fixture),
+        invitation.id,
+        randomUUID(),
+        { ipAddress: '127.0.0.8', userAgent: 'replace contender' },
+      ),
+    ]);
+    expect(
+      operations.filter((item) => item.status === 'fulfilled'),
+    ).toHaveLength(1);
+    const [state] = await owner.query<
+      Array<{
+        status: string;
+        users: number;
+        memberships: number;
+        activationAudits: number;
+        replacementAudits: number;
+        replacementInvitations: number;
+      }>
+    >(
+      `SELECT invitation.status,
+              (SELECT count(*)::int FROM users WHERE email = $2) AS users,
+              (SELECT count(*)::int FROM memberships AS membership
+               JOIN users AS application_user ON application_user.id = membership.user_id
+               WHERE application_user.email = $2
+                 AND membership.organization_id = invitation.organization_id)
+                AS memberships,
+              (SELECT count(*)::int FROM organization_audit_logs
+               WHERE invitation_id = $1
+                 AND event_type = 'organization.invitation.activated')
+                AS "activationAudits",
+              (SELECT count(*)::int FROM organization_audit_logs
+               WHERE invitation_id = $1
+                 AND event_type = 'organization.invitation.replaced')
+                AS "replacementAudits",
+              (SELECT count(*)::int FROM organization_invitations
+               WHERE email_normalized = $2 AND id <> $1) AS "replacementInvitations"
+       FROM organization_invitations AS invitation WHERE invitation.id = $1`,
+      [invitation.id, email],
+    );
+    expect(['accepted', 'revoked']).toContain(state?.status);
+    expect(state).toMatchObject(
+      state?.status === 'accepted'
+        ? {
+            users: 1,
+            memberships: 1,
+            activationAudits: 1,
+            replacementAudits: 0,
+            replacementInvitations: 0,
+          }
+        : {
+            users: 0,
+            memberships: 0,
+            activationAudits: 0,
+            replacementAudits: 1,
+            replacementInvitations: 1,
+          },
+    );
+  });
+
+  it('serializes activate x organization inactivation with the canonical organization lock', async () => {
+    const fixture = await createFixture('activate-organization-race');
+    const email = `activate-organization-${randomUUID()}@example.com`;
+    const invitation = await createInvitation(fixture, email);
+    const operations = await Promise.allSettled([
+      activationService(undefined, runtime).activate(
+        {
+          token: issue(invitation),
+          name: 'Activation Contender',
+          password: 'Strong activation password 1!',
+        },
+        { ipAddress: '127.0.0.9', userAgent: 'activate contender' },
+      ),
+      owner.transaction(async (manager) => {
+        await manager.query(
+          `SELECT app_private.lock_invitation_context(
+             $1::uuid[], $2::uuid[], $3::uuid[]
+           )`,
+          [[fixture.organization.id], [], []],
+        );
+        await manager.query(
+          `UPDATE organizations SET status = 'inactive',
+                  updated_at = transaction_timestamp() WHERE id = $1`,
+          [fixture.organization.id],
+        );
+      }),
+    ]);
+    expect(operations[1]).toMatchObject({ status: 'fulfilled' });
+    const state = await activationCompetitionState(invitation.id, email);
+    expect(state.organizationStatus).toBe('inactive');
+    expect(['accepted', 'pending']).toContain(state.status);
+    expect(state).toMatchObject(
+      state.status === 'accepted'
+        ? { users: 1, memberships: 1, activationAudits: 1 }
+        : { users: 0, memberships: 0, activationAudits: 0 },
+    );
+  });
+
+  it('checks HMAC before spending password hashing capacity', async () => {
+    const fixture = await createFixture('activate-mac');
+    const invitation = await createInvitation(
+      fixture,
+      `activate-mac-${randomUUID()}@example.com`,
+    );
+    const valid = issue(invitation);
+    const [, , , mac] = valid.split('.');
+    const hash = jest.fn();
+    const service = activationService({ hash });
+
+    await expect(
+      service.activate(
+        {
+          token: `${invitation.id}.2.1.${tamperMac(mac)}`,
+          name: 'New User',
+          password: 'Strong activation password 1!',
+        },
+        { ipAddress: null, userAgent: null },
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(hash).not.toHaveBeenCalled();
+  });
+
+  it('rejects adversarial direct SECURITY DEFINER calls without partial writes', async () => {
+    const fixture = await createFixture('activate-direct-invalid');
+    const email = `activate-direct-invalid-${randomUUID()}@example.com`;
+    const invitation = await createInvitation(fixture, email);
+    await expect(
+      secondRuntime.query(
+        `SELECT * FROM app_private.activate_new_user_invitation(
+           $1::uuid, $2::text, $3::text, $4::uuid, $5::inet, $6::text
+         )`,
+        [
+          invitation.id,
+          ' name with forbidden boundary ',
+          'forged-credential',
+          randomUUID(),
+          null,
+          null,
+        ],
+      ),
+    ).rejects.toMatchObject({ driverError: { code: '22023' } });
+    await expect(
+      activationCompetitionState(invitation.id, email),
+    ).resolves.toMatchObject({
+      status: 'pending',
+      users: 0,
+      memberships: 0,
+      activationAudits: 0,
+    });
+  });
+
+  it('executes the exact direct function contract under an adversarial caller search_path', async () => {
+    const fixture = await createFixture('activate-direct-search-path');
+    const email = `activate-direct-search-path-${randomUUID()}@example.com`;
+    const invitation = await createInvitation(fixture, email);
+    const passwordHash = await new PasswordCredentialsService().hash(
+      'Strong direct activation password 1!',
+    );
+    const [result] = await secondRuntime.transaction(async (manager) => {
+      await manager.query(`SET LOCAL search_path = pg_temp, public`);
+      return manager.query<
+        Array<{
+          organization_id: string;
+          user_id: string;
+          membership_id: string;
+        }>
+      >(
+        `SELECT * FROM app_private.activate_new_user_invitation(
+           $1::uuid, $2::text, $3::text, $4::uuid, $5::inet, $6::text
+         )`,
+        [
+          invitation.id,
+          'Direct User',
+          passwordHash,
+          randomUUID(),
+          '127.0.0.10',
+          'direct adversarial search path',
+        ],
+      );
+    });
+    expect(Object.keys(result ?? {}).sort()).toEqual([
+      'membership_id',
+      'organization_id',
+      'user_id',
+    ]);
+    await expect(
+      activationCompetitionState(invitation.id, email),
+    ).resolves.toMatchObject({
+      status: 'accepted',
+      users: 1,
+      memberships: 1,
+      activationAudits: 1,
+    });
+  });
+
+  it.each([
+    ['user insert', 'users', 'BEFORE INSERT'],
+    ['membership insert', 'memberships', 'BEFORE INSERT'],
+    ['invitation terminal update', 'organization_invitations', 'BEFORE UPDATE'],
+    ['outbox cancellation', 'invitation_delivery_outbox', 'BEFORE UPDATE'],
+    ['audit insert', 'organization_audit_logs', 'BEFORE INSERT'],
+  ] as const)(
+    'rolls back every earlier stage when %s fails',
+    async (_stage, table, event) => {
+      const fixture = await createFixture('act-fault');
+      const email = `activate-fault-${table}-${randomUUID()}@example.com`;
+      const invitation = await createInvitation(fixture, email);
+      await owner.query(`
+        CREATE OR REPLACE FUNCTION public.fail_activation_stage()
+        RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          RAISE EXCEPTION 'forced activation stage failure'
+            USING ERRCODE = 'P0001';
+        END;
+        $$
+      `);
+      await owner.query(
+        `CREATE TRIGGER fail_activation_stage ${event} ON public.${table}
+         FOR EACH ROW EXECUTE FUNCTION public.fail_activation_stage()`,
+      );
+      try {
+        await expect(
+          activationService(undefined, secondRuntime).activate(
+            {
+              token: issue(invitation),
+              name: 'Rollback User',
+              password: 'Strong activation password 1!',
+            },
+            { ipAddress: null, userAgent: 'forced rollback' },
+          ),
+        ).rejects.toMatchObject({ driverError: { code: 'P0001' } });
+        const state = await activationCompetitionState(invitation.id, email);
+        expect(state).toMatchObject({
+          status: 'pending',
+          users: 0,
+          memberships: 0,
+          activationAudits: 0,
+          outboxStatus: 'queued',
+        });
+      } finally {
+        await owner.query(
+          `DROP TRIGGER IF EXISTS fail_activation_stage ON public.${table}`,
+        );
+        await owner.query(
+          `DROP FUNCTION IF EXISTS public.fail_activation_stage()`,
+        );
+      }
+    },
+  );
+
+  it('maps only the real email unique race and rolls activation back fully', async () => {
+    const fixture = await createFixture('activate-email-race');
+    const email = `activate-email-race-${randomUUID()}@example.com`;
+    const invitation = await createInvitation(fixture, email);
+    const blocker = owner.createQueryRunner();
+    await blocker.connect();
+    await blocker.startTransaction();
+    await blocker.query(
+      `INSERT INTO users (id, email, name, status)
+       VALUES ($1, $2, 'Concurrent User', 'active')`,
+      [randomUUID(), email],
+    );
+
+    const activation = activationService().activate(
+      {
+        token: issue(invitation),
+        name: 'Activation Loser',
+        password: 'Strong activation password 1!',
+      },
+      { ipAddress: null, userAgent: 'email race' },
+    );
+    try {
+      await waitForRuntimeFunctionWait();
+      await blocker.commitTransaction();
+    } finally {
+      if (blocker.isTransactionActive) await blocker.rollbackTransaction();
+      await blocker.release();
+    }
+    await expect(activation).rejects.toMatchObject({ status: 404 });
+
+    const [state] = await owner.query<
+      Array<{
+        invitationStatus: string;
+        acceptedBy: string | null;
+        membershipCount: number;
+        auditCount: number;
+      }>
+    >(
+      `SELECT invitation.status AS "invitationStatus",
+              invitation.accepted_by_user_id AS "acceptedBy",
+              (SELECT count(*)::int FROM memberships AS membership
+               JOIN users AS application_user ON application_user.id = membership.user_id
+               WHERE application_user.email = $2
+                 AND membership.organization_id = invitation.organization_id)
+                AS "membershipCount",
+              (SELECT count(*)::int FROM organization_audit_logs AS audit
+               WHERE audit.invitation_id = invitation.id
+                 AND audit.event_type = 'organization.invitation.activated')
+                AS "auditCount"
+       FROM organization_invitations AS invitation WHERE invitation.id = $1`,
+      [invitation.id, email],
+    );
+    expect(state).toEqual({
+      invitationStatus: 'pending',
+      acceptedBy: null,
+      membershipCount: 0,
+      auditCount: 0,
+    });
   });
 
   it('claims one outbox row only once across concurrent workers', async () => {
@@ -775,15 +1320,133 @@ describe('Invitation acceptance and delivery database smoke', () => {
     expect(state.nextAttemptAt).toBeNull();
   });
 
+  it('fails migration rollback before removing activation objects with real data', async () => {
+    await expect(owner.undoLastMigration()).rejects.toThrow(
+      'Cannot revert invitation activation migration while activation data exists.',
+    );
+    const [state] = await owner.query<
+      Array<{ hasColumn: boolean; hasFunction: boolean }>
+    >(
+      `SELECT
+         EXISTS (
+           SELECT 1 FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'users'
+             AND column_name = 'email_verified_at'
+         ) AS "hasColumn",
+         to_regprocedure(
+           'app_private.activate_new_user_invitation(uuid,text,text,uuid,inet,text)'
+         ) IS NOT NULL AS "hasFunction"`,
+    );
+    expect(state).toEqual({ hasColumn: true, hasFunction: true });
+  });
+
   function acceptanceService(
     serviceKeyring: InvitationTokenKeyring = keyring,
+    serviceDataSource: DataSource = runtime,
   ): InvitationAcceptanceService {
     return new InvitationAcceptanceService(
-      runtime,
+      serviceDataSource,
       new InvitationTokenCodec(serviceKeyring),
       new OrganizationAuditService(),
       new ConfiguredInvitationAcceptanceReadiness(true),
     );
+  }
+
+  function activationService(
+    passwordHasher: {
+      hash(password: string): Promise<string>;
+    } = new PasswordCredentialsService(),
+    serviceDataSource: DataSource = runtime,
+  ): InvitationActivationService {
+    return new InvitationActivationService(
+      serviceDataSource,
+      codec,
+      { consume: jest.fn() } as unknown as InvitationAcceptanceRateLimiter,
+      {
+        run: <T>(operation: () => Promise<T>) => operation(),
+      } as InvitationActivationHashCapacity,
+      passwordHasher,
+      { assertReady: async () => undefined },
+      new InvitationActivationObservability(),
+    );
+  }
+
+  function invitationAdminService(
+    serviceDataSource: DataSource,
+  ): InvitationsService {
+    return new InvitationsService(
+      serviceDataSource,
+      new OrganizationAuditService(),
+      new EnabledInvitationIssuanceReadiness(),
+      keyring,
+    );
+  }
+
+  function tenant(fixture: Awaited<ReturnType<typeof createFixture>>): {
+    userId: string;
+    organizationId: string;
+    membershipId: string;
+    role: MembershipRole;
+  } {
+    return {
+      userId: fixture.issuer.userId,
+      organizationId: fixture.organization.id,
+      membershipId: fixture.issuer.id,
+      role: MembershipRole.OWNER,
+    };
+  }
+
+  async function activationCompetitionState(
+    invitationId: string,
+    email: string,
+  ): Promise<{
+    status: string;
+    organizationStatus: string;
+    users: number;
+    memberships: number;
+    activationAudits: number;
+    revokeAudits: number;
+    outboxStatus: string;
+  }> {
+    const [state] = await owner.query<
+      Array<{
+        status: string;
+        organizationStatus: string;
+        users: number;
+        memberships: number;
+        activationAudits: number;
+        revokeAudits: number;
+        outboxStatus: string;
+      }>
+    >(
+      `SELECT invitation.status,
+              organization.status AS "organizationStatus",
+              (SELECT count(*)::int FROM users WHERE email = $2) AS users,
+              (SELECT count(*)::int FROM memberships AS membership
+               JOIN users AS application_user ON application_user.id = membership.user_id
+               WHERE application_user.email = $2
+                 AND membership.organization_id = invitation.organization_id)
+                AS memberships,
+              (SELECT count(*)::int FROM organization_audit_logs
+               WHERE invitation_id = $1
+                 AND event_type = 'organization.invitation.activated')
+                AS "activationAudits",
+              (SELECT count(*)::int FROM organization_audit_logs
+               WHERE invitation_id = $1
+                 AND event_type = 'organization.invitation.revoked')
+                AS "revokeAudits",
+              (SELECT status FROM invitation_delivery_outbox
+               WHERE invitation_id = $1 ORDER BY created_at LIMIT 1)
+                AS "outboxStatus"
+       FROM organization_invitations AS invitation
+       JOIN organizations AS organization
+         ON organization.id = invitation.organization_id
+       WHERE invitation.id = $1`,
+      [invitationId, email],
+    );
+    if (state === undefined)
+      throw new Error('missing activation competition state');
+    return state;
   }
 
   async function expectUnavailable(
@@ -904,6 +1567,23 @@ describe('Invitation acceptance and delivery database smoke', () => {
            locked_by = NULL, locked_at = NULL, lease_until = NULL
        WHERE status IN ('queued', 'processing', 'dead')`,
     );
+  }
+
+  async function waitForRuntimeFunctionWait(): Promise<void> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const [row] = await owner.query<Array<{ waiting: boolean }>>(
+        `SELECT EXISTS (
+           SELECT 1 FROM pg_stat_activity
+           WHERE usename = $1
+             AND query LIKE '%activate_new_user_invitation%'
+             AND wait_event IS NOT NULL
+         ) AS waiting`,
+        [process.env.DATABASE_RUNTIME_ROLE],
+      );
+      if (row?.waiting) return;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    throw new Error('activation did not reach the expected unique-key wait');
   }
 
   async function makeDue(outboxId: string): Promise<void> {

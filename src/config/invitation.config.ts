@@ -3,6 +3,7 @@ import { registerAs } from '@nestjs/config';
 export interface InvitationConfig {
   issuanceReady: boolean;
   acceptanceReady: boolean;
+  activationReady: boolean;
   workerEnabled: boolean;
   workerHealthPort: number;
   acceptanceUrl: string;
@@ -15,6 +16,10 @@ export interface InvitationConfig {
   inspectIpMaxAttempts: number;
   acceptIpMaxAttempts: number;
   acceptUserIpMaxAttempts: number;
+  activationIpMaxAttempts: number;
+  activationInvitationIpMaxAttempts: number;
+  activationHashConcurrency: number;
+  publicReplicaCount: number;
   rateLimitMaxBuckets: number;
 }
 
@@ -107,16 +112,33 @@ export default registerAs('invitation', (): InvitationConfig => {
       'INVITATION_TOKEN_CURRENT_VERSION must reference a configured key.',
     );
   }
+  const acceptanceReady = enabled('INVITATION_ACCEPTANCE_READINESS');
+  const activationReady = enabled('INVITATION_ACTIVATION_READINESS');
+  const publicReplicaCount = Number(
+    process.env.INVITATION_PUBLIC_REPLICA_COUNT ?? 1,
+  );
+  const resendApiKey = process.env.RESEND_API_KEY?.trim() || null;
+  const emailFrom = process.env.INVITATION_EMAIL_FROM ?? '';
+  const workerEnabled = enabled('INVITATION_WORKER_ENABLED');
+  const issuanceReady =
+    enabled('INVITATION_ISSUANCE_READINESS') &&
+    acceptanceReady &&
+    activationReady &&
+    workerEnabled &&
+    publicReplicaCount === 1 &&
+    acceptanceUrl !== '' &&
+    emailFrom !== '' &&
+    resendApiKey !== null &&
+    tokenCurrentVersion !== null;
   return {
-    // The 0.2.5.2 rollout deliberately cannot enable production issuance.
-    issuanceReady:
-      environment !== 'production' && enabled('INVITATION_ISSUANCE_READINESS'),
-    acceptanceReady: enabled('INVITATION_ACCEPTANCE_READINESS'),
-    workerEnabled: enabled('INVITATION_WORKER_ENABLED'),
+    issuanceReady,
+    acceptanceReady,
+    activationReady,
+    workerEnabled,
     workerHealthPort: Number(process.env.INVITATION_WORKER_HEALTH_PORT ?? 3001),
     acceptanceUrl,
-    emailFrom: process.env.INVITATION_EMAIL_FROM ?? '',
-    resendApiKey: process.env.RESEND_API_KEY?.trim() || null,
+    emailFrom,
+    resendApiKey,
     resendApiUrl:
       environment === 'production'
         ? RESEND_EMAIL_ENDPOINT
@@ -135,6 +157,16 @@ export default registerAs('invitation', (): InvitationConfig => {
     acceptUserIpMaxAttempts: Number(
       process.env.INVITATION_ACCEPT_USER_IP_MAX_ATTEMPTS ?? 10,
     ),
+    activationIpMaxAttempts: Number(
+      process.env.INVITATION_ACTIVATION_IP_MAX_ATTEMPTS ?? 20,
+    ),
+    activationInvitationIpMaxAttempts: Number(
+      process.env.INVITATION_ACTIVATION_INVITATION_IP_MAX_ATTEMPTS ?? 5,
+    ),
+    activationHashConcurrency: Number(
+      process.env.INVITATION_ACTIVATION_HASH_CONCURRENCY ?? 2,
+    ),
+    publicReplicaCount,
     rateLimitMaxBuckets: Number(
       process.env.INVITATION_RATE_LIMIT_MAX_BUCKETS ?? 10_000,
     ),

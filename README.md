@@ -1,11 +1,11 @@
 # Genesis Platform API
 
-Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas, contexto de organização ativa por request, autorização por papel e o fluxo de entrega/aceitação de convites para usuários existentes. A 0.2.5.1 foi concluída no PR #13, squash `829cefa4cf06f596d0076e4c422e31c26d31e0a5`, com CI pós-merge 29840864674 aprovada; a 0.2.5.2 está implementada, com Gate 1 e Gate 2 aprovados, mas entrega, Pull Request, CI e Gate 3 permanecem pendentes e ela ainda não foi incorporada à `main`.
+Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa. Esta versão contém a fundação técnica, o núcleo persistente multi-tenant, autenticação com sessões persistidas, contexto de organização ativa por request, autorização por papel e o fluxo de entrega e acceptance de convites. A 0.2.5.2 foi concluída no PR #14, squash `410f0576a98e373c39bf178f73b80838b40d2924`, com CI pós-merge 29919743498 aprovada. A 0.2.5.3 implementa activation de usuário novo por convite.
 
-A 0.2.5.1 adicionou o domínio e as rotas administrativas de convites. A
-implementação da 0.2.5.2 adiciona provider/worker de email e aceitação autenticada
-para usuário existente; em produção, emissão e substituição permanecem
-fail-closed até a 0.2.5.3.
+A activation recebe somente token, nome e senha, cria User, credencial e
+Membership atomicamente e não realiza auto-login. Em produção, emissão e
+substituição permanecem fail-closed até todas as precondições operacionais
+estarem explícitas e a API pública operar com uma única réplica.
 
 ## Documentação do projeto
 
@@ -134,6 +134,9 @@ npm run build
 npm run test
 npm run test:e2e
 npm run test:integration
+npm run task:preflight
+npm run db:test:env
+npm run gate2:validate
 ```
 
 Os testes unitários e o E2E de health check usam mocks da conexão. O E2E de
@@ -260,8 +263,9 @@ papel `owner` ou `admin`; admins enxergam e administram apenas convites de
 `member`. Convites de `owner` não podem ser criados.
 
 Criação e substituição consultam readiness operacional antes de transação,
-idempotência, quota, auditoria ou outbox. A implementação da 0.2.5.2 inclui provider
-e worker, mas a emissão em produção permanece fail-closed até a 0.2.5.3.
+idempotência, quota, auditoria ou outbox. A emissão em produção exige provider,
+worker, acceptance, activation, keyring e frontend prontos, além de uma única
+réplica pública enquanto rate limits e semaphore forem process-local.
 Listagem, consulta e revogação continuam disponíveis para registros
 persistidos.
 
@@ -273,6 +277,19 @@ Replace retorna publicamente somente `previousInvitationId`, `invitationId`,
 `stateAtCreation` e `deliveryStatusAtCreation`. Replay devolve exatamente o
 mesmo resultado; sua indicação adicional existe apenas no header
 `Idempotency-Replayed`.
+
+## Acceptance e activation de convites
+
+`POST /api/v1/invitation-acceptance/inspect` inspeciona o bearer com resposta
+mínima; `accept` exige login do usuário existente. A rota pública
+`POST /api/v1/invitation-acceptance/activate` recebe exclusivamente `token`,
+`name` e `password`, cria User, credencial e Membership atomicamente e responde
+`201` somente com `organizationId` e `membershipId`. Ela não cria sessão nem
+retorna access/refresh token; o login normal é usado depois.
+
+Todos os endpoints usam `Cache-Control: no-store`. Activation indisponível por
+estado, identidade, tenant, chave ou token válido estruturalmente converge para
+`404 Invitation unavailable.`; overload retorna `429` e readiness retorna `503`.
 
 ## Seed inicial
 
@@ -453,4 +470,4 @@ Os módulos de users, organizations e memberships ainda não expõem CRUD. O mó
 
 ## Próximos módulos previstos
 
-A Tarefa 0.2.5 — Convites e gestão de membros — está em andamento. A 0.2.5.1 foi concluída e a 0.2.5.2, com email e aceitação para user existente, está implementada, com Gate 1 e Gate 2 aprovados; entrega, Pull Request, CI e Gate 3 permanecem pendentes, e ela ainda não foi incorporada à `main`. A 0.2.5.3 ativará user novo e a 0.2.5.4 tratará memberships/ownership; módulos de CRM e integrações continuam futuros.
+A Tarefa 0.2.5 — Convites e gestão de membros — está em andamento. A 0.2.5.1 e a 0.2.5.2 estão concluídas; a 0.2.5.3 implementa activation de user novo e a 0.2.5.4 permanece responsável por memberships/ownership. Módulos de CRM e integrações continuam futuros.

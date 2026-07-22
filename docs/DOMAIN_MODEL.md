@@ -81,15 +81,15 @@ Este documento resume conceitos implementados; as migrations são a fonte do sch
 - **Token:** nonce não selecionado por padrão e versões são persistidos; token,
   MAC e hash não são persistidos. A MAC HMAC-SHA-256 é regenerável por keyring.
 - **Lifecycle:** a 0.2.5.1 implementou create, revoke idempotente e replace com
-  nova linha e relação imutável; o candidato da 0.2.5.2 implementa aceitação
-  autenticada para usuário existente.
+  nova linha e relação imutável; a 0.2.5.2 implementou aceitação autenticada
+  para usuário existente e a 0.2.5.3 adiciona activation para usuário inexistente.
 - **Emissor:** membership imutável. Inativar issuer membership/user revoga
   pendentes na mesma transação; mudar role não revoga.
 
 ## InvitationDeliveryOutbox e OrganizationAuditLog
 
 O outbox contém somente colunas explícitas e referências, sem token/email/link;
-o candidato da 0.2.5.2 adiciona worker, retry, fencing e dead-letter sobre os
+a 0.2.5.2 adicionou worker, retry, fencing e dead-letter sobre os
 estados persistidos. A auditoria organizacional é append-only no PostgreSQL e
 não reutiliza `AuthAuditLog`.
 
@@ -100,6 +100,15 @@ aceita somente pelo usuário autenticado de email correspondente. O resultado é
 atômico: invitation `accepted`, membership criada/preservada/reativada, outbox
 cancelável cancelada e um audit append-only. Replay do mesmo usuário devolve os
 mesmos IDs sem novos efeitos; membership ativa com papel divergente é conflito.
+
+## Activation 0.2.5.3
+
+Uma invitation pending, não expirada e sem User global para o email pode criar
+um User ativo, credencial Argon2id e Membership ativa. Email, Organization e
+papel são derivados somente da invitation; `owner` é impossível. O mesmo
+timestamp transacional confirma email e mudança de senha. User existente ou uma
+corrida na unicidade global não é alterado: toda a activation reverte e o fluxo
+autenticado de acceptance continua separado.
 
 ## Regra para entidades futuras
 

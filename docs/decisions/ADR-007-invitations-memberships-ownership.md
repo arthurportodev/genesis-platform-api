@@ -1,6 +1,8 @@
 # ADR-007 — Convites, memberships e invariantes de ownership
 
-- **Status:** Accepted — 0.2.5.1 concluída no PR #13, squash `829cefa4cf06f596d0076e4c422e31c26d31e0a5`, com CI pós-merge 29840864674 aprovada; 0.2.5.2 implementada, com Gate 1 e Gate 2 aprovados, mas entrega, Pull Request, CI e Gate 3 pendentes e ainda não incorporada à `main`
+- **Status:** Accepted — fundações de convites, entrega, aceitação e ativação de
+  usuário novo implementadas; gestão de memberships e ownership permanece como
+  evolução separada
 - **Data:** 2026-07-20
 
 ## Contexto
@@ -26,11 +28,16 @@ isso a Tarefa 0.2.5 é Critical e foi dividida em quatro subtarefas Critical.
 - Entregar tokens exclusivamente por email através de porta e outbox. Token
   bruto nunca é persistido nem devolvido pela API. Provider/worker pertencem à
   0.2.5.2; emissão permanece desabilitada até então.
-- A 0.2.5.2 seleciona Resend como provider concreto. O worker reconstrói o token
+- A entrega seleciona Resend como provider concreto. O worker reconstrói o token
   somente em memória, usa chave persistida por versão, idempotency key estável,
   leases/fencing e relógio do PostgreSQL. A acceptance permanece independente
-  da disponibilidade do provider e a emissão em produção continua bloqueada
-  até a ativação segura de usuário novo na 0.2.5.3.
+  da disponibilidade do provider.
+- A ativação de usuário novo recebe somente token, nome e senha, revalida o
+  HMAC antes e depois dos locks, deriva organization/email/role da invitation e
+  cria User, credencial, Membership, terminalização, cancelamento de outbox e
+  audit em uma única função `SECURITY DEFINER`. Não cria sessão nem permite
+  owner. IP e user-agent são contexto opcional; por isso essa assinatura é
+  `CALLED ON NULL INPUT`, com validação explícita dos argumentos obrigatórios.
 - Convites valem sete dias. Expiração é derivada. Replace cria nova invitation,
   revoga e relaciona a anterior. Revoke é idempotente.
 - Inativar a membership ou o user emissor revoga na mesma transação suas
@@ -89,11 +96,11 @@ versões, nunca token, MAC ou hash do token. O outbox guarda somente referência
 
 ## Consequências
 
-- A 0.2.5.1 registrou rotas, schema, audit e eventos queued. A implementação da
-  0.2.5.2 substitui o bloqueio estático por verificação operacional e implementa
-  provider, worker/retry e aceitação para user existente; a emissão em produção
-  permanece fail-closed até a 0.2.5.3.
-- A 0.2.5.3 implementará a ativação de user novo, sem auto-login.
+- O domínio registra rotas, schema, audit e eventos queued. A entrega substitui
+  o bloqueio estático por verificação operacional e implementa provider,
+  worker/retry e aceitação para user existente.
+- A ativação de user novo é fail-closed por readiness de schema, ACL, keyring e
+  réplica pública única; não há auto-login.
 - A aceitação deriva organization/email/role exclusivamente da
   invitation; não recebe tenant ou privilégio do cliente.
 - Escritas críticas relêem actor, organization e membership dentro da
@@ -136,19 +143,23 @@ versões, nunca token, MAC ou hash do token. O outbox guarda somente referência
 
 ## Implementação
 
-A 0.2.5.1 implementa domínio, administração tenant-scoped, quotas,
+A fundação implementa domínio, administração tenant-scoped, quotas,
 idempotência, base persistida do outbox, auditoria, defesas D7 e a API interna
 de locks least-privilege. Testes PostgreSQL reais verificam metadata/hardening,
 ownership, grants e revokes, ausência de `UPDATE`, bloqueio até commit/rollback,
 ordem e deduplicação concorrentes, `search_path` hostil, IDs ausentes e a
-rejeição de mutação da fronteira pelo runtime. As subtarefas 0.2.5.3 e 0.2.5.4
-permanecem planejadas.
+rejeição de mutação da fronteira pelo runtime. A entrega e aceitação adicionam
+outbox, worker e a mutação atômica para user existente. A ativação adiciona
+`email_verified_at`, a política central de credenciais, a assinatura exclusiva
+`app_private.activate_new_user_invitation(uuid,text,text,uuid,inet,text)` e
+readiness que confirma o conjunto exato de EXECUTE, revogação de PUBLIC,
+ausência de DML direto/herdado e impossibilidade de assumir o owner.
 
-A 0.2.5.2 está implementada, com Gate 1 e Gate 2 aprovados; entrega, Pull Request,
-CI e Gate 3 permanecem pendentes, e ela ainda não foi incorporada à `main`.
-A 0.2.5.3 e a 0.2.5.4
-permanecem planejadas. A emenda de Gate 2 adiciona a assinatura exclusiva do
-refresh. Testes reais
+Testes PostgreSQL reais cobrem chamadas diretas sob `search_path` hostil,
+rollback em cada estágio, corrida de email e activate concorrente com
+activate/accept/revoke/replace/inativação de organização. A gestão de
+memberships e ownership permanece planejada. A emenda de refresh adiciona a
+assinatura exclusiva do refresh. Testes reais
 distinguem estruturalmente as forças das duas funções, confirmam `KEY SHARE` por
 insert de audit, bloqueio de inativação/delete/mudança de chave, rollback e
 corridas repetidas refresh×refresh/logout/logout-all sem SQLSTATE `40P01`.

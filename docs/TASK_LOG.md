@@ -137,10 +137,20 @@
 
 ## 0.2.5.2 — Entrega por email e aceitação para usuário existente
 
-**Status: implementada; Gate 1 e Gate 2 aprovados; entrega, Pull Request, CI e Gate 3 pendentes; ainda não incorporada à `main`.**
+**Status: concluída no PR #14, squash `410f0576a98e373c39bf178f73b80838b40d2924`, com CI pós-merge 29919743498 aprovada.**
 
 - Provider Resend atrás de porta, outbox transacional e worker separado com idempotência, retry, lease, fencing, recovery e health interno em loopback.
 - `inspect` público mínimo e `accept` autenticado derivam tenant, email, papel e estado exclusivamente do convite e do PostgreSQL.
 - Membership inexistente é criada, ativa igual é preservada, inativa é reativada na mesma linha e ativa divergente falha com conflito.
 - Readiness de acceptance inventaria todas as versões de chave ainda necessárias; falha de chave não chama provider nem morre antes do deadline.
-- Emissão de produção permanece desabilitada até a 0.2.5.3; nenhum email real é executado pelos testes.
+- Nenhum email real é executado pelos testes.
+
+## 0.2.5.3 — Ativação de usuário novo por convite
+
+**Comportamento implementado no candidato funcional.**
+
+- `POST /api/v1/invitation-acceptance/activate` recebe exclusivamente token, nome e senha e retorna apenas Organization e Membership, sem sessão ou tokens de autenticação.
+- `CredentialsModule` centraliza política e Argon2id por portas opacas; activation confirma o email pela invitation e preenche `email_verified_at` junto de `password_changed_at`.
+- User, Membership, acceptance, cancelamento da outbox e auditoria append-only são atômicos por função privada `SECURITY DEFINER` com ACL mínima.
+- HMAC e estado são revalidados sob locks Organization → Invitation; corrida de email faz rollback integral e mantém a invitation pending.
+- Readiness, dois rate limits e semaphore Argon2 falham fechados; issuance de produção exige todas as precondições explícitas e uma única réplica pública.
