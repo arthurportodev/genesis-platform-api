@@ -4,8 +4,8 @@ import { OrganizationAuditLog } from '../entities/organization-audit-log.entity'
 
 export type OrganizationAuditRecord = Omit<
   OrganizationAuditLog,
-  'id' | 'occurredAt'
->;
+  'id' | 'occurredAt' | 'membershipResult'
+> & { membershipResult?: OrganizationAuditLog['membershipResult'] };
 
 @Injectable()
 export class OrganizationAuditService {
@@ -14,6 +14,11 @@ export class OrganizationAuditService {
     manager: EntityManager,
   ): Promise<void> {
     const repository = manager.getRepository(OrganizationAuditLog);
-    await repository.insert(repository.create(input));
+    await repository.insert(
+      repository.create({
+        ...input,
+        membershipResult: input.membershipResult ?? null,
+      }),
+    );
   }
 }

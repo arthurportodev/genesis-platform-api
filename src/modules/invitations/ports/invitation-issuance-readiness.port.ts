@@ -20,3 +20,15 @@ export class DisabledInvitationIssuanceReadiness implements InvitationIssuanceRe
 export class EnabledInvitationIssuanceReadiness implements InvitationIssuanceReadiness {
   assertReady(): void {}
 }
+
+export class ConfiguredInvitationIssuanceReadiness implements InvitationIssuanceReadiness {
+  constructor(private readonly enabled: boolean) {}
+
+  assertReady(): void {
+    if (!this.enabled) {
+      throw new ServiceUnavailableException(
+        'Invitation delivery is unavailable.',
+      );
+    }
+  }
+}

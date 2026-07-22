@@ -17,6 +17,12 @@ export interface InvitationTokenFields {
   nonce: string;
 }
 
+export interface ParsedInvitationToken {
+  invitationId: string;
+  keyVersion: number;
+  tokenVersion: number;
+}
+
 @Injectable()
 export class InvitationTokenCodec {
   private static readonly UUID_V4 =
@@ -32,6 +38,26 @@ export class InvitationTokenCodec {
     this.assertFields(fields);
     const mac = this.computeMac(fields);
     return `${fields.invitationId}.${fields.keyVersion}.${fields.tokenVersion}.${mac.toString('base64url')}`;
+  }
+
+  parse(token: string): ParsedInvitationToken | null {
+    const parts = token.split('.');
+    if (
+      parts.length !== 4 ||
+      !InvitationTokenCodec.UUID_V4.test(parts[0]) ||
+      !/^\d{1,10}$/u.test(parts[1]) ||
+      !/^\d{1,10}$/u.test(parts[2]) ||
+      !InvitationTokenCodec.BASE64URL_32.test(parts[3])
+    ) {
+      return null;
+    }
+    const keyVersion = Number(parts[1]);
+    const tokenVersion = Number(parts[2]);
+    if (!this.isUint32(keyVersion) || !this.isUint32(tokenVersion)) return null;
+    if (Buffer.from(parts[3], 'base64url').toString('base64url') !== parts[3]) {
+      return null;
+    }
+    return { invitationId: parts[0].toLowerCase(), keyVersion, tokenVersion };
   }
 
   verify(token: string, fields: InvitationTokenFields): boolean {
@@ -58,6 +84,19 @@ export class InvitationTokenCodec {
       presented.length === expected.length &&
       timingSafeEqual(presented, expected)
     );
+  }
+
+  verifySafely(token: string, fields: InvitationTokenFields | null): boolean {
+    try {
+      if (fields !== null) return this.verify(token, fields);
+    } catch {
+      // Continue with a constant-shape dummy HMAC below.
+    }
+    const dummy = createHmac('sha256', Buffer.alloc(32, 0x5a))
+      .update(Buffer.alloc(256, 0x31))
+      .digest();
+    timingSafeEqual(dummy, Buffer.alloc(32, 0x00));
+    return false;
   }
 
   private computeMac(fields: InvitationTokenFields): Buffer {

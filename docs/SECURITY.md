@@ -29,7 +29,7 @@
 - O lock do user usa exclusivamente
   `app_private.lock_auth_refresh_user(uuid)`, sem conceder `UPDATE` em `users` à
   role runtime. A função não retorna dados nem escreve e usa `FOR NO KEY
-  UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
+UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   commit/rollback, enquanto inserts de auditoria que dependem de `KEY SHARE`
   continuam livres e não formam ciclo com logout/logout-all.
 - Reapresentar um token `consumed` comprova reutilização e revoga sessão e tokens ativos.
@@ -91,6 +91,20 @@
 - As rotas administrativas de invitations são o primeiro consumidor tenant-scoped; a regra de papel também é revalidada no service.
 - O papel é um snapshot validado por request. Uma alteração concorrente posterior à criação do contexto será observada na request seguinte; operações críticas futuras poderão exigir revalidação transacional própria.
 
+## Segurança da entrega e acceptance
+
+- Token bearer trafega apenas no body e no fragmento do link; nunca em query,
+  logs, audit, outbox ou resposta administrativa.
+- Inspect usa resposta uniforme, masking e `no-store`; accept exige access token
+  do usuário cujo email normalizado coincide exatamente com o convite.
+- Keyring é versionado e completo para o backlog; ausência de chave falha
+  fechada sem fallback para a versão corrente nem chamada ao provider.
+- Worker usa idempotency key estável, lease/fencing e relógio PostgreSQL. Health
+  não consulta Resend e não expõe configuração, PII ou causa interna.
+- Create/replace não consultam a existência de User ou Membership do recipient;
+  isso evita enumeração e mantém a emissão compatível com usuários novos. Toda
+  identidade e estado são derivados e revalidados somente em acceptance.
+
 ## Limitações e decisões abertas
 
 - Refresh token ainda é retornado em JSON; cookie `HttpOnly` não foi implementado.
@@ -110,8 +124,8 @@
   abrir transação de escrita.
 - Admin é hard-filtered para `member`; IDs cross-tenant ou invitations de admin
   usam `404` uniforme.
-- Create/replace falham com `503` antes de qualquer transação enquanto a
-  readiness fixa estiver desabilitada.
+- Create/replace consultam readiness operacional antes de qualquer transação;
+  em produção, a emissão permanece fail-closed até a 0.2.5.3.
 - Owner invitation é impossível no DTO, enum do banco e service.
 - Token bruto, MAC, chave e nonce nunca entram em API, audit, outbox,
   idempotência ou logs. O nonce é a única matéria do token persistida e não é
@@ -132,12 +146,11 @@
   migration não cria role, concede ACL mínima por tabela e falha fechada também
   ao detectar qualquer privilégio efetivo/herdado fora de `SELECT`/`INSERT` na
   auditoria organizacional.
-- Create pré-resolve os IDs e bloqueia organization, users, memberships e
-  invitations nessa ordem; coleções usam UUID crescente para evitar deadlock
-  inclusive em convites recíprocos entre tenants. Depois dos locks, todos os
-  IDs e atributos de recipient são relidos apenas para comparação; divergência
-  aborta e reinicia a transação, enquanto decisões usam somente o snapshot
-  bloqueado.
+- Create/replace não consultam a existência global do User recipient. Dentro da
+  transação, bloqueiam e relêem organization, User ator e membership ator;
+  replace também bloqueia e relê a invitation alvo. Tenant, status, papel e
+  capability do ator são revalidados, enquanto o email do recipient permanece
+  somente como valor normalizado do comando e da invitation.
 - O resultado persistido de replace contém somente invitation anterior/nova e
   os snapshots fixos `pending`/`queued`; metadata da resposta/replay permanece
   separada e nunca adiciona campos ao payload público.

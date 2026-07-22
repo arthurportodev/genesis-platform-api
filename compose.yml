@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init-runtime-role.sh:/docker-entrypoint-initdb.d/10-runtime-role.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -24,8 +24,8 @@ services:
     build:
       context: .
       target: production
-    restart: "no"
-    command: ["npm", "run", "migration:run"]
+    restart: 'no'
+    command: ['npm', 'run', 'migration:run']
     environment:
       DATABASE_HOST: postgres
       DATABASE_PORT: ${DATABASE_PORT:-5432}
@@ -65,18 +65,71 @@ services:
       AUTH_LOGIN_MAX_BUCKETS: ${AUTH_LOGIN_MAX_BUCKETS:-10000}
       AUTH_LOGIN_WINDOW_SECONDS: ${AUTH_LOGIN_WINDOW_SECONDS:-900}
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
+      INVITATION_ISSUANCE_READINESS: ${INVITATION_ISSUANCE_READINESS:-false}
+      INVITATION_ACCEPTANCE_READINESS: ${INVITATION_ACCEPTANCE_READINESS:-false}
+      INVITATION_ACCEPTANCE_URL: ${INVITATION_ACCEPTANCE_URL:-}
+      INVITATION_TOKEN_CURRENT_VERSION: ${INVITATION_TOKEN_CURRENT_VERSION:-}
+      INVITATION_TOKEN_KEYS: ${INVITATION_TOKEN_KEYS:-}
+      INVITATION_RATE_LIMIT_WINDOW_SECONDS: ${INVITATION_RATE_LIMIT_WINDOW_SECONDS:-900}
+      INVITATION_INSPECT_IP_MAX_ATTEMPTS: ${INVITATION_INSPECT_IP_MAX_ATTEMPTS:-30}
+      INVITATION_ACCEPT_IP_MAX_ATTEMPTS: ${INVITATION_ACCEPT_IP_MAX_ATTEMPTS:-20}
+      INVITATION_ACCEPT_USER_IP_MAX_ATTEMPTS: ${INVITATION_ACCEPT_USER_IP_MAX_ATTEMPTS:-10}
+      INVITATION_RATE_LIMIT_MAX_BUCKETS: ${INVITATION_RATE_LIMIT_MAX_BUCKETS:-10000}
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - '${PORT:-3000}:${PORT:-3000}'
     depends_on:
       migrate:
         condition: service_completed_successfully
     healthcheck:
       test:
         [
-          "CMD",
-          "node",
-          "-e",
+          'CMD',
+          'node',
+          '-e',
           "fetch('http://localhost:' + process.env.PORT + '/api/v1/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - genesis_internal
+
+  invitation-worker:
+    build:
+      context: .
+      target: production
+    restart: unless-stopped
+    command: ['node', 'dist/invitation-worker.js']
+    stop_grace_period: 20s
+    environment:
+      NODE_ENV: production
+      APP_NAME: ${APP_NAME:-Genesis Platform API}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-genesis_platform}
+      DATABASE_USER: ${DATABASE_RUNTIME_ROLE:-genesis_runtime}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-change-runtime-password}
+      DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:-genesis_runtime}
+      INVITATION_WORKER_ENABLED: ${INVITATION_WORKER_ENABLED:-false}
+      INVITATION_WORKER_HEALTH_PORT: ${INVITATION_WORKER_HEALTH_PORT:-3001}
+      INVITATION_ACCEPTANCE_URL: ${INVITATION_ACCEPTANCE_URL:-}
+      INVITATION_EMAIL_FROM: ${INVITATION_EMAIL_FROM:-}
+      INVITATION_TOKEN_CURRENT_VERSION: ${INVITATION_TOKEN_CURRENT_VERSION:-}
+      INVITATION_TOKEN_KEYS: ${INVITATION_TOKEN_KEYS:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_API_URL: ${RESEND_API_URL:-https://api.resend.com/emails}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:' + process.env.INVITATION_WORKER_HEALTH_PORT + '/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))",
         ]
       interval: 10s
       timeout: 5s

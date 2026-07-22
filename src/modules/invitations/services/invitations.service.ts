@@ -52,24 +52,8 @@ interface ActorRow {
   role: MembershipRole;
 }
 
-interface RecipientUserRow {
-  id: string;
-  email: string;
-  status: string;
-}
-
-interface RecipientMembershipRow {
-  id: string;
-  userId: string;
-  organizationId: string;
-  role: MembershipRole;
-  status: string;
-}
-
 interface CreateLockScope {
   actor: ActorRow;
-  recipientUser: RecipientUserRow | null;
-  recipientMembership: RecipientMembershipRow | null;
   existingInvitation: InvitationRow | null;
 }
 
@@ -148,11 +132,6 @@ export class InvitationsService implements PendingInvitationRevoker {
           this.assertCanTarget(actor.role, dto.role);
           const keyVersion = this.currentKeyVersion();
           await this.assertQuotas(manager, actor, email);
-          this.assertRecipientAvailable(
-            scope.recipientUser,
-            scope.recipientMembership,
-          );
-
           if (existing !== null) {
             this.assertExistingInvitationVisible(actor.role, existing.role);
           }
@@ -623,102 +602,44 @@ export class InvitationsService implements PendingInvitationRevoker {
     tenant: TenantContext,
     email: string,
   ): Promise<CreateLockScope> {
-    const recipientUsers = await manager.query<RecipientUserRow[]>(
-      `SELECT id, email, status FROM users WHERE email = $1 ORDER BY id`,
-      [email],
-    );
-    const recipientMemberships = await manager.query<RecipientMembershipRow[]>(
-      `SELECT m.id, m.user_id AS "userId",
-              m.organization_id AS "organizationId", m.role, m.status
-       FROM memberships m
-       JOIN users u ON u.id = m.user_id
-       WHERE u.email = $1 AND m.organization_id = $2
-       ORDER BY m.id`,
-      [email, tenant.organizationId],
-    );
-    const invitationIds = await manager.query<Array<{ id: string }>>(
-      `SELECT id FROM organization_invitations
-       WHERE organization_id = $1 AND email_normalized = $2
-         AND status = 'pending' ORDER BY id`,
-      [tenant.organizationId, email],
-    );
-
-    const organizationIds = [tenant.organizationId].sort();
-    const userIds = [
-      ...new Set([tenant.userId, ...recipientUsers.map(({ id }) => id)]),
-    ]
-      .map(String)
-      .sort();
-    const membershipIds = [
-      ...new Set([
-        tenant.membershipId,
-        ...recipientMemberships.map(({ id }) => id),
-      ]),
-    ]
-      .map(String)
-      .sort();
     await this.lockInvitationContext(
       manager,
-      organizationIds,
-      userIds,
-      membershipIds,
+      [tenant.organizationId],
+      [tenant.userId],
+      [tenant.membershipId],
     );
     const organizations = await manager.query<
       Array<{ id: string; status: string }>
     >(
       `SELECT id, status FROM organizations
        WHERE id = ANY($1::uuid[]) ORDER BY id`,
-      [organizationIds],
+      [[tenant.organizationId]],
     );
-    const users = await manager.query<RecipientUserRow[]>(
-      `SELECT id, status, email FROM users
-       WHERE id = ANY($1::uuid[]) ORDER BY id`,
-      [userIds],
+    const users = await manager.query<Array<{ id: string; status: string }>>(
+      `SELECT id, status FROM users WHERE id = $1`,
+      [tenant.userId],
     );
-    const memberships = await manager.query<RecipientMembershipRow[]>(
+    const memberships = await manager.query<
+      Array<{
+        id: string;
+        userId: string;
+        organizationId: string;
+        role: MembershipRole;
+        status: string;
+      }>
+    >(
       `SELECT id, user_id AS "userId", organization_id AS "organizationId",
               role, status FROM memberships
-       WHERE id = ANY($1::uuid[]) ORDER BY id`,
-      [membershipIds],
+       WHERE id = $1`,
+      [tenant.membershipId],
     );
-    const sortedInvitationIds = invitationIds.map(({ id }) => id).sort();
-    let lockedInvitations: InvitationRow[] = [];
-    if (sortedInvitationIds.length > 0) {
-      lockedInvitations = await manager.query<InvitationRow[]>(
-        `${this.selectInvitationSql('i')}
-         WHERE i.id = ANY($1::uuid[]) ORDER BY i.id FOR UPDATE OF i`,
-        [sortedInvitationIds],
-      );
-    }
-
-    const currentRecipientUsers = await manager.query<RecipientUserRow[]>(
-      `SELECT id, email, status FROM users WHERE email = $1 ORDER BY id`,
-      [email],
-    );
-    const currentRecipientMemberships = await manager.query<
-      RecipientMembershipRow[]
-    >(
-      `SELECT m.id, m.user_id AS "userId",
-              m.organization_id AS "organizationId", m.role, m.status
-       FROM memberships m
-       JOIN users u ON u.id = m.user_id
-       WHERE u.email = $1 AND m.organization_id = $2
-       ORDER BY m.id`,
-      [email, tenant.organizationId],
-    );
-    const currentInvitationIds = await manager.query<Array<{ id: string }>>(
-      `SELECT id FROM organization_invitations
-       WHERE organization_id = $1 AND email_normalized = $2
-         AND status = 'pending' ORDER BY id`,
+    const lockedInvitations = await manager.query<InvitationRow[]>(
+      `${this.selectInvitationSql('i')}
+       WHERE i.organization_id = $1 AND i.email_normalized = $2
+         AND i.status = 'pending'
+       ORDER BY i.id FOR UPDATE OF i`,
       [tenant.organizationId, email],
     );
-    if (
-      !this.sameSnapshot(recipientUsers, currentRecipientUsers) ||
-      !this.sameSnapshot(recipientMemberships, currentRecipientMemberships) ||
-      !this.sameSnapshot(invitationIds, currentInvitationIds)
-    ) {
-      throw new CreateScopeChangedError();
-    }
 
     const organization = organizations.find(
       ({ id }) => id === tenant.organizationId,
@@ -746,11 +667,6 @@ export class InvitationsService implements PendingInvitationRevoker {
         organizationId: tenant.organizationId,
         role: actorMembership.role,
       },
-      recipientUser:
-        users.find(({ id }) => id === recipientUsers[0]?.id) ?? null,
-      recipientMembership:
-        memberships.find(({ id }) => id === recipientMemberships[0]?.id) ??
-        null,
       existingInvitation: lockedInvitations[0] ?? null,
     };
   }
@@ -767,10 +683,6 @@ export class InvitationsService implements PendingInvitationRevoker {
        )`,
       [organizationIds, userIds, membershipIds],
     );
-  }
-
-  private sameSnapshot<T>(left: T[], right: T[]): boolean {
-    return JSON.stringify(left) === JSON.stringify(right);
   }
 
   private assertCanTarget(
@@ -811,21 +723,6 @@ export class InvitationsService implements PendingInvitationRevoker {
       existingRole !== InvitationRole.MEMBER
     ) {
       throw new NotFoundException('Invitation not found.');
-    }
-  }
-
-  private assertRecipientAvailable(
-    user: RecipientUserRow | null,
-    membership: RecipientMembershipRow | null,
-  ): void {
-    if (user === null) {
-      return;
-    }
-    if (user.status === 'inactive') {
-      throw new ConflictException('Invitation cannot be created.');
-    }
-    if (membership?.status === 'active') {
-      throw new ConflictException('Invitation cannot be created.');
     }
   }
 
@@ -1026,6 +923,7 @@ export class InvitationsService implements PendingInvitationRevoker {
     await manager.query(
       `UPDATE invitation_delivery_outbox
        SET status = 'cancelled', cancelled_at = transaction_timestamp(),
+           last_error_code = NULL, next_attempt_at = NULL,
            locked_by = NULL, locked_at = NULL, lease_until = NULL,
            updated_at = transaction_timestamp()
        WHERE invitation_id = $1 AND organization_id = $2
@@ -1121,6 +1019,7 @@ export class InvitationsService implements PendingInvitationRevoker {
        ), cancelled AS (
          UPDATE invitation_delivery_outbox o
          SET status = 'cancelled', cancelled_at = transaction_timestamp(),
+             last_error_code = NULL, next_attempt_at = NULL,
              locked_by = NULL, locked_at = NULL, lease_until = NULL,
              updated_at = transaction_timestamp()
          FROM revoked r

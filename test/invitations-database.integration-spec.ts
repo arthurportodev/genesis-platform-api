@@ -60,6 +60,8 @@ describe('Organization invitations database integration', () => {
     ]);
 
     await connection.undoLastMigration();
+    expect(await invitationTableNames()).toHaveLength(4);
+    await connection.undoLastMigration();
     expect(await invitationTableNames()).toEqual([]);
     await connection.runMigrations();
     expect(await invitationTableNames()).toHaveLength(4);
@@ -72,6 +74,7 @@ describe('Organization invitations database integration', () => {
     }
     const groupRole = `audit_trigger_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
 
+    await connection.undoLastMigration();
     await connection.undoLastMigration();
     expect(await invitationTableNames()).toEqual([]);
     await connection.query(
@@ -336,6 +339,10 @@ describe('Organization invitations database integration', () => {
       [runtimeRole],
     );
     expect(executableFunctions).toEqual([
+      {
+        signature:
+          'app_private.apply_existing_user_invitation_membership(uuid,uuid)',
+      },
       {
         signature: 'app_private.lock_auth_refresh_user(uuid)',
       },
@@ -1327,7 +1334,7 @@ describe('Organization invitations database integration', () => {
     }
   });
 
-  it('restarts create when recipient identity appears after pre-resolution', async () => {
+  it('creates one pending invitation when recipient identity appears concurrently', async () => {
     const fixture = await createFixture('recipient-race');
     const recipientUserId = randomUUID();
     const recipientMembershipId = randomUUID();
@@ -1357,13 +1364,13 @@ describe('Organization invitations database integration', () => {
       await waitForRuntimeOrganizationLock();
       await inserter.commitTransaction();
 
-      await expect(operation).rejects.toMatchObject({ status: 409 });
+      await expect(operation).resolves.toMatchObject({ state: 'pending' });
       const [{ count }] = await connection.query<Array<{ count: string }>>(
         `SELECT count(*)::text AS count FROM organization_invitations
          WHERE organization_id = $1 AND email_normalized = $2`,
         [fixture.organization.id, recipientEmail],
       );
-      expect(count).toBe('0');
+      expect(count).toBe('1');
     } finally {
       if (inserter.isTransactionActive) await inserter.rollbackTransaction();
       await inserter.release();

@@ -49,7 +49,7 @@ describe('InvitationsService command invariants', () => {
       sql.includes('SELECT id, status FROM organizations'),
     );
     const userReload = queries.findIndex(({ sql }) =>
-      sql.includes('SELECT id, status, email FROM users'),
+      sql.includes('SELECT id, status FROM users WHERE id = $1'),
     );
     const membershipReload = queries.findIndex(({ sql }) =>
       sql.includes('role, status FROM memberships'),
@@ -166,7 +166,10 @@ describe('InvitationsService command invariants', () => {
           { id: tenant.userId, status: 'active', email: 'owner@example.com' },
         ];
       }
-      if (sql.includes('role, status FROM memberships')) {
+      if (sql.includes('SELECT id, status FROM users WHERE id = $1')) {
+        return [{ id: tenant.userId, status: 'active' }];
+      }
+      if (sql.includes('user_id AS "userId"')) {
         return [
           {
             id: tenant.membershipId,

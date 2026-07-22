@@ -1,12 +1,13 @@
 # Estado atual
 
-- **Última atualização:** 2026-07-20
+- **Última atualização:** 2026-07-21
 - **Fase:** 0.2 — Identidade e multi-tenancy
 - **Última tarefa funcional concluída:** 0.2.4 — Autorização por papel
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Tarefa funcional em implementação:** 0.2.5.1 — Domínio e administração de convites
+- **Última subtarefa funcional concluída:** 0.2.5.1 — Domínio e administração de convites (PR #13, squash `829cefa` e CI aprovados)
+- **Tarefa funcional em implementação:** 0.2.5.2 — Entrega por email e aceitação por usuário existente
 
 ## Implementado
 
@@ -57,15 +58,19 @@
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/auth/logout-all`
 - `GET /api/v1/auth/me`
-- `POST /api/v1/invitations` (`503` fixo até 0.2.5.2)
+- `POST /api/v1/invitations` (readiness operacional; produção fail-closed até 0.2.5.3)
 - `GET /api/v1/invitations`
 - `GET /api/v1/invitations/:invitationId`
 - `POST /api/v1/invitations/:invitationId/revoke`
-- `POST /api/v1/invitations/:invitationId/replace` (`503` fixo até 0.2.5.2)
+- `POST /api/v1/invitations/:invitationId/replace` (readiness operacional; produção fail-closed até 0.2.5.3)
 
 Não existem endpoints de CRUD para usuários, organizações ou memberships.
 
 ### Convites em implementação
+
+- A 0.2.5.1 foi incorporada à `main` pelo PR #13, squash `829cefa`, com CI do PR e pós-merge aprovadas.
+- A 0.2.5.2 adiciona inspect/accept, membership para usuário existente, adapter Resend, worker separado, retry/fencing, health interno e observabilidade allowlisted.
+- Em produção, emissão continua fail-closed até a 0.2.5.3: `INVITATION_ISSUANCE_READINESS` não habilita create/replace em production.
 
 - `OrganizationInvitation` e as tabelas separadas de audit, idempotência e
   outbox implementam o domínio e a administração tenant-scoped da 0.2.5.1.
@@ -73,12 +78,14 @@ Não existem endpoints de CRUD para usuários, organizações ou memberships.
   invitations de `member`, sempre com a cadeia completa de guards e revalidação
   transacional.
 - As rotas create/list/get/revoke/replace estão registradas. Create e replace
-  permanecem bloqueadas por readiness fixa com `503` até a 0.2.5.2 entregar
-  provider e worker; nenhuma flag de ambiente pode habilitá-las nesta etapa.
-- O outbox só acumula eventos `queued` quando readiness é substituída em testes;
-  não existe envio, worker ou retry real.
-- Aceitação, ativação, criação de users e gestão de memberships continuam
-  planejadas para as subtarefas seguintes.
+  usam readiness operacional dependente do banco, keyring e delivery; em
+  produção, a emissão permanece fail-closed até a 0.2.5.3.
+- O outbox possui worker separado, claim concorrente, retry, fencing,
+  dead-letter, adapter Resend e health interno; o provider não participa da
+  transação de aceitação.
+- A aceitação autenticada para usuário existente está implementada no candidato
+  da 0.2.5.2. Ativação/criação de usuário e gestão de memberships/ownership
+  permanecem futuras nas subtarefas 0.2.5.3 e 0.2.5.4.
 
 ### Schema
 

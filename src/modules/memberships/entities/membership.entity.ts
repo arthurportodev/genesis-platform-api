@@ -17,6 +17,11 @@ import { MembershipStatus } from '../enums/membership-status.enum';
 @Index('UQ_memberships_user_organization', ['userId', 'organizationId'], {
   unique: true,
 })
+@Index(
+  'UQ_memberships_id_user_organization',
+  ['id', 'userId', 'organizationId'],
+  { unique: true },
+)
 @Index('IDX_memberships_user_id', ['userId'])
 @Index('IDX_memberships_organization_id', ['organizationId'])
 @Index('IDX_memberships_organization_status', ['organizationId', 'status'])
