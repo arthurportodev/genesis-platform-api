@@ -11,17 +11,19 @@ Estes templates compactos parametrizam tarefas sem repetir política. Preencha a
 
 Parâmetros entre `<...>` são obrigatórios quando aplicáveis. Uma operação Git não é autorizada apenas por aparecer no template.
 
+Cada prompt contém somente o delta: objetivo, escopo, contratos e invariantes específicos, riscos, critérios de aceite e diferenças em relação às políticas canônicas. Não copie integralmente os documentos referenciados acima.
+
 ## Tarefa Simple
 
 ```text
 Tarefa: <identificador e título>
 Base/branch: <SHA e branch>
-Parâmetros: <objetivo, arquivos, padrão aceito, validações>
+Delta: <objetivo, escopo, contrato específico, riscos e aceite>
 Objetivo: executar uma mudança local, reversível e sem gatilho Critical.
-Papéis: <coordenador, builder e verifier por checklist, com acumulação declarada>; <operador, se autorizado>.
-Autonomia: findings baixos e correções inequívocas dentro do contrato.
+Papéis: um builder acumula coordenação e verifier por checklist; <operador, se autorizado>.
+Autonomia: correções mecânicas e funcionais locais dentro do contrato congelado.
 Restrições: <fora do escopo>; não antecipar tarefas; um writer por arquivo.
-Gates: justificar dispensa de Gate 1 separado; preparar evidência para Gate 2; merge exige Gate 3.
+Gates: sem Task Packet ou Gate 1 separado; Gate 2 proporcional; merge exige Gate 3.
 Interromper: gatilho Critical, decisão ausente, expansão de escopo ou base divergente.
 Handoff: classe confirmada, base SHA, arquivos, decisões, validações, findings, docs e Git realizado/não realizado.
 ```
@@ -46,10 +48,11 @@ Handoff: classe, contexto, alternativas, decisão recomendada, contratos, riscos
 ```text
 Tarefa/classe: <identificador, título e classe>
 Base/branch: <SHA e branch>
-Parâmetros: <Gate 1 ou justificativa de dispensa, escopo, owners, critérios, validações>
+Delta: <Gate 1 ou justificativa de dispensa, escopo, contratos, riscos, aceite e validações>
+Manifesto: <obrigatório para Critical; opcional para Normal; perfil de validação>
 Objetivo: implementar código, testes e documentação afetada até ficar pronta para Gate 2.
-Papéis: coordenador; builder(s) <nomes>; verifier <nome/modo>; sem operador remoto salvo autorização separada.
-Autonomia: findings baixos; uma iteração de finding médio estritamente dentro do contrato.
+Papéis: coordenador; um builder <nome>; verifier final <nome/modo>; verifier incremental somente por risco; sem operador remoto salvo autorização separada.
+Autonomia: correções mecânicas e funcionais locais dentro do contrato congelado; rodadas são telemetria.
 Restrições: um writer por arquivo; worktrees para writers paralelos; <fora do escopo>; sem Git remoto.
 Gates: Gate 1 deve estar satisfeito quando exigido; não ultrapassar Gate 2.
 Interromper: condições do modelo operacional, conflito semântico, classe elevada ou autonomia excedida.
@@ -90,7 +93,7 @@ Handoff: commit, branch/PR, checks, comentários/threads, escopo publicado, esta
 
 ```text
 Tarefa/PR: <identificador, número e URL>
-Parâmetros: <Gate 3 explícito, head/base esperados, checks obrigatórios, branch>
+Parâmetros: <Gate 3 explícito, PR, head SHA, fingerprint ou commit aprovado, CI, branch atualizada e bloqueios>
 Objetivo: executar squash merge, comprovar incorporação, sincronizar, remover branch e acompanhar CI pós-merge.
 Papéis: operador de entrega único; coordenador para qualquer divergência.
 Autonomia: somente operações mecânicas autorizadas e verificações read-only.

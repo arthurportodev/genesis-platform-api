@@ -143,12 +143,12 @@ Autenticação anexa o user, tenant context relê membership e organization ativ
 
 Metadata no handler substitui metadata do controller. Ausência, lista vazia, valor inválido, array esparso ou índice herdado são erros de configuração `500`; tenant context ausente também falha explicitamente. Papel não listado recebe `403 Organization access denied.` sem revelar a política.
 
-O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, não consulta repository, não adiciona query, não aceita papel do cliente e não implementa hierarquia, permissions ou autorização por recurso. A infraestrutura não possui endpoint tenant-scoped de produção e não define matriz real de capacidades. Consulte o [ADR-005](decisions/ADR-005-role-based-authorization.md).
+O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, não consulta repository, não adiciona query, não aceita papel do cliente e não implementa hierarquia, permissions ou autorização por recurso. Invitations e memberships usam essa infraestrutura em endpoints tenant-scoped de produção; uma matriz geral de capacidades continua fora do escopo. Consulte o [ADR-005](decisions/ADR-005-role-based-authorization.md).
 
 ## Fronteiras
 
-- **Implementado:** identidade, persistência multi-tenant básica, autenticação, sessões, auditoria, CI, seleção da organização ativa por request, contexto de tenant e infraestrutura genérica de autorização por papel.
-- **Planejado:** invariantes, convites, gestão de membros, matriz de capacidades de endpoints futuros e módulos comerciais.
+- **Implementado:** identidade, persistência multi-tenant, autenticação, sessões, auditoria, CI, contexto de tenant, autorização por papel, convites, gestão de memberships e invariantes de ownership.
+- **Planejado:** matriz geral de capacidades, autorização por recurso e módulos comerciais.
 - **Fora do estágio atual:** frontend, integrações, deploy e microservices.
 
 ## Entrega e aceitação de convites

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "task": {
+    "id": "X.Y",
+    "title": "Example critical task",
+    "class": "critical"
+  },
+  "git": {
+    "branch": "feature/example-critical-task",
+    "baseSha": "0000000000000000000000000000000000000000",
+    "requireCleanStage": true
+  },
+  "scope": {
+    "allowedPaths": ["src/modules/example/**", "test/example/**", "docs/**"],
+    "protectedPaths": [
+      "src/modules/auth/**",
+      "src/database/migrations/previous/**"
+    ]
+  },
+  "artifacts": {
+    "taskPacket": ".codex/task-packets/X.Y.md"
+  },
+  "validation": {
+    "profile": "critical",
+    "focusedScripts": []
+  }
+}

@@ -5,10 +5,9 @@ Esta versão contém a fundação técnica, núcleo persistente multi-tenant,
 autenticação, contexto de organização ativa, autorização por papel, convites e
 gestão de memberships/ownership.
 
-A ativação de usuário novo por convite (0.2.5.3) foi concluída no PR #15,
-squash `945142b3103a24104525d825226ff75c9e5e1f9b`, com CI pós-merge
-29933958617 aprovada. A 0.2.5.4 permanece como candidato funcional local até a
-entrega pelo fluxo protegido.
+A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
+squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge
+29952145756 aprovada.
 
 A activation recebe somente token, nome e senha, cria User, credencial e
 Membership atomicamente e não realiza auto-login. Em produção, emissão e
@@ -500,6 +499,5 @@ Os módulos de users, organizations e memberships ainda não expõem CRUD. O mó
 
 ## Próximos módulos previstos
 
-A Tarefa 0.2.5 — Convites e gestão de membros — está em andamento; as quatro
-subtarefas funcionais possuem implementação. Módulos de CRM e integrações
-continuam futuros.
+A Tarefa 0.2.5 — Convites e gestão de membros — e a Fase 0.2 estão concluídas.
+Módulos de CRM e integrações continuam futuros.
