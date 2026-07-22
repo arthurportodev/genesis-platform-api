@@ -342,6 +342,15 @@ describe('Invitation administration (e2e)', () => {
       .set('Idempotency-Key', key)
       .send({})
       .expect(201);
+    const guardianMembership = await connection
+      .getRepository(Membership)
+      .findOneByOrFail({
+        userId: adminMembership.userId,
+        organizationId: enabledOrganization.id,
+      });
+    await connection
+      .getRepository(Membership)
+      .update(guardianMembership.id, { role: MembershipRole.OWNER });
     await connection
       .getRepository(Membership)
       .update(enabledOwnerMembership.id, {
@@ -360,6 +369,9 @@ describe('Invitation administration (e2e)', () => {
       await connection
         .getRepository(Membership)
         .update(enabledOwnerMembership.id, { role: MembershipRole.OWNER });
+      await connection
+        .getRepository(Membership)
+        .update(guardianMembership.id, { role: MembershipRole.ADMIN });
     }
   });
 
@@ -404,27 +416,27 @@ describe('Invitation administration (e2e)', () => {
   }
 
   async function createEnabledTenant(): Promise<void> {
-    enabledOrganization = await connection.getRepository(Organization).save(
-      connection.getRepository(Organization).create({
-        name: 'Enabled Invitation Tenant',
-        slug: `enabled-invitations-${randomUUID()}`,
-        status: OrganizationStatus.ACTIVE,
-      }),
-    );
     const ownerUser = await connection.getRepository(User).findOneByOrFail({
       email: 'contato@agenciagenesismkt.com.br',
     });
     const memberUser = await connection.getRepository(User).findOneByOrFail({
       email: 'invitation-member@example.com',
     });
-    enabledOwnerMembership = await connection.getRepository(Membership).save(
-      connection.getRepository(Membership).create({
-        userId: ownerUser.id,
-        organizationId: enabledOrganization.id,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      }),
-    );
+    ({ organization: enabledOrganization, membership: enabledOwnerMembership } =
+      await connection.transaction(async (manager) => {
+        const organization = await manager.getRepository(Organization).save({
+          name: 'Enabled Invitation Tenant',
+          slug: `enabled-invitations-${randomUUID()}`,
+          status: OrganizationStatus.ACTIVE,
+        });
+        const membership = await manager.getRepository(Membership).save({
+          userId: ownerUser.id,
+          organizationId: organization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        });
+        return { organization, membership };
+      }));
     await connection.getRepository(Membership).save([
       connection.getRepository(Membership).create({
         userId: adminMembership.userId,

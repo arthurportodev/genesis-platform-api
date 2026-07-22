@@ -20,7 +20,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:e2e": "jest --config test/jest-e2e.json",
+    "test:e2e": "jest --config test/jest-e2e.json --runInBand",
     "test:integration": "jest --config test/jest-integration.json --runInBand",
     "test:db:up": "docker compose -f compose.test.yml up -d --wait",
     "test:db:down": "docker compose -f compose.test.yml down -v",

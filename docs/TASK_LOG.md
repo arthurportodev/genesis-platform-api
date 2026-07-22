@@ -147,10 +147,32 @@
 
 ## 0.2.5.3 — Ativação de usuário novo por convite
 
-**Comportamento implementado no candidato funcional.**
+**Status: concluída no PR #15, squash `945142b3103a24104525d825226ff75c9e5e1f9b`, com CI pós-merge 29933958617 aprovada.**
 
 - `POST /api/v1/invitation-acceptance/activate` recebe exclusivamente token, nome e senha e retorna apenas Organization e Membership, sem sessão ou tokens de autenticação.
 - `CredentialsModule` centraliza política e Argon2id por portas opacas; activation confirma o email pela invitation e preenche `email_verified_at` junto de `password_changed_at`.
 - User, Membership, acceptance, cancelamento da outbox e auditoria append-only são atômicos por função privada `SECURITY DEFINER` com ACL mínima.
 - HMAC e estado são revalidados sob locks Organization → Invitation; corrida de email faz rollback integral e mantém a invitation pending.
 - Readiness, dois rate limits e semaphore Argon2 falham fechados; issuance de produção exige todas as precondições explícitas e uma única réplica pública.
+
+## 0.2.5.4 — Gestão de memberships e ownership
+
+**Comportamento implementado no candidato funcional.**
+
+- Diretório paginado e consulta de membros sob `/api/v1/members`, com owner
+  vendo todos, admin hard-filtered para `member` e member sem diretório.
+- Comandos explícitos para papel, promoção a owner, desativação, reativação e
+  saída própria; self-target e cross-tenant falham sem ampliar visibilidade.
+- Uma única função privada tipada centraliza autorização transacional, ordem de
+  locks e resultados `changed`, `no_change` e `blocked_last_owner`.
+- Constraint triggers diferidos protegem o owner efetivo em mudanças de
+  Organization, User e Membership; vínculo user/organization é imutável.
+- Auditoria append-only registra uma mudança, zero para no-op e a tentativa
+  bloqueada do último owner com snapshots coerentes e FK tenant-scoped.
+- Readiness e migration verificam allowlist exata, ACLs, metadata de funções e
+  os triggers de ownership e D7. Runtime permanece sem DML central direto.
+- `API_PUBLIC_REPLICA_COUNT` é a variável canônica compartilhada; o nome legado
+  é aceito temporariamente e conflito falha fechado.
+- Testes reais cobrem preaudit, rollback fail-closed, concorrência do último
+  owner, drift de catálogo, matriz owner/admin/member, auditoria, HTTP e
+  regressão de activation/invitations/auth.

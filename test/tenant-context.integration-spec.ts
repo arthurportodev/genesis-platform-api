@@ -18,6 +18,7 @@ describe('TenantContextService integration', () => {
   let service: TenantContextService;
   let firstUser: User;
   let secondUser: User;
+  let guardianUser: User;
   let primaryOrganization: Organization;
   let secondaryOrganization: Organization;
   let inactiveOrganization: Organization;
@@ -35,7 +36,7 @@ describe('TenantContextService integration', () => {
     await connection.runMigrations();
 
     const users = connection.getRepository(User);
-    [firstUser, secondUser] = await users.save([
+    [firstUser, secondUser, guardianUser] = await users.save([
       users.create({
         email: 'tenant-first@example.com',
         name: 'Tenant First',
@@ -46,82 +47,114 @@ describe('TenantContextService integration', () => {
         name: 'Tenant Second',
         status: UserStatus.ACTIVE,
       }),
-    ]);
-
-    const organizations = connection.getRepository(Organization);
-    [
-      primaryOrganization,
-      secondaryOrganization,
-      inactiveOrganization,
-      inactiveMembershipOrganization,
-      noMembershipOrganization,
-      otherUserOrganization,
-    ] = await organizations.save([
-      organizations.create({
-        name: 'Primary Organization',
-        slug: 'tenant-primary',
-        status: OrganizationStatus.ACTIVE,
-      }),
-      organizations.create({
-        name: 'Secondary Organization',
-        slug: 'tenant-secondary',
-        status: OrganizationStatus.ACTIVE,
-      }),
-      organizations.create({
-        name: 'Inactive Organization',
-        slug: 'tenant-inactive-organization',
-        status: OrganizationStatus.INACTIVE,
-      }),
-      organizations.create({
-        name: 'Inactive Membership Organization',
-        slug: 'tenant-inactive-membership',
-        status: OrganizationStatus.ACTIVE,
-      }),
-      organizations.create({
-        name: 'No Membership Organization',
-        slug: 'tenant-no-membership',
-        status: OrganizationStatus.ACTIVE,
-      }),
-      organizations.create({
-        name: 'Other User Organization',
-        slug: 'tenant-other-user',
-        status: OrganizationStatus.ACTIVE,
+      users.create({
+        email: 'tenant-guardian@example.com',
+        name: 'Tenant Guardian',
+        status: UserStatus.ACTIVE,
       }),
     ]);
 
+    await connection.transaction(async (manager) => {
+      const organizations = manager.getRepository(Organization);
+      [
+        primaryOrganization,
+        secondaryOrganization,
+        inactiveOrganization,
+        inactiveMembershipOrganization,
+        noMembershipOrganization,
+        otherUserOrganization,
+      ] = await organizations.save([
+        organizations.create({
+          name: 'Primary Organization',
+          slug: 'tenant-primary',
+          status: OrganizationStatus.ACTIVE,
+        }),
+        organizations.create({
+          name: 'Secondary Organization',
+          slug: 'tenant-secondary',
+          status: OrganizationStatus.ACTIVE,
+        }),
+        organizations.create({
+          name: 'Inactive Organization',
+          slug: 'tenant-inactive-organization',
+          status: OrganizationStatus.INACTIVE,
+        }),
+        organizations.create({
+          name: 'Inactive Membership Organization',
+          slug: 'tenant-inactive-membership',
+          status: OrganizationStatus.ACTIVE,
+        }),
+        organizations.create({
+          name: 'No Membership Organization',
+          slug: 'tenant-no-membership',
+          status: OrganizationStatus.ACTIVE,
+        }),
+        organizations.create({
+          name: 'Other User Organization',
+          slug: 'tenant-other-user',
+          status: OrganizationStatus.ACTIVE,
+        }),
+      ]);
+
+      const memberships = manager.getRepository(Membership);
+      [primaryMembership, secondaryMembership] = await memberships.save([
+        memberships.create({
+          userId: firstUser.id,
+          organizationId: primaryOrganization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        }),
+        memberships.create({
+          userId: firstUser.id,
+          organizationId: secondaryOrganization.id,
+          role: MembershipRole.MEMBER,
+          status: MembershipStatus.ACTIVE,
+        }),
+        memberships.create({
+          userId: firstUser.id,
+          organizationId: inactiveOrganization.id,
+          role: MembershipRole.ADMIN,
+          status: MembershipStatus.ACTIVE,
+        }),
+        memberships.create({
+          userId: firstUser.id,
+          organizationId: inactiveMembershipOrganization.id,
+          role: MembershipRole.ADMIN,
+          status: MembershipStatus.INACTIVE,
+        }),
+        memberships.create({
+          userId: secondUser.id,
+          organizationId: otherUserOrganization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        }),
+        memberships.create({
+          userId: guardianUser.id,
+          organizationId: primaryOrganization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        }),
+        memberships.create({
+          userId: guardianUser.id,
+          organizationId: secondaryOrganization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        }),
+        memberships.create({
+          userId: guardianUser.id,
+          organizationId: inactiveMembershipOrganization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        }),
+        memberships.create({
+          userId: guardianUser.id,
+          organizationId: noMembershipOrganization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        }),
+      ]);
+    });
     const memberships = connection.getRepository(Membership);
-    [primaryMembership, secondaryMembership] = await memberships.save([
-      memberships.create({
-        userId: firstUser.id,
-        organizationId: primaryOrganization.id,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      }),
-      memberships.create({
-        userId: firstUser.id,
-        organizationId: secondaryOrganization.id,
-        role: MembershipRole.MEMBER,
-        status: MembershipStatus.ACTIVE,
-      }),
-      memberships.create({
-        userId: firstUser.id,
-        organizationId: inactiveOrganization.id,
-        role: MembershipRole.ADMIN,
-        status: MembershipStatus.ACTIVE,
-      }),
-      memberships.create({
-        userId: firstUser.id,
-        organizationId: inactiveMembershipOrganization.id,
-        role: MembershipRole.ADMIN,
-        status: MembershipStatus.INACTIVE,
-      }),
-      memberships.create({
-        userId: secondUser.id,
-        organizationId: otherUserOrganization.id,
-        role: MembershipRole.ADMIN,
-        status: MembershipStatus.ACTIVE,
-      }),
-    ]);
     service = new TenantContextService(memberships);
   });
 

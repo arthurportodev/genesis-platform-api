@@ -4,6 +4,7 @@ import { CreateAuthSessions1784486400000 } from '../../src/database/migrations/1
 import { CreateOrganizationInvitations1785004800000 } from '../../src/database/migrations/1785004800000-CreateOrganizationInvitations';
 import { DeliverInvitationAcceptance1785087600000 } from '../../src/database/migrations/1785087600000-DeliverInvitationAcceptance';
 import { ActivateNewInvitationUser1785174000000 } from '../../src/database/migrations/1785174000000-ActivateNewInvitationUser';
+import { ManageMembershipOwnership1785260400000 } from '../../src/database/migrations/1785260400000-ManageMembershipOwnership';
 import { createBasePostgresOptions } from '../../src/database/typeorm-base.options';
 import { AuthAuditLog } from '../../src/modules/auth-sessions/entities/auth-audit-log.entity';
 import { AuthRefreshToken } from '../../src/modules/auth-sessions/entities/auth-refresh-token.entity';
@@ -57,6 +58,7 @@ export function createIntegrationDataSource(): DataSource {
       CreateOrganizationInvitations1785004800000,
       DeliverInvitationAcceptance1785087600000,
       ActivateNewInvitationUser1785174000000,
+      ManageMembershipOwnership1785260400000,
     ],
     migrationsTableName: 'migrations',
     logging: false,
@@ -77,6 +79,12 @@ export function createIntegrationDataSource(): DataSource {
 
     await typeormDropDatabase();
     await dataSource.query(
+      `DROP FUNCTION IF EXISTS app_private.execute_membership_command(uuid, uuid, uuid, app_private.membership_command_enum, public.membership_role_enum, uuid, inet, text)`,
+    );
+    await dataSource.query(
+      `DROP FUNCTION IF EXISTS app_private.assert_active_organization_effective_owner(uuid[])`,
+    );
+    await dataSource.query(
       `DROP FUNCTION IF EXISTS app_private.activate_new_user_invitation(uuid, text, text, uuid, inet, text)`,
     );
     await dataSource.query(
@@ -88,7 +96,7 @@ export function createIntegrationDataSource(): DataSource {
     await dataSource.query(
       `DROP FUNCTION IF EXISTS app_private.lock_invitation_context(uuid[], uuid[], uuid[])`,
     );
-    await dataSource.query(`DROP SCHEMA IF EXISTS app_private`);
+    await dataSource.query(`DROP SCHEMA IF EXISTS app_private CASCADE`);
     await dataSource.query(
       `DROP FUNCTION IF EXISTS public.reject_organization_audit_mutation()`,
     );

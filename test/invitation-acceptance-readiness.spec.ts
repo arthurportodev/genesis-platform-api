@@ -56,6 +56,7 @@ describe('OperationalInvitationAcceptanceReadiness', () => {
     query.mockResolvedValue([]);
     const service = new OperationalInvitationAcceptanceReadiness(
       true,
+      1,
       keyring,
       dataSource,
     );
@@ -66,6 +67,22 @@ describe('OperationalInvitationAcceptanceReadiness', () => {
     await expect(
       new OperationalInvitationAcceptanceReadiness(
         false,
+        1,
+        keyring,
+        dataSource,
+      ).assertReady(),
+    ).rejects.toMatchObject({
+      status: 503,
+      message: 'Invitation acceptance is unavailable.',
+    });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when process-local limiters run with multiple replicas', async () => {
+    await expect(
+      new OperationalInvitationAcceptanceReadiness(
+        true,
+        2,
         keyring,
         dataSource,
       ).assertReady(),
@@ -79,6 +96,7 @@ describe('OperationalInvitationAcceptanceReadiness', () => {
   function readiness(): OperationalInvitationAcceptanceReadiness {
     return new OperationalInvitationAcceptanceReadiness(
       true,
+      1,
       keyring,
       dataSource,
     );

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Membership } from '../../memberships/entities/membership.entity';
 import { MembershipStatus } from '../../memberships/enums/membership-status.enum';
 import { OrganizationStatus } from '../../organizations/enums/organization-status.enum';
+import { UserStatus } from '../../users/enums/user-status.enum';
 import { TenantContext } from '../types/tenant-context.type';
 
 export const TENANT_CONTEXT_RESOLVER = Symbol('TENANT_CONTEXT_RESOLVER');
@@ -35,6 +36,9 @@ export class TenantContextService implements TenantContextResolver {
         'organization.status = :organizationStatus',
         { organizationStatus: OrganizationStatus.ACTIVE },
       )
+      .innerJoin('membership.user', 'user', 'user.status = :userStatus', {
+        userStatus: UserStatus.ACTIVE,
+      })
       .where('membership.userId = :userId', { userId })
       .andWhere('membership.organizationId = :organizationId', {
         organizationId,

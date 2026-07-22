@@ -57,7 +57,7 @@ describe('Multi-tenant database integration', () => {
     ]);
 
     await connection.undoLastMigration();
-    const invitationTablesAfterAcceptanceRollback = await connection.query<
+    const invitationTablesAfterOwnershipRollback = await connection.query<
       CountRow[]
     >(`
         SELECT count(*)::text AS count
@@ -68,7 +68,21 @@ describe('Multi-tenant database integration', () => {
             'organization_command_idempotency', 'invitation_delivery_outbox'
           )
       `);
-    expect(invitationTablesAfterAcceptanceRollback[0]?.count).toBe('4');
+    expect(invitationTablesAfterOwnershipRollback[0]?.count).toBe('4');
+
+    await connection.undoLastMigration();
+    const invitationTablesAfterActivationRollback = await connection.query<
+      CountRow[]
+    >(`
+        SELECT count(*)::text AS count
+        FROM pg_tables
+        WHERE schemaname = 'public'
+          AND tablename IN (
+            'organization_invitations', 'organization_audit_logs',
+            'organization_command_idempotency', 'invitation_delivery_outbox'
+          )
+      `);
+    expect(invitationTablesAfterActivationRollback[0]?.count).toBe('4');
 
     await connection.undoLastMigration();
     const invitationTablesAfterDeliveryRollback = await connection.query<
@@ -198,13 +212,29 @@ describe('Multi-tenant database integration', () => {
       ),
     ).rejects.toThrow();
 
-    const organization = await organizations.save(
-      organizations.create({
-        name: 'Constraint Organization',
-        slug: 'constraint-organization',
-        status: OrganizationStatus.ACTIVE,
-      }),
-    );
+    const { organization } = await connection.transaction(async (manager) => {
+      const transactionOrganizations = manager.getRepository(Organization);
+      const transactionMemberships = manager.getRepository(Membership);
+      const createdOrganization = await transactionOrganizations.save(
+        transactionOrganizations.create({
+          name: 'Constraint Organization',
+          slug: 'constraint-organization',
+          status: OrganizationStatus.ACTIVE,
+        }),
+      );
+      const createdMembership = await transactionMemberships.save(
+        transactionMemberships.create({
+          userId: user.id,
+          organizationId: createdOrganization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        }),
+      );
+      return {
+        organization: createdOrganization,
+        membership: createdMembership,
+      };
+    });
     await expect(
       organizations.save(
         organizations.create({
@@ -215,13 +245,6 @@ describe('Multi-tenant database integration', () => {
       ),
     ).rejects.toThrow();
 
-    const membership = memberships.create({
-      userId: user.id,
-      organizationId: organization.id,
-      role: MembershipRole.MEMBER,
-      status: MembershipStatus.ACTIVE,
-    });
-    await memberships.save(membership);
     await expect(
       memberships.save(
         memberships.create({

@@ -33,6 +33,16 @@ Este documento resume conceitos implementados; as migrations são a fonte do sch
 - **Status:** `active` ou `inactive`.
 - **Constraints:** par user/organization único; foreign keys usam `ON DELETE RESTRICT`.
 - **Ownership:** o papel pertence à membership, nunca diretamente ao user.
+- **Identidade do vínculo:** `user_id` e `organization_id` são imutáveis; uma
+  mudança de vínculo exige outra Membership.
+- **Transições administrativas:** `member` ↔ `admin`, promoção para `owner`,
+  demotion de `owner` para `member`/`admin`, `active` ↔ `inactive` e saída
+  própria (`active` → `inactive`). Hard delete não faz parte do domínio.
+- **Owner efetivo:** exige Organization, User e Membership `active`, além do
+  papel `owner`. Toda Organization ativa conserva pelo menos um owner efetivo.
+- **Concorrência:** comandos serializam por Organization, depois Users e
+  Memberships em UUID crescente; constraint triggers diferidos protegem o
+  mesmo invariante contra SQL direto.
 
 ## AuthSession
 
@@ -109,6 +119,19 @@ papel são derivados somente da invitation; `owner` é impossível. O mesmo
 timestamp transacional confirma email e mudança de senha. User existente ou uma
 corrida na unicidade global não é alterado: toda a activation reverte e o fluxo
 autenticado de acceptance continua separado.
+
+## Gestão de memberships e ownership 0.2.5.4
+
+Owner lista e consulta todas as Memberships do tenant e administra qualquer
+alvo exceto a própria Membership. Admin lista, consulta, desativa e reativa
+somente `member`. `member` não possui diretório e pode apenas sair pela rota
+dedicada. Alvos invisíveis ou cross-tenant usam `404` uniforme.
+
+Comandos tipados retornam `changed`, `no_change` ou `blocked_last_owner`.
+Mudança efetiva registra exatamente um evento append-only; no-op não registra;
+bloqueio do último owner registra a tentativa e preserva o estado. Audit contém
+somente `target_membership_id`, ação e snapshots coerentes de role/status, sem
+um segundo target user.
 
 ## Regra para entidades futuras
 

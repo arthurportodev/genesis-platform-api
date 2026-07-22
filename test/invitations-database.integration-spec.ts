@@ -64,6 +64,8 @@ describe('Organization invitations database integration', () => {
     await connection.undoLastMigration();
     expect(await invitationTableNames()).toHaveLength(4);
     await connection.undoLastMigration();
+    expect(await invitationTableNames()).toHaveLength(4);
+    await connection.undoLastMigration();
     expect(await invitationTableNames()).toEqual([]);
     await connection.runMigrations();
     expect(await invitationTableNames()).toHaveLength(4);
@@ -76,6 +78,7 @@ describe('Organization invitations database integration', () => {
     }
     const groupRole = `audit_trigger_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
 
+    await connection.undoLastMigration();
     await connection.undoLastMigration();
     await connection.undoLastMigration();
     await connection.undoLastMigration();
@@ -349,6 +352,10 @@ describe('Organization invitations database integration', () => {
       {
         signature:
           'app_private.apply_existing_user_invitation_membership(uuid,uuid)',
+      },
+      {
+        signature:
+          'app_private.execute_membership_command(uuid,uuid,uuid,app_private.membership_command_enum,membership_role_enum,uuid,inet,text)',
       },
       {
         signature: 'app_private.lock_auth_refresh_user(uuid)',
@@ -1064,6 +1071,7 @@ describe('Organization invitations database integration', () => {
 
   it('revokes pending invitations exactly once when the issuer membership becomes inactive', async () => {
     const fixture = await createFixture('membership-trigger');
+    await addGuardianOwner(fixture, 'membership-trigger');
     const invitation = await fixture.service.create(
       tenant(fixture),
       { email: 'trigger@example.com', role: InvitationRole.MEMBER },
@@ -1124,28 +1132,30 @@ describe('Organization invitations database integration', () => {
 
   it('revokes pending invitations across organizations exactly once when the issuer user becomes inactive', async () => {
     const fixture = await createFixture('user-trigger');
-    const secondOrganization = await connection
-      .getRepository(Organization)
-      .save(
-        connection.getRepository(Organization).create({
-          name: 'Invitation user trigger second',
-          slug: `user-trigger-second-${randomUUID()}`,
-          status: OrganizationStatus.ACTIVE,
-        }),
-      );
-    const secondMembership = await connection.getRepository(Membership).save(
-      connection.getRepository(Membership).create({
-        userId: fixture.user.id,
-        organizationId: secondOrganization.id,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      }),
-    );
+    await addGuardianOwner(fixture, 'user-trigger-first');
+    const { secondOrganization, secondMembership } =
+      await connection.transaction(async (manager) => {
+        const secondOrganization = await manager
+          .getRepository(Organization)
+          .save({
+            name: 'Invitation user trigger second',
+            slug: `user-trigger-second-${randomUUID()}`,
+            status: OrganizationStatus.ACTIVE,
+          });
+        const secondMembership = await manager.getRepository(Membership).save({
+          userId: fixture.user.id,
+          organizationId: secondOrganization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        });
+        return { secondOrganization, secondMembership };
+      });
     const secondFixture: Fixture = {
       ...fixture,
       organization: secondOrganization,
       membership: secondMembership,
     };
+    await addGuardianOwner(secondFixture, 'user-trigger-second');
     const invitations = await Promise.all([
       fixture.service.create(
         tenant(fixture),
@@ -1194,6 +1204,7 @@ describe('Organization invitations database integration', () => {
 
   it('keeps the application revoker and database trigger idempotent in one transaction', async () => {
     const fixture = await createFixture('revoker-port');
+    await addGuardianOwner(fixture, 'revoker-port');
     const invitation = await fixture.service.create(
       tenant(fixture),
       { email: 'revoker-port@example.com', role: InvitationRole.MEMBER },
@@ -1255,6 +1266,7 @@ describe('Organization invitations database integration', () => {
 
   it('preserves D7 without deadlock during concurrent issuance and inactivation', async () => {
     const fixture = await createFixture('d7-race');
+    await addGuardianOwner(fixture, 'd7-race');
     const secondConnection = createIntegrationRuntimeDataSource();
     await secondConnection.initialize();
     const secondService = new InvitationsService(
@@ -1387,6 +1399,7 @@ describe('Organization invitations database integration', () => {
 
   it('does not revoke invitations for a role change', async () => {
     const fixture = await createFixture('role-change');
+    await addGuardianOwner(fixture, 'role-change');
     const invitation = await fixture.service.create(
       tenant(fixture),
       { email: 'role@example.com', role: InvitationRole.MEMBER },
@@ -2132,6 +2145,7 @@ describe('Organization invitations database integration', () => {
 
   it('revalidates replay visibility after owner demotion without rereading mutable results', async () => {
     const fixture = await createFixture('replay-demotion');
+    await addGuardianOwner(fixture, 'replay-demotion');
     const member = await fixture.service.create(
       tenant(fixture),
       { email: 'replay-member@example.com', role: InvitationRole.MEMBER },
@@ -2362,20 +2376,21 @@ describe('Organization invitations database integration', () => {
         status: UserStatus.ACTIVE,
       }),
     );
-    const organization = await connection.getRepository(Organization).save(
-      connection.getRepository(Organization).create({
-        name: `Invitation ${suffix}`,
-        slug: `${suffix}-${randomUUID()}`,
-        status: OrganizationStatus.ACTIVE,
-      }),
-    );
-    const membership = await connection.getRepository(Membership).save(
-      connection.getRepository(Membership).create({
-        userId: user.id,
-        organizationId: organization.id,
-        role: MembershipRole.OWNER,
-        status: MembershipStatus.ACTIVE,
-      }),
+    const { organization, membership } = await connection.transaction(
+      async (manager) => {
+        const organization = await manager.getRepository(Organization).save({
+          name: `Invitation ${suffix}`,
+          slug: `${suffix}-${randomUUID()}`,
+          status: OrganizationStatus.ACTIVE,
+        });
+        const membership = await manager.getRepository(Membership).save({
+          userId: user.id,
+          organizationId: organization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        });
+        return { organization, membership };
+      },
     );
     return {
       user,
@@ -2391,6 +2406,25 @@ describe('Organization invitations database integration', () => {
         },
       ),
     };
+  }
+
+  async function addGuardianOwner(
+    fixture: Fixture,
+    suffix: string,
+  ): Promise<void> {
+    await connection.transaction(async (manager) => {
+      const guardian = await manager.getRepository(User).save({
+        email: `guardian-${suffix}-${randomUUID()}@example.com`,
+        name: `Guardian ${suffix}`,
+        status: UserStatus.ACTIVE,
+      });
+      await manager.getRepository(Membership).save({
+        userId: guardian.id,
+        organizationId: fixture.organization.id,
+        role: MembershipRole.OWNER,
+        status: MembershipStatus.ACTIVE,
+      });
+    });
   }
 
   async function waitForRuntimeOrganizationLock(

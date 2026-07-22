@@ -7,6 +7,7 @@ describe('invitation production rollout configuration', () => {
     'INVITATION_ACCEPTANCE_READINESS',
     'INVITATION_ACTIVATION_READINESS',
     'INVITATION_WORKER_ENABLED',
+    'API_PUBLIC_REPLICA_COUNT',
     'INVITATION_PUBLIC_REPLICA_COUNT',
     'INVITATION_ACCEPTANCE_URL',
     'INVITATION_EMAIL_FROM',
@@ -43,12 +44,24 @@ describe('invitation production rollout configuration', () => {
     ['INVITATION_ACCEPTANCE_READINESS', 'false'],
     ['INVITATION_ACTIVATION_READINESS', 'false'],
     ['INVITATION_WORKER_ENABLED', 'false'],
-    ['INVITATION_PUBLIC_REPLICA_COUNT', '2'],
+    ['API_PUBLIC_REPLICA_COUNT', '2'],
     ['RESEND_API_KEY', ''],
   ])('fails issuance closed when %s is not ready', (name, value) => {
     configureCompleteRollout();
     process.env[name] = value;
     expect(invitationConfig().issuanceReady).toBe(false);
+  });
+
+  it('temporarily accepts the legacy replica name and rejects conflicts', () => {
+    configureCompleteRollout();
+    delete process.env.API_PUBLIC_REPLICA_COUNT;
+    process.env.INVITATION_PUBLIC_REPLICA_COUNT = '1';
+    expect(invitationConfig().publicReplicaCount).toBe(1);
+
+    process.env.API_PUBLIC_REPLICA_COUNT = '2';
+    expect(() => invitationConfig()).toThrow(
+      'API_PUBLIC_REPLICA_COUNT conflicts with INVITATION_PUBLIC_REPLICA_COUNT.',
+    );
   });
 
   function configureCompleteRollout(): void {
@@ -57,7 +70,8 @@ describe('invitation production rollout configuration', () => {
     process.env.INVITATION_ACCEPTANCE_READINESS = 'true';
     process.env.INVITATION_ACTIVATION_READINESS = 'true';
     process.env.INVITATION_WORKER_ENABLED = 'true';
-    process.env.INVITATION_PUBLIC_REPLICA_COUNT = '1';
+    process.env.API_PUBLIC_REPLICA_COUNT = '1';
+    delete process.env.INVITATION_PUBLIC_REPLICA_COUNT;
     process.env.INVITATION_ACCEPTANCE_URL =
       'https://app.example.com/invitations/accept';
     process.env.INVITATION_EMAIL_FROM = 'Genesis <invites@example.com>';

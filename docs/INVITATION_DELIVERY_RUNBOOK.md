@@ -5,7 +5,7 @@
 1. Aplicar migrations com a role owner e manter a API/worker na role runtime.
 2. Configurar todas as versões presentes em convites pending não expirados em `INVITATION_TOKEN_KEYS`.
 3. Configurar URL HTTPS sem query/fragment, sender autorizado e chave Resend sending-only.
-4. Manter `INVITATION_PUBLIC_REPLICA_COUNT=1`; os rate limits e o semáforo de
+4. Manter `API_PUBLIC_REPLICA_COUNT=1`; os rate limits e o semáforo de
    hash são locais ao processo e a ativação falha fechada com qualquer outro
    valor.
 5. Subir o worker com `INVITATION_WORKER_ENABLED=true` e health interno em
@@ -43,7 +43,7 @@ estiver `503`.
 - **Chave ausente:** restaurar a versão correta; não promover a current como fallback.
 - **Backlog crescente:** verificar DB, health, leases, 429/5xx e sender/API key.
 - **Ativação em `503`:** verificar migration/coluna/função, ACL exata da role
-  runtime, versões do keyring e `INVITATION_PUBLIC_REPLICA_COUNT=1`.
+  runtime, versões do keyring e `API_PUBLIC_REPLICA_COUNT=1`.
 - **Ativação em `429`:** observar separadamente limites por IP, invitation+IP e
   capacidade de hash; não aumentar concorrência sem medir CPU e latência.
 - **Comprometimento de token/key:** desabilitar emissão, revogar convites afetados e rotacionar com nova versão; preservar auditoria.

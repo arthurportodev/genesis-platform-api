@@ -328,33 +328,25 @@ describe('Tenant context (e2e)', () => {
     primaryOrganization = await organizations.findOneByOrFail({
       slug: 'agencia-genesis',
     });
-    [
-      secondaryOrganization,
-      inactiveOrganization,
-      noMembershipOrganization,
-      inactiveMembershipOrganization,
-    ] = await organizations.save([
-      organizations.create({
-        name: 'Secondary E2E Organization',
-        slug: 'secondary-e2e-organization',
-        status: OrganizationStatus.ACTIVE,
-      }),
+    secondaryOrganization = await createActiveOrganization(
+      'Secondary E2E Organization',
+      'secondary-e2e-organization',
+    );
+    noMembershipOrganization = await createActiveOrganization(
+      'No Membership E2E Organization',
+      'no-membership-e2e-organization',
+    );
+    inactiveMembershipOrganization = await createActiveOrganization(
+      'Inactive Membership E2E Organization',
+      'inactive-membership-e2e-organization',
+    );
+    inactiveOrganization = await organizations.save(
       organizations.create({
         name: 'Inactive E2E Organization',
         slug: 'inactive-e2e-organization',
         status: OrganizationStatus.INACTIVE,
       }),
-      organizations.create({
-        name: 'No Membership E2E Organization',
-        slug: 'no-membership-e2e-organization',
-        status: OrganizationStatus.ACTIVE,
-      }),
-      organizations.create({
-        name: 'Inactive Membership E2E Organization',
-        slug: 'inactive-membership-e2e-organization',
-        status: OrganizationStatus.ACTIVE,
-      }),
-    ]);
+    );
 
     const memberships = connection.getRepository(Membership);
     primaryMembership = await memberships.findOneByOrFail({
@@ -381,6 +373,31 @@ describe('Tenant context (e2e)', () => {
         status: MembershipStatus.INACTIVE,
       }),
     ]);
+  }
+
+  async function createActiveOrganization(
+    name: string,
+    slug: string,
+  ): Promise<Organization> {
+    return connection.transaction(async (manager) => {
+      const guardian = await manager.getRepository(User).save({
+        email: `guardian-${slug}-${randomUUID()}@example.com`,
+        name: `Guardian ${name}`,
+        status: UserStatus.ACTIVE,
+      });
+      const organization = await manager.getRepository(Organization).save({
+        name,
+        slug,
+        status: OrganizationStatus.ACTIVE,
+      });
+      await manager.getRepository(Membership).save({
+        userId: guardian.id,
+        organizationId: organization.id,
+        role: MembershipRole.OWNER,
+        status: MembershipStatus.ACTIVE,
+      });
+      return organization;
+    });
   }
 
   function tenantRequest(organizationId: string, token?: string) {
