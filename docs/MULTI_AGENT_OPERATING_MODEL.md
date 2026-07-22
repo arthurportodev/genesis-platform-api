@@ -56,9 +56,9 @@ Arquitetura e contexto, qualidade e testes, segurança e documentação são len
 
 ## Topologia por classe
 
-- **Simple:** coordenador, builder e verifier por checklist podem ser acumulados de forma declarada pela mesma pessoa ou agente; o operador atua somente quando autorizado.
-- **Normal:** coordenador e builder são obrigatórios; verifier pode ser um papel separado ou uma etapa lógica independente, conforme o risco.
-- **Critical:** coordenador, builder e verifier independente são obrigatórios. O operador de entrega atua somente após os gates correspondentes.
+- **Simple:** um builder pode acumular coordenação e verifier por checklist; não usa Task Packet nem Gate 1 separado. O operador atua somente quando autorizado.
+- **Normal:** coordenador, um builder e verifier final focado são obrigatórios; o manifesto é opcional conforme o alcance operacional.
+- **Critical:** coordenador, um builder e verifier independente são obrigatórios, com manifesto e Task Packet. Verificação incremental adicional é acionada pelas fronteiras de risco. O operador de entrega atua somente após os gates correspondentes.
 
 Builders adicionais só são úteis quando os contratos estão estáveis, os conjuntos de arquivos são disjuntos e o ganho supera o custo de integração. A tabela completa está em [TASK_CLASSIFICATION.md](TASK_CLASSIFICATION.md).
 
@@ -114,14 +114,14 @@ O coordenador integra entregas em ordem explícita e executa novamente as valida
 
 ## Correções autônomas
 
-O builder pode corrigir na mesma execução:
+O builder pode corrigir autonomamente, com validação e reverificação proporcionais:
 
-- findings baixos;
-- inconsistências factuais inequívocas;
-- links quebrados, duplicações e formatação introduzida;
-- um finding médio estritamente contido no contrato, reversível e sem tocar segurança, tenant, dados, schema, API ou ownership.
+- formatação, lint e typos;
+- documentação factual, fixtures e testes incorretos;
+- findings baixos, links quebrados, duplicações e correções mecânicas;
+- correção funcional local, reversível e estritamente contida no contrato congelado.
 
-Toda correção deve ser comunicada ao coordenador e reverificada. Para finding médio permitido, há no máximo uma iteração autônoma; persistência ou mudança de natureza interrompe o trabalho.
+Toda correção deve ser comunicada ao coordenador e reverificada. Quantidade de rodadas é telemetria, não limite automático de autoridade. Persistência sem convergência ou mudança de natureza exige diagnóstico e pode interromper o trabalho.
 
 Não são autônomos:
 
@@ -129,6 +129,7 @@ Não são autônomos:
 - finding alto ou crítico;
 - nova dependência, migration, endpoint ou papel permanente não aprovado;
 - mudança de arquitetura, gate, produto ou regra de negócio;
+- mudança de API pública, semântica concorrente ou integração externa;
 - expansão material de escopo ou operação com risco de perda de dados.
 
 ## Gates e interrupção

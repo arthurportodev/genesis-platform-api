@@ -53,15 +53,15 @@ O diff está estável, o verifier concluiu a revisão exigida, todos os findings
 
 ### Gate 3 — Merge autorizado
 
-O Product Owner autoriza explicitamente o merge depois de Pull Request, CI, feedback e estado final serem conhecidos. Gate 3 não é presumido pelo sucesso da CI nem por autorização anterior de commit ou push.
+O Product Owner autoriza explicitamente o merge depois de confirmar Pull Request, head SHA, fingerprint ou commit aprovado, CI verde, branch atualizada e zero bloqueios. Gate 3 não é presumido pelo sucesso da CI nem por autorização anterior de commit ou push.
 
 ## Matriz mínima
 
 | Classe   | Papéis mínimos                                                                                                            | Gates                                                               | Validação mínima                                                                                                 |
 | -------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Simple   | coordenador, builder e verifier por checklist podem ser acumulados de forma declarada; operador somente quando autorizado | Gate 1 separado dispensável; Gate 2 proporcional; Gate 3 para merge | checks focados no diff e validações estáticas aplicáveis                                                         |
-| Normal   | coordenador e builder; verifier separado ou etapa lógica independente; operador quando autorizado                         | Gate 1 quando houver decisão nova; Gates 2 e 3                      | checks focados, build e suítes afetadas; CI no PR                                                                |
-| Critical | coordenador, builder, verifier independente e operador autorizado                                                         | Gates 1, 2 e 3 obrigatórios                                         | validação completa aplicável, casos adversariais, segurança e CI; migration, integração e Docker quando afetados |
+| Simple   | um builder pode acumular coordenação e verifier por checklist; operador somente quando autorizado | sem Task Packet ou Gate 1 separado; Gate 2 proporcional; Gate 3 para merge | checks focados no diff e validações estáticas aplicáveis                                                         |
+| Normal   | coordenador, um builder e verifier final focado; operador quando autorizado                        | Gate 1 quando houver decisão nova; manifesto opcional; Gates 2 e 3             | checks focados, build e suítes afetadas; CI no PR                                                                |
+| Critical | coordenador, um builder, verifier independente e operador autorizado                               | manifesto e Task Packet obrigatórios; Gates 1, 2 e 3                           | validação completa aplicável, casos adversariais, segurança e CI; migration, integração e Docker quando afetados |
 
 As responsabilidades detalhadas e as regras de acumulação de papéis estão no [modelo operacional](MULTI_AGENT_OPERATING_MODEL.md).
 

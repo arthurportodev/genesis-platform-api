@@ -90,7 +90,6 @@
 - A prova byte a byte confirmou zero mudança semântica acidental nos arquivos normalizados.
 - Formatação, lint, build, testes unitários, E2E e de integração e build Docker foram aprovados na mesma rodada completa.
 - O primeiro piloto multiagente usou ownership exclusivo, handoffs completos e verifier independente; as Skills permanecem adiadas.
-- Nenhuma funcionalidade da API foi alterada, e a Tarefa 0.2.5 continua planejada e não iniciada.
 
 ## 0.2.3 — Organização ativa e contexto de tenant
 
@@ -117,7 +116,6 @@
 - ADR-005 registra a decisão arquitetural como implementada pela Tarefa 0.2.4.
 - Implementação funcional incorporada pelo PR #8, com validações do PR e pós-merge aprovadas e nenhum finding pendente.
 - Limites preservados: sem endpoint tenant-scoped de produção, matriz real de capacidades, permissions, hierarquia, policy engine, autorização por recurso, regra de último owner, gestão de membros, migration ou dependência nova.
-- Próxima tarefa funcional planejada: 0.2.5 — Convites e gestão de membros; ainda não iniciada.
 
 ## 0.2.5.1 — Domínio e administração de convites
 
@@ -157,7 +155,7 @@
 
 ## 0.2.5.4 — Gestão de memberships e ownership
 
-**Comportamento implementado no candidato funcional.**
+**Concluída no PR #16, squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge 29952145756 aprovada.**
 
 - Diretório paginado e consulta de membros sob `/api/v1/members`, com owner
   vendo todos, admin hard-filtered para `member` e member sem diretório.
@@ -176,3 +174,11 @@
 - Testes reais cobrem preaudit, rollback fail-closed, concorrência do último
   owner, drift de catálogo, matriz owner/admin/member, auditoria, HTTP e
   regressão de activation/invitations/auth.
+
+## 0.2.5 — Convites e gestão de membros
+
+**Concluído.** As tarefas 0.2.5.1 a 0.2.5.4 entregaram administração, entrega e aceitação de convites, ativação de usuário novo, gestão de memberships e invariantes de ownership.
+
+## Fase 0.2 — Identidade e multi-tenancy
+
+**Concluída.** O fechamento ocorreu com o PR #16 no squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`; a CI pós-merge 29952145756 foi aprovada. A descoberta de produto da Fase 0.3 — CRM é o próximo estágio.

@@ -1,13 +1,13 @@
 # Estado atual
 
 - **Última atualização:** 2026-07-22
-- **Fase:** 0.2 — Identidade e multi-tenancy
-- **Última tarefa funcional concluída:** 0.2.5.3 — Ativação de usuário novo por convite
+- **Fase concluída:** 0.2 — Identidade e multi-tenancy
+- **Próxima fase:** 0.3 — CRM, em descoberta de produto
+- **Última tarefa funcional concluída:** 0.2.5.4 — Gestão de memberships e ownership
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Última subtarefa funcional concluída:** 0.2.5.3 — Ativação de usuário novo por convite (PR #15, squash `945142b3103a24104525d825226ff75c9e5e1f9b`, CI pós-merge 29933958617 aprovada)
-- **Tarefa funcional em implementação:** 0.2.5.4 — Gestão de memberships e ownership
+- **Última subtarefa funcional concluída:** 0.2.5.4 — Gestão de memberships e ownership (PR #16, squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, CI pós-merge 29952145756 aprovada)
 
 ## Implementado
 
@@ -24,13 +24,13 @@
 - Toda tarefa é classificada como Simple, Normal ou Critical antes da escrita; um único gatilho crítico eleva toda a tarefa.
 - O ciclo operacional usa coordenador, builder, verifier e operador de entrega, com ownership exclusivo por arquivo e worktrees para writers paralelos.
 - Gate 1 aprova arquitetura quando exigida, Gate 2 aprova a implementação e Gate 3 autoriza explicitamente o merge.
-- Findings baixos e uma iteração de finding médio estritamente dentro do contrato podem ser corrigidos e reverificados; riscos de segurança, tenant, dados, schema, API, ownership ou expansão material interrompem o trabalho.
+- Correções mecânicas e funcionais locais dentro do contrato congelado podem ser corrigidas e reverificadas autonomamente; produto, segurança, tenant, dados, schema, API, ownership, concorrência ou expansão material interrompem o trabalho.
 - Código, testes e documentação durável devem integrar um único Pull Request por tarefa; evidências transitórias permanecem no GitHub.
 - As Skills `genesis-project-context` e `genesis-task-classification` são candidatas futuras e ainda não foram criadas.
 - O GitHub permite somente squash merge; merge commits e rebase merges estão desabilitados, e branches remotas incorporadas são excluídas automaticamente. Nenhuma aprovação obrigatória é prevista enquanto não houver segundo mantenedor humano elegível.
 - `.gitattributes` define `* text=auto eol=lf`: arquivos textuais tracked usam LF canônico e binários detectados permanecem sem conversão de texto.
 - O inventário atual não exige exceção CRLF nem regra binária específica; falsos diffs `Delete-CR` foram eliminados sem alterar `core.autocrlf`.
-- A Tarefa 0.2.2.6 concluiu o primeiro piloto do modelo multiagente. As Skills continuam ausentes e a 0.2.5 permanece planejada e não iniciada.
+- A Tarefa 0.2.2.6 concluiu o primeiro piloto do modelo multiagente. As Skills continuam ausentes; o bloco 0.2.5 e a Fase 0.2 foram concluídos.
 
 ### Tenant context implementado
 
@@ -77,11 +77,12 @@
 Não existem endpoints de CRUD para usuários ou organizações. Memberships usam
 comandos explícitos de papel, ciclo de vida e saída, sem hard delete.
 
-### Convites em implementação
+### Convites e memberships concluídos
 
 - A 0.2.5.1 foi incorporada à `main` pelo PR #13, squash `829cefa`, com CI do PR e pós-merge aprovadas.
 - A 0.2.5.2 foi concluída no PR #14, squash `410f0576a98e373c39bf178f73b80838b40d2924`, com CI pós-merge 29919743498 aprovada.
 - A 0.2.5.3 foi concluída no PR #15, squash `945142b3103a24104525d825226ff75c9e5e1f9b`, com CI pós-merge 29933958617 aprovada; activation pública para usuário inexistente cria credencial Argon2id, Membership, acceptance e auditoria em uma única transação, sem auto-login.
+- A 0.2.5.4 foi concluída no PR #16, squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge 29952145756 aprovada; diretório e comandos de membership preservam ownership efetivo, ACL mínima e auditoria sob concorrência.
 - Em produção, emissão somente abre quando issuance, acceptance, activation, worker, keyring, delivery e frontend estão explicitamente prontos e a API pública opera com uma réplica.
 
 - `OrganizationInvitation` e as tabelas separadas de audit, idempotência e
@@ -91,15 +92,15 @@ comandos explícitos de papel, ciclo de vida e saída, sem hard delete.
   transacional.
 - As rotas create/list/get/revoke/replace estão registradas. Create e replace
   usam readiness operacional dependente do banco, keyring e delivery,
-  consolidada pela 0.2.5.3 no PR #15, com CI pós-merge 29933958617 — success. A
-  0.2.5.4 implementa gestão de memberships e invariantes de ownership para
-  concluir o bloco 0.2.5.
+  consolidada pela 0.2.5.3 no PR #15, com CI pós-merge 29933958617 — success.
+  A gestão de memberships e as invariantes de ownership concluíram o bloco
+  0.2.5 no PR #16.
 - O outbox possui worker separado, claim concorrente, retry, fencing,
   dead-letter, adapter Resend e health interno; o provider não participa da
   transação de aceitação.
 - A aceitação autenticada para usuário existente está incorporada. A activation
-  cria somente usuário novo e nunca converte automaticamente para accept;
-  a 0.2.5.4 adiciona gestão de memberships e ownership.
+  cria somente usuário novo e nunca converte automaticamente para accept. A
+  gestão de memberships e ownership está incorporada.
 
 ### Schema
 
