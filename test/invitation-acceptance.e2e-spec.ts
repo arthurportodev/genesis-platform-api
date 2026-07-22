@@ -22,10 +22,12 @@ import {
   ConfiguredInvitationAcceptanceReadiness,
   INVITATION_ACCEPTANCE_READINESS,
 } from '../src/modules/invitations/ports/invitation-acceptance-readiness.port';
+import { INVITATION_ACTIVATION_READINESS } from '../src/modules/invitations/ports/invitation-activation-readiness.port';
 import { INVITATION_TOKEN_KEYRING } from '../src/modules/invitations/ports/invitation-token-keyring.port';
 import { InvitationTokenCodec } from '../src/modules/invitations/services/invitation-token-codec.service';
 import { Membership } from '../src/modules/memberships/entities/membership.entity';
 import { Organization } from '../src/modules/organizations/entities/organization.entity';
+import { OrganizationStatus } from '../src/modules/organizations/enums/organization-status.enum';
 import { User } from '../src/modules/users/entities/user.entity';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
 import {
@@ -40,6 +42,7 @@ describe('Invitation acceptance (e2e)', () => {
   let recipient: User;
   let otherUser: User;
   let organization: Organization;
+  let issuer: Membership;
   let invitation: OrganizationInvitation;
   let outboxId: string;
   let token: string;
@@ -85,6 +88,11 @@ describe('Invitation acceptance (e2e)', () => {
     process.env.INVITATION_INSPECT_IP_MAX_ATTEMPTS = '100';
     process.env.INVITATION_ACCEPT_IP_MAX_ATTEMPTS = '100';
     process.env.INVITATION_ACCEPT_USER_IP_MAX_ATTEMPTS = '100';
+    process.env.INVITATION_ACTIVATION_READINESS = 'true';
+    process.env.INVITATION_ACTIVATION_IP_MAX_ATTEMPTS = '100';
+    process.env.INVITATION_ACTIVATION_INVITATION_IP_MAX_ATTEMPTS = '100';
+    process.env.INVITATION_ACTIVATION_HASH_CONCURRENCY = '2';
+    process.env.INVITATION_PUBLIC_REPLICA_COUNT = '1';
 
     connection = createIntegrationDataSource();
     await connection.initialize();
@@ -103,7 +111,7 @@ describe('Invitation acceptance (e2e)', () => {
       .findOneByOrFail({
         slug: 'agencia-genesis',
       });
-    const issuer = await connection.getRepository(Membership).findOneByOrFail({
+    issuer = await connection.getRepository(Membership).findOneByOrFail({
       organizationId: organization.id,
     });
     recipient = await connection.getRepository(User).save(
@@ -171,6 +179,8 @@ describe('Invitation acceptance (e2e)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(INVITATION_ACCEPTANCE_READINESS)
       .useValue(new ConfiguredInvitationAcceptanceReadiness(true))
+      .overrideProvider(INVITATION_ACTIVATION_READINESS)
+      .useValue({ assertReady: () => Promise.resolve() })
       .overrideProvider(INVITATION_TOKEN_KEYRING)
       .useValue(keyring)
       .compile();
@@ -285,11 +295,307 @@ describe('Invitation acceptance (e2e)', () => {
     }
   });
 
+  it('activates a new user publicly and returns only organization and membership IDs', async () => {
+    const email = `new-activation-${Date.now()}@example.com`;
+    const activationInvitation = await createActivationInvitation(email);
+    const activationToken = new InvitationTokenCodec(keyring).issue(
+      tokenFieldsFor(activationInvitation),
+    );
+    const password = '  Strong activation password 1!  ';
+
+    const response = await request(app.getHttpServer() as Server)
+      .post('/api/v1/invitation-acceptance/activate')
+      .send({
+        token: activationToken,
+        name: '  New Activation User  ',
+        password,
+      })
+      .expect('Cache-Control', 'no-store')
+      .expect(201);
+    expect(Object.keys(response.body as object).sort()).toEqual([
+      'membershipId',
+      'organizationId',
+    ]);
+    expect(response.body).toMatchObject({ organizationId: organization.id });
+
+    const [state] = await connection.query<
+      Array<{
+        userId: string;
+        name: string;
+        status: string;
+        passwordHash: string;
+        timestampsEqual: boolean;
+        membershipId: string;
+        invitationStatus: string;
+        outboxStatus: string;
+        auditCount: number;
+        sessionCount: number;
+      }>
+    >(
+      `SELECT application_user.id AS "userId", application_user.name,
+              application_user.status,
+              application_user.password_hash AS "passwordHash",
+              application_user.email_verified_at = application_user.password_changed_at
+                AS "timestampsEqual",
+              membership.id AS "membershipId",
+              invitation.status AS "invitationStatus",
+              outbox.status AS "outboxStatus",
+              (SELECT count(*)::int FROM organization_audit_logs AS audit
+               WHERE audit.invitation_id = invitation.id
+                 AND audit.event_type = 'organization.invitation.activated'
+                 AND audit.actor_user_id = application_user.id
+                 AND audit.actor_membership_id = membership.id) AS "auditCount",
+              (SELECT count(*)::int FROM auth_sessions AS session
+               WHERE session.user_id = application_user.id) AS "sessionCount"
+       FROM users AS application_user
+       JOIN memberships AS membership ON membership.user_id = application_user.id
+       JOIN organization_invitations AS invitation
+         ON invitation.accepted_by_user_id = application_user.id
+       JOIN invitation_delivery_outbox AS outbox
+         ON outbox.invitation_id = invitation.id
+       WHERE application_user.email = $1 AND invitation.id = $2`,
+      [email, activationInvitation.id],
+    );
+    const activationResponse = response.body as {
+      organizationId: string;
+      membershipId: string;
+    };
+    expect(state).toMatchObject({
+      name: 'New Activation User',
+      status: 'active',
+      timestampsEqual: true,
+      membershipId: activationResponse.membershipId,
+      invitationStatus: 'accepted',
+      outboxStatus: 'cancelled',
+      auditCount: 1,
+      sessionCount: 0,
+    });
+    expect(state?.passwordHash).toMatch(
+      /^\$argon2id\$v=19\$m=65536,(?:t=3,p=1|p=1,t=3)\$/u,
+    );
+
+    await request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/login')
+      .send({ email, password })
+      .expect(200);
+  });
+
+  it('uses generic 400/404 responses and keeps failed invitations pending', async () => {
+    await request(app.getHttpServer() as Server)
+      .post('/api/v1/invitation-acceptance/activate')
+      .send({ token, name: 'User', password: 'Password 123!', role: 'owner' })
+      .expect('Cache-Control', 'no-store')
+      .expect(400, {
+        message: 'Invalid activation request.',
+        error: 'Bad Request',
+        statusCode: 400,
+      });
+
+    const existingInvitation = await createActivationInvitation(
+      recipient.email,
+    );
+    const existingToken = new InvitationTokenCodec(keyring).issue(
+      tokenFieldsFor(existingInvitation),
+    );
+    await request(app.getHttpServer() as Server)
+      .post('/api/v1/invitation-acceptance/activate')
+      .send({
+        token: existingToken,
+        name: 'Existing User',
+        password: 'Password 123!',
+      })
+      .expect('Cache-Control', 'no-store')
+      .expect(404, {
+        message: 'Invitation unavailable.',
+        error: 'Not Found',
+        statusCode: 404,
+      });
+    await expect(
+      connection.getRepository(OrganizationInvitation).findOneByOrFail({
+        id: existingInvitation.id,
+      }),
+    ).resolves.toMatchObject({ status: InvitationStatus.PENDING });
+  });
+
+  it('converges cryptographic, terminal, expired, and inactive-tenant states to 404', async () => {
+    const revoked = await createActivationInvitation(
+      `revoked-${Date.now()}@example.com`,
+    );
+    const revokedToken = new InvitationTokenCodec(keyring).issue(
+      tokenFieldsFor(revoked),
+    );
+    await connection.query(
+      `UPDATE organization_invitations
+       SET status = 'revoked', revoked_at = transaction_timestamp(),
+           revocation_reason = 'manual' WHERE id = $1`,
+      [revoked.id],
+    );
+
+    const expired = await createActivationInvitation(
+      `expired-${Date.now()}@example.com`,
+    );
+    await connection.query(
+      `UPDATE organization_invitations
+       SET created_at = transaction_timestamp() - interval '8 days',
+           expires_at = transaction_timestamp() - interval '1 day'
+       WHERE id = $1`,
+      [expired.id],
+    );
+    const expiredState = await connection
+      .getRepository(OrganizationInvitation)
+      .findOneByOrFail({ id: expired.id });
+    expired.expiresAt = expiredState.expiresAt;
+    const expiredToken = new InvitationTokenCodec(keyring).issue(
+      tokenFieldsFor(expired),
+    );
+
+    for (const unavailableToken of [token, revokedToken, expiredToken]) {
+      await request(app.getHttpServer() as Server)
+        .post('/api/v1/invitation-acceptance/activate')
+        .send({
+          token: unavailableToken,
+          name: 'Unavailable User',
+          password: 'Password 123!',
+        })
+        .expect(404, {
+          message: 'Invitation unavailable.',
+          error: 'Not Found',
+          statusCode: 404,
+        });
+    }
+
+    const missingKey = await createActivationInvitation(
+      `missing-key-${Date.now()}@example.com`,
+    );
+    const missingKeyToken = new InvitationTokenCodec(keyring).issue(
+      tokenFieldsFor(missingKey),
+    );
+    invitationKeys.delete(2);
+    try {
+      await request(app.getHttpServer() as Server)
+        .post('/api/v1/invitation-acceptance/activate')
+        .send({
+          token: missingKeyToken,
+          name: 'Unavailable Key',
+          password: 'Password 123!',
+        })
+        .expect(404, {
+          message: 'Invitation unavailable.',
+          error: 'Not Found',
+          statusCode: 404,
+        });
+    } finally {
+      invitationKeys.set(2, Buffer.alloc(32, 0x32));
+    }
+
+    const inactiveOrganization = await createActivationInvitation(
+      `inactive-org-${Date.now()}@example.com`,
+    );
+    const inactiveOrganizationToken = new InvitationTokenCodec(keyring).issue(
+      tokenFieldsFor(inactiveOrganization),
+    );
+    await connection.getRepository(Organization).update(organization.id, {
+      status: OrganizationStatus.INACTIVE,
+    });
+    try {
+      await request(app.getHttpServer() as Server)
+        .post('/api/v1/invitation-acceptance/activate')
+        .send({
+          token: inactiveOrganizationToken,
+          name: 'Inactive Organization',
+          password: 'Password 123!',
+        })
+        .expect(404, {
+          message: 'Invitation unavailable.',
+          error: 'Not Found',
+          statusCode: 404,
+        });
+    } finally {
+      await connection.getRepository(Organization).update(organization.id, {
+        status: OrganizationStatus.ACTIVE,
+      });
+    }
+  });
+
+  it('fails closed with the public 429 contract when the IP bucket is exhausted', async () => {
+    let response: request.Response | undefined;
+    for (let attempt = 0; attempt < 101; attempt += 1) {
+      response = await request(app.getHttpServer() as Server)
+        .post('/api/v1/invitation-acceptance/activate')
+        .send({});
+      if (response.status === 429) break;
+    }
+    expect(response?.status).toBe(429);
+    expect(response?.headers['cache-control']).toBe('no-store');
+    expect(response?.body).toMatchObject({
+      message: 'Too many requests.',
+      statusCode: 429,
+      path: '/api/v1/invitation-acceptance/activate',
+    });
+  });
+
   function accept(presentedToken: string, bearer: string) {
     return request(app.getHttpServer() as Server)
       .post('/api/v1/invitation-acceptance/accept')
       .set('Authorization', `Bearer ${bearer}`)
       .send({ token: presentedToken });
+  }
+
+  async function createActivationInvitation(
+    email: string,
+  ): Promise<OrganizationInvitation> {
+    const created = await connection.getRepository(OrganizationInvitation).save(
+      connection.getRepository(OrganizationInvitation).create({
+        organizationId: organization.id,
+        emailNormalized: email,
+        role: InvitationRole.MEMBER,
+        status: InvitationStatus.PENDING,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        invitedByMembershipId: issuer.id,
+        acceptedByUserId: null,
+        resultingMembershipId: null,
+        acceptedAt: null,
+        revokedByMembershipId: null,
+        revokedAt: null,
+        revocationReason: null,
+        supersededByInvitationId: null,
+        tokenKeyVersion: 2,
+        tokenVersion: 1,
+        tokenNonce: randomBytes(32).toString('base64url'),
+      }),
+    );
+    await connection.getRepository(InvitationDeliveryOutbox).save(
+      connection.getRepository(InvitationDeliveryOutbox).create({
+        organizationId: organization.id,
+        invitationId: created.id,
+        eventType: InvitationDeliveryEventType.REQUESTED,
+        tokenVersion: 1,
+        status: InvitationDeliveryStatus.QUEUED,
+        attempts: 0,
+        nextAttemptAt: null,
+        lockedBy: null,
+        lockedAt: null,
+        leaseUntil: null,
+        providerMessageId: null,
+        lastErrorCode: null,
+        sentAt: null,
+        cancelledAt: null,
+      }),
+    );
+    return created;
+  }
+
+  function tokenFieldsFor(created: OrganizationInvitation) {
+    return {
+      invitationId: created.id,
+      keyVersion: created.tokenKeyVersion,
+      tokenVersion: created.tokenVersion,
+      organizationId: created.organizationId,
+      emailNormalized: created.emailNormalized,
+      role: created.role,
+      expiresAt: created.expiresAt,
+      nonce: created.tokenNonce,
+    };
   }
 
   async function expectUnavailableWithoutWrites(

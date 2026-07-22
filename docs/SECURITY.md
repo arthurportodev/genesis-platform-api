@@ -104,11 +104,20 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Create/replace não consultam a existência de User ou Membership do recipient;
   isso evita enumeração e mantém a emissão compatível com usuários novos. Toda
   identidade e estado são derivados e revalidados somente em acceptance.
+- Activation pública aceita somente token, nome e senha, usa resposta genérica
+  para todos os estados indisponíveis e nunca cria sessão. HMAC é validado antes
+  de Argon2 e novamente sob locks; hash, senha, token, MAC e nonce não são logados.
+- Argon2 possui capacidade local sem fila e activation possui buckets por IP e
+  invitation+IP. Enquanto esses controles forem process-local, readiness e
+  issuance exigem exatamente uma réplica pública.
+- A função privada de activation recebe somente IDs/contexto tipados, deriva
+  email, Organization e papel do banco, proíbe owner, tem `PUBLIC EXECUTE`
+  revogado e preserva a role runtime sem INSERT/UPDATE amplo em users/memberships.
 
 ## Limitações e decisões abertas
 
 - Refresh token ainda é retornado em JSON; cookie `HttpOnly` não foi implementado.
-- Rate limiter não é distribuído; uma solução compartilhada será necessária com múltiplas réplicas.
+- Rate limiter e semaphore Argon2 não são distribuídos; uma solução compartilhada será necessária antes de múltiplas réplicas públicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.
 - Rotação operacional de segredos não foi definida.
 - Outras entidades comerciais tenant-scoped e seus filtros por `organization_id` ainda não foram implementados.
@@ -125,7 +134,7 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Admin é hard-filtered para `member`; IDs cross-tenant ou invitations de admin
   usam `404` uniforme.
 - Create/replace consultam readiness operacional antes de qualquer transação;
-  em produção, a emissão permanece fail-closed até a 0.2.5.3.
+  em produção, a emissão abre somente com todas as precondições explícitas.
 - Owner invitation é impossível no DTO, enum do banco e service.
 - Token bruto, MAC, chave e nonce nunca entram em API, audit, outbox,
   idempotência ou logs. O nonce é a única matéria do token persistida e não é

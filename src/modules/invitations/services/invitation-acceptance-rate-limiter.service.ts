@@ -14,19 +14,19 @@ export class InvitationAcceptanceRateLimiter {
   constructor(private readonly config: ConfigService) {}
 
   consume(
-    scope: 'inspect-ip' | 'accept-ip' | 'accept-user-ip',
+    scope:
+      | 'inspect-ip'
+      | 'accept-ip'
+      | 'accept-user-ip'
+      | 'activate-ip'
+      | 'activate-invitation-ip',
     key: string,
   ): void {
     const settings = this.config.getOrThrow<InvitationConfig>('invitation');
     const now = Date.now();
     this.prune(now);
     const bucketKey = `${scope}:${key}`;
-    const limit =
-      scope === 'inspect-ip'
-        ? settings.inspectIpMaxAttempts
-        : scope === 'accept-ip'
-          ? settings.acceptIpMaxAttempts
-          : settings.acceptUserIpMaxAttempts;
+    const limit = this.limitFor(scope, settings);
     let bucket = this.buckets.get(bucketKey);
     if (bucket === undefined || bucket.resetAt <= now) {
       if (this.buckets.size >= settings.rateLimitMaxBuckets) this.reject();
@@ -38,6 +38,22 @@ export class InvitationAcceptanceRateLimiter {
     }
     bucket.count += 1;
     if (bucket.count > limit) this.reject();
+  }
+
+  private limitFor(
+    scope:
+      | 'inspect-ip'
+      | 'accept-ip'
+      | 'accept-user-ip'
+      | 'activate-ip'
+      | 'activate-invitation-ip',
+    settings: InvitationConfig,
+  ): number {
+    if (scope === 'inspect-ip') return settings.inspectIpMaxAttempts;
+    if (scope === 'accept-ip') return settings.acceptIpMaxAttempts;
+    if (scope === 'accept-user-ip') return settings.acceptUserIpMaxAttempts;
+    if (scope === 'activate-ip') return settings.activationIpMaxAttempts;
+    return settings.activationInvitationIpMaxAttempts;
   }
 
   private prune(now: number): void {

@@ -62,6 +62,8 @@ describe('Organization invitations database integration', () => {
     await connection.undoLastMigration();
     expect(await invitationTableNames()).toHaveLength(4);
     await connection.undoLastMigration();
+    expect(await invitationTableNames()).toHaveLength(4);
+    await connection.undoLastMigration();
     expect(await invitationTableNames()).toEqual([]);
     await connection.runMigrations();
     expect(await invitationTableNames()).toHaveLength(4);
@@ -74,6 +76,7 @@ describe('Organization invitations database integration', () => {
     }
     const groupRole = `audit_trigger_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
 
+    await connection.undoLastMigration();
     await connection.undoLastMigration();
     await connection.undoLastMigration();
     expect(await invitationTableNames()).toEqual([]);
@@ -339,6 +342,10 @@ describe('Organization invitations database integration', () => {
       [runtimeRole],
     );
     expect(executableFunctions).toEqual([
+      {
+        signature:
+          'app_private.activate_new_user_invitation(uuid,text,text,uuid,inet,text)',
+      },
       {
         signature:
           'app_private.apply_existing_user_invitation_membership(uuid,uuid)',

@@ -71,6 +71,20 @@ describe('Multi-tenant database integration', () => {
     expect(invitationTablesAfterAcceptanceRollback[0]?.count).toBe('4');
 
     await connection.undoLastMigration();
+    const invitationTablesAfterDeliveryRollback = await connection.query<
+      CountRow[]
+    >(`
+        SELECT count(*)::text AS count
+        FROM pg_tables
+        WHERE schemaname = 'public'
+          AND tablename IN (
+            'organization_invitations', 'organization_audit_logs',
+            'organization_command_idempotency', 'invitation_delivery_outbox'
+          )
+      `);
+    expect(invitationTablesAfterDeliveryRollback[0]?.count).toBe('4');
+
+    await connection.undoLastMigration();
     const invitationTablesAfterRollback = await connection.query<CountRow[]>(`
       SELECT count(*)::text AS count
       FROM pg_tables

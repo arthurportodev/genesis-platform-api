@@ -1,7 +1,13 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  HttpException,
+  Injectable,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { AuthenticatedRequest } from '../../auth/types/auth-request.type';
 import { InvitationAcceptanceRateLimiter } from '../services/invitation-acceptance-rate-limiter.service';
+import { InvitationActivationObservability } from '../services/invitation-activation-observability.service';
 
 function clientIp(request: Request): string {
   return request.ip || request.socket.remoteAddress || 'unknown';
@@ -45,6 +51,27 @@ export class InvitationAcceptUserIpRateLimitGuard implements CanActivate {
       'accept-user-ip',
       `${request.user.userId}:${clientIp(request)}`,
     );
+    return true;
+  }
+}
+
+@Injectable()
+export class InvitationActivateIpRateLimitGuard implements CanActivate {
+  constructor(
+    private readonly limiter: InvitationAcceptanceRateLimiter,
+    private readonly observability: InvitationActivationObservability,
+  ) {}
+  canActivate(context: ExecutionContext): boolean {
+    noStore(context);
+    const request = context.switchToHttp().getRequest<Request>();
+    try {
+      this.limiter.consume('activate-ip', clientIp(request));
+    } catch (error) {
+      if (error instanceof HttpException && error.getStatus() === 429) {
+        this.observability.rateLimited('ip');
+      }
+      throw error;
+    }
     return true;
   }
 }

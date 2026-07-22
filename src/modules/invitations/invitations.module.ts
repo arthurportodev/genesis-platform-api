@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { AuthModule } from '../auth/auth.module';
 import { AuthorizationModule } from '../authorization/authorization.module';
+import { CredentialsModule } from '../credentials/credentials.module';
 import { OrganizationAuditModule } from '../organization-audit/organization-audit.module';
 import { TenantContextModule } from '../tenant-context/tenant-context.module';
 import { InvitationsController } from './controllers/invitations.controller';
@@ -21,6 +22,10 @@ import {
   OperationalInvitationAcceptanceReadiness,
 } from './ports/invitation-acceptance-readiness.port';
 import {
+  INVITATION_ACTIVATION_READINESS,
+  OperationalInvitationActivationReadiness,
+} from './ports/invitation-activation-readiness.port';
+import {
   ConfiguredInvitationTokenKeyring,
   INVITATION_TOKEN_KEYRING,
 } from './ports/invitation-token-keyring.port';
@@ -29,9 +34,13 @@ import { InvitationTokenCodec } from './services/invitation-token-codec.service'
 import { InvitationsService } from './services/invitations.service';
 import { InvitationAcceptanceService } from './services/invitation-acceptance.service';
 import { InvitationAcceptanceRateLimiter } from './services/invitation-acceptance-rate-limiter.service';
+import { InvitationActivationHashCapacity } from './services/invitation-activation-hash-capacity.service';
+import { InvitationActivationService } from './services/invitation-activation.service';
+import { InvitationActivationObservability } from './services/invitation-activation-observability.service';
 import {
   InvitationAcceptIpRateLimitGuard,
   InvitationAcceptUserIpRateLimitGuard,
+  InvitationActivateIpRateLimitGuard,
   InvitationInspectRateLimitGuard,
 } from './guards/invitation-acceptance-rate-limit.guards';
 import { NoStoreInterceptor } from './interceptors/no-store.interceptor';
@@ -44,6 +53,7 @@ import { NoStoreInterceptor } from './interceptors/no-store.interceptor';
       InvitationDeliveryOutbox,
     ]),
     AuthModule,
+    CredentialsModule,
     TenantContextModule,
     AuthorizationModule,
     OrganizationAuditModule,
@@ -75,6 +85,23 @@ import { NoStoreInterceptor } from './interceptors/no-store.interceptor';
       },
     },
     {
+      provide: INVITATION_ACTIVATION_READINESS,
+      inject: [ConfigService, INVITATION_TOKEN_KEYRING, DataSource],
+      useFactory: (
+        config: ConfigService,
+        keyring: ConfiguredInvitationTokenKeyring,
+        dataSource: DataSource,
+      ) => {
+        const invitation = config.getOrThrow<InvitationConfig>('invitation');
+        return new OperationalInvitationActivationReadiness(
+          invitation.activationReady,
+          invitation.publicReplicaCount,
+          keyring,
+          dataSource,
+        );
+      },
+    },
+    {
       provide: INVITATION_TOKEN_KEYRING,
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
@@ -89,9 +116,13 @@ import { NoStoreInterceptor } from './interceptors/no-store.interceptor';
     InvitationsService,
     InvitationAcceptanceService,
     InvitationAcceptanceRateLimiter,
+    InvitationActivationHashCapacity,
+    InvitationActivationObservability,
+    InvitationActivationService,
     InvitationInspectRateLimitGuard,
     InvitationAcceptIpRateLimitGuard,
     InvitationAcceptUserIpRateLimitGuard,
+    InvitationActivateIpRateLimitGuard,
     NoStoreInterceptor,
     {
       provide: PENDING_INVITATION_REVOKER,

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
@@ -8,12 +8,15 @@ import { AuthSession } from '../auth-sessions/entities/auth-session.entity';
 import { AuthAuditEventType } from '../auth-sessions/enums/auth-audit-event-type.enum';
 import { AuthRefreshTokenStatus } from '../auth-sessions/enums/auth-refresh-token-status.enum';
 import { AuthSessionStatus } from '../auth-sessions/enums/auth-session-status.enum';
+import {
+  PASSWORD_LOGIN_VERIFIER,
+  PasswordLoginVerifier,
+} from '../credentials/ports/password-login-verifier.port';
 import { User } from '../users/entities/user.entity';
 import { UserStatus } from '../users/enums/user-status.enum';
 import { LoginDto } from './dto/login.dto';
 import { AuthAuditService } from './services/auth-audit.service';
 import { LoginRateLimiter } from './services/login-rate-limiter.port';
-import { PasswordService } from './services/password.service';
 import { TokenService } from './services/token.service';
 import {
   AuthenticatedUser,
@@ -46,7 +49,8 @@ export class AuthService {
   constructor(
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly dataSource: DataSource,
-    private readonly passwordService: PasswordService,
+    @Inject(PASSWORD_LOGIN_VERIFIER)
+    private readonly passwordService: PasswordLoginVerifier,
     private readonly tokenService: TokenService,
     private readonly auditService: AuthAuditService,
     private readonly rateLimiter: LoginRateLimiter,
