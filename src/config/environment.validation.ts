@@ -145,4 +145,37 @@ export const environmentValidationSchema = Joi.object({
     .min(3)
     .max(1_000_000)
     .default(10_000),
+  LEAD_FORM_READINESS: Joi.string().valid('true', 'false').default('false'),
+  LEAD_FORM_ORGANIZATION_ID: Joi.string()
+    .guid({ version: 'uuidv4' })
+    .allow('')
+    .default(''),
+  LEAD_FORM_KEY_CURRENT_VERSION: Joi.alternatives()
+    .try(Joi.number().integer().min(1).max(32767), Joi.string().valid(''))
+    .optional(),
+  LEAD_FORM_KEYS: Joi.string().allow('').optional(),
+  LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION: Joi.alternatives()
+    .try(Joi.number().integer().min(1).max(32767), Joi.string().valid(''))
+    .optional(),
+  LEAD_IDEMPOTENCY_KEYS: Joi.string().allow('').optional(),
+  LEAD_FORM_RATE_LIMIT_WINDOW_SECONDS: Joi.number()
+    .integer()
+    .min(1)
+    .max(86_400)
+    .default(900),
+  LEAD_FORM_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(10_000)
+    .default(30),
+  LEAD_FORM_KEY_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(100_000)
+    .default(300),
+  LEAD_FORM_RATE_LIMIT_MAX_BUCKETS: Joi.number()
+    .integer()
+    .min(2)
+    .max(1_000_000)
+    .default(10_000),
 });

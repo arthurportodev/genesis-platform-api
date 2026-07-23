@@ -4,6 +4,7 @@ import appConfig from './app.config';
 import authConfig from './auth.config';
 import databaseConfig from './database.config';
 import invitationConfig from './invitation.config';
+import leadConfig from './lead.config';
 import membershipConfig from './membership.config';
 import { environmentValidationSchema } from './environment.validation';
 
@@ -17,6 +18,7 @@ import { environmentValidationSchema } from './environment.validation';
         authConfig,
         databaseConfig,
         invitationConfig,
+        leadConfig,
         membershipConfig,
       ],
       validationSchema: environmentValidationSchema,

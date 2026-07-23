@@ -1,6 +1,9 @@
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { RUNTIME_EXECUTABLE_FUNCTIONS } from '../../../database/runtime-executable-functions';
+import {
+  CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS,
+  RUNTIME_EXECUTABLE_FUNCTIONS,
+} from '../../../database/runtime-executable-functions';
 
 export const MEMBERSHIP_READINESS = Symbol('MEMBERSHIP_READINESS');
 
@@ -203,11 +206,19 @@ export class OperationalMembershipReadiness implements MembershipReadiness {
       boundary.canAssumeOwner ||
       boundary.canMutateCentralTables ||
       !boundary.catalogSafe ||
-      JSON.stringify(boundary.executableFunctions) !==
-        JSON.stringify(RUNTIME_EXECUTABLE_FUNCTIONS)
+      !this.executableBoundaryMatches(boundary.executableFunctions)
     ) {
       this.unavailable('schema_unavailable');
     }
+  }
+
+  private executableBoundaryMatches(actual: string[]): boolean {
+    const expected = actual.includes(
+      'app_private.required_lead_fingerprint_key_versions()',
+    )
+      ? CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS
+      : [...RUNTIME_EXECUTABLE_FUNCTIONS].sort();
+    return JSON.stringify(actual) === JSON.stringify(expected);
   }
 
   private unavailable(code: string): never {

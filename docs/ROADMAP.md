@@ -24,10 +24,10 @@ Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado
   - ✅ 0.2.5.3 — Ativação de user novo
   - ✅ 0.2.5.4 — Gestão de memberships e ownership
 
-## 0.3 — CRM
+## 0.3 — CRM 🚧
 
-- ⬜ Definir o modelo e os fluxos macro de leads, pipelines e atividades.
-- ⬜ Dividir a fase em tarefas somente após aprovação de requisitos.
+- 🚧 0.3.1 — Fundação e Inbox de Leads (candidato local em validação).
+- ⬜ Pipeline, atividades, notas, busca, métricas e demais capacidades do CRM.
 
 ## 0.4 — Comunicação
 

@@ -12,7 +12,9 @@ import { AppConfig } from './config/app.config';
 import { configureTrustProxy } from './config/trust-proxy';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
   const configService = app.get(ConfigService);
   const config = configService.getOrThrow<AppConfig>('app');
 
