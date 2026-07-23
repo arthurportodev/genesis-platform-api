@@ -2,7 +2,8 @@
 
 - **Última atualização:** 2026-07-22
 - **Fase concluída:** 0.2 — Identidade e multi-tenancy
-- **Próxima fase:** 0.3 — CRM, em descoberta de produto
+- **Fase atual:** 0.3 — CRM
+- **Tarefa em implementação local:** 0.3.1 — Fundação e Inbox de Leads
 - **Última tarefa funcional concluída:** 0.2.5.4 — Gestão de memberships e ownership
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
@@ -18,6 +19,7 @@
 - Autenticação por email e senha, sessões persistidas, refresh rotativo e auditoria.
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
 - Testes unitários, E2E e de integração; CI com build Docker.
+- Candidato local da 0.3.1 com `Lead`, `LeadEntry`, timeline mínima, intake manual e `genesis_form`, deduplicação E.164, idempotência durável, inbox tenant-scoped, edição básica e assignment.
 
 ### Governança multiagente adotada
 
@@ -73,6 +75,13 @@
 - `POST /api/v1/members/:membershipId/deactivate`
 - `POST /api/v1/members/:membershipId/reactivate`
 - `POST /api/v1/members/me/leave`
+- `POST /api/v1/leads`
+- `GET /api/v1/leads`
+- `GET /api/v1/leads/:leadId`
+- `GET /api/v1/leads/:leadId/timeline`
+- `PATCH /api/v1/leads/:leadId`
+- `PATCH /api/v1/leads/:leadId/assignment`
+- `POST /api/v1/lead-intake/genesis-form` (fail-closed até homologação do relay real)
 
 Não existem endpoints de CRUD para usuários ou organizações. Memberships usam
 comandos explícitos de papel, ciclo de vida e saída, sem hard delete.
@@ -112,6 +121,7 @@ Migrations existentes:
 - [`1785087600000-DeliverInvitationAcceptance.ts`](../src/database/migrations/1785087600000-DeliverInvitationAcceptance.ts)
 - [`1785174000000-ActivateNewInvitationUser.ts`](../src/database/migrations/1785174000000-ActivateNewInvitationUser.ts)
 - [`1785260400000-ManageMembershipOwnership.ts`](../src/database/migrations/1785260400000-ManageMembershipOwnership.ts)
+- [`1785346800000-CreateLeadFoundation.ts`](../src/database/migrations/1785346800000-CreateLeadFoundation.ts)
 
 Tabelas da aplicação: `users`, `organizations`, `memberships`, `auth_sessions`, `auth_refresh_tokens`, `auth_audit_logs`, `organization_invitations`, `organization_audit_logs`, `organization_command_idempotency` e `invitation_delivery_outbox`.
 
@@ -149,4 +159,4 @@ Consulte os [ADRs](decisions/README.md).
 
 ## Fora do escopo atual
 
-CRM, comunicação, WhatsApp, automações, tracking, relatórios, billing, frontend e deploy permanecem planejados ou futuros; nenhum deles está implementado.
+Pipeline, atividades, comunicação, WhatsApp, automações, tracking, relatórios, billing, frontend e deploy permanecem planejados ou futuros; a fundação de Leads 0.3.1 existe somente como candidato local até aprovação e entrega.

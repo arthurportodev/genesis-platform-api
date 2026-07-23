@@ -136,3 +136,11 @@ um segundo target user.
 ## Regra para entidades futuras
 
 Entidades de negócio tenant-scoped devem conter `organization_id` e depender do contexto validado. `OrganizationInvitation` e suas rotas administrativas são a primeira aplicação dessa regra; uma matriz geral de capacidades e as demais entidades de negócio ainda não existem.
+
+## Lead, LeadEntry e Timeline 0.3.1
+
+- `Lead` representa a identidade ativa do contato por `organization_id` e telefone E.164; a unicidade `(organization_id, primary_phone)` é a fronteira de deduplicação.
+- `LeadEntry` é append-only e registra cada entrada com canal, Source e UTMs sem sobrescrever atribuição anterior. Duplicidade ativa cria exatamente uma nova Entry.
+- A timeline append-only registra criação, entrada recebida, alteração de dados básicos e mudança ou limpeza de responsável em colunas explícitas.
+- `status=active` e `stage=new` são constantes da API nesta tarefa; pipeline persistido permanece fora do escopo.
+- Member enxerga somente Leads atribuídos à sua Membership. Owner/admin acessam o tenant inteiro e administram assignment; offboarding limpa assignments atomicamente, sem redistribuição.

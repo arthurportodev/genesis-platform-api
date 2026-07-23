@@ -182,3 +182,13 @@
 ## Fase 0.2 — Identidade e multi-tenancy
 
 **Concluída.** O fechamento ocorreu com o PR #16 no squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`; a CI pós-merge 29952145756 foi aprovada. A descoberta de produto da Fase 0.3 — CRM é o próximo estágio.
+
+## 0.3.1 — Fundação e Inbox de Leads
+
+**Status: candidato local em validação do Gate 2.**
+
+- Modelo tenant-scoped de Lead, Entry append-only, timeline mínima e idempotência técnica.
+- Intake manual e relay `genesis_form` dedicado; E.164, deduplicação ativa, Source e UTMs e respostas opacas.
+- Inbox, list, detail, edição básica com ETag/If-Match e assignment owner/admin; member limitado aos próprios Leads.
+- ACL por funções estreitas, readiness fail-closed, HMAC do corpo bruto e limpeza transacional de assignments no offboarding.
+- Pipeline, atividades, notas, busca, métricas, import, WhatsApp e frontend permanecem fora do escopo.

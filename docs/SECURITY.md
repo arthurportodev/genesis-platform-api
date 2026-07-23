@@ -139,6 +139,16 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 
 ## Limitações e decisões abertas
 
+## Segurança da fundação de Leads 0.3.1
+
+- Toda leitura usa filtro obrigatório por `organization_id`; member recebe ainda filtro por `responsible_membership_id`, e alvos invisíveis ou cross-tenant usam `404` uniforme.
+- O runtime possui somente `SELECT` nas tabelas visíveis de Lead e `EXECUTE` nas três funções estreitas de mutação e na função de inventário de versões; não recebe DML nas tabelas CRM nem acesso direto à idempotência técnica.
+- Telefone passa por `libphonenumber-js`, default BR, validação de possibilidade e persistência E.164 antes de fingerprint ou escrita.
+- Idempotência usa chave UUID v4 e fingerprint HMAC-SHA-256 canônico com keyring versionado. Reuso com payload divergente retorna conflito.
+- O intake `genesis_form` valida HMAC sobre timestamp, idempotency key e hash do corpo bruto, usa comparação constant-time, janela de cinco minutos e rate limits process-local por IP e versão de chave.
+- Readiness falha com `503` se keyring, réplica única, schema, funções, triggers ou ACLs não estiverem íntegros. O canal externo permanece desabilitado até a homologação do relay real da Agência Gênesis.
+- `If-Match` é obrigatório em updates e assignment: ausente `428`, revisão stale `412` e conflito de telefone ou fingerprint `409`.
+
 - Refresh token ainda é retornado em JSON; cookie `HttpOnly` não foi implementado.
 - Rate limiter e semaphore Argon2 não são distribuídos; uma solução compartilhada será necessária antes de múltiplas réplicas públicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.

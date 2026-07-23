@@ -1,7 +1,10 @@
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { InvitationTokenKeyring } from './invitation-token-keyring.port';
-import { RUNTIME_EXECUTABLE_FUNCTIONS } from '../../../database/runtime-executable-functions';
+import {
+  CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS,
+  RUNTIME_EXECUTABLE_FUNCTIONS,
+} from '../../../database/runtime-executable-functions';
 
 export const INVITATION_ACTIVATION_READINESS = Symbol(
   'INVITATION_ACTIVATION_READINESS',
@@ -131,8 +134,7 @@ export class OperationalInvitationActivationReadiness implements InvitationActiv
       schema.canMutateMemberships ||
       schema.canMutateUserColumn ||
       schema.canMutateMembershipColumn ||
-      JSON.stringify(schema.executableFunctions) !==
-        JSON.stringify(RUNTIME_EXECUTABLE_FUNCTIONS)
+      !this.executableBoundaryMatches(schema.executableFunctions)
     ) {
       this.unavailable('schema_unavailable');
     }
@@ -145,6 +147,15 @@ export class OperationalInvitationActivationReadiness implements InvitationActiv
         this.unavailable('key_unavailable');
       }
     }
+  }
+
+  private executableBoundaryMatches(actual: string[]): boolean {
+    const expected = actual.includes(
+      'app_private.required_lead_fingerprint_key_versions()',
+    )
+      ? CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS
+      : [...RUNTIME_EXECUTABLE_FUNCTIONS].sort();
+    return JSON.stringify(actual) === JSON.stringify(expected);
   }
 
   private unavailable(code: string): never {

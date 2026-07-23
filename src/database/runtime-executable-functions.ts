@@ -8,3 +8,15 @@ export const RUNTIME_EXECUTABLE_FUNCTIONS = [
 
 export type RuntimeExecutableFunction =
   (typeof RUNTIME_EXECUTABLE_FUNCTIONS)[number];
+
+export const LEAD_RUNTIME_EXECUTABLE_FUNCTIONS = [
+  'app_private.assign_lead(uuid,uuid,uuid,uuid,uuid,bigint)',
+  'app_private.ingest_lead(uuid,uuid,uuid,text,text,text,text,text,text,text,text,uuid,text,text,text,text,text,text,text,uuid,smallint,text,jsonb)',
+  'app_private.required_lead_fingerprint_key_versions()',
+  'app_private.update_lead(uuid,uuid,uuid,uuid,bigint,text,text,text,text,text,text,text)',
+] as const;
+
+export const CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS = [
+  ...RUNTIME_EXECUTABLE_FUNCTIONS,
+  ...LEAD_RUNTIME_EXECUTABLE_FUNCTIONS,
+].sort();
