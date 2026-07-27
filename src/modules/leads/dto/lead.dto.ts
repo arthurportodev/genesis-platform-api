@@ -17,7 +17,9 @@ import {
 } from 'class-validator';
 import {
   LeadArchiveReason,
+  LeadActivityType,
   LeadLostReason,
+  LeadNextActionType,
   LeadSource,
   LeadStage,
   LeadStatus,
@@ -237,4 +239,79 @@ export class ListLeadCyclesDto {
   @Min(1)
   @Max(100)
   limit = 25;
+}
+
+export class ListLeadTimelineDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 50;
+}
+
+export class CreateLeadActivityDto {
+  @IsEnum(LeadActivityType)
+  type!: LeadActivityType;
+
+  @IsString()
+  @Matches(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u,
+  )
+  performedAt!: string;
+
+  @IsOptional()
+  @IsString()
+  outcome?: string;
+}
+
+export class CreateLeadNoteDto {
+  @IsString()
+  content!: string;
+}
+
+export class CreateLeadNextActionDto {
+  @IsEnum(LeadNextActionType)
+  type!: LeadNextActionType;
+
+  @IsString()
+  description!: string;
+
+  @IsString()
+  @Matches(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u,
+  )
+  dueAt!: string;
+}
+
+export class RescheduleLeadNextActionDto {
+  @IsString()
+  @Matches(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u,
+  )
+  dueAt!: string;
+}
+
+export class CompleteLeadNextActionDto {
+  @IsString()
+  @Matches(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u,
+  )
+  performedAt!: string;
+
+  @IsOptional()
+  @IsString()
+  outcome?: string;
+}
+
+export class CancelLeadNextActionDto {
+  @IsOptional()
+  @IsString()
+  note?: string;
 }

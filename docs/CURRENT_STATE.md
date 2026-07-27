@@ -3,12 +3,12 @@
 - **Última atualização:** 2026-07-27
 - **Fase concluída:** 0.2 — Identidade e multi-tenancy
 - **Fase atual:** 0.3 — CRM
-- **Tarefa em implementação local:** 0.3.2 — Pipeline comercial, fechamento e retorno
-- **Última tarefa funcional concluída:** 0.3.1 — Fundação e Inbox de Leads
+- **Tarefa em implementação local:** 0.3.3 — Atividades e Follow-up
+- **Última tarefa funcional concluída:** 0.3.2 — Pipeline comercial, fechamento e retorno
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Última subtarefa funcional concluída:** 0.3.1 — Fundação e Inbox de Leads (PR #18, squash `dbaa1a0430c7b0a65ce28ca20d3eff277aa7cdca`, CI pós-merge 30000872384 aprovada)
+- **Última subtarefa funcional concluída:** 0.3.2 — Pipeline comercial, fechamento e retorno (PR #19, squash `6fa39f103b9ebf65f93d26fcbc60504fa47d4e37`, CI pós-merge 30298541579 aprovada)
 
 ## Implementado
 
@@ -20,7 +20,8 @@
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
 - Testes unitários, E2E e de integração; CI com build Docker.
 - Fundação 0.3.1 incorporada com `Lead`, `LeadEntry`, timeline, intake manual e `genesis_form` fail-closed, deduplicação E.164, idempotência durável, inbox tenant-scoped, edição básica e assignment.
-- Candidato local da 0.3.2 com pipeline persistido, ciclos comerciais imutáveis, fechamento ganho/perdido/arquivado, reativação, revisão agregada de retornos e comandos idempotentes.
+- Pipeline 0.3.2 incorporado com ciclos comerciais imutáveis, fechamento ganho/perdido/arquivado, reativação, revisão agregada de retornos e comandos idempotentes.
+- Candidato local da 0.3.3 com Activity e Note append-only, Next Action única, timezone IANA da Organization e timeline operacional paginada.
 
 ### Governança multiagente adotada
 
@@ -80,9 +81,16 @@
 - `GET /api/v1/leads`
 - `GET /api/v1/leads/:leadId`
 - `GET /api/v1/leads/:leadId/timeline`
+- `GET /api/v1/leads/:leadId/next-action`
 - `GET /api/v1/leads/:leadId/cycles`
 - `PATCH /api/v1/leads/:leadId`
 - `PATCH /api/v1/leads/:leadId/assignment`
+- `POST /api/v1/leads/:leadId/activities`
+- `POST /api/v1/leads/:leadId/notes`
+- `POST /api/v1/leads/:leadId/next-action`
+- `POST /api/v1/leads/:leadId/next-action/reschedule`
+- `POST /api/v1/leads/:leadId/next-action/complete`
+- `POST /api/v1/leads/:leadId/next-action/cancel`
 - `POST /api/v1/leads/:leadId/move`
 - `POST /api/v1/leads/:leadId/win`
 - `POST /api/v1/leads/:leadId/lose`
@@ -131,8 +139,14 @@ Migrations existentes:
 - [`1785260400000-ManageMembershipOwnership.ts`](../src/database/migrations/1785260400000-ManageMembershipOwnership.ts)
 - [`1785346800000-CreateLeadFoundation.ts`](../src/database/migrations/1785346800000-CreateLeadFoundation.ts)
 - [`1785433200000-ManageLeadCommercialPipeline.ts`](../src/database/migrations/1785433200000-ManageLeadCommercialPipeline.ts)
+- [`1785519600000-ManageLeadActivitiesFollowUp.ts`](../src/database/migrations/1785519600000-ManageLeadActivitiesFollowUp.ts)
 
-O CRM acrescenta `leads`, `lead_entries`, `lead_timeline_events`, `lead_ingest_idempotency`, `lead_commercial_cycles`, `lead_return_reviews` e `lead_command_idempotency` às tabelas de identidade, convites e memberships.
+O CRM acrescenta `leads`, `lead_entries`, `lead_timeline_events`,
+`lead_ingest_idempotency`, `lead_commercial_cycles`, `lead_return_reviews`,
+`lead_command_idempotency`, `lead_activities`, `lead_notes`,
+`lead_next_actions` e `lead_follow_up_idempotency` às tabelas de identidade,
+convites e memberships. `organizations.crm_time_zone` define o contexto IANA
+usado somente para projeções temporais derivadas.
 
 ## Decisões adotadas
 
@@ -148,7 +162,7 @@ Consulte os [ADRs](decisions/README.md).
 
 ## Limitações conhecidas
 
-- Leads são a primeira fronteira comercial tenant-scoped; atividades, notas, busca e métricas ainda não existem.
+- Leads são a primeira fronteira comercial tenant-scoped; busca e métricas ainda não existem.
 - A infraestrutura genérica de autorização por papel e as invariantes de
   ownership estão implementadas; permissions, matriz geral de capacidades e
   autorização por recurso permanecem futuras.
@@ -168,4 +182,6 @@ Consulte os [ADRs](decisions/README.md).
 
 ## Fora do escopo atual
 
-Atividades, notas livres, busca, métricas, importação, comunicação, WhatsApp, automações, tracking, relatórios, billing, frontend e deploy permanecem planejados ou futuros. O pipeline 0.3.2 existe somente como candidato local até aprovação e entrega.
+Busca, métricas, importação, comunicação, WhatsApp, automações, tracking,
+relatórios, billing, frontend e deploy permanecem planejados ou futuros.
+O intake `genesis_form` continua fail-closed e operacionalmente desabilitado.

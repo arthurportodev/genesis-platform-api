@@ -153,3 +153,13 @@ Entidades de negócio tenant-scoped devem conter `organization_id` e depender do
 - Uma Entry recebida após fechamento preserva status, estágio e assignment e abre ou agrega um único `LeadReturnReview` pendente. Reativar terminaliza a revisão e abre novo ciclo; descartar apenas terminaliza a revisão.
 - Comandos de lifecycle são idempotentes por tenant, ator, comando e UUID v4, usam fingerprint HMAC versionado e controle otimista por revisão. Efeitos efetivos incrementam revisão e timeline exatamente uma vez; mover para o mesmo estágio é no-op persistido.
 - Owner/admin podem editar dados básicos e assignment de Leads encerrados; member pode lê-los enquanto atribuído, mas não editar dados básicos após o fechamento. Offboarding continua limpando assignment sem alterar lifecycle.
+
+## Activities, Notes e Next Action 0.3.3
+
+- `LeadActivity` registra interação humana concluída, pertence a Lead e Commercial Cycle e é append-only. Pode ser direta ou derivada da conclusão de uma Next Action; o vínculo derivado é único.
+- `LeadNote` registra conteúdo manual append-only no ciclo. Textos normalizam CRLF para LF, têm limites por code point e não são copiados para timeline, logs, fingerprints ou claims de idempotência.
+- `LeadNextAction` representa o único compromisso `pending` do Lead e transita somente para `completed` ou `canceled`. Reagendamento muda apenas `dueAt`; mudar tipo ou descrição exige cancelar e criar outra.
+- `dueAt` é um instante `timestamptz`. A leitura dedicada projeta o instante no `crm_time_zone` IANA da Organization e deriva `overdue`, `today`, `future` ou `none` com o relógio PostgreSQL; o estado não é persistido.
+- Assignment transfere o snapshot de responsável da pendência. Unassignment e offboarding preservam a pendência com responsável nulo. Fechamento cancela com `lead_closed`, e reativação não restaura a ação.
+- Owner/admin podem adicionar Activity retroativa e Note administrativa no último ciclo encerrado. Member só muta Lead ativo atualmente atribuído à própria Membership ativa.
+- Timeline pagina por `sequence ASC`, mantém referências tipadas e resolve conteúdo livre nas tabelas canônicas somente após autorizar o Lead.

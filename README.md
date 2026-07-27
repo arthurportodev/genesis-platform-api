@@ -5,10 +5,10 @@ Esta versão contém a fundação técnica, núcleo persistente multi-tenant,
 autenticação, contexto de organização ativa, autorização por papel, convites e
 gestão de memberships/ownership.
 
-A Tarefa 0.3.1 entregou a fundação de Leads no PR #18, squash
-`dbaa1a0430c7b0a65ce28ca20d3eff277aa7cdca`, com CI pós-merge 30000872384
-aprovada. A branch da 0.3.2 acrescenta o candidato local de pipeline, ciclos
-imutáveis, fechamento, reativação e revisão explícita de retornos.
+A Tarefa 0.3.2 entregou o pipeline comercial no PR #19, squash
+`6fa39f103b9ebf65f93d26fcbc60504fa47d4e37`, com CI pós-merge 30298541579
+aprovada. A branch da 0.3.3 acrescenta o candidato local de Activities, Notes,
+Next Action única, timezone organizacional e timeline paginada.
 
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge

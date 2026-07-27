@@ -3,8 +3,11 @@ import { createHmac } from 'node:crypto';
 import { CreateLeadDto } from '../dto/lead.dto';
 import {
   LeadArchiveReason,
+  LeadActivityType,
   LeadCommand,
+  LeadFollowUpCommand,
   LeadLostReason,
+  LeadNextActionType,
   LeadSource,
   LeadStage,
 } from '../enums/lead.enums';
@@ -128,6 +131,49 @@ export function leadCommandFingerprint(
         input.lostReason,
         input.archiveReason,
         input.reasonNote,
+      ]),
+      'utf8',
+    )
+    .digest('hex');
+}
+
+export interface LeadFollowUpFingerprintInput {
+  organizationId: string;
+  actorMembershipId: string;
+  leadId: string;
+  command: LeadFollowUpCommand;
+  expectedRevision: string;
+  activityType: LeadActivityType | null;
+  performedAt: string | null;
+  activityOutcome: string | null;
+  noteContent: string | null;
+  nextActionType: LeadNextActionType | null;
+  nextActionDescription: string | null;
+  dueAt: string | null;
+  cancellationNote: string | null;
+}
+
+export function leadFollowUpFingerprint(
+  input: LeadFollowUpFingerprintInput,
+  key: Buffer,
+): string {
+  return createHmac('sha256', key)
+    .update(
+      JSON.stringify([
+        1,
+        input.organizationId,
+        input.actorMembershipId,
+        input.leadId,
+        input.command,
+        input.expectedRevision,
+        input.activityType,
+        input.performedAt,
+        input.activityOutcome,
+        input.noteContent,
+        input.nextActionType,
+        input.nextActionDescription,
+        input.dueAt,
+        input.cancellationNote,
       ]),
       'utf8',
     )

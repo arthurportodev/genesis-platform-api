@@ -158,6 +158,15 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Motivos são enums fechados. A nota é trimada, limitada a 500 code points, obrigatória para `other`, rejeita Unicode malformado e qualquer controle, inclusive quebra de linha; não entra em fingerprint persistido em claro, logs ou metadata de idempotência.
 - O runtime recebe somente `SELECT` em ciclos/revisões e `EXECUTE` na função de comando; não recebe qualquer acesso direto à tabela de claims nem DML nas tabelas CRM. Readiness compara a allowlist executável exata e falha fechada diante de drift.
 
+## Segurança de Activities e Follow-up 0.3.3
+
+- As seis mutações exigem `If-Match` e `Idempotency-Key` UUID v4. Claims persistem somente HMAC versionado do contrato normalizado; Activity, Note e descrição da Next Action não entram em claro na idempotência, timeline ou logs.
+- A função `SECURITY DEFINER` relê Organization, Users, Memberships, Lead, ciclo e pendência sob a ordem global de locks. Owner/admin operam o tenant; member só opera Lead ativo atualmente atribuído e perde capacidade após unassignment ou offboarding.
+- Activity e Note são append-only. Next Action aceita somente `pending → completed|canceled`, possui índice único parcial para uma pendência por Lead e gera Activity derivada única na conclusão.
+- Timezone é obrigatório e validado contra `pg_timezone_names`. A classificação temporal usa o relógio PostgreSQL e o timezone persistido da Organization, nunca timezone do cliente, processo, sessão ou servidor.
+- Timeline autoriza o Lead antes dos joins, pagina por sequência e não duplica textos livres em metadata. Conclusão+Activity, fechamento+cancelamento e assignment/offboarding+transferência aparecem como um único item composto.
+- O runtime não recebe DML direto nas novas tabelas nem acesso às claims. Readiness verifica tabelas, colunas, constraints, triggers, funções, ACL e inventário global exato; rollback falha fechado depois do primeiro dado real.
+
 - Refresh token ainda é retornado em JSON; cookie `HttpOnly` não foi implementado.
 - Rate limiter e semaphore Argon2 não são distribuídos; uma solução compartilhada será necessária antes de múltiplas réplicas públicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.
