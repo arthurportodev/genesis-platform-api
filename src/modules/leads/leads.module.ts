@@ -12,6 +12,8 @@ import { LeadsController } from './controllers/leads.controller';
 import { LeadEntry } from './entities/lead-entry.entity';
 import { LeadTimelineEvent } from './entities/lead-timeline-event.entity';
 import { Lead } from './entities/lead.entity';
+import { LeadCommercialCycle } from './entities/lead-commercial-cycle.entity';
+import { LeadReturnReview } from './entities/lead-return-review.entity';
 import { FormRateLimitGuard } from './guards/form-rate-limit.guard';
 import { FormSignatureGuard } from './guards/form-signature.guard';
 import {
@@ -28,7 +30,13 @@ import { LeadsService } from './services/leads.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Lead, LeadEntry, LeadTimelineEvent]),
+    TypeOrmModule.forFeature([
+      Lead,
+      LeadEntry,
+      LeadTimelineEvent,
+      LeadCommercialCycle,
+      LeadReturnReview,
+    ]),
     AuthModule,
     AuthorizationModule,
     TenantContextModule,

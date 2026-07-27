@@ -147,9 +147,9 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
 
 ## Fronteiras
 
-- **Implementado:** identidade, persistência multi-tenant, autenticação, sessões, auditoria, CI, contexto de tenant, autorização por papel, convites, gestão de memberships e invariantes de ownership.
-- **Em implementação local:** `LeadsModule`, primeira fundação comercial tenant-scoped.
-- **Planejado:** matriz geral de capacidades, pipeline, atividades e demais módulos comerciais.
+- **Implementado:** identidade, persistência multi-tenant, autenticação, sessões, auditoria, CI, contexto de tenant, autorização por papel, convites, gestão de memberships, invariantes de ownership e fundação tenant-scoped de Leads.
+- **Em implementação local:** lifecycle comercial de Leads com pipeline, ciclos e revisão de retornos.
+- **Planejado:** matriz geral de capacidades, atividades e demais módulos comerciais.
 - **Fora do estágio atual:** frontend, integrações, deploy e microservices.
 
 ## Entrega e aceitação de convites
@@ -181,3 +181,9 @@ são atômicos; nenhum token, email payload ou link entra no outbox.
 ## LeadsModule 0.3.1
 
 O módulo separa controllers tenant-scoped do intake externo. Rotas manuais compõem autenticação, tenant context, readiness e papel; o relay do formulário compõe readiness, rate limit e assinatura HMAC sobre `rawBody`. Mutações atravessam funções privadas com ordem de locks Organization → Users → Memberships → Leads. Leituras permanecem SQL tenant-filtered, e Entry e Timeline são append-only no PostgreSQL.
+
+## Lifecycle comercial de Leads 0.3.2
+
+O estado corrente permanece em `Lead`, enquanto `LeadCommercialCycle` preserva o histórico de cada período ativo e `LeadReturnReview` agrega novas Entries recebidas após um fechamento. Constraint triggers diferidos exigem exatamente um ciclo aberto para Lead ativo e nenhum para Lead encerrado.
+
+Comandos estreitos (`move`, `win`, `lose`, `archive`, `reactivate` e `dismiss_return`) executam em uma única função `SECURITY DEFINER`, revalidam ator e recurso e seguem a ordem Organization → Users ordenados → Memberships ordenadas → Lead → claim idempotente → Cycle → ReturnReview → Timeline. Todos usam revisão otimista e fingerprint HMAC versionado. Leituras de ciclos e timeline permanecem tenant-filtered; o runtime não recebe DML direto nas tabelas do lifecycle.

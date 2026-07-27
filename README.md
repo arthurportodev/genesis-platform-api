@@ -5,9 +5,10 @@ Esta versão contém a fundação técnica, núcleo persistente multi-tenant,
 autenticação, contexto de organização ativa, autorização por papel, convites e
 gestão de memberships/ownership.
 
-A branch da Tarefa 0.3.1 adiciona o candidato local da fundação de Leads:
-inbox tenant-scoped, intake manual e por relay assinado, deduplicação E.164,
-atribuição append-only e controle otimista por ETag.
+A Tarefa 0.3.1 entregou a fundação de Leads no PR #18, squash
+`dbaa1a0430c7b0a65ce28ca20d3eff277aa7cdca`, com CI pós-merge 30000872384
+aprovada. A branch da 0.3.2 acrescenta o candidato local de pipeline, ciclos
+imutáveis, fechamento, reativação e revisão explícita de retornos.
 
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge
@@ -504,4 +505,4 @@ Os módulos de users e organizations não expõem CRUD. Invitations, memberships
 
 ## Próximos módulos previstos
 
-A Tarefa 0.2.5 e a Fase 0.2 estão concluídas. A 0.3.1 inicia o CRM com a fundação e Inbox de Leads; pipeline, atividades, comunicação e integrações genéricas continuam futuros.
+A Tarefa 0.2.5 e a Fase 0.2 estão concluídas. A 0.3.1 entregou a fundação e Inbox de Leads; a 0.3.2 implementa localmente pipeline, fechamento, ciclos e retorno para revisão. Atividades, comunicação e integrações genéricas continuam futuras.

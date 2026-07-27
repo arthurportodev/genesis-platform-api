@@ -27,13 +27,20 @@ import {
   AssignLeadDto,
   CreateLeadDto,
   LeadParamsDto,
+  ListLeadCyclesDto,
   ListLeadsDto,
+  MoveLeadDto,
+  LoseLeadDto,
+  ArchiveLeadDto,
+  EmptyLeadCommandDto,
   UpdateLeadDto,
 } from '../dto/lead.dto';
 import { ManualLeadReadinessGuard } from '../guards/lead-readiness.guards';
 import { LeadsService } from '../services/leads.service';
 import {
   LeadListResponse,
+  LeadCycleListResponse,
+  LeadCommandResult,
   LeadTimelineView,
   LeadView,
 } from '../types/lead-api.type';
@@ -108,6 +115,15 @@ export class LeadsController {
     return this.leads.timeline(tenant, params.leadId);
   }
 
+  @Get(':leadId/cycles')
+  cycles(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Query() query: ListLeadCyclesDto,
+  ): Promise<LeadCycleListResponse> {
+    return this.leads.cycles(tenant, params.leadId, query);
+  }
+
   @Patch(':leadId')
   async update(
     @CurrentTenant() tenant: TenantContext,
@@ -145,6 +161,120 @@ export class LeadsController {
     return lead;
   }
 
+  @Post(':leadId/move')
+  async move(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: MoveLeadDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.move(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto.stage,
+    );
+    this.commandResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/win')
+  async win(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() _dto: EmptyLeadCommandDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.win(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+    );
+    this.commandResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/lose')
+  async lose(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: LoseLeadDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.lose(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
+    );
+    this.commandResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/archive')
+  @Roles(MembershipRole.OWNER, MembershipRole.ADMIN)
+  async archive(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: ArchiveLeadDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.archive(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
+    );
+    this.commandResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/reactivate')
+  @Roles(MembershipRole.OWNER, MembershipRole.ADMIN)
+  async reactivate(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() _dto: EmptyLeadCommandDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.reactivate(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+    );
+    this.commandResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/return-review/dismiss')
+  @Roles(MembershipRole.OWNER, MembershipRole.ADMIN)
+  async dismissReturn(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() _dto: EmptyLeadCommandDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.dismissReturn(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+    );
+    this.commandResponse(response, params.leadId, result);
+  }
+
   private idempotencyKey(value: string | undefined): string {
     if (
       typeof value !== 'string' ||
@@ -173,5 +303,15 @@ export class LeadsController {
 
   private etag(lead: LeadView): string {
     return `"lead:${lead.id}:${lead.revision}"`;
+  }
+
+  private commandResponse(
+    response: Response,
+    leadId: string,
+    result: LeadCommandResult,
+  ): void {
+    response.status(result.responseStatus);
+    response.setHeader('ETag', `"lead:${leadId}:${result.revision}"`);
+    if (result.replayed) response.setHeader('Idempotency-Replayed', 'true');
   }
 }

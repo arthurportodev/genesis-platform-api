@@ -1,14 +1,14 @@
 # Estado atual
 
-- **Última atualização:** 2026-07-22
+- **Última atualização:** 2026-07-27
 - **Fase concluída:** 0.2 — Identidade e multi-tenancy
 - **Fase atual:** 0.3 — CRM
-- **Tarefa em implementação local:** 0.3.1 — Fundação e Inbox de Leads
-- **Última tarefa funcional concluída:** 0.2.5.4 — Gestão de memberships e ownership
+- **Tarefa em implementação local:** 0.3.2 — Pipeline comercial, fechamento e retorno
+- **Última tarefa funcional concluída:** 0.3.1 — Fundação e Inbox de Leads
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Última subtarefa funcional concluída:** 0.2.5.4 — Gestão de memberships e ownership (PR #16, squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, CI pós-merge 29952145756 aprovada)
+- **Última subtarefa funcional concluída:** 0.3.1 — Fundação e Inbox de Leads (PR #18, squash `dbaa1a0430c7b0a65ce28ca20d3eff277aa7cdca`, CI pós-merge 30000872384 aprovada)
 
 ## Implementado
 
@@ -19,7 +19,8 @@
 - Autenticação por email e senha, sessões persistidas, refresh rotativo e auditoria.
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
 - Testes unitários, E2E e de integração; CI com build Docker.
-- Candidato local da 0.3.1 com `Lead`, `LeadEntry`, timeline mínima, intake manual e `genesis_form`, deduplicação E.164, idempotência durável, inbox tenant-scoped, edição básica e assignment.
+- Fundação 0.3.1 incorporada com `Lead`, `LeadEntry`, timeline, intake manual e `genesis_form` fail-closed, deduplicação E.164, idempotência durável, inbox tenant-scoped, edição básica e assignment.
+- Candidato local da 0.3.2 com pipeline persistido, ciclos comerciais imutáveis, fechamento ganho/perdido/arquivado, reativação, revisão agregada de retornos e comandos idempotentes.
 
 ### Governança multiagente adotada
 
@@ -79,8 +80,15 @@
 - `GET /api/v1/leads`
 - `GET /api/v1/leads/:leadId`
 - `GET /api/v1/leads/:leadId/timeline`
+- `GET /api/v1/leads/:leadId/cycles`
 - `PATCH /api/v1/leads/:leadId`
 - `PATCH /api/v1/leads/:leadId/assignment`
+- `POST /api/v1/leads/:leadId/move`
+- `POST /api/v1/leads/:leadId/win`
+- `POST /api/v1/leads/:leadId/lose`
+- `POST /api/v1/leads/:leadId/archive`
+- `POST /api/v1/leads/:leadId/reactivate`
+- `POST /api/v1/leads/:leadId/return-review/dismiss`
 - `POST /api/v1/lead-intake/genesis-form` (fail-closed até homologação do relay real)
 
 Não existem endpoints de CRUD para usuários ou organizações. Memberships usam
@@ -122,8 +130,9 @@ Migrations existentes:
 - [`1785174000000-ActivateNewInvitationUser.ts`](../src/database/migrations/1785174000000-ActivateNewInvitationUser.ts)
 - [`1785260400000-ManageMembershipOwnership.ts`](../src/database/migrations/1785260400000-ManageMembershipOwnership.ts)
 - [`1785346800000-CreateLeadFoundation.ts`](../src/database/migrations/1785346800000-CreateLeadFoundation.ts)
+- [`1785433200000-ManageLeadCommercialPipeline.ts`](../src/database/migrations/1785433200000-ManageLeadCommercialPipeline.ts)
 
-Tabelas da aplicação: `users`, `organizations`, `memberships`, `auth_sessions`, `auth_refresh_tokens`, `auth_audit_logs`, `organization_invitations`, `organization_audit_logs`, `organization_command_idempotency` e `invitation_delivery_outbox`.
+O CRM acrescenta `leads`, `lead_entries`, `lead_timeline_events`, `lead_ingest_idempotency`, `lead_commercial_cycles`, `lead_return_reviews` e `lead_command_idempotency` às tabelas de identidade, convites e memberships.
 
 ## Decisões adotadas
 
@@ -139,7 +148,7 @@ Consulte os [ADRs](decisions/README.md).
 
 ## Limitações conhecidas
 
-- `OrganizationInvitation` é a primeira entidade de domínio tenant-scoped; as demais entidades comerciais ainda não existem.
+- Leads são a primeira fronteira comercial tenant-scoped; atividades, notas, busca e métricas ainda não existem.
 - A infraestrutura genérica de autorização por papel e as invariantes de
   ownership estão implementadas; permissions, matriz geral de capacidades e
   autorização por recurso permanecem futuras.
@@ -159,4 +168,4 @@ Consulte os [ADRs](decisions/README.md).
 
 ## Fora do escopo atual
 
-Pipeline, atividades, comunicação, WhatsApp, automações, tracking, relatórios, billing, frontend e deploy permanecem planejados ou futuros; a fundação de Leads 0.3.1 existe somente como candidato local até aprovação e entrega.
+Atividades, notas livres, busca, métricas, importação, comunicação, WhatsApp, automações, tracking, relatórios, billing, frontend e deploy permanecem planejados ou futuros. O pipeline 0.3.2 existe somente como candidato local até aprovação e entrega.

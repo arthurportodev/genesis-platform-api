@@ -1,7 +1,13 @@
 import { BadRequestException } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import { CreateLeadDto } from '../dto/lead.dto';
-import { LeadSource } from '../enums/lead.enums';
+import {
+  LeadArchiveReason,
+  LeadCommand,
+  LeadLostReason,
+  LeadSource,
+  LeadStage,
+} from '../enums/lead.enums';
 
 export interface NormalizedLeadInput {
   displayName: string;
@@ -87,6 +93,41 @@ export function leadRequestFingerprint(
         input.utmContent,
         input.utmTerm,
         input.responsibleMembershipId,
+      ]),
+      'utf8',
+    )
+    .digest('hex');
+}
+
+export interface LeadCommandFingerprintInput {
+  organizationId: string;
+  actorMembershipId: string;
+  leadId: string;
+  command: LeadCommand;
+  expectedRevision: string;
+  stage: LeadStage | null;
+  lostReason: LeadLostReason | null;
+  archiveReason: LeadArchiveReason | null;
+  reasonNote: string | null;
+}
+
+export function leadCommandFingerprint(
+  input: LeadCommandFingerprintInput,
+  key: Buffer,
+): string {
+  return createHmac('sha256', key)
+    .update(
+      JSON.stringify([
+        1,
+        input.organizationId,
+        input.actorMembershipId,
+        input.leadId,
+        input.command,
+        input.expectedRevision,
+        input.stage,
+        input.lostReason,
+        input.archiveReason,
+        input.reasonNote,
       ]),
       'utf8',
     )

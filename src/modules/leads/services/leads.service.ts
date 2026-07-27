@@ -14,15 +14,34 @@ import { DataSource, QueryFailedError } from 'typeorm';
 import { LeadConfig } from '../../../config/lead.config';
 import { MembershipRole } from '../../memberships/enums/membership-role.enum';
 import { TenantContext } from '../../tenant-context/types/tenant-context.type';
-import { CreateLeadDto, ListLeadsDto, UpdateLeadDto } from '../dto/lead.dto';
-import { LeadIntakeChannel } from '../enums/lead.enums';
+import {
+  ArchiveLeadDto,
+  CreateLeadDto,
+  ListLeadCyclesDto,
+  ListLeadsDto,
+  LoseLeadDto,
+  UpdateLeadDto,
+} from '../dto/lead.dto';
+import {
+  LeadArchiveReason,
+  LeadCommand,
+  LeadIntakeChannel,
+  LeadLostReason,
+  LeadStage,
+  LeadStatus,
+} from '../enums/lead.enums';
 import { normalizeLeadPhone } from '../normalization/phone.normalizer';
 import { LEAD_READINESS, LeadReadiness } from '../ports/lead-readiness.port';
 import {
   leadRequestFingerprint,
+  leadCommandFingerprint,
+  LeadCommandFingerprintInput,
   normalizeLeadInput,
 } from '../security/lead-fingerprint';
 import {
+  LeadCommandResult,
+  LeadCommercialCycleView,
+  LeadCycleListResponse,
   LeadIngestResult,
   LeadListResponse,
   LeadTimelineView,
@@ -39,6 +58,10 @@ interface LeadRow {
   city: string | null;
   serviceInterest: string | null;
   responsibleMembershipId: string | null;
+  status: LeadStatus;
+  stage: LeadStage;
+  latestCycleNumber: string;
+  returnReviewPending: boolean;
   revision: string;
   createdAt: Date;
   updatedAt: Date;
@@ -57,6 +80,16 @@ interface IngestRow {
 interface CursorValue {
   createdAt: string;
   id: string;
+}
+
+interface CycleCursorValue {
+  cycleNumber: string;
+}
+
+interface CommandRow {
+  revision: string;
+  replayed: boolean;
+  responseStatus: number;
 }
 
 @Injectable()
@@ -119,6 +152,23 @@ export class LeadsService {
     if (query.unassigned === 'true') {
       predicates.push('lead.responsible_membership_id IS NULL');
     }
+    if (query.status !== undefined) {
+      parameters.push(query.status);
+      predicates.push(`lead.status = $${parameters.length}::lead_status_enum`);
+    }
+    if (query.stage !== undefined) {
+      parameters.push(query.stage);
+      predicates.push(`lead.stage = $${parameters.length}::lead_stage_enum`);
+    }
+    if (query.returnPending !== undefined) {
+      predicates.push(
+        `${query.returnPending === 'true' ? '' : 'NOT '}EXISTS (
+          SELECT 1 FROM public.lead_return_reviews review
+          WHERE review.organization_id = lead.organization_id
+            AND review.lead_id = lead.id AND review.status = 'pending'
+        )`,
+      );
+    }
     if (cursor !== null) {
       parameters.push(cursor.createdAt, cursor.id);
       predicates.push(
@@ -172,6 +222,14 @@ export class LeadsService {
               event.previous_responsible_membership_id AS "previousResponsibleMembershipId",
               event.new_responsible_membership_id AS "newResponsibleMembershipId",
               event.changed_fields AS "changedFields",
+              event.cycle_id AS "cycleId",
+              event.return_review_id AS "returnReviewId",
+              event.previous_status AS "previousStatus",
+              event.new_status AS "newStatus",
+              event.previous_stage AS "previousStage",
+              event.new_stage AS "newStage",
+              event.lost_reason AS "lostReason",
+              event.archive_reason AS "archiveReason",
               event.occurred_at AS "occurredAt"
        FROM public.lead_timeline_events event
        JOIN public.leads lead ON lead.id = event.lead_id
@@ -182,6 +240,56 @@ export class LeadsService {
     );
     if (rows.length === 0) throw new NotFoundException('Lead not found.');
     return rows;
+  }
+
+  async cycles(
+    tenant: TenantContext,
+    leadId: string,
+    query: ListLeadCyclesDto,
+  ): Promise<LeadCycleListResponse> {
+    await this.readiness.assertManualReady();
+    if ((await this.findVisible(tenant, leadId)) === null) {
+      throw new NotFoundException('Lead not found.');
+    }
+    const cursor = query.cursor ? this.decodeCycleCursor(query.cursor) : null;
+    const parameters: unknown[] = [tenant.organizationId, leadId];
+    let cursorPredicate = '';
+    if (cursor !== null) {
+      parameters.push(cursor.cycleNumber);
+      cursorPredicate = ` AND cycle.cycle_number < $${parameters.length}::bigint`;
+    }
+    parameters.push(query.limit + 1);
+    const rows = await this.dataSource.query<LeadCommercialCycleView[]>(
+      `SELECT cycle.id, cycle.cycle_number::text AS "cycleNumber",
+              cycle.opening_reason AS "openingReason",
+              cycle.starting_stage AS "startingStage",
+              cycle.opened_by_membership_id AS "openedByMembershipId",
+              cycle.opened_at AS "openedAt",
+              cycle.closed_by_membership_id AS "closedByMembershipId",
+              cycle.closed_at AS "closedAt",
+              cycle.closing_status AS "closingStatus",
+              cycle.stage_at_close AS "stageAtClose",
+              cycle.lost_reason AS "lostReason",
+              cycle.archive_reason AS "archiveReason",
+              cycle.reason_note AS "reasonNote"
+       FROM public.lead_commercial_cycles cycle
+       WHERE cycle.organization_id = $1 AND cycle.lead_id = $2${cursorPredicate}
+       ORDER BY cycle.cycle_number DESC LIMIT $${parameters.length}`,
+      parameters,
+    );
+    const hasMore = rows.length > query.limit;
+    const items = hasMore ? rows.slice(0, query.limit) : rows;
+    const last = items.at(-1);
+    return {
+      items,
+      page: {
+        limit: query.limit,
+        nextCursor:
+          hasMore && last !== undefined
+            ? this.encodeCycleCursor(last.cycleNumber)
+            : null,
+      },
+    };
   }
 
   async update(
@@ -294,6 +402,239 @@ export class LeadsService {
     return this.get(tenant, leadId);
   }
 
+  move(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+    stage: LeadStage,
+  ): Promise<LeadCommandResult> {
+    return this.executeCommand(
+      tenant,
+      leadId,
+      expectedRevision,
+      idempotencyKey,
+      LeadCommand.MOVE,
+      stage,
+      null,
+      null,
+      null,
+    );
+  }
+
+  win(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+  ): Promise<LeadCommandResult> {
+    return this.executeCommand(
+      tenant,
+      leadId,
+      expectedRevision,
+      idempotencyKey,
+      LeadCommand.WIN,
+      null,
+      null,
+      null,
+      null,
+    );
+  }
+
+  lose(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+    dto: LoseLeadDto,
+  ): Promise<LeadCommandResult> {
+    return this.executeCommand(
+      tenant,
+      leadId,
+      expectedRevision,
+      idempotencyKey,
+      LeadCommand.LOSE,
+      null,
+      dto.lostReason,
+      null,
+      this.normalizeReasonNote(
+        dto.reasonNote,
+        dto.lostReason === LeadLostReason.OTHER,
+      ),
+    );
+  }
+
+  archive(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+    dto: ArchiveLeadDto,
+  ): Promise<LeadCommandResult> {
+    return this.executeCommand(
+      tenant,
+      leadId,
+      expectedRevision,
+      idempotencyKey,
+      LeadCommand.ARCHIVE,
+      null,
+      null,
+      dto.archiveReason,
+      this.normalizeReasonNote(
+        dto.reasonNote,
+        dto.archiveReason === LeadArchiveReason.OTHER,
+      ),
+    );
+  }
+
+  reactivate(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+  ): Promise<LeadCommandResult> {
+    return this.executeCommand(
+      tenant,
+      leadId,
+      expectedRevision,
+      idempotencyKey,
+      LeadCommand.REACTIVATE,
+      null,
+      null,
+      null,
+      null,
+    );
+  }
+
+  dismissReturn(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+  ): Promise<LeadCommandResult> {
+    return this.executeCommand(
+      tenant,
+      leadId,
+      expectedRevision,
+      idempotencyKey,
+      LeadCommand.DISMISS_RETURN,
+      null,
+      null,
+      null,
+      null,
+    );
+  }
+
+  private async executeCommand(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+    command: LeadCommand,
+    stage: LeadStage | null,
+    lostReason: LeadLostReason | null,
+    archiveReason: LeadArchiveReason | null,
+    reasonNote: string | null,
+  ): Promise<LeadCommandResult> {
+    await this.readiness.assertManualReady();
+    const version = this.config.idempotencyCurrentKeyVersion as number;
+    const input: LeadCommandFingerprintInput = {
+      organizationId: tenant.organizationId,
+      actorMembershipId: tenant.membershipId,
+      leadId,
+      command,
+      expectedRevision,
+      stage,
+      lostReason,
+      archiveReason,
+      reasonNote,
+    };
+    const fingerprints = Object.fromEntries(
+      [...this.config.idempotencyKeys.entries()].map(
+        ([candidateVersion, candidateKey]) => [
+          String(candidateVersion),
+          leadCommandFingerprint(input, candidateKey),
+        ],
+      ),
+    );
+    let rows: CommandRow[];
+    try {
+      rows = await this.dataSource.query<CommandRow[]>(
+        `SELECT revision::text AS revision, replayed,
+                response_status AS "responseStatus"
+         FROM app_private.execute_lead_command(
+           $1::uuid,$2::uuid,$3::uuid,$4::uuid,
+           $5::app_private.lead_command_enum,$6::bigint,$7::uuid,$8::smallint,
+           $9::text,$10::jsonb,$11::lead_stage_enum,$12::lead_lost_reason_enum,
+           $13::lead_archive_reason_enum,$14::text)`,
+        [
+          tenant.userId,
+          tenant.membershipId,
+          tenant.organizationId,
+          leadId,
+          command,
+          expectedRevision,
+          idempotencyKey,
+          version,
+          leadCommandFingerprint(
+            input,
+            this.config.idempotencyKeys.get(version) as Buffer,
+          ),
+          JSON.stringify(fingerprints),
+          stage,
+          lostReason,
+          archiveReason,
+          reasonNote,
+        ],
+      );
+    } catch (error) {
+      this.mapDatabaseError(error);
+    }
+    const result = rows[0];
+    if (result === undefined) {
+      throw new ServiceUnavailableException('Lead command is unavailable.');
+    }
+    return result;
+  }
+
+  private normalizeReasonNote(
+    value: string | undefined,
+    required: boolean,
+  ): string | null {
+    const normalized = value?.trim() ?? '';
+    if (normalized === '') {
+      if (required) {
+        throw new BadRequestException(
+          'Reason note is required for the selected reason.',
+        );
+      }
+      return null;
+    }
+    if (
+      [...normalized].length > 500 ||
+      /[\p{Cc}\p{Zl}\p{Zp}]/u.test(normalized) ||
+      !this.isWellFormedUnicode(normalized)
+    ) {
+      throw new BadRequestException('Invalid reason note.');
+    }
+    return normalized;
+  }
+
+  private isWellFormedUnicode(value: string): boolean {
+    for (let index = 0; index < value.length; index += 1) {
+      const code = value.charCodeAt(index);
+      if (code >= 0xd800 && code <= 0xdbff) {
+        const next = value.charCodeAt(index + 1);
+        if (!Number.isInteger(next) || next < 0xdc00 || next > 0xdfff)
+          return false;
+        index += 1;
+      } else if (code >= 0xdc00 && code <= 0xdfff) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private async ingest(
     tenant: TenantContext | null,
     channel: LeadIntakeChannel,
@@ -399,6 +740,13 @@ export class LeadsService {
       lead.company_name AS "companyName", lead.instagram, lead.city,
       lead.service_interest AS "serviceInterest",
       lead.responsible_membership_id AS "responsibleMembershipId",
+      lead.status, lead.stage,
+      (lead.next_cycle_number - 1)::text AS "latestCycleNumber",
+      EXISTS (
+        SELECT 1 FROM public.lead_return_reviews review
+        WHERE review.organization_id = lead.organization_id
+          AND review.lead_id = lead.id AND review.status = 'pending'
+      ) AS "returnReviewPending",
       lead.revision::text AS revision, lead.created_at AS "createdAt",
       lead.updated_at AS "updatedAt",
       first_entry.attribution AS "initialAttribution",
@@ -429,7 +777,7 @@ export class LeadsService {
   }
 
   private toView(row: LeadRow): LeadView {
-    return { ...row, status: 'active', stage: 'new' };
+    return row;
   }
 
   private encodeCursor(createdAt: Date, id: string): string {
@@ -460,6 +808,31 @@ export class LeadsService {
     }
   }
 
+  private encodeCycleCursor(cycleNumber: string): string {
+    return Buffer.from(JSON.stringify({ cycleNumber }), 'utf8').toString(
+      'base64url',
+    );
+  }
+
+  private decodeCycleCursor(value: string): CycleCursorValue {
+    try {
+      const parsed = JSON.parse(
+        Buffer.from(value, 'base64url').toString('utf8'),
+      ) as Partial<CycleCursorValue>;
+      if (
+        typeof parsed.cycleNumber !== 'string' ||
+        !/^[1-9]\d*$/u.test(parsed.cycleNumber) ||
+        BigInt(parsed.cycleNumber) > 9_223_372_036_854_775_807n ||
+        Buffer.from(value, 'base64url').toString('base64url') !== value
+      ) {
+        throw new Error('invalid');
+      }
+      return parsed as CycleCursorValue;
+    } catch {
+      throw new BadRequestException('Invalid cursor.');
+    }
+  }
+
   private mapDatabaseError(error: unknown): never {
     if (error instanceof QueryFailedError) {
       const code = (error.driverError as { code?: string }).code;
@@ -475,6 +848,12 @@ export class LeadsService {
       }
       if (code === 'P3005') {
         throw new ServiceUnavailableException('Lead intake is unavailable.');
+      }
+      if (code === 'P3007') {
+        throw new ServiceUnavailableException('Lead lifecycle is unavailable.');
+      }
+      if (code === '22023') {
+        throw new BadRequestException('Invalid lead command.');
       }
     }
     throw error;

@@ -3,11 +3,17 @@ import { DataSource, QueryRunner } from 'typeorm';
 import { LeadConfig } from '../../src/config/lead.config';
 import { ConfigService } from '@nestjs/config';
 import { CreateLeadFoundation1785346800000 } from '../../src/database/migrations/1785346800000-CreateLeadFoundation';
+import { ManageLeadCommercialPipeline1785433200000 } from '../../src/database/migrations/1785433200000-ManageLeadCommercialPipeline';
 import { OperationalInvitationActivationReadiness } from '../../src/modules/invitations/ports/invitation-activation-readiness.port';
 import { Membership } from '../../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../../src/modules/memberships/enums/membership-role.enum';
 import { MembershipStatus } from '../../src/modules/memberships/enums/membership-status.enum';
-import { LeadSource } from '../../src/modules/leads/enums/lead.enums';
+import {
+  LeadArchiveReason,
+  LeadLostReason,
+  LeadSource,
+  LeadStage,
+} from '../../src/modules/leads/enums/lead.enums';
 import { OperationalLeadReadiness } from '../../src/modules/leads/ports/lead-readiness.port';
 import { LeadsService } from '../../src/modules/leads/services/leads.service';
 import { Organization } from '../../src/modules/organizations/entities/organization.entity';
@@ -49,6 +55,7 @@ describe('Lead foundation database integration', () => {
     await owner.runMigrations();
     migrationRunner = owner.createQueryRunner();
     await new CreateLeadFoundation1785346800000().up(migrationRunner);
+    await new ManageLeadCommercialPipeline1785433200000().up(migrationRunner);
     configureIntegrationRuntimeEnvironment();
     runtime = createIntegrationRuntimeDataSource();
     await runtime.initialize();
@@ -60,6 +67,91 @@ describe('Lead foundation database integration', () => {
     if (owner?.isInitialized) {
       await owner.dropDatabase();
       await owner.destroy();
+    }
+  });
+
+  it('reverts and reapplies the additive pipeline migration before lifecycle data exists', async () => {
+    const migration = new ManageLeadCommercialPipeline1785433200000();
+    await migrationRunner.startTransaction();
+    try {
+      await expect(migration.down(migrationRunner)).resolves.toBeUndefined();
+      const [rolledBack] = (await migrationRunner.query(
+        `SELECT to_regclass('public.lead_commercial_cycles') IS NOT NULL AS "cyclesPresent",
+          EXISTS (SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'leads'
+              AND column_name = 'status') AS "leadStatusPresent"`,
+      )) as Array<{ cyclesPresent: boolean; leadStatusPresent: boolean }>;
+      expect(rolledBack).toEqual({
+        cyclesPresent: false,
+        leadStatusPresent: false,
+      });
+
+      const organizationId = randomUUID();
+      const userId = randomUUID();
+      const membershipId = randomUUID();
+      const key = randomUUID();
+      await migrationRunner.query(
+        `INSERT INTO public.organizations (id,name,slug,status)
+         VALUES ($1::uuid,'Legacy CRM','legacy-crm-' || $1::text,'inactive')`,
+        [organizationId],
+      );
+      await migrationRunner.query(
+        `INSERT INTO public.users (id,email,name,status)
+         VALUES ($1,$2,'Legacy owner','active')`,
+        [userId, `legacy-${userId}@example.com`],
+      );
+      await migrationRunner.query(
+        `INSERT INTO public.memberships
+          (id,user_id,organization_id,role,status)
+         VALUES ($1,$2,$3,'owner','active')`,
+        [membershipId, userId, organizationId],
+      );
+      await migrationRunner.query(
+        `UPDATE public.organizations SET status = 'active' WHERE id = $1`,
+        [organizationId],
+      );
+      const [legacy] = (await migrationRunner.query(
+        `SELECT lead_id AS "leadId" FROM app_private.ingest_lead(
+          $1::uuid,$2::uuid,$3::uuid,'manual','Legacy Lead','+5562666666666',
+          NULL,NULL,NULL,NULL,NULL,NULL,'manual',NULL,NULL,NULL,NULL,NULL,NULL,
+          $4::uuid,1::smallint,$5::text,$6::jsonb)`,
+        [
+          userId,
+          membershipId,
+          organizationId,
+          key,
+          '8'.repeat(64),
+          JSON.stringify({ 1: '8'.repeat(64) }),
+        ],
+      )) as Array<{ leadId: string }>;
+      await expect(migration.up(migrationRunner)).resolves.toBeUndefined();
+      const [backfilled] = (await migrationRunner.query(
+        `SELECT lead.status, lead.stage, lead.revision::text AS revision,
+          cycle.cycle_number::text AS "cycleNumber",
+          cycle.opening_reason AS "openingReason",
+          cycle.opened_at = lead.created_at AS "openedAtMatches"
+         FROM public.leads lead
+         JOIN public.lead_commercial_cycles cycle ON cycle.lead_id = lead.id
+         WHERE lead.id = $1`,
+        [legacy?.leadId],
+      )) as Array<{
+        status: string;
+        stage: string;
+        revision: string;
+        cycleNumber: string;
+        openingReason: string;
+        openedAtMatches: boolean;
+      }>;
+      expect(backfilled).toEqual({
+        status: 'active',
+        stage: 'new',
+        revision: '1',
+        cycleNumber: '1',
+        openingReason: 'created',
+        openedAtMatches: true,
+      });
+    } finally {
+      await migrationRunner.rollbackTransaction();
     }
   });
 
@@ -117,6 +209,85 @@ describe('Lead foundation database integration', () => {
       `SELECT to_regclass('public.leads') IS NOT NULL AS "tablePresent"`,
     );
     expect(boundary?.tablePresent).toBe(true);
+  });
+
+  it('replays the original intake after the lead phone changes without creating an orphan', async () => {
+    const fixture = await createFixture();
+    const key = randomUUID();
+    const fingerprint = 'c'.repeat(64);
+    const created = await ingest(fixture, key, fingerprint, 'manual');
+    const config = leadConfig();
+    const service = new LeadsService(
+      runtime,
+      { getOrThrow: () => config } as unknown as ConfigService,
+      new OperationalLeadReadiness(config, runtime),
+    );
+    const tenant = {
+      userId: fixture.users[0].id,
+      membershipId: fixture.memberships[0].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.OWNER,
+    };
+
+    await expect(
+      service.update(tenant, created.leadId, created.revision, {
+        primaryPhone: '+5562888777666',
+      }),
+    ).resolves.toMatchObject({ revision: '2' });
+    await expect(
+      ingest(fixture, key, fingerprint, 'manual'),
+    ).resolves.toMatchObject({
+      leadId: created.leadId,
+      revision: '2',
+      replayed: true,
+      responseStatus: 200,
+    });
+
+    const [counts] = await owner.query<
+      Array<{ leads: string; cycles: string; entries: string }>
+    >(
+      `SELECT count(DISTINCT lead.id)::text AS leads,
+              count(DISTINCT cycle.id)::text AS cycles,
+              count(DISTINCT entry.id)::text AS entries
+       FROM public.leads lead
+       LEFT JOIN public.lead_commercial_cycles cycle ON cycle.lead_id = lead.id
+       LEFT JOIN public.lead_entries entry ON entry.lead_id = lead.id
+       WHERE lead.organization_id = $1`,
+      [fixture.organization.id],
+    );
+    expect(counts).toEqual({ leads: '1', cycles: '1', entries: '1' });
+  });
+
+  it('rejects Unicode line separators at the database command boundary', async () => {
+    const fixture = await createFixture();
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      'e'.repeat(64),
+      'manual',
+    );
+    const fingerprint = 'f'.repeat(64);
+
+    for (const separator of ['\u2028', '\u2029']) {
+      await expect(
+        runtime.query(
+          `SELECT * FROM app_private.execute_lead_command(
+            $1::uuid,$2::uuid,$3::uuid,$4::uuid,'lose',$5::bigint,$6::uuid,
+            1::smallint,$7::text,$8::jsonb,NULL,'other',NULL,$9::text)`,
+          [
+            fixture.users[0].id,
+            fixture.memberships[0].id,
+            fixture.organization.id,
+            created.leadId,
+            created.revision,
+            randomUUID(),
+            fingerprint,
+            JSON.stringify({ 1: fingerprint }),
+            `linha${separator}seguinte`,
+          ],
+        ),
+      ).rejects.toMatchObject({ code: '22023' });
+    }
   });
 
   it('opens readiness only for the installed least-privilege catalog', async () => {
@@ -467,6 +638,374 @@ describe('Lead foundation database integration', () => {
       [created.leadId],
     );
     expect(lead).toEqual({ displayName: 'Maria', email: null });
+  });
+
+  it('runs the commercial lifecycle, aggregates closed returns, and preserves immutable cycles', async () => {
+    const fixture = await createFixture();
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      '3'.repeat(64),
+      'campaign',
+      fixture.memberships[1].id,
+      '+5562888888888',
+    );
+    const config = leadConfig();
+    const service = new LeadsService(
+      runtime,
+      { getOrThrow: () => config } as unknown as ConfigService,
+      new OperationalLeadReadiness(config, runtime),
+    );
+    const ownerTenant = {
+      userId: fixture.users[0].id,
+      membershipId: fixture.memberships[0].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.OWNER,
+    };
+    const memberTenant = {
+      userId: fixture.users[1].id,
+      membershipId: fixture.memberships[1].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.MEMBER,
+    };
+
+    const moveKey = randomUUID();
+    await expect(
+      service.move(
+        ownerTenant,
+        created.leadId,
+        created.revision,
+        moveKey,
+        LeadStage.QUALIFICATION,
+      ),
+    ).resolves.toMatchObject({ revision: '2', replayed: false });
+    await expect(
+      service.move(
+        ownerTenant,
+        created.leadId,
+        created.revision,
+        moveKey,
+        LeadStage.QUALIFICATION,
+      ),
+    ).resolves.toMatchObject({ revision: '2', replayed: true });
+
+    await expect(
+      service.lose(ownerTenant, created.leadId, '2', randomUUID(), {
+        lostReason: LeadLostReason.OTHER,
+        reasonNote: '  Decisão adiada pelo cliente  ',
+      }),
+    ).resolves.toMatchObject({ revision: '3', replayed: false });
+
+    await ingest(
+      fixture,
+      randomUUID(),
+      '4'.repeat(64),
+      'lead_magnet',
+      null,
+      '+5562888888888',
+    );
+    await ingest(
+      fixture,
+      randomUUID(),
+      '5'.repeat(64),
+      'landing_page',
+      null,
+      '+5562888888888',
+    );
+    const closed = await service.get(ownerTenant, created.leadId);
+    expect(closed).toMatchObject({
+      status: 'lost',
+      stage: LeadStage.QUALIFICATION,
+      revision: '5',
+      returnReviewPending: true,
+    });
+    const [review] = await owner.query<
+      Array<{ entryCount: string; receivedEvents: string }>
+    >(
+      `SELECT review.entry_count::text AS "entryCount",
+        (SELECT count(*)::text FROM public.lead_timeline_events event
+          WHERE event.return_review_id = review.id
+            AND event.event_type = 'lead.return.received') AS "receivedEvents"
+       FROM public.lead_return_reviews review
+       WHERE review.lead_id = $1 AND review.status = 'pending'`,
+      [created.leadId],
+    );
+    expect(review).toEqual({ entryCount: '2', receivedEvents: '1' });
+
+    await expect(
+      service.reactivate(ownerTenant, created.leadId, '5', randomUUID()),
+    ).resolves.toMatchObject({ revision: '6', replayed: false });
+    const active = await service.get(ownerTenant, created.leadId);
+    expect(active).toMatchObject({
+      status: 'active',
+      stage: LeadStage.QUALIFICATION,
+      latestCycleNumber: '2',
+      returnReviewPending: false,
+    });
+    const cycles = await service.cycles(ownerTenant, created.leadId, {
+      limit: 20,
+    });
+    expect(cycles.items).toHaveLength(2);
+    expect(cycles.items[0]).toMatchObject({
+      cycleNumber: '2',
+      openingReason: 'reactivated',
+      closingStatus: null,
+    });
+    expect(cycles.items[1]).toMatchObject({
+      cycleNumber: '1',
+      closingStatus: 'lost',
+      lostReason: LeadLostReason.OTHER,
+      reasonNote: 'Decisão adiada pelo cliente',
+    });
+
+    await expect(
+      service.win(memberTenant, created.leadId, '6', randomUUID()),
+    ).resolves.toMatchObject({ revision: '7' });
+    await expect(
+      service.update(memberTenant, created.leadId, '7', {
+        displayName: 'Closed member edit',
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.assign(ownerTenant, created.leadId, '7', null),
+    ).resolves.toMatchObject({ revision: '8', responsibleMembershipId: null });
+    await expect(
+      service.get(memberTenant, created.leadId),
+    ).rejects.toMatchObject({ status: 404 });
+    await ingest(
+      fixture,
+      randomUUID(),
+      '7'.repeat(64),
+      'landing_page',
+      null,
+      '+5562888888888',
+    );
+    await expect(
+      service.dismissReturn(ownerTenant, created.leadId, '9', randomUUID()),
+    ).resolves.toMatchObject({ revision: '10' });
+    await expect(
+      service.get(ownerTenant, created.leadId),
+    ).resolves.toMatchObject({
+      status: 'won',
+      stage: LeadStage.QUALIFICATION,
+      returnReviewPending: false,
+      revision: '10',
+    });
+  });
+
+  it('serializes concurrent commands and records a same-stage move as an idempotent no-op', async () => {
+    const fixture = await createFixture();
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      '6'.repeat(64),
+      'manual',
+      null,
+      '+5562777777777',
+    );
+    const config = leadConfig();
+    const service = new LeadsService(
+      runtime,
+      { getOrThrow: () => config } as unknown as ConfigService,
+      new OperationalLeadReadiness(config, runtime),
+    );
+    const tenant = {
+      userId: fixture.users[0].id,
+      membershipId: fixture.memberships[0].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.OWNER,
+    };
+    const qualificationKey = randomUUID();
+    const proposalKey = randomUUID();
+    const results = await Promise.allSettled([
+      service.move(
+        tenant,
+        created.leadId,
+        created.revision,
+        qualificationKey,
+        LeadStage.QUALIFICATION,
+      ),
+      service.move(
+        tenant,
+        created.leadId,
+        created.revision,
+        proposalKey,
+        LeadStage.PROPOSAL,
+      ),
+    ]);
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === 'rejected'),
+    ).toHaveLength(1);
+    expect(
+      (
+        results.find(
+          (result) => result.status === 'rejected',
+        ) as PromiseRejectedResult
+      ).reason,
+    ).toMatchObject({ status: 412 });
+
+    const current = await service.get(tenant, created.leadId);
+    const winningKey =
+      current.stage === LeadStage.QUALIFICATION
+        ? qualificationKey
+        : proposalKey;
+    const otherStage =
+      current.stage === LeadStage.QUALIFICATION
+        ? LeadStage.PROPOSAL
+        : LeadStage.QUALIFICATION;
+    await expect(
+      service.move(
+        tenant,
+        created.leadId,
+        created.revision,
+        winningKey,
+        otherStage,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      service.move(
+        tenant,
+        created.leadId,
+        current.revision,
+        randomUUID(),
+        current.stage,
+      ),
+    ).resolves.toMatchObject({ revision: current.revision, replayed: false });
+    const [counts] = await owner.query<
+      Array<{ stageEvents: string; revision: string }>
+    >(
+      `SELECT count(event.id)::text AS "stageEvents", lead.revision::text AS revision
+       FROM public.leads lead
+       LEFT JOIN public.lead_timeline_events event ON event.lead_id = lead.id
+         AND event.event_type = 'lead.stage.changed'
+       WHERE lead.id = $1 GROUP BY lead.id`,
+      [created.leadId],
+    );
+    expect(counts).toEqual({ stageEvents: '1', revision: '2' });
+  });
+
+  it('serializes competing move/close and win/lose commands and enforces command capabilities', async () => {
+    const fixture = await createFixture();
+    const config = leadConfig();
+    const service = new LeadsService(
+      runtime,
+      { getOrThrow: () => config } as unknown as ConfigService,
+      new OperationalLeadReadiness(config, runtime),
+    );
+    const ownerTenant = {
+      userId: fixture.users[0].id,
+      membershipId: fixture.memberships[0].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.OWNER,
+    };
+    const memberTenant = {
+      userId: fixture.users[1].id,
+      membershipId: fixture.memberships[1].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.MEMBER,
+    };
+
+    const moveClose = await ingest(
+      fixture,
+      randomUUID(),
+      '9'.repeat(64),
+      'campaign',
+      fixture.memberships[1].id,
+      '+5562555555551',
+    );
+    const moveCloseResults = await Promise.allSettled([
+      service.move(
+        ownerTenant,
+        moveClose.leadId,
+        moveClose.revision,
+        randomUUID(),
+        LeadStage.DIAGNOSIS,
+      ),
+      service.win(
+        ownerTenant,
+        moveClose.leadId,
+        moveClose.revision,
+        randomUUID(),
+      ),
+    ]);
+    expect(
+      moveCloseResults.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      moveCloseResults.find((result) => result.status === 'rejected'),
+    ).toMatchObject({ reason: { status: 412 } });
+    await expect(
+      service.get(ownerTenant, moveClose.leadId),
+    ).resolves.toMatchObject({ revision: '2' });
+
+    const winLose = await ingest(
+      fixture,
+      randomUUID(),
+      'a'.repeat(64),
+      'lead_magnet',
+      fixture.memberships[1].id,
+      '+5562555555552',
+    );
+    const winLoseResults = await Promise.allSettled([
+      service.win(memberTenant, winLose.leadId, winLose.revision, randomUUID()),
+      service.lose(
+        memberTenant,
+        winLose.leadId,
+        winLose.revision,
+        randomUUID(),
+        { lostReason: LeadLostReason.NO_BUDGET },
+      ),
+    ]);
+    expect(
+      winLoseResults.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      winLoseResults.find((result) => result.status === 'rejected'),
+    ).toMatchObject({ reason: { status: 412 } });
+    const closed = await service.get(ownerTenant, winLose.leadId);
+    expect(closed.revision).toBe('2');
+    expect(['won', 'lost']).toContain(closed.status);
+
+    const archive = await ingest(
+      fixture,
+      randomUUID(),
+      'b'.repeat(64),
+      'manual',
+      fixture.memberships[1].id,
+      '+5562555555553',
+    );
+    await expect(
+      service.archive(
+        memberTenant,
+        archive.leadId,
+        archive.revision,
+        randomUUID(),
+        { archiveReason: LeadArchiveReason.SPAM },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.archive(
+        ownerTenant,
+        archive.leadId,
+        archive.revision,
+        randomUUID(),
+        { archiveReason: LeadArchiveReason.SPAM },
+      ),
+    ).resolves.toMatchObject({ revision: '2' });
+    await expect(
+      service.reactivate(ownerTenant, archive.leadId, '2', randomUUID()),
+    ).resolves.toMatchObject({ revision: '3' });
+    await expect(
+      service.get(ownerTenant, archive.leadId),
+    ).resolves.toMatchObject({
+      status: 'active',
+      stage: LeadStage.QUALIFICATION,
+      latestCycleNumber: '2',
+      returnReviewPending: false,
+    });
   });
 
   async function createFixture(): Promise<Fixture> {

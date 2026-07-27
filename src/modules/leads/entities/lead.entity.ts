@@ -13,6 +13,9 @@ import { Membership } from '../../memberships/entities/membership.entity';
 import { Organization } from '../../organizations/entities/organization.entity';
 import { LeadEntry } from './lead-entry.entity';
 import { LeadTimelineEvent } from './lead-timeline-event.entity';
+import { LeadCommercialCycle } from './lead-commercial-cycle.entity';
+import { LeadReturnReview } from './lead-return-review.entity';
+import { LeadStage, LeadStatus } from '../enums/lead.enums';
 
 @Entity({ name: 'leads' })
 @Index('UQ_leads_organization_phone', ['organizationId', 'primaryPhone'], {
@@ -54,11 +57,17 @@ export class Lead {
   responsibleMembershipId!: string | null;
   @Column({ name: 'created_by_membership_id', type: 'uuid', nullable: true })
   createdByMembershipId!: string | null;
+  @Column({ type: 'enum', enum: LeadStatus, enumName: 'lead_status_enum' })
+  status!: LeadStatus;
+  @Column({ type: 'enum', enum: LeadStage, enumName: 'lead_stage_enum' })
+  stage!: LeadStage;
   @Column({ type: 'bigint', default: 0 }) revision!: string;
   @Column({ name: 'next_entry_sequence', type: 'bigint', default: 1 })
   nextEntrySequence!: string;
   @Column({ name: 'next_event_sequence', type: 'bigint', default: 1 })
   nextEventSequence!: string;
+  @Column({ name: 'next_cycle_number', type: 'bigint', default: 2 })
+  nextCycleNumber!: string;
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamptz',
@@ -89,4 +98,8 @@ export class Lead {
   @OneToMany(() => LeadEntry, (entry) => entry.lead) entries!: LeadEntry[];
   @OneToMany(() => LeadTimelineEvent, (event) => event.lead)
   timeline!: LeadTimelineEvent[];
+  @OneToMany(() => LeadCommercialCycle, (cycle) => cycle.lead)
+  commercialCycles!: LeadCommercialCycle[];
+  @OneToMany(() => LeadReturnReview, (review) => review.lead)
+  returnReviews!: LeadReturnReview[];
 }

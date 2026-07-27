@@ -149,6 +149,15 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Readiness falha com `503` se keyring, réplica única, schema, funções, triggers ou ACLs não estiverem íntegros. O canal externo permanece desabilitado até a homologação do relay real da Agência Gênesis.
 - `If-Match` é obrigatório em updates e assignment: ausente `428`, revisão stale `412` e conflito de telefone ou fingerprint `409`.
 
+## Segurança do lifecycle comercial de Leads 0.3.2
+
+- Todo comando exige `If-Match` e `Idempotency-Key` UUID v4. O fingerprint HMAC cobre tenant, ator, Lead, comando, revisão e payload normalizado; replay revalida ator e visibilidade, retorna `204` e não repete efeitos.
+- A função privada bloqueia Organization, User, Membership, Lead, claim, ciclo e revisão em ordem fixa. Revisões stale retornam `412`; chave reutilizada com outro fingerprint ou transição inválida retorna `409`.
+- Member pode mover, ganhar e perder somente Lead atualmente atribuído; archive, reactivate e dismiss são owner/admin. Member não altera dados básicos de Lead encerrado, e perde acesso imediatamente após unassign ou offboarding.
+- Ciclos e revisões possuem foreign keys tenant-scoped, checks de estado e triggers contra alteração histórica. A consistência Lead↔ciclo é verificada no commit por constraints diferidas.
+- Motivos são enums fechados. A nota é trimada, limitada a 500 code points, obrigatória para `other`, rejeita Unicode malformado e qualquer controle, inclusive quebra de linha; não entra em fingerprint persistido em claro, logs ou metadata de idempotência.
+- O runtime recebe somente `SELECT` em ciclos/revisões e `EXECUTE` na função de comando; não recebe qualquer acesso direto à tabela de claims nem DML nas tabelas CRM. Readiness compara a allowlist executável exata e falha fechada diante de drift.
+
 - Refresh token ainda é retornado em JSON; cookie `HttpOnly` não foi implementado.
 - Rate limiter e semaphore Argon2 não são distribuídos; uma solução compartilhada será necessária antes de múltiplas réplicas públicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.
