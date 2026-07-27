@@ -73,6 +73,7 @@ describe('Lead HTTP contract (e2e)', () => {
     updatedAt: new Date('2026-07-22T12:00:00Z'),
     initialAttribution: attribution('manual'),
     lastAttribution: attribution('manual'),
+    nextAction: null,
   };
   const createManual = jest.fn() as jest.MockedFunction<
     LeadsService['createManual']
@@ -100,6 +101,13 @@ describe('Lead HTTP contract (e2e)', () => {
     archive: jest.fn(),
     reactivate: jest.fn(),
     dismissReturn: jest.fn(),
+    nextAction: jest.fn(),
+    createActivity: jest.fn(),
+    createNote: jest.fn(),
+    createNextAction: jest.fn(),
+    rescheduleNextAction: jest.fn(),
+    completeNextAction: jest.fn(),
+    cancelNextAction: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -333,6 +341,183 @@ describe('Lead HTTP contract (e2e)', () => {
       .set('If-Match', `"lead:${leadId}:1"`)
       .send({ displayName: 'Stale' })
       .expect(412);
+  });
+
+  it('exposes paginated timeline and volatile next-action reads without cache validators', async () => {
+    leads.timeline.mockResolvedValue({
+      items: [],
+      page: { nextCursor: null, limit: 25 },
+    });
+    const timelineResponse = await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}/timeline?limit=25&cursor=7`)
+      .expect(200)
+      .expect('Cache-Control', 'no-store');
+    expect(timelineResponse.body).toEqual({
+      items: [],
+      page: { nextCursor: null, limit: 25 },
+    });
+    expect(leads.timeline).toHaveBeenCalledWith(expect.any(Object), leadId, {
+      cursor: '7',
+      limit: 25,
+    });
+
+    leads.nextAction.mockResolvedValue({
+      item: null,
+      temporalState: 'none',
+      leadRevision: '1',
+    });
+    const nextActionResponse = await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}/next-action`)
+      .expect(200)
+      .expect('Cache-Control', 'no-store');
+    expect(nextActionResponse.headers).not.toHaveProperty('etag');
+    expect(nextActionResponse.body).toEqual({
+      item: null,
+      temporalState: 'none',
+      leadRevision: '1',
+    });
+
+    await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}/timeline?limit=101`)
+      .expect(400);
+  });
+
+  it('creates activities, notes and next actions with stable replay responses', async () => {
+    const key = randomUUID();
+    const activityId = randomUUID();
+    leads.createActivity.mockResolvedValue({
+      id: activityId,
+      revision: '2',
+      replayed: true,
+      responseStatus: 201,
+    });
+    const activityResponse = await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/activities`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', key)
+      .send({
+        type: 'internal_task',
+        performedAt: '2026-07-22T09:00:00-03:00',
+        outcome: '  retorno\r\nfeito  ',
+      })
+      .expect(201)
+      .expect('ETag', `"lead:${leadId}:2"`)
+      .expect('Idempotency-Replayed', 'true')
+      .expect('Cache-Control', 'no-store');
+    expect(activityResponse.body).toEqual({ id: activityId });
+    expect(leads.createActivity).toHaveBeenCalledWith(
+      expect.any(Object),
+      leadId,
+      '1',
+      key,
+      expect.objectContaining({ type: 'internal_task' }),
+    );
+
+    const noteId = randomUUID();
+    leads.createNote.mockResolvedValue({
+      id: noteId,
+      revision: '3',
+      replayed: false,
+      responseStatus: 201,
+    });
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/notes`)
+      .set('If-Match', `"lead:${leadId}:2"`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ content: 'Observação interna' })
+      .expect(201)
+      .expect('ETag', `"lead:${leadId}:3"`)
+      .expect({ id: noteId });
+
+    const nextActionId = randomUUID();
+    leads.createNextAction.mockResolvedValue({
+      id: nextActionId,
+      revision: '4',
+      replayed: false,
+      responseStatus: 201,
+    });
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/next-action`)
+      .set('If-Match', `"lead:${leadId}:3"`)
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        type: 'call',
+        description: 'Retornar contato',
+        dueAt: '2026-07-23T09:00:00-03:00',
+      })
+      .expect(201)
+      .expect('ETag', `"lead:${leadId}:4"`)
+      .expect({ id: nextActionId });
+  });
+
+  it('exposes bodyless next-action state commands and validates their contracts', async () => {
+    const successfulCommand = {
+      revision: '5',
+      replayed: false,
+      responseStatus: 204,
+    };
+    leads.rescheduleNextAction.mockResolvedValue(successfulCommand);
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/next-action/reschedule`)
+      .set('If-Match', `"lead:${leadId}:4"`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ dueAt: '2026-07-24T09:00:00-03:00' })
+      .expect(204)
+      .expect('ETag', `"lead:${leadId}:5"`);
+
+    leads.completeNextAction.mockResolvedValue({
+      ...successfulCommand,
+      revision: '6',
+      replayed: true,
+    });
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/next-action/complete`)
+      .set('If-Match', `"lead:${leadId}:5"`)
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        performedAt: '2026-07-22T12:00:00Z',
+        outcome: 'Concluído',
+      })
+      .expect(204)
+      .expect('ETag', `"lead:${leadId}:6"`)
+      .expect('Idempotency-Replayed', 'true');
+
+    leads.cancelNextAction.mockResolvedValue({
+      ...successfulCommand,
+      revision: '7',
+    });
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/next-action/cancel`)
+      .set('If-Match', `"lead:${leadId}:6"`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ note: 'Cancelada manualmente' })
+      .expect(204)
+      .expect('ETag', `"lead:${leadId}:7"`);
+
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/next-action`)
+      .set('If-Match', `"lead:${leadId}:7"`)
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        type: 'call',
+        description: 'Sem offset',
+        dueAt: '2026-07-24T09:00:00',
+      })
+      .expect(400);
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/next-action/cancel`)
+      .set('If-Match', `"lead:${leadId}:7"`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ unexpected: true })
+      .expect(400);
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/activities`)
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        type: 'call',
+        performedAt: '2026-07-22T12:00:00Z',
+      })
+      .expect(428);
   });
 
   it('executes the real form readiness, rate-limit and raw-body HMAC guard chain', async () => {

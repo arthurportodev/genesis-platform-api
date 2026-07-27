@@ -25,14 +25,21 @@ import { TenantContext } from '../../tenant-context/types/tenant-context.type';
 import { NoStoreInterceptor } from '../../invitations/interceptors/no-store.interceptor';
 import {
   AssignLeadDto,
+  CancelLeadNextActionDto,
+  CompleteLeadNextActionDto,
+  CreateLeadActivityDto,
   CreateLeadDto,
+  CreateLeadNextActionDto,
+  CreateLeadNoteDto,
   LeadParamsDto,
   ListLeadCyclesDto,
+  ListLeadTimelineDto,
   ListLeadsDto,
   MoveLeadDto,
   LoseLeadDto,
   ArchiveLeadDto,
   EmptyLeadCommandDto,
+  RescheduleLeadNextActionDto,
   UpdateLeadDto,
 } from '../dto/lead.dto';
 import { ManualLeadReadinessGuard } from '../guards/lead-readiness.guards';
@@ -41,7 +48,9 @@ import {
   LeadListResponse,
   LeadCycleListResponse,
   LeadCommandResult,
-  LeadTimelineView,
+  LeadCreateMutationResult,
+  LeadNextActionResponse,
+  LeadTimelineResponse,
   LeadView,
 } from '../types/lead-api.type';
 
@@ -111,8 +120,24 @@ export class LeadsController {
   timeline(
     @CurrentTenant() tenant: TenantContext,
     @Param() params: LeadParamsDto,
-  ): Promise<LeadTimelineView[]> {
-    return this.leads.timeline(tenant, params.leadId);
+    @Query() query: ListLeadTimelineDto,
+  ): Promise<LeadTimelineResponse> {
+    return this.leads.timeline(tenant, params.leadId, query);
+  }
+
+  @Get(':leadId/next-action')
+  async nextAction(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Res() response: Response,
+  ): Promise<void> {
+    const result: LeadNextActionResponse = await this.leads.nextAction(
+      tenant,
+      params.leadId,
+    );
+    response.status(200);
+    response.setHeader('Content-Type', 'application/json; charset=utf-8');
+    response.end(JSON.stringify(result));
   }
 
   @Get(':leadId/cycles')
@@ -159,6 +184,120 @@ export class LeadsController {
     );
     response.setHeader('ETag', this.etag(lead));
     return lead;
+  }
+
+  @Post(':leadId/activities')
+  async createActivity(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: CreateLeadActivityDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ id: string }> {
+    const result = await this.leads.createActivity(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
+    );
+    return this.createMutationResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/notes')
+  async createNote(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: CreateLeadNoteDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ id: string }> {
+    const result = await this.leads.createNote(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
+    );
+    return this.createMutationResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/next-action')
+  async createNextAction(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: CreateLeadNextActionDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ id: string }> {
+    const result = await this.leads.createNextAction(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
+    );
+    return this.createMutationResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/next-action/reschedule')
+  async rescheduleNextAction(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: RescheduleLeadNextActionDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.rescheduleNextAction(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
+    );
+    this.commandResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/next-action/complete')
+  async completeNextAction(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: CompleteLeadNextActionDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.completeNextAction(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
+    );
+    this.commandResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/next-action/cancel')
+  async cancelNextAction(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: CancelLeadNextActionDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.cancelNextAction(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
+    );
+    this.commandResponse(response, params.leadId, result);
   }
 
   @Post(':leadId/move')
@@ -313,5 +452,16 @@ export class LeadsController {
     response.status(result.responseStatus);
     response.setHeader('ETag', `"lead:${leadId}:${result.revision}"`);
     if (result.replayed) response.setHeader('Idempotency-Replayed', 'true');
+  }
+
+  private createMutationResponse(
+    response: Response,
+    leadId: string,
+    result: LeadCreateMutationResult,
+  ): { id: string } {
+    response.status(result.responseStatus);
+    response.setHeader('ETag', `"lead:${leadId}:${result.revision}"`);
+    if (result.replayed) response.setHeader('Idempotency-Replayed', 'true');
+    return { id: result.id };
   }
 }

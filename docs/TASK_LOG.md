@@ -195,10 +195,21 @@
 
 ## 0.3.2 — Pipeline comercial, fechamento e retorno
 
-**Status: candidato local em validação do Gate 2.**
+**Concluída no PR #19, squash `6fa39f103b9ebf65f93d26fcbc60504fa47d4e37`, com CI pós-merge 30298541579 aprovada.**
 
 - Estágios fixos `new`, `qualification`, `diagnosis`, `proposal` e `negotiation`, com movimentação livre enquanto o Lead está ativo.
 - Fechamentos `won`, `lost` e `archived` preservam o estágio e encerram um ciclo comercial imutável; reativação abre novo ciclo em `qualification`.
 - Entradas recebidas para Lead encerrado não reabrem nem reatribuem: agregam uma revisão pendente por Lead, resolvida explicitamente por reativação ou descarte.
 - Comandos usam `If-Match`, UUID v4 de idempotência, fingerprint HMAC versionado, resposta `204`, ETag e timeline tipada append-only.
 - ACL mínima, readiness de catálogo, invariantes diferidas, rollback fail-closed e testes PostgreSQL cobrem concorrência, replay e isolamento tenant-scoped.
+
+## 0.3.3 — Atividades e Follow-up
+
+**Status: candidato local.**
+
+- Activity e Note são registros tenant-scoped, append-only e vinculados ao ciclo comercial; conteúdo livre permanece nas tabelas canônicas e fora da metadata da timeline.
+- Existe no máximo uma Next Action `pending` por Lead, com comandos explícitos de criação, reagendamento, conclusão e cancelamento; conclusão gera uma Activity exatamente uma vez.
+- Assignment transfere a pendência, unassignment/offboarding limpam o responsável e fechamento cancela atomicamente com razão `lead_closed`; reativação não restaura pendência.
+- `organizations.crm_time_zone` usa IANA e default/backfill `America/Belem`; `overdue`, `today`, `future` e `none` são derivados no PostgreSQL somente na leitura dedicada.
+- Timeline passa a ser paginada por sequência e retorna referências tipadas e conteúdo canônico após autorização do Lead.
+- O intake `genesis_form` permanece implementado, fail-closed e operacionalmente desabilitado.

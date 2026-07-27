@@ -5,13 +5,18 @@ import { DataSource } from 'typeorm';
 import { LeadConfig } from '../../src/config/lead.config';
 import {
   LeadArchiveReason,
+  LeadActivityType,
   LeadCommand,
+  LeadFollowUpCommand,
   LeadLostReason,
+  LeadNextActionType,
   LeadStage,
 } from '../../src/modules/leads/enums/lead.enums';
 import {
   leadCommandFingerprint,
+  leadFollowUpFingerprint,
   LeadCommandFingerprintInput,
+  LeadFollowUpFingerprintInput,
 } from '../../src/modules/leads/security/lead-fingerprint';
 import { LeadsService } from '../../src/modules/leads/services/leads.service';
 import { MembershipRole } from '../../src/modules/memberships/enums/membership-role.enum';
@@ -155,6 +160,120 @@ describe('Lead commercial pipeline', () => {
     expect(calls[0]?.[10]).toBe(LeadStage.NEGOTIATION);
     await service.win(tenant, leadId, '4', randomUUID());
     expect(calls[1]?.slice(10)).toEqual([null, null, null, null]);
+  });
+
+  it('fingerprints every normalized follow-up field and revision', () => {
+    const input: LeadFollowUpFingerprintInput = {
+      organizationId: tenant.organizationId,
+      actorMembershipId: tenant.membershipId,
+      leadId,
+      command: LeadFollowUpCommand.CREATE_NEXT_ACTION,
+      expectedRevision: '8',
+      activityType: null,
+      performedAt: null,
+      activityOutcome: null,
+      noteContent: null,
+      nextActionType: LeadNextActionType.CALL,
+      nextActionDescription: 'Ligar para cliente',
+      dueAt: '2026-07-30T12:00:00.000Z',
+      cancellationNote: null,
+    };
+    const fingerprint = leadFollowUpFingerprint(input, key);
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/u);
+    expect(leadFollowUpFingerprint(input, key)).toBe(fingerprint);
+    expect(
+      leadFollowUpFingerprint({ ...input, expectedRevision: '9' }, key),
+    ).not.toBe(fingerprint);
+    expect(
+      leadFollowUpFingerprint(
+        { ...input, nextActionDescription: 'Outro compromisso' },
+        key,
+      ),
+    ).not.toBe(fingerprint);
+  });
+
+  it('normalizes multiline text and sends only the typed follow-up payload', async () => {
+    let parameters: unknown[] | undefined;
+    const query: QueryStub = (_sql, values) => {
+      parameters = values;
+      return Promise.resolve([
+        {
+          revision: '2',
+          replayed: false,
+          responseStatus: 201,
+          activityId: randomUUID(),
+          noteId: null,
+          nextActionId: null,
+        },
+      ]);
+    };
+    const service = serviceWith(query);
+    await service.createActivity(tenant, leadId, '1', randomUUID(), {
+      type: LeadActivityType.INTERNAL_TASK,
+      performedAt: '2026-07-27T15:00:00.123456-03:00',
+      outcome: '  Linha 1\r\nLinha 2  ',
+    });
+    expect(parameters?.slice(0, 7)).toEqual([
+      tenant.userId,
+      tenant.membershipId,
+      tenant.organizationId,
+      leadId,
+      LeadFollowUpCommand.CREATE_ACTIVITY,
+      '1',
+      expect.any(String),
+    ]);
+    expect(parameters?.slice(10)).toEqual([
+      LeadActivityType.INTERNAL_TASK,
+      '2026-07-27T18:00:00.123456Z',
+      'Linha 1\nLinha 2',
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it('rejects offsetless dates, malformed Unicode and forbidden controls before SQL', () => {
+    let called = false;
+    const service = serviceWith(() => {
+      called = true;
+      return Promise.resolve([]);
+    });
+    expect(() =>
+      service.createNextAction(tenant, leadId, '1', randomUUID(), {
+        type: LeadNextActionType.CALL,
+        description: 'Ligar',
+        dueAt: '2026-07-30T12:00:00',
+      }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.createNextAction(tenant, leadId, '1', randomUUID(), {
+        type: LeadNextActionType.CALL,
+        description: 'Calendário inválido',
+        dueAt: '2026-02-30T09:00:00-03:00',
+      }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.createNextAction(tenant, leadId, '1', randomUUID(), {
+        type: LeadNextActionType.CALL,
+        description: 'Precisão excessiva',
+        dueAt: '2026-07-27T09:00:00.1234567-03:00',
+      }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.createNote(tenant, leadId, '1', randomUUID(), {
+        content: 'Texto\u2028inválido',
+      }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.createActivity(tenant, leadId, '1', randomUUID(), {
+        type: LeadActivityType.CALL,
+        performedAt: '2026-07-30T12:00:00Z',
+        outcome: '\ud800',
+      }),
+    ).toThrow(BadRequestException);
+    expect(called).toBe(false);
   });
 
   function serviceWith(query: QueryStub): LeadsService {

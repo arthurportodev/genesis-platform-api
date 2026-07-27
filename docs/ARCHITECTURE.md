@@ -147,9 +147,9 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
 
 ## Fronteiras
 
-- **Implementado:** identidade, persistência multi-tenant, autenticação, sessões, auditoria, CI, contexto de tenant, autorização por papel, convites, gestão de memberships, invariantes de ownership e fundação tenant-scoped de Leads.
-- **Em implementação local:** lifecycle comercial de Leads com pipeline, ciclos e revisão de retornos.
-- **Planejado:** matriz geral de capacidades, atividades e demais módulos comerciais.
+- **Implementado:** identidade, persistência multi-tenant, autenticação, sessões, auditoria, CI, contexto de tenant, autorização por papel, convites, gestão de memberships, invariantes de ownership, fundação tenant-scoped de Leads e lifecycle comercial com ciclos e revisão de retornos.
+- **Em implementação local:** Activities, Notes, Next Action, timezone organizacional e timeline paginada.
+- **Planejado:** matriz geral de capacidades, busca, métricas e demais módulos comerciais.
 - **Fora do estágio atual:** frontend, integrações, deploy e microservices.
 
 ## Entrega e aceitação de convites
@@ -187,3 +187,11 @@ O módulo separa controllers tenant-scoped do intake externo. Rotas manuais comp
 O estado corrente permanece em `Lead`, enquanto `LeadCommercialCycle` preserva o histórico de cada período ativo e `LeadReturnReview` agrega novas Entries recebidas após um fechamento. Constraint triggers diferidos exigem exatamente um ciclo aberto para Lead ativo e nenhum para Lead encerrado.
 
 Comandos estreitos (`move`, `win`, `lose`, `archive`, `reactivate` e `dismiss_return`) executam em uma única função `SECURITY DEFINER`, revalidam ator e recurso e seguem a ordem Organization → Users ordenados → Memberships ordenadas → Lead → claim idempotente → Cycle → ReturnReview → Timeline. Todos usam revisão otimista e fingerprint HMAC versionado. Leituras de ciclos e timeline permanecem tenant-filtered; o runtime não recebe DML direto nas tabelas do lifecycle.
+
+## Atividades e Follow-up 0.3.3
+
+`LeadActivity`, `LeadNote` e `LeadNextAction` são tabelas canônicas próprias, tenant-scoped e vinculadas ao ciclo. A timeline guarda somente referências tipadas e snapshots escalares; a leitura autoriza primeiro o Lead e só então resolve conteúdo livre nas tabelas canônicas. O cursor opaco codifica a sequência monotônica, e a resposta é limitada a 100 itens.
+
+As seis mutações atravessam `app_private.execute_lead_follow_up_command`. A função mantém a ordem global de locks, revalida actor, capability, assignment, lifecycle, revisão e claim HMAC, e compõe os efeitos de conclusão, assignment, offboarding e fechamento em um único evento operacional. Triggers protegem append-only, transições terminais, unicidade da pendência e consistência diferida.
+
+O estado temporal não pertence ao snapshot estável do Lead. `GET /next-action` consulta `statement_timestamp()` e `organizations.crm_time_zone`, projeta o instante com regras IANA e retorna `no-store` sem ETag. O runtime continua sem DML direto e só recebe `SELECT` e `EXECUTE` nas superfícies enumeradas pelo readiness.

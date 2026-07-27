@@ -14,6 +14,9 @@ import { LeadTimelineEvent } from './entities/lead-timeline-event.entity';
 import { Lead } from './entities/lead.entity';
 import { LeadCommercialCycle } from './entities/lead-commercial-cycle.entity';
 import { LeadReturnReview } from './entities/lead-return-review.entity';
+import { LeadActivity } from './entities/lead-activity.entity';
+import { LeadNote } from './entities/lead-note.entity';
+import { LeadNextAction } from './entities/lead-next-action.entity';
 import { FormRateLimitGuard } from './guards/form-rate-limit.guard';
 import { FormSignatureGuard } from './guards/form-signature.guard';
 import {
@@ -36,6 +39,9 @@ import { LeadsService } from './services/leads.service';
       LeadTimelineEvent,
       LeadCommercialCycle,
       LeadReturnReview,
+      LeadActivity,
+      LeadNote,
+      LeadNextAction,
     ]),
     AuthModule,
     AuthorizationModule,

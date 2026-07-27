@@ -10,6 +10,8 @@ import {
 import {
   LeadArchiveReason,
   LeadLostReason,
+  LeadNextActionCancellationReason,
+  LeadNextActionStatus,
   LeadStage,
   LeadStatus,
   LeadTimelineEventType,
@@ -97,6 +99,42 @@ export class LeadTimelineEvent {
     nullable: true,
   })
   archiveReason!: LeadArchiveReason | null;
+  @Column({ name: 'activity_id', type: 'uuid', nullable: true })
+  activityId!: string | null;
+  @Column({ name: 'note_id', type: 'uuid', nullable: true })
+  noteId!: string | null;
+  @Column({ name: 'next_action_id', type: 'uuid', nullable: true })
+  nextActionId!: string | null;
+  @Column({
+    name: 'previous_next_action_status',
+    type: 'enum',
+    enum: LeadNextActionStatus,
+    enumName: 'lead_next_action_status_enum',
+    nullable: true,
+  })
+  previousNextActionStatus!: LeadNextActionStatus | null;
+  @Column({
+    name: 'new_next_action_status',
+    type: 'enum',
+    enum: LeadNextActionStatus,
+    enumName: 'lead_next_action_status_enum',
+    nullable: true,
+  })
+  newNextActionStatus!: LeadNextActionStatus | null;
+  @Column({ name: 'previous_due_at', type: 'timestamptz', nullable: true })
+  previousDueAt!: Date | null;
+  @Column({ name: 'new_due_at', type: 'timestamptz', nullable: true })
+  newDueAt!: Date | null;
+  @Column({ name: 'next_action_revision', type: 'bigint', nullable: true })
+  nextActionRevision!: string | null;
+  @Column({
+    name: 'next_action_cancellation_reason',
+    type: 'enum',
+    enum: LeadNextActionCancellationReason,
+    enumName: 'lead_next_action_cancellation_reason_enum',
+    nullable: true,
+  })
+  nextActionCancellationReason!: LeadNextActionCancellationReason | null;
   @CreateDateColumn({
     name: 'occurred_at',
     type: 'timestamptz',

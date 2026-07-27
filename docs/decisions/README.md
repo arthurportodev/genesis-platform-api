@@ -41,3 +41,4 @@ Crie ADR quando a decisão afetar múltiplas tarefas, segurança, dados, isolame
 - [ADR-006 — Modelo operacional multiagente](ADR-006-multi-agent-operating-model.md) — Accepted; implementado na tarefa 0.2.2.4
 - [ADR-007 — Convites, memberships e invariantes de ownership](ADR-007-invitations-memberships-ownership.md) — Accepted; implementação iniciada na tarefa 0.2.5.1
 - [ADR-008 — Lifecycle comercial de Leads por estado atual e ciclos imutáveis](ADR-008-lead-commercial-lifecycle.md) — Accepted; implementado na tarefa 0.3.2
+- [ADR-009 — Activities, Notes e Next Action tipadas](ADR-009-lead-activities-follow-up.md) — Accepted; implementado na tarefa 0.3.3

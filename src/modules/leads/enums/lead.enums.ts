@@ -63,6 +63,53 @@ export enum LeadCommand {
   DISMISS_RETURN = 'dismiss_return',
 }
 
+export enum LeadActivityType {
+  WHATSAPP = 'whatsapp',
+  CALL = 'call',
+  MEETING = 'meeting',
+  DIAGNOSIS = 'diagnosis',
+  PROPOSAL_SENT = 'proposal_sent',
+  FOLLOW_UP = 'follow_up',
+  INTERNAL_TASK = 'internal_task',
+}
+
+export enum LeadNextActionType {
+  WHATSAPP = 'whatsapp',
+  CALL = 'call',
+  MEETING = 'meeting',
+  DIAGNOSIS = 'diagnosis',
+  SEND_PROPOSAL = 'send_proposal',
+  FOLLOW_UP = 'follow_up',
+  INTERNAL_TASK = 'internal_task',
+}
+
+export enum LeadNextActionStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  CANCELED = 'canceled',
+}
+
+export enum LeadNextActionCancellationReason {
+  MANUAL = 'manual',
+  LEAD_CLOSED = 'lead_closed',
+}
+
+export enum LeadNextActionTemporalState {
+  NONE = 'none',
+  OVERDUE = 'overdue',
+  TODAY = 'today',
+  FUTURE = 'future',
+}
+
+export enum LeadFollowUpCommand {
+  CREATE_ACTIVITY = 'create_activity',
+  CREATE_NOTE = 'create_note',
+  CREATE_NEXT_ACTION = 'create_next_action',
+  RESCHEDULE_NEXT_ACTION = 'reschedule_next_action',
+  COMPLETE_NEXT_ACTION = 'complete_next_action',
+  CANCEL_NEXT_ACTION = 'cancel_next_action',
+}
+
 export enum LeadTimelineEventType {
   CREATED = 'lead.created',
   ENTRY_RECEIVED = 'lead.entry.received',
@@ -76,4 +123,10 @@ export enum LeadTimelineEventType {
   REACTIVATED = 'lead.reactivated',
   RETURN_RECEIVED = 'lead.return.received',
   RETURN_DISMISSED = 'lead.return.dismissed',
+  ACTIVITY_CREATED = 'lead.activity.created',
+  NOTE_CREATED = 'lead.note.created',
+  NEXT_ACTION_CREATED = 'lead.next_action.created',
+  NEXT_ACTION_RESCHEDULED = 'lead.next_action.rescheduled',
+  NEXT_ACTION_COMPLETED = 'lead.next_action.completed',
+  NEXT_ACTION_CANCELED = 'lead.next_action.canceled',
 }

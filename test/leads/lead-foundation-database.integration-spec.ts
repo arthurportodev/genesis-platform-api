@@ -4,13 +4,16 @@ import { LeadConfig } from '../../src/config/lead.config';
 import { ConfigService } from '@nestjs/config';
 import { CreateLeadFoundation1785346800000 } from '../../src/database/migrations/1785346800000-CreateLeadFoundation';
 import { ManageLeadCommercialPipeline1785433200000 } from '../../src/database/migrations/1785433200000-ManageLeadCommercialPipeline';
+import { ManageLeadActivitiesFollowUp1785519600000 } from '../../src/database/migrations/1785519600000-ManageLeadActivitiesFollowUp';
 import { OperationalInvitationActivationReadiness } from '../../src/modules/invitations/ports/invitation-activation-readiness.port';
 import { Membership } from '../../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../../src/modules/memberships/enums/membership-role.enum';
 import { MembershipStatus } from '../../src/modules/memberships/enums/membership-status.enum';
 import {
   LeadArchiveReason,
+  LeadActivityType,
   LeadLostReason,
+  LeadNextActionType,
   LeadSource,
   LeadStage,
 } from '../../src/modules/leads/enums/lead.enums';
@@ -56,6 +59,7 @@ describe('Lead foundation database integration', () => {
     migrationRunner = owner.createQueryRunner();
     await new CreateLeadFoundation1785346800000().up(migrationRunner);
     await new ManageLeadCommercialPipeline1785433200000().up(migrationRunner);
+    await new ManageLeadActivitiesFollowUp1785519600000().up(migrationRunner);
     configureIntegrationRuntimeEnvironment();
     runtime = createIntegrationRuntimeDataSource();
     await runtime.initialize();
@@ -72,8 +76,12 @@ describe('Lead foundation database integration', () => {
 
   it('reverts and reapplies the additive pipeline migration before lifecycle data exists', async () => {
     const migration = new ManageLeadCommercialPipeline1785433200000();
+    const followUpMigration = new ManageLeadActivitiesFollowUp1785519600000();
     await migrationRunner.startTransaction();
     try {
+      await expect(
+        followUpMigration.down(migrationRunner),
+      ).resolves.toBeUndefined();
       await expect(migration.down(migrationRunner)).resolves.toBeUndefined();
       const [rolledBack] = (await migrationRunner.query(
         `SELECT to_regclass('public.lead_commercial_cycles') IS NOT NULL AS "cyclesPresent",
@@ -125,6 +133,10 @@ describe('Lead foundation database integration', () => {
         ],
       )) as Array<{ leadId: string }>;
       await expect(migration.up(migrationRunner)).resolves.toBeUndefined();
+      await migrationRunner.query('SET CONSTRAINTS ALL IMMEDIATE');
+      await expect(
+        followUpMigration.up(migrationRunner),
+      ).resolves.toBeUndefined();
       const [backfilled] = (await migrationRunner.query(
         `SELECT lead.status, lead.stage, lead.revision::text AS revision,
           cycle.cycle_number::text AS "cycleNumber",
@@ -345,6 +357,48 @@ describe('Lead foundation database integration', () => {
     expect(first).toMatchObject({ responseStatus: 201, replayed: false });
     expect(replay).toMatchObject({ responseStatus: 200, replayed: true });
     expect(replay.lead?.id).toBe(first.lead?.id);
+
+    const activityKey = randomUUID();
+    const performedAt = await databaseNow();
+    const activity = await oldService.createActivity(
+      tenant,
+      first.lead?.id as string,
+      '1',
+      activityKey,
+      {
+        type: LeadActivityType.CALL,
+        performedAt,
+        outcome: 'Contato sob chave anterior',
+      },
+    );
+    await expect(
+      rotatedService.createActivity(
+        tenant,
+        first.lead?.id as string,
+        '1',
+        activityKey,
+        {
+          type: LeadActivityType.CALL,
+          performedAt,
+          outcome: 'Contato sob chave anterior',
+        },
+      ),
+    ).resolves.toMatchObject({
+      id: activity.id,
+      revision: '2',
+      replayed: true,
+      responseStatus: 201,
+    });
+    const missingOldKeyConfig = leadConfig(
+      2,
+      new Map([[2, Buffer.alloc(32, 2)]]),
+    );
+    await expect(
+      new OperationalLeadReadiness(
+        missingOldKeyConfig,
+        runtime,
+      ).assertManualReady(),
+    ).rejects.toMatchObject({ status: 503 });
   });
 
   it('exposes derived Source attribution and a tenant-scoped unassigned inbox', async () => {
@@ -1008,6 +1062,1113 @@ describe('Lead foundation database integration', () => {
     });
   });
 
+  it('persists activities, notes and the next action state machine with exact replay', async () => {
+    const fixture = await createFixture();
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      'd'.repeat(64),
+      'manual',
+      fixture.memberships[1].id,
+      '+5562555555561',
+    );
+    const service = createLeadService();
+    const tenant = ownerTenant(fixture);
+    const performedAt = await databaseNow();
+    const activityKey = randomUUID();
+    const activity = await service.createActivity(
+      tenant,
+      created.leadId,
+      created.revision,
+      activityKey,
+      {
+        type: LeadActivityType.WHATSAPP,
+        performedAt,
+        outcome: '  Cliente confirmou interesse.\r\nRetornar amanhã.  ',
+      },
+    );
+    expect(activity).toMatchObject({ revision: '2', responseStatus: 201 });
+    await expect(
+      service.createActivity(
+        tenant,
+        created.leadId,
+        created.revision,
+        activityKey,
+        {
+          type: LeadActivityType.WHATSAPP,
+          performedAt,
+          outcome: '  Cliente confirmou interesse.\r\nRetornar amanhã.  ',
+        },
+      ),
+    ).resolves.toMatchObject({
+      id: activity.id,
+      revision: '2',
+      replayed: true,
+    });
+
+    const note = await service.createNote(
+      tenant,
+      created.leadId,
+      '2',
+      randomUUID(),
+      { content: '  Prefere contato à tarde.\r\nSócia participa.  ' },
+    );
+    expect(note).toMatchObject({ revision: '3', responseStatus: 201 });
+
+    const overdue = new Date(Date.now() - 60_000).toISOString();
+    const action = await service.createNextAction(
+      tenant,
+      created.leadId,
+      '3',
+      randomUUID(),
+      {
+        type: LeadNextActionType.INTERNAL_TASK,
+        description: 'Preparar diagnóstico interno',
+        dueAt: overdue,
+      },
+    );
+    expect(action).toMatchObject({ revision: '4', responseStatus: 201 });
+    await expect(
+      runtime.query(
+        `UPDATE public.lead_next_actions SET description = 'Bypass' WHERE id = $1`,
+        [action.id],
+      ),
+    ).rejects.toMatchObject({ driverError: { code: '42501' } });
+    await expect(
+      owner.query(
+        `UPDATE public.lead_next_actions SET description = 'Rewritten' WHERE id = $1`,
+        [action.id],
+      ),
+    ).rejects.toMatchObject({ driverError: { code: 'P3006' } });
+    await expect(
+      owner.query(`DELETE FROM public.lead_notes WHERE id = $1`, [note.id]),
+    ).rejects.toMatchObject({ driverError: { code: 'P3006' } });
+    await expect(
+      owner.query(`DELETE FROM public.lead_activities WHERE id = $1`, [
+        activity.id,
+      ]),
+    ).rejects.toMatchObject({ driverError: { code: 'P3006' } });
+    await expect(
+      service.createNextAction(tenant, created.leadId, '4', randomUUID(), {
+        type: LeadNextActionType.CALL,
+        description: 'Segunda pendência',
+        dueAt: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      service.nextAction(tenant, created.leadId),
+    ).resolves.toMatchObject({
+      temporalState: 'overdue',
+      item: { id: action.id, revision: '1' },
+    });
+
+    const future = new Date(Date.now() + 172_800_000).toISOString();
+    await expect(
+      service.rescheduleNextAction(tenant, created.leadId, '4', randomUUID(), {
+        dueAt: future,
+      }),
+    ).resolves.toMatchObject({ revision: '5' });
+    await expect(
+      service.rescheduleNextAction(tenant, created.leadId, '5', randomUUID(), {
+        dueAt: future,
+      }),
+    ).resolves.toMatchObject({ revision: '5', replayed: false });
+
+    const completeKey = randomUUID();
+    const completedAt = await databaseNow();
+    await expect(
+      service.completeNextAction(tenant, created.leadId, '5', completeKey, {
+        performedAt: completedAt,
+        outcome: 'Concluída',
+      }),
+    ).resolves.toMatchObject({ revision: '6', responseStatus: 204 });
+    await expect(
+      service.completeNextAction(tenant, created.leadId, '5', completeKey, {
+        performedAt: completedAt,
+        outcome: 'Concluída',
+      }),
+    ).resolves.toMatchObject({ revision: '6', replayed: true });
+    const [counts] = await owner.query<
+      Array<{ generated: string; completedEvents: string }>
+    >(
+      `SELECT
+        (SELECT count(*)::text FROM public.lead_activities activity
+          WHERE activity.next_action_id = $1) AS generated,
+        (SELECT count(*)::text FROM public.lead_timeline_events event
+          WHERE event.next_action_id = $1
+            AND event.event_type = 'lead.next_action.completed') AS "completedEvents"`,
+      [action.id],
+    );
+    expect(counts).toEqual({ generated: '1', completedEvents: '1' });
+    await expect(
+      service.nextAction(tenant, created.leadId),
+    ).resolves.toMatchObject({
+      item: null,
+      temporalState: 'none',
+      leadRevision: '6',
+    });
+
+    await service.createNote(tenant, created.leadId, '6', randomUUID(), {
+      content: 'Evolução posterior à conclusão.',
+    });
+    await service.win(tenant, created.leadId, '7', randomUUID());
+    await expect(
+      service.completeNextAction(tenant, created.leadId, '5', completeKey, {
+        performedAt: completedAt,
+        outcome: 'Concluída',
+      }),
+    ).resolves.toMatchObject({
+      revision: '6',
+      replayed: true,
+      responseStatus: 204,
+    });
+
+    const firstPage = await service.timeline(tenant, created.leadId, {
+      limit: 2,
+    });
+    expect(firstPage.items).toHaveLength(2);
+    expect(firstPage.page.nextCursor).not.toBeNull();
+    const secondPage = await service.timeline(tenant, created.leadId, {
+      limit: 100,
+      cursor: firstPage.page.nextCursor as string,
+    });
+    const timelineItems = [...firstPage.items, ...secondPage.items];
+    expect(new Set(timelineItems.map((event) => event.sequence)).size).toBe(
+      firstPage.items.length + secondPage.items.length,
+    );
+    expect(
+      timelineItems.find((event) => event.eventType === 'lead.activity.created')
+        ?.activity?.performedAt,
+    ).toBe(performedAt);
+    expect(
+      timelineItems.find(
+        (event) => event.eventType === 'lead.next_action.completed',
+      )?.activity?.performedAt,
+    ).toBe(completedAt);
+  });
+
+  it('maps every completed next-action type to its canonical activity type', async () => {
+    const mappings = [
+      [LeadNextActionType.WHATSAPP, LeadActivityType.WHATSAPP],
+      [LeadNextActionType.CALL, LeadActivityType.CALL],
+      [LeadNextActionType.MEETING, LeadActivityType.MEETING],
+      [LeadNextActionType.DIAGNOSIS, LeadActivityType.DIAGNOSIS],
+      [LeadNextActionType.SEND_PROPOSAL, LeadActivityType.PROPOSAL_SENT],
+      [LeadNextActionType.FOLLOW_UP, LeadActivityType.FOLLOW_UP],
+      [LeadNextActionType.INTERNAL_TASK, LeadActivityType.INTERNAL_TASK],
+    ] as const;
+    for (const [nextActionType, expectedActivityType] of mappings) {
+      const fixture = await createFixture();
+      const service = createLeadService();
+      const tenant = ownerTenant(fixture);
+      const created = await ingest(
+        fixture,
+        randomUUID(),
+        '9'.repeat(64),
+        'manual',
+        null,
+        uniquePhone(),
+      );
+      const action = await service.createNextAction(
+        tenant,
+        created.leadId,
+        '1',
+        randomUUID(),
+        {
+          type: nextActionType,
+          description: `Mapeamento ${nextActionType}`,
+          dueAt: new Date(Date.now() + 60_000).toISOString(),
+        },
+      );
+      await service.completeNextAction(
+        tenant,
+        created.leadId,
+        '2',
+        randomUUID(),
+        { performedAt: await databaseNow() },
+      );
+      const [generated] = await owner.query<Array<{ type: string }>>(
+        `SELECT type::text AS type FROM public.lead_activities
+         WHERE next_action_id = $1`,
+        [action.id],
+      );
+      expect({ nextActionType, generatedType: generated?.type }).toEqual({
+        nextActionType,
+        generatedType: expectedActivityType,
+      });
+    }
+  });
+
+  it('validates IANA organization timezones and derives today and future in PostgreSQL', async () => {
+    const fixture = await createFixture();
+    const [defaultZone] = await owner.query<Array<{ crmTimeZone: string }>>(
+      `SELECT crm_time_zone AS "crmTimeZone" FROM public.organizations WHERE id = $1`,
+      [fixture.organization.id],
+    );
+    expect(defaultZone).toEqual({ crmTimeZone: 'America/Belem' });
+    await expect(
+      owner.query(
+        `UPDATE public.organizations SET crm_time_zone = 'Invalid/Timezone' WHERE id = $1`,
+        [fixture.organization.id],
+      ),
+    ).rejects.toMatchObject({ driverError: { code: '22023' } });
+    const [dstBoundary] = await owner.query<
+      Array<{ beforeSpring: string; afterSpring: string }>
+    >(
+      `SELECT
+        to_char('2026-03-08 06:59:00+00'::timestamptz AT TIME ZONE 'America/New_York',
+          'YYYY-MM-DD HH24:MI') AS "beforeSpring",
+        to_char('2026-03-08 07:01:00+00'::timestamptz AT TIME ZONE 'America/New_York',
+          'YYYY-MM-DD HH24:MI') AS "afterSpring"`,
+    );
+    expect(dstBoundary).toEqual({
+      beforeSpring: '2026-03-08 01:59',
+      afterSpring: '2026-03-08 03:01',
+    });
+    await owner.query(
+      `UPDATE public.organizations SET crm_time_zone = 'Pacific/Auckland' WHERE id = $1`,
+      [fixture.organization.id],
+    );
+    const [deadlines] = await owner.query<
+      Array<{ todayDue: Date; futureDue: Date }>
+    >(
+      `SELECT
+        (((statement_timestamp() AT TIME ZONE crm_time_zone)::date
+          + time '23:59:59.999999') AT TIME ZONE crm_time_zone) AS "todayDue",
+        ((((statement_timestamp() AT TIME ZONE crm_time_zone)::date + 1)
+          + time '12:00:00') AT TIME ZONE crm_time_zone) AS "futureDue"
+       FROM public.organizations WHERE id = $1`,
+      [fixture.organization.id],
+    );
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      '7'.repeat(64),
+      'manual',
+      null,
+      uniquePhone(),
+    );
+    const service = createLeadService();
+    const tenant = ownerTenant(fixture);
+    await runtime.query(`SET TIME ZONE 'America/Los_Angeles'`);
+    await service.createNextAction(tenant, created.leadId, '1', randomUUID(), {
+      type: LeadNextActionType.CALL,
+      description: 'Ainda hoje na Organization',
+      dueAt: deadlines.todayDue.toISOString(),
+    });
+    await expect(
+      service.nextAction(tenant, created.leadId),
+    ).resolves.toMatchObject({
+      temporalState: 'today',
+    });
+    await service.cancelNextAction(tenant, created.leadId, '2', randomUUID(), {
+      note: 'Mudança de prioridade',
+    });
+    const canceledTimeline = await service.timeline(tenant, created.leadId, {
+      limit: 100,
+    });
+    expect(
+      canceledTimeline.items.find(
+        (event) => event.eventType === 'lead.next_action.canceled',
+      )?.nextAction?.cancellationNote,
+    ).toBe('Mudança de prioridade');
+    await service.createNextAction(tenant, created.leadId, '3', randomUUID(), {
+      type: LeadNextActionType.CALL,
+      description: 'Amanhã na Organization',
+      dueAt: deadlines.futureDue.toISOString(),
+    });
+    await expect(
+      service.nextAction(tenant, created.leadId),
+    ).resolves.toMatchObject({
+      temporalState: 'future',
+    });
+    await runtime.query('RESET TIME ZONE');
+  });
+
+  it('transfers, clears and closes a pending action atomically', async () => {
+    const fixture = await createFixture();
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      'e'.repeat(64),
+      'manual',
+      fixture.memberships[1].id,
+      '+5562555555562',
+    );
+    const service = createLeadService();
+    const tenant = ownerTenant(fixture);
+    const action = await service.createNextAction(
+      tenant,
+      created.leadId,
+      created.revision,
+      randomUUID(),
+      {
+        type: LeadNextActionType.CALL,
+        description: 'Ligar para cliente',
+        dueAt: new Date(Date.now() + 60_000).toISOString(),
+      },
+    );
+    await expect(
+      service.assign(tenant, created.leadId, '2', fixture.memberships[0].id),
+    ).resolves.toMatchObject({ revision: '3' });
+    let [pending] = await owner.query<
+      Array<{ responsibleMembershipId: string | null; revision: string }>
+    >(
+      `SELECT responsible_membership_id AS "responsibleMembershipId",
+              revision::text AS revision FROM public.lead_next_actions
+       WHERE id = $1`,
+      [action.id],
+    );
+    expect(pending).toEqual({
+      responsibleMembershipId: fixture.memberships[0].id,
+      revision: '2',
+    });
+    await service.assign(tenant, created.leadId, '3', null);
+    [pending] = await owner.query(
+      `SELECT responsible_membership_id AS "responsibleMembershipId",
+              revision::text AS revision FROM public.lead_next_actions WHERE id = $1`,
+      [action.id],
+    );
+    expect(pending).toEqual({ responsibleMembershipId: null, revision: '3' });
+    await service.assign(
+      tenant,
+      created.leadId,
+      '4',
+      fixture.memberships[1].id,
+    );
+    await owner.getRepository(Membership).update(fixture.memberships[1].id, {
+      status: MembershipStatus.INACTIVE,
+    });
+    const formerResponsibleTenant = {
+      userId: fixture.users[1].id,
+      membershipId: fixture.memberships[1].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.MEMBER,
+    };
+    await expect(
+      service.timeline(formerResponsibleTenant, created.leadId, { limit: 50 }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      service.nextAction(formerResponsibleTenant, created.leadId),
+    ).rejects.toMatchObject({ status: 404 });
+    [pending] = await owner.query(
+      `SELECT responsible_membership_id AS "responsibleMembershipId",
+              revision::text AS revision FROM public.lead_next_actions WHERE id = $1`,
+      [action.id],
+    );
+    expect(pending).toEqual({ responsibleMembershipId: null, revision: '5' });
+
+    const current = await service.get(tenant, created.leadId);
+    await service.win(tenant, created.leadId, current.revision, randomUUID());
+    const [closed] = await owner.query<
+      Array<{ status: string; reason: string; closeEvents: string }>
+    >(
+      `SELECT action.status, action.cancellation_reason AS reason,
+        (SELECT count(*)::text FROM public.lead_timeline_events event
+          WHERE event.lead_id = action.lead_id AND event.next_action_id = action.id
+            AND event.event_type = 'lead.won') AS "closeEvents"
+       FROM public.lead_next_actions action WHERE action.id = $1`,
+      [action.id],
+    );
+    expect(closed).toEqual({
+      status: 'canceled',
+      reason: 'lead_closed',
+      closeEvents: '1',
+    });
+    await service.reactivate(
+      tenant,
+      created.leadId,
+      String(BigInt(current.revision) + 1n),
+      randomUUID(),
+    );
+    await expect(
+      service.nextAction(tenant, created.leadId),
+    ).resolves.toMatchObject({
+      item: null,
+      temporalState: 'none',
+    });
+  });
+
+  it('denies exact replay after assignment loss and user offboarding', async () => {
+    const fixture = await createFixture();
+    const service = createLeadService();
+    const tenant = ownerTenant(fixture);
+    const memberTenant = {
+      userId: fixture.users[1].id,
+      membershipId: fixture.memberships[1].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.MEMBER,
+    };
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      '8'.repeat(64),
+      'manual',
+      fixture.memberships[1].id,
+      uniquePhone(),
+    );
+    const noteKey = randomUUID();
+    await service.createNote(memberTenant, created.leadId, '1', noteKey, {
+      content: 'Replay depende de visibilidade atual',
+    });
+    await service.assign(tenant, created.leadId, '2', null);
+    await expect(
+      service.createNote(memberTenant, created.leadId, '1', noteKey, {
+        content: 'Replay depende de visibilidade atual',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+
+    await service.assign(
+      tenant,
+      created.leadId,
+      '3',
+      fixture.memberships[1].id,
+    );
+    const actionKey = randomUUID();
+    const actionInput = {
+      type: LeadNextActionType.CALL,
+      description: 'Ação do usuário ativo',
+      dueAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+    await service.createNextAction(
+      memberTenant,
+      created.leadId,
+      '4',
+      actionKey,
+      actionInput,
+    );
+    await owner.getRepository(User).update(fixture.users[1].id, {
+      status: UserStatus.INACTIVE,
+    });
+    await expect(
+      service.createNextAction(
+        memberTenant,
+        created.leadId,
+        '4',
+        actionKey,
+        actionInput,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    const [state] = await owner.query<
+      Array<{
+        userStatus: string;
+        leadResponsible: string | null;
+        pendingResponsible: string | null;
+      }>
+    >(
+      `SELECT application_user.status AS "userStatus",
+              lead.responsible_membership_id AS "leadResponsible",
+              action.responsible_membership_id AS "pendingResponsible"
+       FROM public.users application_user
+       JOIN public.leads lead ON lead.organization_id = $2 AND lead.id = $3
+       LEFT JOIN public.lead_next_actions action ON action.lead_id = lead.id
+         AND action.status = 'pending'
+       WHERE application_user.id = $1`,
+      [fixture.users[1].id, fixture.organization.id, created.leadId],
+    );
+    expect(state).toEqual({
+      userStatus: 'inactive',
+      leadResponsible: null,
+      pendingResponsible: null,
+    });
+  });
+
+  it('allows owner closed-history records, denies member writes, and serializes complete versus reschedule', async () => {
+    const fixture = await createFixture();
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      'f'.repeat(64),
+      'manual',
+      fixture.memberships[1].id,
+      '+5562555555563',
+    );
+    const service = createLeadService();
+    const tenant = ownerTenant(fixture);
+    await service.win(tenant, created.leadId, created.revision, randomUUID());
+    const [cycle] = await owner.query<Array<{ closedAt: Date }>>(
+      `SELECT closed_at AS "closedAt" FROM public.lead_commercial_cycles
+       WHERE lead_id = $1 ORDER BY cycle_number DESC LIMIT 1`,
+      [created.leadId],
+    );
+    await expect(
+      service.createActivity(tenant, created.leadId, '2', randomUUID(), {
+        type: LeadActivityType.CALL,
+        performedAt: cycle.closedAt.toISOString(),
+      }),
+    ).resolves.toMatchObject({ revision: '3' });
+    await expect(
+      service.createActivity(tenant, created.leadId, '3', randomUUID(), {
+        type: LeadActivityType.CALL,
+        performedAt: new Date(cycle.closedAt.getTime() + 1).toISOString(),
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      service.createNote(tenant, created.leadId, '3', randomUUID(), {
+        content: 'Registro administrativo após fechamento.',
+      }),
+    ).resolves.toMatchObject({ revision: '4' });
+    await expect(
+      service.createNote(
+        {
+          userId: fixture.users[1].id,
+          membershipId: fixture.memberships[1].id,
+          organizationId: fixture.organization.id,
+          role: MembershipRole.MEMBER,
+        },
+        created.leadId,
+        '4',
+        randomUUID(),
+        { content: 'Member não pode.' },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.createActivity(
+        {
+          userId: fixture.users[1].id,
+          membershipId: fixture.memberships[1].id,
+          organizationId: fixture.organization.id,
+          role: MembershipRole.MEMBER,
+        },
+        created.leadId,
+        '4',
+        randomUUID(),
+        {
+          type: LeadActivityType.CALL,
+          performedAt: cycle.closedAt.toISOString(),
+        },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const foreignFixture = await createFixture();
+    await expect(
+      service.createNote(
+        ownerTenant(foreignFixture),
+        created.leadId,
+        '4',
+        randomUUID(),
+        { content: 'Cross tenant.' },
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+
+    await owner.getRepository(Membership).update(fixture.memberships[1].id, {
+      role: MembershipRole.ADMIN,
+    });
+    await expect(
+      service.createNote(
+        {
+          userId: fixture.users[1].id,
+          membershipId: fixture.memberships[1].id,
+          organizationId: fixture.organization.id,
+          role: MembershipRole.ADMIN,
+        },
+        created.leadId,
+        '4',
+        randomUUID(),
+        { content: 'Registro administrativo do admin.' },
+      ),
+    ).resolves.toMatchObject({ revision: '5' });
+
+    const raceLead = await ingest(
+      fixture,
+      randomUUID(),
+      '1'.repeat(64),
+      'manual',
+      null,
+      '+5562555555564',
+    );
+    await service.createNextAction(
+      tenant,
+      raceLead.leadId,
+      raceLead.revision,
+      randomUUID(),
+      {
+        type: LeadNextActionType.MEETING,
+        description: 'Reunião de diagnóstico',
+        dueAt: new Date(Date.now() + 60_000).toISOString(),
+      },
+    );
+    const results = await Promise.allSettled([
+      service.completeNextAction(tenant, raceLead.leadId, '2', randomUUID(), {
+        performedAt: await databaseNow(),
+      }),
+      service.rescheduleNextAction(tenant, raceLead.leadId, '2', randomUUID(), {
+        dueAt: new Date(Date.now() + 120_000).toISOString(),
+      }),
+    ]);
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.find((result) => result.status === 'rejected'),
+    ).toMatchObject({
+      reason: { status: 412 },
+    });
+  });
+
+  it('serializes every competing Next Action state command by the Lead revision', async () => {
+    const scenarios: Array<{
+      name: string;
+      run: (
+        service: LeadsService,
+        tenant: ReturnType<typeof ownerTenant>,
+        leadId: string,
+      ) =>
+        | PromiseSettledResult<unknown>[]
+        | Promise<PromiseSettledResult<unknown>[]>;
+    }> = [
+      {
+        name: 'create × create',
+        run: (service, tenant, leadId) =>
+          Promise.allSettled([
+            service.createNextAction(tenant, leadId, '1', randomUUID(), {
+              type: LeadNextActionType.CALL,
+              description: 'Primeira ligação',
+              dueAt: new Date(Date.now() + 60_000).toISOString(),
+            }),
+            service.createNextAction(tenant, leadId, '1', randomUUID(), {
+              type: LeadNextActionType.MEETING,
+              description: 'Primeira reunião',
+              dueAt: new Date(Date.now() + 120_000).toISOString(),
+            }),
+          ]),
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const fixture = await createFixture();
+      const created = await ingest(
+        fixture,
+        randomUUID(),
+        '2'.repeat(64),
+        'manual',
+        null,
+        uniquePhone(),
+      );
+      const results = await scenario.run(
+        createLeadService(),
+        ownerTenant(fixture),
+        created.leadId,
+      );
+      expectSingleStaleWinner(scenario.name, results);
+    }
+
+    const pairScenarios = [
+      'reschedule × reschedule',
+      'complete × cancel',
+      'complete × complete',
+      'cancel × cancel',
+    ] as const;
+    for (const scenario of pairScenarios) {
+      const fixture = await createFixture();
+      const service = createLeadService();
+      const tenant = ownerTenant(fixture);
+      const created = await ingest(
+        fixture,
+        randomUUID(),
+        '3'.repeat(64),
+        'manual',
+        null,
+        uniquePhone(),
+      );
+      await service.createNextAction(
+        tenant,
+        created.leadId,
+        '1',
+        randomUUID(),
+        {
+          type: LeadNextActionType.CALL,
+          description: 'Ação concorrente',
+          dueAt: new Date(Date.now() + 60_000).toISOString(),
+        },
+      );
+      const completedAt = await databaseNow();
+      const commands =
+        scenario === 'reschedule × reschedule'
+          ? [
+              service.rescheduleNextAction(
+                tenant,
+                created.leadId,
+                '2',
+                randomUUID(),
+                { dueAt: new Date(Date.now() + 120_000).toISOString() },
+              ),
+              service.rescheduleNextAction(
+                tenant,
+                created.leadId,
+                '2',
+                randomUUID(),
+                { dueAt: new Date(Date.now() + 180_000).toISOString() },
+              ),
+            ]
+          : scenario === 'complete × cancel'
+            ? [
+                service.completeNextAction(
+                  tenant,
+                  created.leadId,
+                  '2',
+                  randomUUID(),
+                  { performedAt: completedAt },
+                ),
+                service.cancelNextAction(
+                  tenant,
+                  created.leadId,
+                  '2',
+                  randomUUID(),
+                  { note: 'Cancelamento concorrente' },
+                ),
+              ]
+            : scenario === 'complete × complete'
+              ? [
+                  service.completeNextAction(
+                    tenant,
+                    created.leadId,
+                    '2',
+                    randomUUID(),
+                    { performedAt: completedAt },
+                  ),
+                  service.completeNextAction(
+                    tenant,
+                    created.leadId,
+                    '2',
+                    randomUUID(),
+                    { performedAt: completedAt },
+                  ),
+                ]
+              : [
+                  service.cancelNextAction(
+                    tenant,
+                    created.leadId,
+                    '2',
+                    randomUUID(),
+                    { note: 'Primeiro cancelamento' },
+                  ),
+                  service.cancelNextAction(
+                    tenant,
+                    created.leadId,
+                    '2',
+                    randomUUID(),
+                    { note: 'Segundo cancelamento' },
+                  ),
+                ];
+      expectSingleStaleWinner(scenario, await Promise.allSettled(commands));
+    }
+  });
+
+  it('serializes follow-up writes against lifecycle and assignment commands', async () => {
+    const scenarios = [
+      'close × complete',
+      'close × reschedule',
+      'assignment × complete',
+      'unassignment × complete',
+      'Activity create × Activity create',
+      'Note create × Note create',
+      'Activity create × close',
+      'Note create × close',
+    ] as const;
+    for (const scenario of scenarios) {
+      const fixture = await createFixture();
+      const service = createLeadService();
+      const tenant = ownerTenant(fixture);
+      const responsibleTenant = {
+        userId: fixture.users[1].id,
+        membershipId: fixture.memberships[1].id,
+        organizationId: fixture.organization.id,
+        role: MembershipRole.MEMBER,
+      };
+      const requiresAction =
+        !scenario.startsWith('Activity') && !scenario.startsWith('Note');
+      const created = await ingest(
+        fixture,
+        randomUUID(),
+        '4'.repeat(64),
+        'manual',
+        fixture.memberships[1].id,
+        uniquePhone(),
+      );
+      if (requiresAction) {
+        await service.createNextAction(
+          tenant,
+          created.leadId,
+          '1',
+          randomUUID(),
+          {
+            type: LeadNextActionType.CALL,
+            description: 'Ação em disputa',
+            dueAt: new Date(Date.now() + 60_000).toISOString(),
+          },
+        );
+      }
+      const revision = requiresAction ? '2' : '1';
+      const completedAt = await databaseNow();
+      const commands =
+        scenario === 'close × complete'
+          ? [
+              service.win(tenant, created.leadId, revision, randomUUID()),
+              service.completeNextAction(
+                tenant,
+                created.leadId,
+                revision,
+                randomUUID(),
+                { performedAt: completedAt },
+              ),
+            ]
+          : scenario === 'close × reschedule'
+            ? [
+                service.win(tenant, created.leadId, revision, randomUUID()),
+                service.rescheduleNextAction(
+                  tenant,
+                  created.leadId,
+                  revision,
+                  randomUUID(),
+                  { dueAt: new Date(Date.now() + 120_000).toISOString() },
+                ),
+              ]
+            : scenario === 'assignment × complete'
+              ? [
+                  service.assign(
+                    tenant,
+                    created.leadId,
+                    revision,
+                    fixture.memberships[0].id,
+                  ),
+                  service.completeNextAction(
+                    responsibleTenant,
+                    created.leadId,
+                    revision,
+                    randomUUID(),
+                    { performedAt: completedAt },
+                  ),
+                ]
+              : scenario === 'unassignment × complete'
+                ? [
+                    service.assign(tenant, created.leadId, revision, null),
+                    service.completeNextAction(
+                      responsibleTenant,
+                      created.leadId,
+                      revision,
+                      randomUUID(),
+                      { performedAt: completedAt },
+                    ),
+                  ]
+                : scenario === 'Activity create × Activity create'
+                  ? [
+                      service.createActivity(
+                        tenant,
+                        created.leadId,
+                        revision,
+                        randomUUID(),
+                        {
+                          type: LeadActivityType.CALL,
+                          performedAt: completedAt,
+                        },
+                      ),
+                      service.createActivity(
+                        tenant,
+                        created.leadId,
+                        revision,
+                        randomUUID(),
+                        {
+                          type: LeadActivityType.INTERNAL_TASK,
+                          performedAt: completedAt,
+                        },
+                      ),
+                    ]
+                  : scenario === 'Note create × Note create'
+                    ? [
+                        service.createNote(
+                          tenant,
+                          created.leadId,
+                          revision,
+                          randomUUID(),
+                          { content: 'Primeira nota concorrente' },
+                        ),
+                        service.createNote(
+                          tenant,
+                          created.leadId,
+                          revision,
+                          randomUUID(),
+                          { content: 'Segunda nota concorrente' },
+                        ),
+                      ]
+                    : scenario === 'Activity create × close'
+                      ? [
+                          service.createActivity(
+                            tenant,
+                            created.leadId,
+                            revision,
+                            randomUUID(),
+                            {
+                              type: LeadActivityType.CALL,
+                              performedAt: completedAt,
+                            },
+                          ),
+                          service.win(
+                            tenant,
+                            created.leadId,
+                            revision,
+                            randomUUID(),
+                          ),
+                        ]
+                      : [
+                          service.createNote(
+                            tenant,
+                            created.leadId,
+                            revision,
+                            randomUUID(),
+                            { content: 'Nota em disputa com fechamento' },
+                          ),
+                          service.win(
+                            tenant,
+                            created.leadId,
+                            revision,
+                            randomUUID(),
+                          ),
+                        ];
+      const results = await Promise.allSettled(commands);
+      if (
+        scenario === 'assignment × complete' ||
+        scenario === 'unassignment × complete'
+      ) {
+        expectSingleRejectedWithStatuses(scenario, results, [404, 412]);
+      } else {
+        expectSingleStaleWinner(scenario, results);
+      }
+    }
+  });
+
+  it('preserves invariants for offboarding and reactivation races', async () => {
+    for (const scenario of [
+      'offboarding × complete',
+      'offboarding × create',
+    ] as const) {
+      const fixture = await createFixture();
+      const service = createLeadService();
+      const memberTenant = {
+        userId: fixture.users[1].id,
+        membershipId: fixture.memberships[1].id,
+        organizationId: fixture.organization.id,
+        role: MembershipRole.MEMBER,
+      };
+      const created = await ingest(
+        fixture,
+        randomUUID(),
+        '5'.repeat(64),
+        'manual',
+        fixture.memberships[1].id,
+        uniquePhone(),
+      );
+      if (scenario === 'offboarding × complete') {
+        await service.createNextAction(
+          memberTenant,
+          created.leadId,
+          '1',
+          randomUUID(),
+          {
+            type: LeadNextActionType.CALL,
+            description: 'Ação do member',
+            dueAt: new Date(Date.now() + 60_000).toISOString(),
+          },
+        );
+      }
+      const revision = scenario === 'offboarding × complete' ? '2' : '1';
+      const performedAt = await databaseNow();
+      const operation =
+        scenario === 'offboarding × complete'
+          ? service.completeNextAction(
+              memberTenant,
+              created.leadId,
+              revision,
+              randomUUID(),
+              { performedAt },
+            )
+          : service.createNextAction(
+              memberTenant,
+              created.leadId,
+              revision,
+              randomUUID(),
+              {
+                type: LeadNextActionType.CALL,
+                description: 'Criação durante offboarding',
+                dueAt: new Date(Date.now() + 60_000).toISOString(),
+              },
+            );
+      const results = await Promise.allSettled([
+        owner.getRepository(Membership).update(fixture.memberships[1].id, {
+          status: MembershipStatus.INACTIVE,
+        }),
+        operation,
+      ]);
+      expect(results[0]).toMatchObject({ status: 'fulfilled' });
+      if (results[1]?.status === 'rejected') {
+        expect([403, 404]).toContain(exceptionStatus(results[1].reason));
+      }
+      const [state] = await owner.query<
+        Array<{
+          memberStatus: string;
+          leadResponsible: string | null;
+          pendingResponsible: string | null;
+        }>
+      >(
+        `SELECT membership.status AS "memberStatus",
+                lead.responsible_membership_id AS "leadResponsible",
+                action.responsible_membership_id AS "pendingResponsible"
+         FROM public.memberships membership
+         JOIN public.leads lead ON lead.organization_id = membership.organization_id
+           AND lead.id = $2
+         LEFT JOIN public.lead_next_actions action ON action.lead_id = lead.id
+           AND action.status = 'pending'
+         WHERE membership.id = $1`,
+        [fixture.memberships[1].id, created.leadId],
+      );
+      expect(state).toMatchObject({
+        memberStatus: 'inactive',
+        leadResponsible: null,
+        pendingResponsible: null,
+      });
+    }
+
+    const fixture = await createFixture();
+    const service = createLeadService();
+    const tenant = ownerTenant(fixture);
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      '6'.repeat(64),
+      'manual',
+      null,
+      uniquePhone(),
+    );
+    await service.win(tenant, created.leadId, '1', randomUUID());
+    const results = await Promise.allSettled([
+      service.reactivate(tenant, created.leadId, '2', randomUUID()),
+      service.createNextAction(tenant, created.leadId, '2', randomUUID(), {
+        type: LeadNextActionType.CALL,
+        description: 'Não deve atravessar reativação',
+        dueAt: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    ]);
+    expect(results[0]).toMatchObject({ status: 'fulfilled' });
+    expect(results[1]).toMatchObject({ status: 'rejected' });
+    expect([409, 412]).toContain(
+      results[1].status === 'rejected'
+        ? exceptionStatus(results[1].reason)
+        : undefined,
+    );
+    await expect(
+      service.nextAction(tenant, created.leadId),
+    ).resolves.toMatchObject({
+      item: null,
+      temporalState: 'none',
+    });
+  });
+
+  it('fails the 0.3.3 rollback closed after real follow-up data exists', async () => {
+    await expect(
+      new ManageLeadActivitiesFollowUp1785519600000().down(migrationRunner),
+    ).rejects.toThrow('Unsafe rollback');
+  });
+
   async function createFixture(): Promise<Fixture> {
     const suffix = randomUUID();
     const organization = await owner.getRepository(Organization).save({
@@ -1045,6 +2206,80 @@ describe('Lead foundation database integration', () => {
       status: OrganizationStatus.ACTIVE,
     });
     return { organization, users, memberships };
+  }
+
+  function createLeadService(): LeadsService {
+    const config = leadConfig();
+    return new LeadsService(
+      runtime,
+      { getOrThrow: () => config } as unknown as ConfigService,
+      new OperationalLeadReadiness(config, runtime),
+    );
+  }
+
+  function ownerTenant(fixture: Fixture) {
+    return {
+      userId: fixture.users[0].id,
+      membershipId: fixture.memberships[0].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.OWNER,
+    };
+  }
+
+  let phoneSequence = 70;
+
+  function uniquePhone(): string {
+    const phone = `+55625555555${phoneSequence}`;
+    phoneSequence += 1;
+    return phone;
+  }
+
+  function expectSingleStaleWinner(
+    scenario: string,
+    results: PromiseSettledResult<unknown>[],
+  ): void {
+    expect({
+      scenario,
+      fulfilled: results.filter((result) => result.status === 'fulfilled')
+        .length,
+      rejected: results.filter((result) => result.status === 'rejected').length,
+    }).toEqual({ scenario, fulfilled: 1, rejected: 1 });
+    const loser = results.find((result) => result.status === 'rejected');
+    expect(
+      loser?.status === 'rejected' ? exceptionStatus(loser.reason) : undefined,
+    ).toBe(412);
+  }
+
+  function expectSingleRejectedWithStatuses(
+    scenario: string,
+    results: PromiseSettledResult<unknown>[],
+    statuses: number[],
+  ): void {
+    expect({
+      scenario,
+      fulfilled: results.filter((result) => result.status === 'fulfilled')
+        .length,
+      rejected: results.filter((result) => result.status === 'rejected').length,
+    }).toEqual({ scenario, fulfilled: 1, rejected: 1 });
+    const loser = results.find((result) => result.status === 'rejected');
+    expect(statuses).toContain(
+      loser?.status === 'rejected' ? exceptionStatus(loser.reason) : undefined,
+    );
+  }
+
+  function exceptionStatus(reason: unknown): number | undefined {
+    if (typeof reason !== 'object' || reason === null) return undefined;
+    const status = (reason as { status?: unknown }).status;
+    return typeof status === 'number' ? status : undefined;
+  }
+
+  async function databaseNow(): Promise<string> {
+    const [row] = await owner.query<Array<{ now: string }>>(
+      `SELECT to_char(statement_timestamp() AT TIME ZONE 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS now`,
+    );
+    if (row === undefined) throw new Error('PostgreSQL clock unavailable.');
+    return row.now;
   }
 
   async function ingest(
