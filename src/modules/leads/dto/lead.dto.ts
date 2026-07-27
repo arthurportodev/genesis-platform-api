@@ -8,13 +8,20 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { LeadSource } from '../enums/lead.enums';
+import {
+  LeadArchiveReason,
+  LeadLostReason,
+  LeadSource,
+  LeadStage,
+  LeadStatus,
+} from '../enums/lead.enums';
 
 export class LeadParamsDto {
   @IsUUID('4')
@@ -174,4 +181,60 @@ export class ListLeadsDto {
   @IsOptional()
   @IsIn(['true', 'false'])
   unassigned?: 'true' | 'false';
+
+  @IsOptional()
+  @IsEnum(LeadStatus)
+  status?: LeadStatus;
+
+  @IsOptional()
+  @IsEnum(LeadStage)
+  stage?: LeadStage;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  returnPending?: 'true' | 'false';
+}
+
+export class MoveLeadDto {
+  @IsEnum(LeadStage)
+  stage!: LeadStage;
+}
+
+export class LoseLeadDto {
+  @IsEnum(LeadLostReason)
+  lostReason!: LeadLostReason;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  @Matches(/^[^\p{Cc}\p{Zl}\p{Zp}]*$/u)
+  reasonNote?: string;
+}
+
+export class ArchiveLeadDto {
+  @IsEnum(LeadArchiveReason)
+  archiveReason!: LeadArchiveReason;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  @Matches(/^[^\p{Cc}\p{Zl}\p{Zp}]*$/u)
+  reasonNote?: string;
+}
+
+export class EmptyLeadCommandDto {}
+
+export class ListLeadCyclesDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 25;
 }

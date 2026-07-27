@@ -26,8 +26,9 @@ Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado
 
 ## 0.3 — CRM 🚧
 
-- 🚧 0.3.1 — Fundação e Inbox de Leads (candidato local em validação).
-- ⬜ Pipeline, atividades, notas, busca, métricas e demais capacidades do CRM.
+- ✅ 0.3.1 — Fundação e Inbox de Leads (PR #18, squash `dbaa1a0430c7b0a65ce28ca20d3eff277aa7cdca`).
+- 🚧 0.3.2 — Pipeline comercial, fechamento e retorno (candidato local em validação).
+- ⬜ Atividades, notas, busca, métricas e demais capacidades do CRM.
 
 ## 0.4 — Comunicação
 

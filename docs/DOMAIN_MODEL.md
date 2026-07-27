@@ -139,8 +139,17 @@ Entidades de negócio tenant-scoped devem conter `organization_id` e depender do
 
 ## Lead, LeadEntry e Timeline 0.3.1
 
-- `Lead` representa a identidade ativa do contato por `organization_id` e telefone E.164; a unicidade `(organization_id, primary_phone)` é a fronteira de deduplicação.
-- `LeadEntry` é append-only e registra cada entrada com canal, Source e UTMs sem sobrescrever atribuição anterior. Duplicidade ativa cria exatamente uma nova Entry.
+- `Lead` representa a identidade do contato por `organization_id` e telefone E.164; a unicidade `(organization_id, primary_phone)` é a fronteira de deduplicação.
+- `LeadEntry` é append-only e registra cada entrada com canal, Source e UTMs sem sobrescrever atribuição anterior. Toda duplicidade cria exatamente uma nova Entry.
 - A timeline append-only registra criação, entrada recebida, alteração de dados básicos e mudança ou limpeza de responsável em colunas explícitas.
-- `status=active` e `stage=new` são constantes da API nesta tarefa; pipeline persistido permanece fora do escopo.
 - Member enxerga somente Leads atribuídos à sua Membership. Owner/admin acessam o tenant inteiro e administram assignment; offboarding limpa assignments atomicamente, sem redistribuição.
+
+## Pipeline, ciclos e retornos 0.3.2
+
+- `Lead.status` usa `active`, `won`, `lost` ou `archived`; `Lead.stage` usa `new`, `qualification`, `diagnosis`, `proposal` ou `negotiation`.
+- Movimentações entre estágios são livres enquanto o Lead está ativo. Fechamento preserva o estágio; reativação volta a `active/qualification` e incrementa o número do ciclo.
+- `LeadCommercialCycle` mantém o histórico imutável de abertura e fechamento. Existe exatamente um ciclo aberto para Lead ativo e nenhum para Lead encerrado, protegido também por constraint triggers diferidos.
+- Perda exige um motivo tipado; arquivamento usa motivos próprios. `reasonNote` pertence ao ciclo encerrado, é obrigatório somente para `other`, tem no máximo 500 caracteres e não admite controles ou quebras de linha.
+- Uma Entry recebida após fechamento preserva status, estágio e assignment e abre ou agrega um único `LeadReturnReview` pendente. Reativar terminaliza a revisão e abre novo ciclo; descartar apenas terminaliza a revisão.
+- Comandos de lifecycle são idempotentes por tenant, ator, comando e UUID v4, usam fingerprint HMAC versionado e controle otimista por revisão. Efeitos efetivos incrementam revisão e timeline exatamente uma vez; mover para o mesmo estágio é no-op persistido.
+- Owner/admin podem editar dados básicos e assignment de Leads encerrados; member pode lê-los enquanto atribuído, mas não editar dados básicos após o fechamento. Offboarding continua limpando assignment sem alterar lifecycle.

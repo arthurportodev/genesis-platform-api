@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   CanActivate,
   ExecutionContext,
   INestApplication,
@@ -20,6 +21,10 @@ import { FormRateLimitGuard } from '../../src/modules/leads/guards/form-rate-lim
 import { FormSignatureGuard } from '../../src/modules/leads/guards/form-signature.guard';
 import { FormLeadReadinessGuard } from '../../src/modules/leads/guards/lead-readiness.guards';
 import { ManualLeadReadinessGuard } from '../../src/modules/leads/guards/lead-readiness.guards';
+import {
+  LeadStage,
+  LeadStatus,
+} from '../../src/modules/leads/enums/lead.enums';
 import { LEAD_READINESS } from '../../src/modules/leads/ports/lead-readiness.port';
 import { FormSignatureService } from '../../src/modules/leads/security/form-signature.service';
 import { FormRateLimiter } from '../../src/modules/leads/services/form-rate-limiter.service';
@@ -59,8 +64,10 @@ describe('Lead HTTP contract (e2e)', () => {
     city: null,
     serviceInterest: null,
     responsibleMembershipId: null,
-    status: 'active',
-    stage: 'new',
+    status: LeadStatus.ACTIVE,
+    stage: LeadStage.NEW,
+    latestCycleNumber: '1',
+    returnReviewPending: false,
     revision: '1',
     createdAt: new Date('2026-07-22T12:00:00Z'),
     updatedAt: new Date('2026-07-22T12:00:00Z'),
@@ -84,8 +91,15 @@ describe('Lead HTTP contract (e2e)', () => {
     list: jest.fn(),
     get: jest.fn(),
     timeline: jest.fn(),
+    cycles: jest.fn(),
     update: jest.fn(),
     assign: jest.fn(),
+    move: jest.fn(),
+    win: jest.fn(),
+    lose: jest.fn(),
+    archive: jest.fn(),
+    reactivate: jest.fn(),
+    dismissReturn: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -224,6 +238,78 @@ describe('Lead HTTP contract (e2e)', () => {
       '1',
       null,
     );
+  });
+
+  it('returns bodyless 204, ETag, no-store, and replay metadata for commands', async () => {
+    tenantGuard.role = MembershipRole.OWNER;
+    leads.move.mockResolvedValue({
+      responseStatus: 204,
+      revision: '2',
+      replayed: true,
+    });
+    const key = randomUUID();
+    const response = await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/move`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', key)
+      .send({ stage: 'qualification' })
+      .expect(204)
+      .expect('ETag', `"lead:${leadId}:2"`)
+      .expect('Idempotency-Replayed', 'true')
+      .expect('Cache-Control', 'no-store');
+    expect(response.text).toBe('');
+    expect(leads.move).toHaveBeenCalledWith(
+      expect.any(Object),
+      leadId,
+      '1',
+      key,
+      'qualification',
+    );
+  });
+
+  it('validates command preconditions, closed reason notes, and empty bodies', async () => {
+    const key = randomUUID();
+    leads.lose.mockRejectedValueOnce(
+      new BadRequestException('Reason note is required.'),
+    );
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/win`)
+      .set('Idempotency-Key', key)
+      .send({})
+      .expect(428);
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/win`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .send({})
+      .expect(400);
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/lose`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', key)
+      .send({ lostReason: 'other' })
+      .expect(400);
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/archive`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', key)
+      .send({ archiveReason: 'other', reasonNote: 'line\nbreak' })
+      .expect(400);
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/archive`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', key)
+      .send({ archiveReason: 'other', reasonNote: 'line\u2028break' })
+      .expect(400);
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/reactivate`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', key)
+      .send({ unexpected: true })
+      .expect(400);
+    expect(leads.win).not.toHaveBeenCalled();
+    expect(leads.lose).toHaveBeenCalledTimes(1);
+    expect(leads.archive).not.toHaveBeenCalled();
+    expect(leads.reactivate).not.toHaveBeenCalled();
   });
 
   it('returns updated ETags and propagates stale preconditions', async () => {

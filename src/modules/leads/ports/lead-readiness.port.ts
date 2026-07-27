@@ -60,6 +60,9 @@ export class OperationalLeadReadiness implements LeadReadiness {
             AND to_regclass('public.lead_entries') IS NOT NULL
             AND to_regclass('public.lead_timeline_events') IS NOT NULL
             AND to_regclass('public.lead_ingest_idempotency') IS NOT NULL
+            AND to_regclass('public.lead_commercial_cycles') IS NOT NULL
+            AND to_regclass('public.lead_return_reviews') IS NOT NULL
+            AND to_regclass('public.lead_command_idempotency') IS NOT NULL
             AS "tablesReady",
           to_regprocedure('app_private.ingest_lead(uuid,uuid,uuid,text,text,text,text,text,text,text,text,uuid,text,text,text,text,text,text,text,uuid,smallint,text,jsonb)') IS NOT NULL
             AND to_regprocedure('app_private.update_lead(uuid,uuid,uuid,uuid,bigint,text,text,text,text,text,text,text)') IS NOT NULL
@@ -67,10 +70,12 @@ export class OperationalLeadReadiness implements LeadReadiness {
             AND has_function_privilege(current_user, 'app_private.ingest_lead(uuid,uuid,uuid,text,text,text,text,text,text,text,text,uuid,text,text,text,text,text,text,text,uuid,smallint,text,jsonb)', 'EXECUTE')
             AND has_function_privilege(current_user, 'app_private.update_lead(uuid,uuid,uuid,uuid,bigint,text,text,text,text,text,text,text)', 'EXECUTE')
             AND has_function_privilege(current_user, 'app_private.assign_lead(uuid,uuid,uuid,uuid,uuid,bigint)', 'EXECUTE')
+            AND to_regprocedure('app_private.execute_lead_command(uuid,uuid,uuid,uuid,app_private.lead_command_enum,bigint,uuid,smallint,text,jsonb,lead_stage_enum,lead_lost_reason_enum,lead_archive_reason_enum,text)') IS NOT NULL
+            AND has_function_privilege(current_user, 'app_private.execute_lead_command(uuid,uuid,uuid,uuid,app_private.lead_command_enum,bigint,uuid,smallint,text,jsonb,lead_stage_enum,lead_lost_reason_enum,lead_archive_reason_enum,text)', 'EXECUTE')
             AND to_regprocedure('app_private.required_lead_fingerprint_key_versions()') IS NOT NULL
             AND has_function_privilege(current_user, 'app_private.required_lead_fingerprint_key_versions()', 'EXECUTE')
             AS "functionsReady",
-          (SELECT count(*) = 8 FROM pg_trigger AS trigger
+          (SELECT count(*) = 14 FROM pg_trigger AS trigger
             WHERE NOT trigger.tgisinternal AND trigger.tgenabled = 'O'
               AND trigger.tgname IN (
                 'trg_lead_entries_append_only',
@@ -80,11 +85,19 @@ export class OperationalLeadReadiness implements LeadReadiness {
                 'trg_lead_timeline_events_append_only_statement',
                 'trg_lead_timeline_events_reject_truncate',
                 'trg_memberships_clear_lead_assignments',
-                'trg_users_clear_lead_assignments'
+                'trg_users_clear_lead_assignments',
+                'trg_leads_state_transition',
+                'trg_lead_cycles_protect',
+                'trg_lead_return_reviews_protect',
+                'trg_leads_cycle_consistency',
+                'trg_lead_cycles_consistency',
+                'trg_lead_return_reviews_consistency'
               )) AS "triggersReady",
           has_table_privilege(current_user, 'public.leads', 'SELECT')
             AND has_table_privilege(current_user, 'public.lead_entries', 'SELECT')
             AND has_table_privilege(current_user, 'public.lead_timeline_events', 'SELECT')
+            AND has_table_privilege(current_user, 'public.lead_commercial_cycles', 'SELECT')
+            AND has_table_privilege(current_user, 'public.lead_return_reviews', 'SELECT')
             AND NOT has_table_privilege(current_user, 'public.leads', 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
             AND NOT has_any_column_privilege(current_user, 'public.leads', 'INSERT,UPDATE,REFERENCES')
             AND NOT has_table_privilege(current_user, 'public.lead_entries', 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
@@ -93,6 +106,12 @@ export class OperationalLeadReadiness implements LeadReadiness {
             AND NOT has_any_column_privilege(current_user, 'public.lead_timeline_events', 'INSERT,UPDATE,REFERENCES')
             AND NOT has_table_privilege(current_user, 'public.lead_ingest_idempotency', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
             AND NOT has_any_column_privilege(current_user, 'public.lead_ingest_idempotency', 'SELECT,INSERT,UPDATE,REFERENCES')
+            AND NOT has_table_privilege(current_user, 'public.lead_commercial_cycles', 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
+            AND NOT has_any_column_privilege(current_user, 'public.lead_commercial_cycles', 'INSERT,UPDATE,REFERENCES')
+            AND NOT has_table_privilege(current_user, 'public.lead_return_reviews', 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
+            AND NOT has_any_column_privilege(current_user, 'public.lead_return_reviews', 'INSERT,UPDATE,REFERENCES')
+            AND NOT has_table_privilege(current_user, 'public.lead_command_idempotency', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
+            AND NOT has_any_column_privilege(current_user, 'public.lead_command_idempotency', 'SELECT,INSERT,UPDATE,REFERENCES')
             AND has_schema_privilege(current_user, 'app_private', 'USAGE')
             AND NOT has_schema_privilege(current_user, 'app_private', 'CREATE')
             AS "aclReady",
@@ -106,7 +125,7 @@ export class OperationalLeadReadiness implements LeadReadiness {
               AND has_function_privilege(current_user, procedure.oid, 'EXECUTE')
             ORDER BY procedure.oid::regprocedure::text
           ) AS "executableFunctions",
-          (SELECT count(*) = 9
+          (SELECT count(*) = 14
            FROM pg_proc AS procedure
            WHERE procedure.oid = ANY(ARRAY[
               to_regprocedure('app_private.ingest_lead(uuid,uuid,uuid,text,text,text,text,text,text,text,text,uuid,text,text,text,text,text,text,text,uuid,smallint,text,jsonb)'),
@@ -117,7 +136,12 @@ export class OperationalLeadReadiness implements LeadReadiness {
              to_regprocedure('app_private.clear_lead_assignments_for_inactive_membership()'),
              to_regprocedure('app_private.clear_lead_assignments_for_inactive_user()'),
              to_regprocedure('app_private.reject_lead_append_only()'),
-             to_regprocedure('app_private.reject_lead_truncate()')
+             to_regprocedure('app_private.reject_lead_truncate()'),
+             to_regprocedure('app_private.execute_lead_command(uuid,uuid,uuid,uuid,app_private.lead_command_enum,bigint,uuid,smallint,text,jsonb,lead_stage_enum,lead_lost_reason_enum,lead_archive_reason_enum,text)'),
+             to_regprocedure('app_private.enforce_lead_state_transition()'),
+             to_regprocedure('app_private.protect_lead_cycle_history()'),
+             to_regprocedure('app_private.protect_lead_return_review_history()'),
+             to_regprocedure('app_private.assert_lead_cycle_consistency()')
            ])
              AND procedure.prosecdef
              AND procedure.proparallel = 'u'
@@ -135,7 +159,10 @@ export class OperationalLeadReadiness implements LeadReadiness {
                 'clear_lead_assignments',
                 'clear_lead_assignments_for_inactive_membership',
                 'clear_lead_assignments_for_inactive_user',
-                'reject_lead_append_only', 'reject_lead_truncate'
+                'reject_lead_append_only', 'reject_lead_truncate',
+                'execute_lead_command', 'enforce_lead_state_transition',
+                'protect_lead_cycle_history', 'protect_lead_return_review_history',
+                'assert_lead_cycle_consistency'
               )
               AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
           ) AND NOT EXISTS (
@@ -144,7 +171,7 @@ export class OperationalLeadReadiness implements LeadReadiness {
             WHERE namespace.nspname = 'app_private'
               AND procedure.proname IN (
                 'ingest_lead', 'update_lead', 'assign_lead',
-                'required_lead_fingerprint_key_versions'
+                'required_lead_fingerprint_key_versions', 'execute_lead_command'
               )
               AND pg_has_role(current_user, procedure.proowner, 'MEMBER')
           ) AND NOT EXISTS (
@@ -158,7 +185,13 @@ export class OperationalLeadReadiness implements LeadReadiness {
                 'trg_lead_timeline_events_append_only_statement',
                 'trg_lead_timeline_events_reject_truncate',
                 'trg_memberships_clear_lead_assignments',
-                'trg_users_clear_lead_assignments'
+                'trg_users_clear_lead_assignments',
+                'trg_leads_state_transition',
+                'trg_lead_cycles_protect',
+                'trg_lead_return_reviews_protect',
+                'trg_leads_cycle_consistency',
+                'trg_lead_cycles_consistency',
+                'trg_lead_return_reviews_consistency'
               ) AND NOT (
                 (trigger.tgname = 'trg_lead_entries_append_only'
                   AND trigger.tgrelid = 'public.lead_entries'::regclass
@@ -192,6 +225,30 @@ export class OperationalLeadReadiness implements LeadReadiness {
                   AND trigger.tgrelid = 'public.users'::regclass
                   AND trigger.tgfoid = to_regprocedure('app_private.clear_lead_assignments_for_inactive_user()')
                   AND trigger.tgtype = 17)
+                OR (trigger.tgname = 'trg_leads_state_transition'
+                  AND trigger.tgrelid = 'public.leads'::regclass
+                  AND trigger.tgfoid = to_regprocedure('app_private.enforce_lead_state_transition()')
+                  AND trigger.tgtype = 23)
+                OR (trigger.tgname = 'trg_lead_cycles_protect'
+                  AND trigger.tgrelid = 'public.lead_commercial_cycles'::regclass
+                  AND trigger.tgfoid = to_regprocedure('app_private.protect_lead_cycle_history()')
+                  AND trigger.tgtype = 27)
+                OR (trigger.tgname = 'trg_lead_return_reviews_protect'
+                  AND trigger.tgrelid = 'public.lead_return_reviews'::regclass
+                  AND trigger.tgfoid = to_regprocedure('app_private.protect_lead_return_review_history()')
+                  AND trigger.tgtype = 27)
+                OR (trigger.tgname = 'trg_leads_cycle_consistency'
+                  AND trigger.tgrelid = 'public.leads'::regclass
+                  AND trigger.tgfoid = to_regprocedure('app_private.assert_lead_cycle_consistency()')
+                  AND trigger.tgtype = 21)
+                OR (trigger.tgname = 'trg_lead_cycles_consistency'
+                  AND trigger.tgrelid = 'public.lead_commercial_cycles'::regclass
+                  AND trigger.tgfoid = to_regprocedure('app_private.assert_lead_cycle_consistency()')
+                  AND trigger.tgtype = 29)
+                OR (trigger.tgname = 'trg_lead_return_reviews_consistency'
+                  AND trigger.tgrelid = 'public.lead_return_reviews'::regclass
+                  AND trigger.tgfoid = to_regprocedure('app_private.assert_lead_cycle_consistency()')
+                  AND trigger.tgtype = 29)
               )
           ) AS "catalogSafe"
       `);
