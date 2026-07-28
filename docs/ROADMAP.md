@@ -48,10 +48,14 @@ Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado
 
 - ✅ 0.7.0 — Contrato Web de Sessão e Bootstrap (PR #22, squash
   `9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`).
-- ⬜ 0.7.1 — Fundação do Frontend Operacional: próxima tarefa planejada, em
-  repositório separado e sem implementação antecipada, com implementação
-  oficial pelo Codex, GitHub como fonte da verdade, Vercel como deploy planejado
-  e Lovable somente como ferramenta visual opcional.
+- 🚧 0.7.1 — Fundação e integração do Frontend Operacional, em repositório
+  separado.
+  - ✅ 0.7.1.1 — Bootstrap do Repositório Frontend (PR #1 do repositório
+    `arthurportodev/genesis-platform-web`, squash
+    `30b91272088dd9be03b8bd9feffbf74dac48acc7`).
+  - ⬜ 0.7.1.2 — Sessão Web, Organization Ativa e Integração com a API: próxima
+    tarefa planejada, ainda não implementada. Vercel permanece como deploy
+    planejado e Lovable somente como ferramenta visual opcional.
 
 ## 0.8 — Infraestrutura e produção
 

@@ -161,8 +161,15 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 
 ## Limitações e decisões abertas
 
-- O frontend ainda não existe. Ele deverá manter access token apenas em
-  memória, preferir proxy same-origin e coordenar refresh entre abas.
+- A fundação do frontend oficial existe no repositório separado
+  `arthurportodev/genesis-platform-web`; a Tarefa 0.7.1.1 foi incorporada no PR
+  #1, squash `30b91272088dd9be03b8bd9feffbf74dac48acc7`.
+- A integração real de sessão, access token em memória no runtime frontend,
+  cliente HTTP, Organization ativa, guards, coordenação de refresh entre abas e
+  proxy same-origin pertencem à Tarefa 0.7.1.2 e ainda não foram implementados.
+- Deploy e ambientes também não foram implementados. Previews permanecem sem
+  acesso à API até existir staging com origem estável e nunca devem apontar para
+  o backend de produção.
 - Não há grace period backend: duas abas que reapresentem o mesmo refresh podem
   acionar reuse detection e revogar a família, conforme a política existente.
 
@@ -203,8 +210,9 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Readiness dos índices e UTF8 falha com `503` somente nas projeções dependentes. O runtime conserva a ACL existente de `SELECT`, sem função privilegiada, grant ou DML novo.
 - Timeout de statement é local à transação. Limites de leitura por Membership, IP confiável e um bucket adicional de métricas são process-local e exigem topologia de uma réplica pública.
 
-- O proxy same-origin e a coordenação de refresh entre abas pertencem ao
-  frontend futuro; tokens não devem ser persistidos em `localStorage`.
+- O proxy same-origin e a coordenação de refresh entre abas pertencem à
+  integração frontend planejada na Tarefa 0.7.1.2; tokens não devem ser
+  persistidos em `localStorage`.
 - Rate limiter e semaphore Argon2 não são distribuídos; uma solução compartilhada será necessária antes de múltiplas réplicas públicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.
 - Rotação operacional de segredos não foi definida.
