@@ -416,11 +416,25 @@ describe('Role authorization (e2e)', () => {
     return testRequest;
   }
 
-  function login() {
+  async function login() {
+    const csrf = await request(app.getHttpServer() as Server)
+      .get('/api/v1/auth/csrf')
+      .expect(200);
     return request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('Cookie', csrfCookie(csrf))
+      .set('X-CSRF-Token', (csrf.body as { csrfToken: string }).csrfToken)
       .send({ email: ownerEmail, password: initialOwnerPassword })
       .expect(200);
+  }
+
+  function csrfCookie(response: { headers: Record<string, unknown> }): string {
+    const header = response.headers['set-cookie'];
+    const value: unknown = Array.isArray(header)
+      ? (header as unknown[])[0]
+      : header;
+    if (typeof value !== 'string') throw new Error('Missing CSRF cookie.');
+    return value.split(';', 1)[0];
   }
 
   function expectGenericDenial(responseBody: unknown): void {

@@ -1,14 +1,14 @@
 # Estado atual
 
-- **Última atualização:** 2026-07-27
-- **Fase concluída:** 0.2 — Identidade e multi-tenancy
-- **Fase atual:** 0.3 — CRM
-- **Tarefa em implementação local:** 0.3.4 — Experiência Operacional do CRM
-- **Última tarefa funcional concluída:** 0.3.3 — Atividades e Follow-up
+- **Última atualização:** 2026-07-28
+- **Fase concluída:** 0.3 — CRM
+- **Fase atual:** 0.7 — Frontend operacional, com o contrato backend 0.7.0 em candidato local
+- **Candidato em implementação local:** 0.7.0 — Contrato Web de Sessão e Bootstrap (implementado, aguardando Gate 2)
+- **Última tarefa funcional concluída:** 0.3.4 — Experiência Operacional do CRM
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Última subtarefa funcional concluída:** 0.3.3 — Atividades e Follow-up (PR #20, squash `7c39fede23fd36e2a4c2f17da5043494f5e42ac1`, CI pós-merge 30310732216 aprovada)
+- **Última subtarefa funcional concluída:** 0.3.4 — Experiência Operacional do CRM (PR #21, squash `f625745b17828a47208cc27461cc8cb6d8d9e67a`)
 
 ## Implementado
 
@@ -22,7 +22,13 @@
 - Fundação 0.3.1 incorporada com `Lead`, `LeadEntry`, timeline, intake manual e `genesis_form` fail-closed, deduplicação E.164, idempotência durável, inbox tenant-scoped, edição básica e assignment.
 - Pipeline 0.3.2 incorporado com ciclos comerciais imutáveis, fechamento ganho/perdido/arquivado, reativação, revisão agregada de retornos e comandos idempotentes.
 - Atividades e Follow-up 0.3.3 incorporados com Activity e Note append-only, Next Action única, timezone IANA da Organization e timeline operacional paginada.
-- Candidato local da 0.3.4 com busca NFC por prefixo e telefone exato, filtros e cursores opacos, filas operacionais, Kanban híbrido, detalhe consolidado e métricas owner/admin.
+- Experiência Operacional 0.3.4 incorporada no PR #21, squash
+  `f625745b17828a47208cc27461cc8cb6d8d9e67a`, com busca NFC por prefixo e
+  telefone exato, filtros e cursores opacos, filas operacionais, Kanban
+  híbrido, detalhe consolidado e métricas owner/admin.
+- Candidato local da 0.7.0 com refresh exclusivamente em cookie protegido,
+  CSRF cookie-to-header, logout idempotente sem dependência de access token,
+  CORS/cache explícitos e bootstrap autenticado das Organizations disponíveis.
 
 ### Governança multiagente adotada
 
@@ -59,10 +65,12 @@
 
 - `GET /api/v1/health`
 - `POST /api/v1/auth/login`
+- `GET /api/v1/auth/csrf`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/auth/logout-all`
 - `GET /api/v1/auth/me`
+- `GET /api/v1/auth/bootstrap`
 - `POST /api/v1/invitations` (readiness operacional consolidada pela 0.2.5.3, incorporada à `main` no PR #15)
 - `GET /api/v1/invitations`
 - `GET /api/v1/invitations/:invitationId`
@@ -146,6 +154,7 @@ Migrations existentes:
 - [`1785346800000-CreateLeadFoundation.ts`](../src/database/migrations/1785346800000-CreateLeadFoundation.ts)
 - [`1785433200000-ManageLeadCommercialPipeline.ts`](../src/database/migrations/1785433200000-ManageLeadCommercialPipeline.ts)
 - [`1785519600000-ManageLeadActivitiesFollowUp.ts`](../src/database/migrations/1785519600000-ManageLeadActivitiesFollowUp.ts)
+- [`1785606000000-AddLeadOperationalReadIndexes.ts`](../src/database/migrations/1785606000000-AddLeadOperationalReadIndexes.ts)
 
 O CRM acrescenta `leads`, `lead_entries`, `lead_timeline_events`,
 `lead_ingest_idempotency`, `lead_commercial_cycles`, `lead_return_reviews`,
@@ -168,18 +177,23 @@ Consulte os [ADRs](decisions/README.md).
 
 ## Limitações conhecidas
 
-- Leads são a primeira fronteira comercial tenant-scoped; busca e métricas ainda não existem.
+- Leads são a primeira fronteira comercial tenant-scoped; busca, filas, Kanban,
+  detalhe consolidado e métricas operacionais estão incorporados.
 - A infraestrutura genérica de autorização por papel e as invariantes de
   ownership estão implementadas; permissions, matriz geral de capacidades e
   autorização por recurso permanecem futuras.
-- Refresh token é retornado em JSON; cookie `HttpOnly` não foi decidido/implementado.
+- Coordenação de refresh concorrente entre abas pertence ao frontend futuro; o
+  backend preserva reuse detection sem grace period.
 - Rate limiter é local, não distribuído e perde estado ao reiniciar.
 - Não há política de retenção para sessões e auditoria.
 - Não há deploy, frontend, recuperação de senha, confirmação de email ou integrações.
+  A Tarefa 0.7.1 planeja iniciar o frontend em repositório separado, sem
+  implementação atual; Vercel é o destino planejado do frontend e Hetzner do
+  backend.
 
 ## Decisões abertas e riscos
 
-- Estratégia final de cookie e integração com frontend.
+- Estratégia operacional do proxy same-origin no frontend futuro.
 - Retenção e limpeza de sessões, tokens e logs de auditoria.
 - Rotação operacional de segredos.
 - Armazenamento distribuído do rate limiter quando houver múltiplas réplicas.
@@ -188,6 +202,6 @@ Consulte os [ADRs](decisions/README.md).
 
 ## Fora do escopo atual
 
-Busca, métricas, importação, comunicação, WhatsApp, automações, tracking,
-relatórios, billing, frontend e deploy permanecem planejados ou futuros.
+Importação, comunicação, WhatsApp, automações, tracking, relatórios, billing,
+frontend e deploy permanecem planejados ou futuros.
 O intake `genesis_form` continua fail-closed e operacionalmente desabilitado.

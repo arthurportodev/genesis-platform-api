@@ -16,7 +16,7 @@ import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter
 import { configureTrustProxy } from '../src/config/trust-proxy';
 import { seedInitialTenant } from '../src/database/seeds/initial-tenant.seed';
 import { AuthModule } from '../src/modules/auth/auth.module';
-import { AuthTokenResponse } from '../src/modules/auth/auth.service';
+import { AuthTokenResponse as PublicAuthTokenResponse } from '../src/modules/auth/auth.service';
 import { AccessTokenGuard } from '../src/modules/auth/guards/access-token.guard';
 import { hashPassword } from '../src/modules/auth/services/password.service';
 import { Membership } from '../src/modules/memberships/entities/membership.entity';
@@ -35,6 +35,13 @@ import {
   createIntegrationDataSource,
   prepareIntegrationRuntimeRole,
 } from './support/integration-data-source';
+
+interface AuthTokenResponse extends PublicAuthTokenResponse {
+  refreshToken: string;
+  refreshCookie: string;
+  csrfToken: string;
+  csrfCookie: string;
+}
 
 @Controller('test/tenant-context')
 @UseGuards(AccessTokenGuard, TenantContextGuard)
@@ -300,15 +307,22 @@ describe('Tenant context (e2e)', () => {
       .expect(200);
 
     const loginTokens = (await login()).body as AuthTokenResponse;
-    const refreshed = (
-      await request(app.getHttpServer() as Server)
-        .post('/api/v1/auth/refresh')
-        .send({ refreshToken: loginTokens.refreshToken })
-        .expect(200)
-    ).body as AuthTokenResponse;
+    const refreshResponse = await request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/refresh')
+      .set('Cookie', [loginTokens.csrfCookie, loginTokens.refreshCookie])
+      .set('X-CSRF-Token', loginTokens.csrfToken)
+      .send({})
+      .expect(200);
+    const refreshed = refreshResponse.body as PublicAuthTokenResponse;
+    expect(refreshed.accessToken).toEqual(expect.any(String));
+    expect(refreshed).not.toHaveProperty('refreshToken');
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/logout')
-      .set('Authorization', `Bearer ${refreshed.accessToken}`)
+      .set('Cookie', [
+        loginTokens.csrfCookie,
+        cookiePair(getSetCookie(refreshResponse, 'genesis_refresh_dev')),
+      ])
+      .set('X-CSRF-Token', loginTokens.csrfToken)
       .expect(204);
   });
 
@@ -410,10 +424,50 @@ describe('Tenant context (e2e)', () => {
     return testRequest;
   }
 
-  function login(email = ownerEmail, password = initialOwnerPassword) {
-    return request(app.getHttpServer() as Server)
+  async function login(email = ownerEmail, password = initialOwnerPassword) {
+    const csrf = await request(app.getHttpServer() as Server)
+      .get('/api/v1/auth/csrf')
+      .expect(200);
+    const csrfToken = (csrf.body as { csrfToken: string }).csrfToken;
+    const csrfCookie = cookiePair(getSetCookie(csrf, 'genesis_csrf_dev'));
+    const response = await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('Cookie', csrfCookie)
+      .set('X-CSRF-Token', csrfToken)
       .send({ email, password })
       .expect(200);
+    const refreshSetCookie = getSetCookie(response, 'genesis_refresh_dev');
+    response.body = {
+      ...(response.body as PublicAuthTokenResponse),
+      refreshToken: cookieValue(refreshSetCookie),
+      refreshCookie: cookiePair(refreshSetCookie),
+      csrfToken,
+      csrfCookie,
+    } satisfies AuthTokenResponse;
+    return response;
+  }
+
+  function getSetCookie(
+    response: { headers: Record<string, unknown> },
+    cookieName: string,
+  ): string {
+    const header = response.headers['set-cookie'];
+    const values = Array.isArray(header)
+      ? (header as string[])
+      : typeof header === 'string'
+        ? [header]
+        : [];
+    const cookie = values.find((value) => value.startsWith(`${cookieName}=`));
+    if (cookie === undefined) throw new Error(`Missing ${cookieName} cookie.`);
+    return cookie;
+  }
+
+  function cookiePair(setCookie: string): string {
+    return setCookie.split(';', 1)[0];
+  }
+
+  function cookieValue(setCookie: string): string {
+    const pair = cookiePair(setCookie);
+    return pair.slice(pair.indexOf('=') + 1);
   }
 });

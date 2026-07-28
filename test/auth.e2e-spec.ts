@@ -1,11 +1,12 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { Server } from 'node:http';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { seedInitialTenant } from '../src/database/seeds/initial-tenant.seed';
+import { buildWebCorsOptions } from '../src/config/app.config';
 import { configureTrustProxy } from '../src/config/trust-proxy';
 import { AuthAuditLog } from '../src/modules/auth-sessions/entities/auth-audit-log.entity';
 import { AuthRefreshToken } from '../src/modules/auth-sessions/entities/auth-refresh-token.entity';
@@ -15,13 +16,15 @@ import { AuthRefreshTokenStatus } from '../src/modules/auth-sessions/enums/auth-
 import { AuthSessionStatus } from '../src/modules/auth-sessions/enums/auth-session-status.enum';
 import {
   AuthService,
-  AuthTokenResponse,
+  AuthTokenResponse as PublicAuthTokenResponse,
 } from '../src/modules/auth/auth.service';
 import { LoginRateLimiter } from '../src/modules/auth/services/login-rate-limiter.port';
+import { TokenService } from '../src/modules/auth/services/token.service';
 import { Membership } from '../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../src/modules/memberships/enums/membership-role.enum';
 import { MembershipStatus } from '../src/modules/memberships/enums/membership-status.enum';
 import { Organization } from '../src/modules/organizations/entities/organization.entity';
+import { OrganizationStatus } from '../src/modules/organizations/enums/organization-status.enum';
 import { User } from '../src/modules/users/entities/user.entity';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
 import {
@@ -30,9 +33,20 @@ import {
   prepareIntegrationRuntimeRole,
 } from './support/integration-data-source';
 
+interface AuthTokenResponse extends PublicAuthTokenResponse {
+  refreshToken: string;
+  csrfToken: string;
+  csrfCookie: string;
+  refreshCookie: string;
+  refreshSetCookie: string;
+  publicBody: PublicAuthTokenResponse;
+}
+
 describe('Authentication endpoints (e2e)', () => {
   let app: INestApplication;
   let connection: DataSource;
+  let sharedCsrfToken: string;
+  let sharedCsrfCookie: string;
   const initialOwnerPassword = randomBytes(24).toString('base64url');
   const ownerEmail = 'contato@agenciagenesismkt.com.br';
 
@@ -94,6 +108,7 @@ describe('Authentication endpoints (e2e)', () => {
     configureTrustProxy(expressApp, 1);
     app = expressApp;
     app.setGlobalPrefix('api/v1');
+    app.enableCors(buildWebCorsOptions(process.env.FRONTEND_URL));
     app.useGlobalPipes(
       new ValidationPipe({
         transform: true,
@@ -102,6 +117,9 @@ describe('Authentication endpoints (e2e)', () => {
       }),
     );
     await app.init();
+    const csrf = await getCsrf();
+    sharedCsrfToken = csrf.token;
+    sharedCsrfCookie = csrf.cookie;
   });
 
   afterAll(async () => {
@@ -112,8 +130,104 @@ describe('Authentication endpoints (e2e)', () => {
     }
   });
 
+  it('issues CSRF and rejects missing, mismatched, or untrusted requests generically', async () => {
+    const csrf = await getCsrf();
+    expect(csrf.token).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    const csrfSetCookie = getSetCookie(
+      await request(app.getHttpServer() as Server)
+        .get('/api/v1/auth/csrf')
+        .expect('Cache-Control', 'no-store')
+        .expect(200),
+      'genesis_csrf_dev',
+    );
+    expect(csrfSetCookie).toContain('Path=/');
+    expect(csrfSetCookie).toContain('SameSite=Lax');
+    expect(csrfSetCookie).not.toContain('HttpOnly');
+    expect(csrfSetCookie).not.toContain('Secure');
+    expect(csrfSetCookie).not.toContain('Domain=');
+
+    const attempts = [
+      () =>
+        request(app.getHttpServer() as Server)
+          .post('/api/v1/auth/login')
+          .send({ email: ownerEmail, password: initialOwnerPassword }),
+      () =>
+        request(app.getHttpServer() as Server)
+          .post('/api/v1/auth/login')
+          .set('Cookie', sharedCsrfCookie)
+          .send({ email: ownerEmail, password: initialOwnerPassword }),
+      () =>
+        request(app.getHttpServer() as Server)
+          .post('/api/v1/auth/login')
+          .set('X-CSRF-Token', sharedCsrfToken)
+          .send({ email: ownerEmail, password: initialOwnerPassword }),
+      () =>
+        request(app.getHttpServer() as Server)
+          .post('/api/v1/auth/login')
+          .set('Cookie', sharedCsrfCookie)
+          .set('X-CSRF-Token', 'different-token')
+          .send({ email: ownerEmail, password: initialOwnerPassword }),
+      () =>
+        request(app.getHttpServer() as Server)
+          .post('/api/v1/auth/login')
+          .set('Cookie', sharedCsrfCookie)
+          .set('X-CSRF-Token', sharedCsrfToken)
+          .set('Origin', 'https://attacker.example')
+          .send({ email: ownerEmail, password: initialOwnerPassword }),
+      () =>
+        request(app.getHttpServer() as Server)
+          .post('/api/v1/auth/login')
+          .set('Cookie', 'genesis_csrf_dev=%')
+          .set('X-CSRF-Token', sharedCsrfToken)
+          .send({ email: ownerEmail, password: initialOwnerPassword }),
+    ];
+    for (const beginAttempt of attempts) {
+      const response = await beginAttempt()
+        .expect('Cache-Control', 'no-store')
+        .expect(403);
+      expect(response.body).toEqual({
+        statusCode: 403,
+        message: 'CSRF validation failed.',
+        error: 'Forbidden',
+      });
+      expect(JSON.stringify(response.body)).not.toContain(sharedCsrfToken);
+    }
+  });
+
+  it('uses the exact credentialed CORS contract without wildcards', async () => {
+    const response = await request(app.getHttpServer() as Server)
+      .options('/api/v1/auth/csrf')
+      .set('Origin', 'http://localhost:5173')
+      .set(
+        'Access-Control-Request-Headers',
+        'content-type,authorization,x-csrf-token,x-organization-id,if-match,idempotency-key',
+      )
+      .expect(204);
+    expect(response.headers['access-control-allow-origin']).toBe(
+      'http://localhost:5173',
+    );
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
+    expect(response.headers['access-control-allow-headers']).not.toContain('*');
+    expect(response.headers['access-control-expose-headers']).not.toContain(
+      '*',
+    );
+
+    await request(app.getHttpServer() as Server)
+      .options('/api/v1/auth/csrf')
+      .set('Origin', 'https://attacker.example')
+      .set('Access-Control-Request-Method', 'GET')
+      .expect(204)
+      .expect((denied) => {
+        expect(denied.headers['access-control-allow-origin']).not.toBe(
+          'https://attacker.example',
+        );
+      });
+  });
+
   it('creates an active session and stores only an active refresh-token hash', async () => {
-    const tokens = (await login()).body as AuthTokenResponse;
+    const loginResponse = await login();
+    const tokens = loginResponse.body as AuthTokenResponse;
+    expect(loginResponse.headers['cache-control']).toBe('no-store');
 
     expect(tokens).toMatchObject({
       tokenType: 'Bearer',
@@ -126,8 +240,15 @@ describe('Authentication endpoints (e2e)', () => {
     });
     expect(tokens.user).not.toHaveProperty('passwordHash');
     expect(tokens.user).not.toHaveProperty('memberships');
-    expect(tokens).not.toHaveProperty('tokenHash');
-    expect(tokens).not.toHaveProperty('refreshTokenHash');
+    expect(tokens.publicBody).not.toHaveProperty('refreshToken');
+    expect(tokens.publicBody).not.toHaveProperty('tokenHash');
+    expect(tokens.publicBody).not.toHaveProperty('refreshTokenHash');
+    expect(tokens.refreshSetCookie).toContain('HttpOnly');
+    expect(tokens.refreshSetCookie).toContain('SameSite=Lax');
+    expect(tokens.refreshSetCookie).toContain('Path=/');
+    expect(tokens.refreshSetCookie).toContain('Expires=');
+    expect(tokens.refreshSetCookie).not.toContain('Secure');
+    expect(tokens.refreshSetCookie).not.toContain('Domain=');
 
     const sessionId = getSessionId(tokens.refreshToken);
     const session = await connection
@@ -156,6 +277,162 @@ describe('Authentication endpoints (e2e)', () => {
     expect(meResponse.body).toEqual(tokens.user);
   });
 
+  it('bootstraps only active organizations and memberships for the bearer user', async () => {
+    const tokens = (await login()).body as AuthTokenResponse;
+    const owner = await connection
+      .getRepository(User)
+      .findOneByOrFail({ email: ownerEmail });
+    const guardian = await connection
+      .getRepository(User)
+      .findOneByOrFail({ email: 'auth-owner-guardian@example.com' });
+    const fixture = await connection.transaction(async (manager) => {
+      const organizations = manager.getRepository(Organization);
+      const memberships = manager.getRepository(Membership);
+      const alpha = await organizations.save({
+        name: 'Alpha Organization',
+        slug: `alpha-${randomUUID()}`,
+        status: OrganizationStatus.ACTIVE,
+      });
+      const zeta = await organizations.save({
+        name: 'Zeta Organization',
+        slug: `zeta-${randomUUID()}`,
+        status: OrganizationStatus.ACTIVE,
+      });
+      const inactiveOrganization = await organizations.save({
+        name: 'Inactive Organization',
+        slug: `inactive-${randomUUID()}`,
+        status: OrganizationStatus.INACTIVE,
+      });
+      const inactiveMembershipOrganization = await organizations.save({
+        name: 'Inactive Membership Organization',
+        slug: `inactive-membership-${randomUUID()}`,
+        status: OrganizationStatus.ACTIVE,
+      });
+      await memberships.save(
+        [alpha, zeta, inactiveMembershipOrganization].map((organization) => ({
+          userId: guardian.id,
+          organizationId: organization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        })),
+      );
+      const alphaMembership = await memberships.save({
+        userId: owner.id,
+        organizationId: alpha.id,
+        role: MembershipRole.MEMBER,
+        status: MembershipStatus.ACTIVE,
+      });
+      const zetaMembership = await memberships.save({
+        userId: owner.id,
+        organizationId: zeta.id,
+        role: MembershipRole.ADMIN,
+        status: MembershipStatus.ACTIVE,
+      });
+      await memberships.save([
+        {
+          userId: owner.id,
+          organizationId: inactiveOrganization.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: owner.id,
+          organizationId: inactiveMembershipOrganization.id,
+          role: MembershipRole.MEMBER,
+          status: MembershipStatus.INACTIVE,
+        },
+      ]);
+      return {
+        alpha,
+        zeta,
+        inactiveOrganization,
+        inactiveMembershipOrganization,
+        alphaMembership,
+        zetaMembership,
+      };
+    });
+    const {
+      alpha,
+      zeta,
+      inactiveOrganization,
+      inactiveMembershipOrganization,
+      alphaMembership,
+      zetaMembership,
+    } = fixture;
+
+    const response = await request(app.getHttpServer() as Server)
+      .get('/api/v1/auth/bootstrap')
+      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .expect('Cache-Control', 'no-store')
+      .expect(200);
+    const body = response.body as {
+      user: PublicAuthTokenResponse['user'];
+      organizations: Array<{
+        id: string;
+        slug: string;
+        membershipId: string;
+        role: MembershipRole;
+      }>;
+    };
+    expect(body.user).toEqual(tokens.user);
+    expect(body.organizations.map(({ slug }) => slug)).toEqual(
+      [...body.organizations.map(({ slug }) => slug)].sort(),
+    );
+    expect(body.organizations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: alpha.id,
+          membershipId: alphaMembership.id,
+          role: MembershipRole.MEMBER,
+        }),
+        expect.objectContaining({
+          id: zeta.id,
+          membershipId: zetaMembership.id,
+          role: MembershipRole.ADMIN,
+        }),
+      ]),
+    );
+    expect(body.organizations.map(({ id }) => id)).not.toContain(
+      inactiveOrganization.id,
+    );
+    expect(body.organizations.map(({ id }) => id)).not.toContain(
+      inactiveMembershipOrganization.id,
+    );
+  });
+
+  it('returns an empty bootstrap for an authenticated user without memberships', async () => {
+    const user = await connection.getRepository(User).save({
+      email: `bootstrap-${randomUUID()}@example.com`,
+      name: 'Bootstrap Empty',
+      status: UserStatus.ACTIVE,
+    });
+    const sessionId = randomUUID();
+    await connection.getRepository(AuthSession).save({
+      id: sessionId,
+      userId: user.id,
+      status: AuthSessionStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+      lastUsedAt: null,
+      revokedAt: null,
+      revokeReason: null,
+      userAgent: 'bootstrap-e2e',
+      ipAddress: '127.0.0.1',
+    });
+    const access = await app
+      .get(TokenService)
+      .issueAccessToken(user.id, sessionId);
+
+    const response = await request(app.getHttpServer() as Server)
+      .get('/api/v1/auth/bootstrap')
+      .set('Authorization', `Bearer ${access.accessToken}`)
+      .expect('Cache-Control', 'no-store')
+      .expect(200);
+    expect(response.body).toMatchObject({
+      user: { id: user.id },
+      organizations: [],
+    });
+  });
+
   it('rotates an active token and records its replacement', async () => {
     const firstTokens = (await login()).body as AuthTokenResponse;
     const sessionId = getSessionId(firstTokens.refreshToken);
@@ -163,9 +440,11 @@ describe('Authentication endpoints (e2e)', () => {
 
     const refreshResponse = await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: firstTokens.refreshToken })
+      .set('Cookie', [sharedCsrfCookie, firstTokens.refreshCookie])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
       .expect(200);
-    const rotatedTokens = refreshResponse.body as AuthTokenResponse;
+    const rotatedTokens = authTokensFromResponse(refreshResponse);
     expect(rotatedTokens.refreshToken).not.toBe(firstTokens.refreshToken);
     expect(rotatedTokens).not.toHaveProperty('tokenHash');
 
@@ -191,6 +470,60 @@ describe('Authentication endpoints (e2e)', () => {
     expect(session.lastUsedAt).toBeInstanceOf(Date);
   });
 
+  it('reads refresh only from its cookie and requires CSRF', async () => {
+    const tokens = (await login()).body as AuthTokenResponse;
+
+    const alternateChannels = [
+      () =>
+        request(app.getHttpServer() as Server)
+          .post('/api/v1/auth/refresh')
+          .set('Cookie', sharedCsrfCookie)
+          .set('X-CSRF-Token', sharedCsrfToken)
+          .send({ refreshToken: tokens.refreshToken }),
+      () =>
+        request(app.getHttpServer() as Server)
+          .post('/api/v1/auth/refresh')
+          .query({ refreshToken: tokens.refreshToken })
+          .set('Cookie', sharedCsrfCookie)
+          .set('X-CSRF-Token', sharedCsrfToken)
+          .send({}),
+      () =>
+        request(app.getHttpServer() as Server)
+          .post('/api/v1/auth/refresh')
+          .set('Cookie', sharedCsrfCookie)
+          .set('X-CSRF-Token', sharedCsrfToken)
+          .set('X-Refresh-Token', tokens.refreshToken)
+          .send({}),
+    ];
+    for (const beginAttempt of alternateChannels) {
+      const response = await beginAttempt()
+        .expect('Cache-Control', 'no-store')
+        .expect(401);
+      expect(response.body).toMatchObject({
+        statusCode: 401,
+        message: 'Invalid refresh token.',
+      });
+    }
+
+    expect(
+      await connection.getRepository(AuthRefreshToken).findOneByOrFail({
+        id: (await findRefreshToken(getSessionId(tokens.refreshToken))).id,
+      }),
+    ).toMatchObject({ status: AuthRefreshTokenStatus.ACTIVE });
+
+    const missingCsrf = await request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/refresh')
+      .set('Cookie', tokens.refreshCookie)
+      .send({})
+      .expect('Cache-Control', 'no-store')
+      .expect(403);
+    expect(missingCsrf.body).toEqual({
+      statusCode: 403,
+      message: 'CSRF validation failed.',
+      error: 'Forbidden',
+    });
+  });
+
   it('rolls back the refresh protocol atomically when rotation persistence fails', async () => {
     const tokens = (await login()).body as AuthTokenResponse;
     const sessionId = getSessionId(tokens.refreshToken);
@@ -212,7 +545,9 @@ describe('Authentication endpoints (e2e)', () => {
     try {
       await request(app.getHttpServer() as Server)
         .post('/api/v1/auth/refresh')
-        .send({ refreshToken: tokens.refreshToken })
+        .set('Cookie', [sharedCsrfCookie, tokens.refreshCookie])
+        .set('X-CSRF-Token', sharedCsrfToken)
+        .send({})
         .expect(500);
 
       expect(
@@ -253,23 +588,28 @@ describe('Authentication endpoints (e2e)', () => {
 
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: tokens.refreshToken })
+      .set('Cookie', [sharedCsrfCookie, tokens.refreshCookie])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
       .expect(200);
   });
 
   it('treats a consumed token as proven reuse and revokes its family', async () => {
     const firstTokens = (await login()).body as AuthTokenResponse;
     const sessionId = getSessionId(firstTokens.refreshToken);
-    const rotatedTokens = (
-      await request(app.getHttpServer() as Server)
-        .post('/api/v1/auth/refresh')
-        .send({ refreshToken: firstTokens.refreshToken })
-        .expect(200)
-    ).body as AuthTokenResponse;
+    const rotatedTokens = await request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/refresh')
+      .set('Cookie', [sharedCsrfCookie, firstTokens.refreshCookie])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
+      .expect(200);
+    const rotated = authTokensFromResponse(rotatedTokens);
 
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: firstTokens.refreshToken })
+      .set('Cookie', [sharedCsrfCookie, firstTokens.refreshCookie])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
       .expect(401);
 
     const session = await connection
@@ -293,7 +633,7 @@ describe('Authentication endpoints (e2e)', () => {
     ).toBe(1);
     await request(app.getHttpServer() as Server)
       .get('/api/v1/auth/me')
-      .set('Authorization', `Bearer ${rotatedTokens.accessToken}`)
+      .set('Authorization', `Bearer ${rotated.accessToken}`)
       .expect(401);
   });
 
@@ -310,7 +650,9 @@ describe('Authentication endpoints (e2e)', () => {
 
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: randomToken })
+      .set('Cookie', [sharedCsrfCookie, refreshCookie(randomToken)])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
       .expect(401);
 
     const session = await connection
@@ -331,7 +673,9 @@ describe('Authentication endpoints (e2e)', () => {
 
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: tokens.refreshToken })
+      .set('Cookie', [sharedCsrfCookie, tokens.refreshCookie])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
       .expect(200);
   });
 
@@ -440,13 +784,15 @@ describe('Authentication endpoints (e2e)', () => {
 
       const refreshResponse = await refreshAttempt;
       expect(refreshResponse.status).toBe(200);
-      const rotated = refreshResponse.body as AuthTokenResponse;
+      const rotated = authTokensFromResponse(refreshResponse);
       await inactivation;
       await inactivator.commitTransaction();
 
       await request(app.getHttpServer() as Server)
         .post('/api/v1/auth/refresh')
-        .send({ refreshToken: rotated.refreshToken })
+        .set('Cookie', [sharedCsrfCookie, rotated.refreshCookie])
+        .set('X-CSRF-Token', sharedCsrfToken)
+        .send({})
         .expect(401);
       expect(
         await connection.getRepository(AuthRefreshToken).countBy({ sessionId }),
@@ -484,7 +830,7 @@ describe('Authentication endpoints (e2e)', () => {
         };
         const logoutOperation =
           operation === 'logout'
-            ? authService.logout(currentUser, context)
+            ? authService.logout(tokens.refreshToken, context)
             : authService.logoutAll(currentUser, context);
 
         const [refreshOutcome, logoutOutcome] = await withTimeout(
@@ -527,7 +873,8 @@ describe('Authentication endpoints (e2e)', () => {
 
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/logout')
-      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .set('Cookie', [tokens.csrfCookie, tokens.refreshCookie])
+      .set('X-CSRF-Token', tokens.csrfToken)
       .expect(204);
 
     expect(
@@ -542,8 +889,122 @@ describe('Authentication endpoints (e2e)', () => {
     ).toMatchObject({ status: AuthRefreshTokenStatus.REVOKED });
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: tokens.refreshToken })
+      .set('Cookie', [sharedCsrfCookie, tokens.refreshCookie])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
       .expect(401);
+  });
+
+  it('makes logout access-token independent, idempotent, and cookie-clearing', async () => {
+    const csrf = await getCsrf();
+    for (const refresh of [undefined, 'invalid-refresh-token']) {
+      const cookies = [csrf.cookie];
+      if (refresh !== undefined) cookies.push(refreshCookie(refresh));
+      const response = await request(app.getHttpServer() as Server)
+        .post('/api/v1/auth/logout')
+        .set('Cookie', cookies)
+        .set('X-CSRF-Token', csrf.token)
+        .expect('Cache-Control', 'no-store')
+        .expect(204);
+      expect(getSetCookie(response, 'genesis_refresh_dev')).toContain(
+        'Expires=Thu, 01 Jan 1970',
+      );
+      expect(getSetCookie(response, 'genesis_csrf_dev')).toContain(
+        'Expires=Thu, 01 Jan 1970',
+      );
+    }
+  });
+
+  it.each([
+    {
+      label: 'expired',
+      status: AuthRefreshTokenStatus.ACTIVE,
+    },
+    {
+      label: 'revoked',
+      status: AuthRefreshTokenStatus.REVOKED,
+    },
+  ] as const)(
+    'logs out an identifiable $label token',
+    async ({ status: tokenStatus }) => {
+      const tokens = (await login()).body as AuthTokenResponse;
+      const sessionId = getSessionId(tokens.refreshToken);
+      const refreshRecord = await findRefreshToken(sessionId);
+      const update =
+        tokenStatus === AuthRefreshTokenStatus.ACTIVE
+          ? { expiresAt: new Date(Date.now() - 60_000) }
+          : {
+              status: AuthRefreshTokenStatus.REVOKED,
+              revokedAt: new Date(),
+            };
+      await connection
+        .getRepository(AuthRefreshToken)
+        .update(refreshRecord.id, update);
+
+      await request(app.getHttpServer() as Server)
+        .post('/api/v1/auth/logout')
+        .set('Cookie', [tokens.csrfCookie, tokens.refreshCookie])
+        .set('X-CSRF-Token', tokens.csrfToken)
+        .expect('Cache-Control', 'no-store')
+        .expect(204);
+
+      expect(
+        await connection.getRepository(AuthSession).findOneByOrFail({
+          id: sessionId,
+        }),
+      ).toMatchObject({ status: AuthSessionStatus.REVOKED });
+      expect(
+        await connection.getRepository(AuthAuditLog).countBy({
+          eventType: AuthAuditEventType.LOGOUT,
+          sessionId,
+        }),
+      ).toBe(1);
+    },
+  );
+
+  it('logs out with a consumed token repeatedly and audits each identifiable request once', async () => {
+    const first = (await login()).body as AuthTokenResponse;
+    const sessionId = getSessionId(first.refreshToken);
+    const rotatedResponse = await request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/refresh')
+      .set('Cookie', [first.csrfCookie, first.refreshCookie])
+      .set('X-CSRF-Token', first.csrfToken)
+      .send({})
+      .expect(200);
+    const rotated = authTokensFromResponse(rotatedResponse);
+
+    for (const expectedAuditCount of [1, 2]) {
+      await request(app.getHttpServer() as Server)
+        .post('/api/v1/auth/logout')
+        .set('Cookie', [sharedCsrfCookie, first.refreshCookie])
+        .set('X-CSRF-Token', sharedCsrfToken)
+        .expect('Cache-Control', 'no-store')
+        .expect(204);
+      expect(
+        await connection.getRepository(AuthAuditLog).countBy({
+          eventType: AuthAuditEventType.LOGOUT,
+          sessionId,
+        }),
+      ).toBe(expectedAuditCount);
+    }
+
+    expect(
+      await connection.getRepository(AuthSession).findOneByOrFail({
+        id: sessionId,
+      }),
+    ).toMatchObject({ status: AuthSessionStatus.REVOKED });
+    expect(
+      await connection.getRepository(AuthRefreshToken).findOneByOrFail({
+        id: (await findRefreshToken(sessionId)).id,
+      }),
+    ).toMatchObject({ status: AuthRefreshTokenStatus.CONSUMED });
+    expect(
+      await connection.getRepository(AuthRefreshToken).countBy({
+        sessionId,
+        status: AuthRefreshTokenStatus.ACTIVE,
+      }),
+    ).toBe(0);
+    expect(rotated.refreshToken).not.toBe(first.refreshToken);
   });
 
   it('revokes all sessions and active refresh tokens on logout-all', async () => {
@@ -557,6 +1018,8 @@ describe('Authentication endpoints (e2e)', () => {
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/logout-all')
       .set('Authorization', `Bearer ${first.accessToken}`)
+      .set('Cookie', [first.csrfCookie, first.refreshCookie])
+      .set('X-CSRF-Token', first.csrfToken)
       .expect(204);
 
     expect(
@@ -585,6 +1048,20 @@ describe('Authentication endpoints (e2e)', () => {
     ).toBe(0);
   });
 
+  it('requires both bearer and CSRF for logout-all', async () => {
+    const tokens = (await login()).body as AuthTokenResponse;
+    await request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/logout-all')
+      .set('Cookie', [tokens.csrfCookie, tokens.refreshCookie])
+      .set('X-CSRF-Token', tokens.csrfToken)
+      .expect(401);
+    await request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/logout-all')
+      .set('Cookie', tokens.refreshCookie)
+      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .expect(403);
+  });
+
   it('rejects expired and already revoked refresh tokens without rotation', async () => {
     const expired = (await login()).body as AuthTokenResponse;
     const expiredSessionId = getSessionId(expired.refreshToken);
@@ -595,7 +1072,9 @@ describe('Authentication endpoints (e2e)', () => {
 
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: expired.refreshToken })
+      .set('Cookie', [sharedCsrfCookie, expired.refreshCookie])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
       .expect(401);
     expect(
       await connection
@@ -617,7 +1096,9 @@ describe('Authentication endpoints (e2e)', () => {
     });
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: revoked.refreshToken })
+      .set('Cookie', [sharedCsrfCookie, revoked.refreshCookie])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
       .expect(401);
     expect(
       await connection.getRepository(AuthSession).findOneByOrFail({
@@ -629,6 +1110,8 @@ describe('Authentication endpoints (e2e)', () => {
   it('uses generic login errors and blocks inactive users', async () => {
     const unknownUser = await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('Cookie', sharedCsrfCookie)
+      .set('X-CSRF-Token', sharedCsrfToken)
       .set('X-Forwarded-For', '198.51.100.101')
       .send({
         email: 'unknown@example.com',
@@ -637,6 +1120,8 @@ describe('Authentication endpoints (e2e)', () => {
       .expect(401);
     const wrongPassword = await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('Cookie', sharedCsrfCookie)
+      .set('X-CSRF-Token', sharedCsrfToken)
       .set('X-Forwarded-For', '198.51.100.102')
       .send({
         email: ownerEmail,
@@ -655,6 +1140,8 @@ describe('Authentication endpoints (e2e)', () => {
       .update({ email: ownerEmail }, { status: UserStatus.INACTIVE });
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('Cookie', sharedCsrfCookie)
+      .set('X-CSRF-Token', sharedCsrfToken)
       .set('X-Forwarded-For', '198.51.100.103')
       .send({ email: ownerEmail, password: initialOwnerPassword })
       .expect(401);
@@ -672,6 +1159,8 @@ describe('Authentication endpoints (e2e)', () => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       await request(server)
         .post('/api/v1/auth/login')
+        .set('Cookie', sharedCsrfCookie)
+        .set('X-CSRF-Token', sharedCsrfToken)
         .set('X-Forwarded-For', '198.51.100.110')
         .send(credentials)
         .expect(401);
@@ -679,6 +1168,8 @@ describe('Authentication endpoints (e2e)', () => {
 
     await request(server)
       .post('/api/v1/auth/login')
+      .set('Cookie', sharedCsrfCookie)
+      .set('X-CSRF-Token', sharedCsrfToken)
       .set('X-Forwarded-For', '198.51.100.110')
       .send(credentials)
       .expect(429);
@@ -689,6 +1180,8 @@ describe('Authentication endpoints (e2e)', () => {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await request(server)
         .post('/api/v1/auth/login')
+        .set('Cookie', sharedCsrfCookie)
+        .set('X-CSRF-Token', sharedCsrfToken)
         .set('X-Forwarded-For', '198.51.100.111')
         .send({
           email: `rotating-${attempt}@example.com`,
@@ -699,6 +1192,8 @@ describe('Authentication endpoints (e2e)', () => {
 
     await request(server)
       .post('/api/v1/auth/login')
+      .set('Cookie', sharedCsrfCookie)
+      .set('X-CSRF-Token', sharedCsrfToken)
       .set('X-Forwarded-For', '198.51.100.111')
       .send({
         email: 'rotating-final@example.com',
@@ -716,6 +1211,8 @@ describe('Authentication endpoints (e2e)', () => {
 
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('Cookie', sharedCsrfCookie)
+      .set('X-CSRF-Token', sharedCsrfToken)
       .set('X-Forwarded-For', ipAddress)
       .set('User-Agent', userAgent)
       .send({
@@ -758,7 +1255,9 @@ describe('Authentication endpoints (e2e)', () => {
 
     await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: tokens.refreshToken })
+      .set('Cookie', [sharedCsrfCookie, tokens.refreshCookie])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
       .expect(401);
     await request(app.getHttpServer() as Server)
       .get('/api/v1/auth/me')
@@ -787,10 +1286,12 @@ describe('Authentication endpoints (e2e)', () => {
       .getOneOrFail();
   }
 
-  function beginRefresh(refreshToken: string) {
+  async function beginRefresh(refreshToken: string) {
     return request(app.getHttpServer() as Server)
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken })
+      .set('Cookie', [sharedCsrfCookie, refreshCookie(refreshToken)])
+      .set('X-CSRF-Token', sharedCsrfToken)
+      .send({})
       .then((response) => response);
   }
 
@@ -863,10 +1364,72 @@ describe('Authentication endpoints (e2e)', () => {
   async function login(ipAddress?: string) {
     const loginRequest = request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('Cookie', sharedCsrfCookie)
+      .set('X-CSRF-Token', sharedCsrfToken)
       .send({ email: ownerEmail, password: initialOwnerPassword });
     if (ipAddress !== undefined) {
       loginRequest.set('X-Forwarded-For', ipAddress);
     }
-    return loginRequest.expect(200);
+    const response = await loginRequest.expect(200);
+    response.body = authTokensFromResponse(response);
+    return response;
+  }
+
+  function authTokensFromResponse(response: {
+    body: unknown;
+    headers: Record<string, unknown>;
+  }): AuthTokenResponse {
+    const publicBody = response.body as PublicAuthTokenResponse;
+    const refreshSetCookie = getSetCookie(response, 'genesis_refresh_dev');
+    return {
+      ...publicBody,
+      refreshToken: cookieValue(refreshSetCookie),
+      csrfToken: sharedCsrfToken,
+      csrfCookie: sharedCsrfCookie,
+      refreshCookie: cookiePair(refreshSetCookie),
+      refreshSetCookie,
+      publicBody,
+    };
+  }
+
+  async function getCsrf(): Promise<{ token: string; cookie: string }> {
+    const response = await request(app.getHttpServer() as Server)
+      .get('/api/v1/auth/csrf')
+      .expect('Cache-Control', 'no-store')
+      .expect(200);
+    const setCookie = getSetCookie(response, 'genesis_csrf_dev');
+    return {
+      token: (response.body as { csrfToken: string }).csrfToken,
+      cookie: cookiePair(setCookie),
+    };
+  }
+
+  function refreshCookie(token: string): string {
+    return `genesis_refresh_dev=${token}`;
+  }
+
+  function getSetCookie(
+    response: { headers: Record<string, unknown> },
+    cookieName: string,
+  ): string {
+    const header = response.headers['set-cookie'];
+    const values = Array.isArray(header)
+      ? (header as string[])
+      : typeof header === 'string'
+        ? [header]
+        : [];
+    const cookie = values.find((value) => value.startsWith(`${cookieName}=`));
+    if (cookie === undefined) {
+      throw new Error(`Missing Set-Cookie for ${cookieName}.`);
+    }
+    return cookie;
+  }
+
+  function cookiePair(setCookie: string): string {
+    return setCookie.split(';', 1)[0];
+  }
+
+  function cookieValue(setCookie: string): string {
+    return cookiePair(setCookie).slice(cookiePair(setCookie).indexOf('=') + 1);
   }
 });

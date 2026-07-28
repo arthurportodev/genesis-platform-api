@@ -1,4 +1,49 @@
 import { registerAs } from '@nestjs/config';
+import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+
+export const WEB_ALLOWED_HEADERS = [
+  'Content-Type',
+  'Authorization',
+  'X-CSRF-Token',
+  'X-Organization-Id',
+  'If-Match',
+  'Idempotency-Key',
+] as const;
+
+export const WEB_EXPOSED_HEADERS = [
+  'ETag',
+  'Location',
+  'Idempotency-Replayed',
+  'Retry-After',
+] as const;
+
+const TENANT_SCOPED_PATH_PREFIXES = [
+  '/api/v1/invitations',
+  '/api/v1/leads',
+  '/api/v1/members',
+] as const;
+
+export function buildWebCorsOptions(frontendUrl: string): CorsOptions {
+  return {
+    origin: frontendUrl,
+    credentials: true,
+    allowedHeaders: [...WEB_ALLOWED_HEADERS],
+    exposedHeaders: [...WEB_EXPOSED_HEADERS],
+  };
+}
+
+export function isSensitiveWebResponse(
+  path: string,
+  organizationHeader: string | undefined,
+): boolean {
+  return (
+    path.startsWith('/api/v1/auth') ||
+    organizationHeader !== undefined ||
+    TENANT_SCOPED_PATH_PREFIXES.some(
+      (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+    )
+  );
+}
 
 export interface AppConfig {
   environment: string;

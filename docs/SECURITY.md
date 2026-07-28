@@ -20,6 +20,10 @@
 
 - Refresh token opaco: `sessionId` + segredo aleatório de 32 bytes em base64url.
 - O banco armazena somente HMAC-SHA-256 com `REFRESH_TOKEN_PEPPER`.
+- O refresh bruto nunca aparece em JSON, body de request, logs, auditoria ou
+  erro. Produção usa cookie host-only `__Host-genesis_refresh`, `HttpOnly`,
+  `Secure`, `SameSite=Lax` e `Path=/`; desenvolvimento/teste usam nome separado
+  e `Secure=false`.
 - Cada login cria sessão persistida e token `active`; validade padrão de 30 dias.
 - Rotação é transacional e mantém histórico `active`/`consumed`/`revoked`. Uma
   pré-leitura sem lock localiza apenas os IDs pelo par exato sessão/hash; ela
@@ -34,8 +38,24 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   continuam livres e não formam ciclo com logout/logout-all.
 - Reapresentar um token `consumed` comprova reutilização e revoga sessão e tokens ativos.
 - Um segredo aleatório cujo hash nunca existiu retorna `401` e auditoria de falha, sem revogar a sessão indicada pelo identificador público.
-- Logout revoga a sessão atual; logout-all revoga todas as sessões ativas do user.
+- Logout usa refresh identificável, não exige access token, é idempotente e
+  sempre limpa refresh/CSRF; logout-all preserva Bearer, revoga todas as sessões
+  ativas do user e também limpa cookies.
 - Sessões expiradas/revogadas e usuários inativos são rejeitados no access e no refresh.
+
+## CSRF, CORS e cache web
+
+- `GET /auth/csrf` gera 32 bytes aleatórios em base64url, define cookie
+  host-only legível pelo frontend e responde `no-store`, sem sessão ou PII.
+- Login, refresh, logout e logout-all exigem exatamente um cookie CSRF e
+  `X-CSRF-Token` equivalente. A comparação usa `timingSafeEqual`; ausência,
+  duplicidade, encoding inválido ou divergência retornam o mesmo `403`.
+- Quando `Origin` está presente, deve coincidir byte a byte com `FRONTEND_URL`,
+  validada como origem HTTP(S) exata, sem path, barra final ou wildcard.
+- CORS habilita credentials somente para essa origem e declara explicitamente
+  os headers aceitos/expostos. Não existe allowlist ampla de previews.
+- Auth, bootstrap e respostas tenant-scoped usam `Cache-Control: no-store`,
+  inclusive falhas processadas pelos guards.
 
 ## Auditoria e sanitização
 
@@ -76,6 +96,8 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Tenant, membership e papel permanecem fora do JWT, da sessão e do user.
 - O contexto não é aceito de body, query ou cookie e não é registrado integralmente em logs.
 - Não há cache ou estado compartilhado de tenant; a validação ocorre novamente a cada request tenant-scoped.
+- Bootstrap não seleciona tenant: retorna apenas Organizations e memberships
+  ativas do user autenticado, com papel persistido e ordem determinística.
 - A infraestrutura de tenant context e a autorização genérica por papel protegem as rotas administrativas de invitations, primeira entidade de domínio com `organization_id`.
 
 ## Autorização por papel implementada
@@ -139,6 +161,11 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 
 ## Limitações e decisões abertas
 
+- O frontend ainda não existe. Ele deverá manter access token apenas em
+  memória, preferir proxy same-origin e coordenar refresh entre abas.
+- Não há grace period backend: duas abas que reapresentem o mesmo refresh podem
+  acionar reuse detection e revogar a família, conforme a política existente.
+
 ## Segurança da fundação de Leads 0.3.1
 
 - Toda leitura usa filtro obrigatório por `organization_id`; member recebe ainda filtro por `responsible_membership_id`, e alvos invisíveis ou cross-tenant usam `404` uniforme.
@@ -176,7 +203,8 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Readiness dos índices e UTF8 falha com `503` somente nas projeções dependentes. O runtime conserva a ACL existente de `SELECT`, sem função privilegiada, grant ou DML novo.
 - Timeout de statement é local à transação. Limites de leitura por Membership, IP confiável e um bucket adicional de métricas são process-local e exigem topologia de uma réplica pública.
 
-- Refresh token ainda é retornado em JSON; cookie `HttpOnly` não foi implementado.
+- O proxy same-origin e a coordenação de refresh entre abas pertencem ao
+  frontend futuro; tokens não devem ser persistidos em `localStorage`.
 - Rate limiter e semaphore Argon2 não são distribuídos; uma solução compartilhada será necessária antes de múltiplas réplicas públicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.
 - Rotação operacional de segredos não foi definida.

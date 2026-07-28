@@ -14,6 +14,10 @@ import {
 } from '../credentials/ports/password-login-verifier.port';
 import { User } from '../users/entities/user.entity';
 import { UserStatus } from '../users/enums/user-status.enum';
+import { Membership } from '../memberships/entities/membership.entity';
+import { MembershipRole } from '../memberships/enums/membership-role.enum';
+import { MembershipStatus } from '../memberships/enums/membership-status.enum';
+import { OrganizationStatus } from '../organizations/enums/organization-status.enum';
 import { LoginDto } from './dto/login.dto';
 import { AuthAuditService } from './services/auth-audit.service';
 import { LoginRateLimiter } from './services/login-rate-limiter.port';
@@ -26,14 +30,32 @@ import {
 
 export interface AuthTokenResponse {
   accessToken: string;
-  refreshToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
   user: PublicUser;
 }
 
+interface AuthOperationResult {
+  response: AuthTokenResponse;
+  refreshToken: string;
+  refreshExpiresAt: Date;
+}
+
+export interface BootstrapOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  membershipId: string;
+  role: MembershipRole;
+}
+
+export interface AuthBootstrapResponse {
+  user: PublicUser;
+  organizations: BootstrapOrganization[];
+}
+
 type RefreshTransactionResult =
-  { ok: true; response: AuthTokenResponse } | { ok: false };
+  { ok: true; result: AuthOperationResult } | { ok: false };
 
 interface RefreshLockTarget {
   refreshTokenId: string;
@@ -48,6 +70,8 @@ const INVALID_REFRESH_MESSAGE = 'Invalid refresh token.';
 export class AuthService {
   constructor(
     @InjectRepository(User) private readonly users: Repository<User>,
+    @InjectRepository(Membership)
+    private readonly memberships: Repository<Membership>,
     private readonly dataSource: DataSource,
     @Inject(PASSWORD_LOGIN_VERIFIER)
     private readonly passwordService: PasswordLoginVerifier,
@@ -59,7 +83,7 @@ export class AuthService {
   async login(
     credentials: LoginDto,
     context: AuthRequestContext,
-  ): Promise<AuthTokenResponse> {
+  ): Promise<AuthOperationResult> {
     const email = normalizeEmail(credentials.email);
     this.rateLimiter.assertAllowed(context.ipAddress, email);
 
@@ -128,13 +152,25 @@ export class AuthService {
       );
     });
 
-    return this.buildTokenResponse(access, refreshToken, user);
+    return {
+      response: this.buildTokenResponse(access, user),
+      refreshToken,
+      refreshExpiresAt,
+    };
   }
 
   async refresh(
-    refreshToken: string,
+    refreshToken: string | null,
     context: AuthRequestContext,
-  ): Promise<AuthTokenResponse> {
+  ): Promise<AuthOperationResult> {
+    if (refreshToken === null) {
+      await this.auditService.record({
+        ...context,
+        eventType: AuthAuditEventType.REFRESH_FAILED,
+        metadata: { reason: 'missing_cookie' },
+      });
+      throw new UnauthorizedException(INVALID_REFRESH_MESSAGE);
+    }
     const parts = this.tokenService.parseRefreshToken(refreshToken);
     if (parts === null) {
       await this.auditService.record({
@@ -156,23 +192,65 @@ export class AuthService {
     if (!result.ok) {
       throw new UnauthorizedException(INVALID_REFRESH_MESSAGE);
     }
-    return result.response;
+    return result.result;
   }
 
   async logout(
-    currentUser: AuthenticatedUser,
+    refreshToken: string | null,
     context: AuthRequestContext,
   ): Promise<void> {
+    if (refreshToken === null) {
+      return;
+    }
+    const parts = this.tokenService.parseRefreshToken(refreshToken);
+    if (parts === null) {
+      return;
+    }
+
     await this.dataSource.transaction(async (manager) => {
-      const session = await manager
-        .getRepository(AuthSession)
-        .createQueryBuilder('session')
-        .setLock('pessimistic_write')
-        .where('session.id = :sessionId', {
-          sessionId: currentUser.sessionId,
+      const presentedTokenHash =
+        this.tokenService.hashRefreshToken(refreshToken);
+      const lockTarget = await manager
+        .getRepository(AuthRefreshToken)
+        .createQueryBuilder('refreshToken')
+        .select('refreshToken.id', 'refreshTokenId')
+        .addSelect('refreshToken.sessionId', 'sessionId')
+        .addSelect('session.userId', 'userId')
+        .innerJoin('refreshToken.session', 'session')
+        .where('refreshToken.tokenHash = :presentedTokenHash', {
+          presentedTokenHash,
         })
-        .andWhere('session.userId = :userId', { userId: currentUser.userId })
+        .andWhere('refreshToken.sessionId = :presentedSessionId', {
+          presentedSessionId: parts.sessionId,
+        })
+        .getRawOne<RefreshLockTarget>();
+
+      if (lockTarget === undefined) {
+        return;
+      }
+
+      await this.lockRefreshTarget(manager, lockTarget);
+      const refreshTokenRecord = await manager
+        .getRepository(AuthRefreshToken)
+        .createQueryBuilder('refreshToken')
+        .addSelect('refreshToken.tokenHash')
+        .innerJoinAndSelect('refreshToken.session', 'session')
+        .where('refreshToken.id = :refreshTokenId', {
+          refreshTokenId: lockTarget.refreshTokenId,
+        })
+        .andWhere('refreshToken.tokenHash = :presentedTokenHash', {
+          presentedTokenHash,
+        })
+        .andWhere('refreshToken.sessionId = :presentedSessionId', {
+          presentedSessionId: parts.sessionId,
+        })
         .getOne();
+
+      if (refreshTokenRecord === null) {
+        return;
+      }
+
+      const session = refreshTokenRecord.session;
 
       if (session !== null && session.status === AuthSessionStatus.ACTIVE) {
         this.revokeSession(session, 'logout');
@@ -185,7 +263,7 @@ export class AuthService {
         {
           ...context,
           eventType: AuthAuditEventType.LOGOUT,
-          userId: currentUser.userId,
+          userId: session.userId,
           sessionId: session?.id,
         },
         manager,
@@ -241,6 +319,43 @@ export class AuthService {
     return this.toPublicUser(user);
   }
 
+  async getBootstrap(
+    currentUser: AuthenticatedUser,
+  ): Promise<AuthBootstrapResponse> {
+    const user = await this.users.findOneBy({
+      id: currentUser.userId,
+      status: UserStatus.ACTIVE,
+    });
+    if (user === null) {
+      throw new UnauthorizedException('Invalid access token.');
+    }
+
+    const memberships = await this.memberships
+      .createQueryBuilder('membership')
+      .innerJoinAndSelect('membership.organization', 'organization')
+      .where('membership.userId = :userId', { userId: currentUser.userId })
+      .andWhere('membership.status = :membershipStatus', {
+        membershipStatus: MembershipStatus.ACTIVE,
+      })
+      .andWhere('organization.status = :organizationStatus', {
+        organizationStatus: OrganizationStatus.ACTIVE,
+      })
+      .orderBy('organization.slug', 'ASC')
+      .addOrderBy('organization.id', 'ASC')
+      .getMany();
+
+    return {
+      user: this.toPublicUser(user),
+      organizations: memberships.map((membership) => ({
+        id: membership.organization.id,
+        name: membership.organization.name,
+        slug: membership.organization.slug,
+        membershipId: membership.id,
+        role: membership.role,
+      })),
+    };
+  }
+
   private async rotateRefreshToken(
     manager: EntityManager,
     presentedSessionId: string,
@@ -274,23 +389,7 @@ export class AuthService {
       return { ok: false };
     }
 
-    await manager.query(`SELECT app_private.lock_auth_refresh_user($1::uuid)`, [
-      lockTarget.userId,
-    ]);
-    await manager.query(
-      `SELECT auth_session.id
-       FROM public.auth_sessions AS auth_session
-       WHERE auth_session.id = $1::uuid
-       FOR UPDATE OF auth_session`,
-      [lockTarget.sessionId],
-    );
-    await manager.query(
-      `SELECT locked_refresh_token.id
-       FROM public.auth_refresh_tokens AS locked_refresh_token
-       WHERE locked_refresh_token.id = $1::uuid
-       FOR UPDATE OF locked_refresh_token`,
-      [lockTarget.refreshTokenId],
-    );
+    await this.lockRefreshTarget(manager, lockTarget);
 
     const refreshToken = await refreshTokens
       .createQueryBuilder('refreshToken')
@@ -431,8 +530,35 @@ export class AuthService {
 
     return {
       ok: true,
-      response: this.buildTokenResponse(access, nextRefreshToken, session.user),
+      result: {
+        response: this.buildTokenResponse(access, session.user),
+        refreshToken: nextRefreshToken,
+        refreshExpiresAt: session.expiresAt,
+      },
     };
+  }
+
+  private async lockRefreshTarget(
+    manager: EntityManager,
+    lockTarget: RefreshLockTarget,
+  ): Promise<void> {
+    await manager.query(`SELECT app_private.lock_auth_refresh_user($1::uuid)`, [
+      lockTarget.userId,
+    ]);
+    await manager.query(
+      `SELECT auth_session.id
+       FROM public.auth_sessions AS auth_session
+       WHERE auth_session.id = $1::uuid
+       FOR UPDATE OF auth_session`,
+      [lockTarget.sessionId],
+    );
+    await manager.query(
+      `SELECT locked_refresh_token.id
+       FROM public.auth_refresh_tokens AS locked_refresh_token
+       WHERE locked_refresh_token.id = $1::uuid
+       FOR UPDATE OF locked_refresh_token`,
+      [lockTarget.refreshTokenId],
+    );
   }
 
   private async recordRefreshFailure(
@@ -485,12 +611,10 @@ export class AuthService {
 
   private buildTokenResponse(
     access: { accessToken: string; expiresIn: number },
-    refreshToken: string,
     user: User,
   ): AuthTokenResponse {
     return {
       accessToken: access.accessToken,
-      refreshToken,
       tokenType: 'Bearer',
       expiresIn: access.expiresIn,
       user: this.toPublicUser(user),

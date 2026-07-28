@@ -22,6 +22,7 @@ describe('AuthService', () => {
     createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
     findOneBy,
   } as unknown as Repository<User>;
+  const memberships = {} as Repository<never>;
   const verifyForLogin = jest.fn();
   const passwordService = { verifyForLogin } as unknown as PasswordService;
   const recordAudit = jest.fn().mockResolvedValue(undefined);
@@ -36,6 +37,7 @@ describe('AuthService', () => {
   } as unknown as LoginRateLimiter;
   const service = new AuthService(
     users,
+    memberships,
     {} as DataSource,
     passwordService,
     {} as TokenService,

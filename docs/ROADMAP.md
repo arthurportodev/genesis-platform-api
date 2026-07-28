@@ -24,12 +24,13 @@ Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado
   - ✅ 0.2.5.3 — Ativação de user novo
   - ✅ 0.2.5.4 — Gestão de memberships e ownership
 
-## 0.3 — CRM 🚧
+## 0.3 — CRM ✅
 
 - ✅ 0.3.1 — Fundação e Inbox de Leads (PR #18, squash `dbaa1a0430c7b0a65ce28ca20d3eff277aa7cdca`).
 - ✅ 0.3.2 — Pipeline comercial, fechamento e retorno (PR #19, squash `6fa39f103b9ebf65f93d26fcbc60504fa47d4e37`).
 - ✅ 0.3.3 — Atividades e Follow-up (PR #20, squash `7c39fede23fd36e2a4c2f17da5043494f5e42ac1`).
-- 🚧 0.3.4 — Experiência Operacional: busca, filtros, filas, Kanban, detalhe e métricas (candidato local).
+- ✅ 0.3.4 — Experiência Operacional: busca, filtros, filas, Kanban, detalhe e
+  métricas (PR #21, squash `f625745b17828a47208cc27461cc8cb6d8d9e67a`).
 
 ## 0.4 — Comunicação
 
@@ -45,11 +46,16 @@ Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado
 
 ## 0.7 — Frontend operacional
 
-- ⬜ Construir a interface após os contratos essenciais do backend estarem estáveis.
+- 🚧 0.7.0 — Contrato Web de Sessão e Bootstrap — candidato implementado,
+  aguardando Gate 2.
+- ⬜ 0.7.1 — Próxima tarefa planejada após a incorporação da 0.7.0: iniciar, em
+  repositório separado e sem implementação antecipada, a fundação do frontend
+  operacional sobre o contrato estabilizado.
 
 ## 0.8 — Infraestrutura e produção
 
-- ⬜ Definir ambientes, deploy, observabilidade, backups e operação segura.
+- ⬜ Definir ambientes, deploy, observabilidade, backups e operação segura;
+  Vercel é o destino planejado do frontend e Hetzner do backend.
 - ⏸ Billing — horizonte futuro, sem escopo aprovado.
 
 O roadmap representa direção planejada e pode ser alterado pelo Product Owner. Ele não prova que uma funcionalidade já está implementada.

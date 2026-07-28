@@ -95,8 +95,11 @@ Squash-only e exclusão automática de branch estão aplicados nas configuraçõ
 
 - **Arthur:** produto, prioridades, decisões de negócio, validação e aprovação dos gates.
 - **ChatGPT:** contexto, arquitetura, requisitos, prompts, revisão e riscos.
-- **Codex:** execução dos papéis operacionais, testes, migrations, infraestrutura e documentação; Git remoto somente quando autorizado.
-- **Lovable:** frontend quando essa fase começar.
+- **Codex:** execução dos papéis operacionais e implementação oficial de backend
+  e frontend, testes, migrations, infraestrutura e documentação; Git remoto
+  somente quando autorizado.
+- **Lovable:** exploração e referência visual opcional para interfaces, sem
+  substituir a implementação oficial pelo Codex.
 - **GitHub:** estado persistido, colaboração, revisão, checks e evidências transitórias.
 
 ## Contingência

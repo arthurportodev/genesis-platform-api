@@ -198,15 +198,9 @@ describe('Invitation acceptance (e2e)', () => {
     );
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
-    const login = await request(app.getHttpServer() as Server)
-      .post('/api/v1/auth/login')
-      .send({ email: recipient.email, password: recipientPassword })
-      .expect(200);
+    const login = await authLogin(recipient.email, recipientPassword);
     accessToken = (login.body as AuthTokenResponse).accessToken;
-    const otherLogin = await request(app.getHttpServer() as Server)
-      .post('/api/v1/auth/login')
-      .send({ email: otherUser.email, password: otherUserPassword })
-      .expect(200);
+    const otherLogin = await authLogin(otherUser.email, otherUserPassword);
     otherAccessToken = (otherLogin.body as AuthTokenResponse).accessToken;
   });
 
@@ -374,10 +368,7 @@ describe('Invitation acceptance (e2e)', () => {
       /^\$argon2id\$v=19\$m=65536,(?:t=3,p=1|p=1,t=3)\$/u,
     );
 
-    await request(app.getHttpServer() as Server)
-      .post('/api/v1/auth/login')
-      .send({ email, password })
-      .expect(200);
+    await authLogin(email, password);
   });
 
   it('uses generic 400/404 responses and keeps failed invitations pending', async () => {
@@ -667,6 +658,21 @@ describe('Invitation acceptance (e2e)', () => {
 
   function tamperMac(mac: string): string {
     return `${mac.slice(0, -1)}${mac.at(-1) === 'A' ? 'B' : 'A'}`;
+  }
+
+  async function authLogin(email: string, password: string) {
+    const csrf = await request(app.getHttpServer() as Server)
+      .get('/api/v1/auth/csrf')
+      .expect(200);
+    const header = csrf.headers['set-cookie'] as unknown;
+    const value = Array.isArray(header) ? header[0] : header;
+    if (typeof value !== 'string') throw new Error('Missing CSRF cookie.');
+    return request(app.getHttpServer() as Server)
+      .post('/api/v1/auth/login')
+      .set('Cookie', value.split(';', 1)[0])
+      .set('X-CSRF-Token', (csrf.body as { csrfToken: string }).csrfToken)
+      .send({ email, password })
+      .expect(200);
   }
 
   function tokenFields() {

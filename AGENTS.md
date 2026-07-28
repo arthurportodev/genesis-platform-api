@@ -61,13 +61,14 @@ Consulte [TASK_CLASSIFICATION.md](docs/TASK_CLASSIFICATION.md) para classes e ga
 
 ### Codex
 
-- implementação, testes, migrations e infraestrutura;
+- implementação oficial de backend e frontend, testes, migrations e infraestrutura;
 - atualização da documentação afetada;
 - commits e Pull Requests somente quando autorizado.
 
 ### Lovable
 
-- frontend e interface quando a fase de frontend for iniciada.
+- exploração e referência visual opcional para interfaces, sem substituir a
+  implementação oficial pelo Codex.
 
 ### GitHub
 
