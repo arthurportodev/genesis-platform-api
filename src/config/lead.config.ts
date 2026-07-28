@@ -13,6 +13,12 @@ export interface LeadConfig {
   formIpMaxAttempts: number;
   formKeyMaxAttempts: number;
   rateLimitMaxBuckets: number;
+  readRateLimitWindowSeconds: number;
+  readMembershipMaxAttempts: number;
+  readIpMaxAttempts: number;
+  metricsMembershipMaxAttempts: number;
+  readRateLimitMaxBuckets: number;
+  readStatementTimeoutMs: number;
 }
 
 export function parseLeadKeyring(
@@ -92,6 +98,22 @@ export default registerAs('lead', (): LeadConfig => {
     formKeyMaxAttempts: Number(process.env.LEAD_FORM_KEY_MAX_ATTEMPTS ?? 300),
     rateLimitMaxBuckets: Number(
       process.env.LEAD_FORM_RATE_LIMIT_MAX_BUCKETS ?? 10_000,
+    ),
+    readRateLimitWindowSeconds: Number(
+      process.env.LEAD_READ_RATE_LIMIT_WINDOW_SECONDS ?? 60,
+    ),
+    readMembershipMaxAttempts: Number(
+      process.env.LEAD_READ_MEMBERSHIP_MAX_ATTEMPTS ?? 120,
+    ),
+    readIpMaxAttempts: Number(process.env.LEAD_READ_IP_MAX_ATTEMPTS ?? 300),
+    metricsMembershipMaxAttempts: Number(
+      process.env.LEAD_METRICS_MEMBERSHIP_MAX_ATTEMPTS ?? 30,
+    ),
+    readRateLimitMaxBuckets: Number(
+      process.env.LEAD_READ_RATE_LIMIT_MAX_BUCKETS ?? 10_000,
+    ),
+    readStatementTimeoutMs: Number(
+      process.env.LEAD_READ_STATEMENT_TIMEOUT_MS ?? 3_000,
     ),
   };
 });

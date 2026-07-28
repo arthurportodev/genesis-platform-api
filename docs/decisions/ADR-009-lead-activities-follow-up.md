@@ -42,4 +42,4 @@ A timeline pagina por sequência monotônica e guarda referências tipadas e sna
 
 ## Implementação
 
-Implementado como candidato local da Tarefa 0.3.3 pela migration aditiva `1785519600000-ManageLeadActivitiesFollowUp.ts`, pelas entidades e APIs do `LeadsModule` e pelos testes unitários, PostgreSQL e E2E correspondentes.
+Implementado na Tarefa 0.3.3 e incorporado à `main` pelo PR #20, squash `7c39fede23fd36e2a4c2f17da5043494f5e42ac1`, com CI pós-merge 30310732216 aprovada. A entrega inclui a migration aditiva `1785519600000-ManageLeadActivitiesFollowUp.ts`, as entidades e APIs do `LeadsModule` e os testes unitários, PostgreSQL e E2E correspondentes.

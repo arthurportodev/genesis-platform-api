@@ -36,6 +36,12 @@ describe('Lead commercial pipeline', () => {
     formIpMaxAttempts: 30,
     formKeyMaxAttempts: 300,
     rateLimitMaxBuckets: 10_000,
+    readRateLimitWindowSeconds: 60,
+    readMembershipMaxAttempts: 120,
+    readIpMaxAttempts: 300,
+    metricsMembershipMaxAttempts: 30,
+    readRateLimitMaxBuckets: 10_000,
+    readStatementTimeoutMs: 3_000,
   };
   const tenant = {
     userId: randomUUID(),
@@ -280,7 +286,11 @@ describe('Lead commercial pipeline', () => {
     return new LeadsService(
       { query } as unknown as DataSource,
       { getOrThrow: () => config } as unknown as ConfigService,
-      { assertManualReady: jest.fn(), assertFormReady: jest.fn() },
+      {
+        assertManualReady: jest.fn(),
+        assertFormReady: jest.fn(),
+        assertOperationalReadReady: jest.fn(),
+      },
     );
   }
 });

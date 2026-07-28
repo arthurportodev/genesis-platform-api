@@ -45,8 +45,108 @@ export interface LeadAttributionView {
 }
 
 export interface LeadListResponse {
-  items: LeadView[];
+  items: LeadListItem[];
+  page: LeadOperationalPage;
+}
+
+export interface LeadOperationalPage {
+  nextCursor: string | null;
+  limit: number;
+  total: number;
+  asOf: string;
+}
+
+export interface LeadListItem {
+  id: string;
+  displayName: string;
+  primaryPhone: string;
+  email: string | null;
+  companyName: string | null;
+  responsibleMembershipId: string | null;
+  status: LeadStatus;
+  stage: LeadStage;
+  source: string;
+  lastEntryAt: string;
+  nextAction: LeadNextActionSummary | null;
+  temporalState: LeadNextActionTemporalState;
+  returnPending: boolean;
+  revision: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeadKanbanColumn {
+  stage: LeadStage;
+  total: number;
+  items: LeadListItem[];
   page: { nextCursor: string | null; limit: number };
+}
+
+export interface LeadKanbanResponse {
+  columns: LeadKanbanColumn[];
+  asOf: string;
+}
+
+export interface LeadReturnReviewItem {
+  lead: LeadListItem;
+  review: {
+    id: string;
+    cycleId: string;
+    entryCount: string;
+    openedAt: string;
+    updatedAt: string;
+    firstEntry: { id: string; source: string; receivedAt: string };
+    latestEntry: { id: string; source: string; receivedAt: string };
+  };
+}
+
+export interface LeadReturnReviewQueueResponse {
+  items: LeadReturnReviewItem[];
+  page: LeadOperationalPage;
+}
+
+export interface LeadMetricsResponse {
+  asOf: string;
+  timeZone: string;
+  snapshot: {
+    active: number;
+    unassigned: number;
+    overdue: number;
+    withoutNextAction: number;
+    pendingReturns: number;
+  };
+  period: {
+    from: string;
+    to: string;
+    created: number;
+    won: number;
+    lost: number;
+    createdBySource: Array<{ source: string; count: number }>;
+  };
+}
+
+export interface LeadDetailView extends LeadView {
+  latestEntry: {
+    id: string;
+    sequence: string;
+    intakeChannel: string;
+    source: string;
+    receivedAt: string;
+  };
+  latestCycle: LeadCommercialCycleView;
+  pendingReturn: {
+    id: string;
+    cycleId: string;
+    entryCount: string;
+    openedAt: string;
+    updatedAt: string;
+  } | null;
+  counts: {
+    timeline: number;
+    cycles: number;
+    activities: number;
+    notes: number;
+  };
 }
 
 export interface LeadTimelineView {

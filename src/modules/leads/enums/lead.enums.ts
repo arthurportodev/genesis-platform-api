@@ -101,6 +101,13 @@ export enum LeadNextActionTemporalState {
   FUTURE = 'future',
 }
 
+export enum LeadListSort {
+  CREATED_AT_DESC = 'createdAt:desc',
+  CREATED_AT_ASC = 'createdAt:asc',
+  NEXT_ACTION_DUE_AT_ASC = 'nextActionDueAt:asc',
+  NEXT_ACTION_DUE_AT_DESC = 'nextActionDueAt:desc',
+}
+
 export enum LeadFollowUpCommand {
   CREATE_ACTIVITY = 'create_activity',
   CREATE_NOTE = 'create_note',

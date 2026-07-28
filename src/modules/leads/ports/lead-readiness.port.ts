@@ -8,6 +8,7 @@ export const LEAD_READINESS = Symbol('LEAD_READINESS');
 export interface LeadReadiness {
   assertManualReady(): Promise<void>;
   assertFormReady(): Promise<void>;
+  assertOperationalReadReady(): Promise<void>;
 }
 
 interface BoundaryRow {
@@ -49,6 +50,47 @@ export class OperationalLeadReadiness implements LeadReadiness {
       this.unavailable('form_configuration');
     }
     await this.assertManualReady();
+  }
+
+  async assertOperationalReadReady(): Promise<void> {
+    await this.assertManualReady();
+    let ready = false;
+    try {
+      const [boundary] = await this.dataSource.query<
+        Array<{ ready: boolean }>
+      >(`
+        WITH expected(name, fragment, predicate) AS (VALUES
+          ('idx_leads_org_display_name_search', 'lower(NORMALIZE(display_name, NFC)) text_pattern_ops', NULL::text),
+          ('idx_leads_org_company_name_search', 'lower(NORMALIZE(company_name, NFC)) text_pattern_ops', '(company_name IS NOT NULL)'),
+          ('idx_leads_org_email_search', 'lower(NORMALIZE(email, NFC)) text_pattern_ops', '(email IS NOT NULL)'),
+          ('idx_lead_entries_org_received', '(organization_id, received_at DESC, lead_id, sequence DESC)', NULL),
+          ('idx_lead_entries_org_initial_source', '(organization_id, source, lead_id)', '(sequence = 1)'),
+          ('idx_lead_next_actions_org_pending_due', '(organization_id, due_at, lead_id)', '(status = ''pending''::lead_next_action_status_enum)'),
+          ('idx_lead_next_actions_org_responsible_pending_due', '(organization_id, responsible_membership_id, due_at, lead_id)', '(status = ''pending''::lead_next_action_status_enum)'),
+          ('idx_lead_return_reviews_org_pending_opened', '(organization_id, opened_at, id, lead_id)', '(status = ''pending''::lead_return_review_status_enum)'),
+          ('idx_lead_cycles_org_closed_status', '(organization_id, closed_at, closing_status, lead_id)', '(closed_at IS NOT NULL)')
+        ), checked AS (
+          SELECT expected.name,
+            index.oid IS NOT NULL
+            AND namespace.oid IS NOT NULL
+            AND catalog.indisvalid AND catalog.indisready
+            AND position(expected.fragment in pg_get_indexdef(index.oid)) > 0
+            AND (expected.predicate IS NULL OR
+              pg_get_expr(catalog.indpred, catalog.indrelid) = expected.predicate) AS valid
+          FROM expected
+          LEFT JOIN pg_catalog.pg_class index ON index.relname = expected.name
+          LEFT JOIN pg_catalog.pg_namespace namespace
+            ON namespace.oid = index.relnamespace AND namespace.nspname = 'public'
+          LEFT JOIN pg_catalog.pg_index catalog ON catalog.indexrelid = index.oid
+        )
+        SELECT current_setting('server_encoding') = 'UTF8'
+          AND count(*) = 9 AND bool_and(valid) AS ready FROM checked
+      `);
+      ready = boundary?.ready === true;
+    } catch {
+      this.unavailable('operational_database');
+    }
+    if (!ready) this.unavailable('operational_schema');
   }
 
   private async assertDatabaseBoundary(): Promise<void> {

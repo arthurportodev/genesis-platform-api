@@ -18,6 +18,12 @@ describe('Genesis form signature', () => {
     formIpMaxAttempts: 30,
     formKeyMaxAttempts: 300,
     rateLimitMaxBuckets: 10_000,
+    readRateLimitWindowSeconds: 60,
+    readMembershipMaxAttempts: 120,
+    readIpMaxAttempts: 300,
+    metricsMembershipMaxAttempts: 30,
+    readRateLimitMaxBuckets: 10_000,
+    readStatementTimeoutMs: 3_000,
   };
   const service = new FormSignatureService({
     getOrThrow: () => config,

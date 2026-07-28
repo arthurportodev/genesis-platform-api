@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { CreateLeadFoundation1785346800000 } from '../../src/database/migrations/1785346800000-CreateLeadFoundation';
 import { ManageLeadCommercialPipeline1785433200000 } from '../../src/database/migrations/1785433200000-ManageLeadCommercialPipeline';
 import { ManageLeadActivitiesFollowUp1785519600000 } from '../../src/database/migrations/1785519600000-ManageLeadActivitiesFollowUp';
+import { AddLeadOperationalReadIndexes1785606000000 } from '../../src/database/migrations/1785606000000-AddLeadOperationalReadIndexes';
 import { OperationalInvitationActivationReadiness } from '../../src/modules/invitations/ports/invitation-activation-readiness.port';
 import { Membership } from '../../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../../src/modules/memberships/enums/membership-role.enum';
@@ -12,6 +13,7 @@ import { MembershipStatus } from '../../src/modules/memberships/enums/membership
 import {
   LeadArchiveReason,
   LeadActivityType,
+  LeadListSort,
   LeadLostReason,
   LeadNextActionType,
   LeadSource,
@@ -19,6 +21,7 @@ import {
 } from '../../src/modules/leads/enums/lead.enums';
 import { OperationalLeadReadiness } from '../../src/modules/leads/ports/lead-readiness.port';
 import { LeadsService } from '../../src/modules/leads/services/leads.service';
+import { LeadOperationalReadService } from '../../src/modules/leads/services/lead-operational-read.service';
 import { Organization } from '../../src/modules/organizations/entities/organization.entity';
 import { OrganizationStatus } from '../../src/modules/organizations/enums/organization-status.enum';
 import { User } from '../../src/modules/users/entities/user.entity';
@@ -60,6 +63,7 @@ describe('Lead foundation database integration', () => {
     await new CreateLeadFoundation1785346800000().up(migrationRunner);
     await new ManageLeadCommercialPipeline1785433200000().up(migrationRunner);
     await new ManageLeadActivitiesFollowUp1785519600000().up(migrationRunner);
+    await new AddLeadOperationalReadIndexes1785606000000().up(migrationRunner);
     configureIntegrationRuntimeEnvironment();
     runtime = createIntegrationRuntimeDataSource();
     await runtime.initialize();
@@ -71,6 +75,78 @@ describe('Lead foundation database integration', () => {
     if (owner?.isInitialized) {
       await owner.dropDatabase();
       await owner.destroy();
+    }
+  });
+
+  it('reverts and reapplies exactly the nine operational indexes on UTF8', async () => {
+    const migration = new AddLeadOperationalReadIndexes1785606000000();
+    await migrationRunner.startTransaction();
+    try {
+      await migration.down(migrationRunner);
+      const [removed] = (await migrationRunner.query(
+        `SELECT count(*)::int AS count FROM pg_indexes
+         WHERE schemaname = 'public' AND indexname IN (
+          'idx_leads_org_display_name_search',
+          'idx_leads_org_company_name_search',
+          'idx_leads_org_email_search',
+          'idx_lead_entries_org_received',
+          'idx_lead_entries_org_initial_source',
+          'idx_lead_next_actions_org_pending_due',
+          'idx_lead_next_actions_org_responsible_pending_due',
+          'idx_lead_return_reviews_org_pending_opened',
+          'idx_lead_cycles_org_closed_status'
+        )`,
+      )) as Array<{ count: number }>;
+      expect(removed?.count).toBe(0);
+
+      await migration.up(migrationRunner);
+      const [restored] = (await migrationRunner.query(
+        `SELECT current_setting('server_encoding') AS encoding,
+          count(*)::int AS count FROM pg_indexes
+         WHERE schemaname = 'public' AND indexname IN (
+          'idx_leads_org_display_name_search',
+          'idx_leads_org_company_name_search',
+          'idx_leads_org_email_search',
+          'idx_lead_entries_org_received',
+          'idx_lead_entries_org_initial_source',
+          'idx_lead_next_actions_org_pending_due',
+          'idx_lead_next_actions_org_responsible_pending_due',
+          'idx_lead_return_reviews_org_pending_opened',
+          'idx_lead_cycles_org_closed_status'
+        ) GROUP BY current_setting('server_encoding')`,
+      )) as Array<{ encoding: string; count: number }>;
+      expect(restored).toEqual({ encoding: 'UTF8', count: 9 });
+
+      const planOrganizationId = randomUUID();
+      await migrationRunner.query(
+        `INSERT INTO public.organizations (id, name, slug, status)
+         VALUES ($1::uuid, 'Plan fixture', 'plan-' || $1::uuid::text, 'inactive')`,
+        [planOrganizationId],
+      );
+      await migrationRunner.query(
+        `INSERT INTO public.leads
+          (organization_id, display_name, primary_phone)
+         SELECT $1::uuid,
+           CASE WHEN sequence <= 5 THEN 'Ágata ' || sequence::text
+                ELSE 'Zulu ' || sequence::text END,
+           '+5562' || lpad(sequence::text, 10, '0')
+         FROM generate_series(1, 5000) AS sequence`,
+        [planOrganizationId],
+      );
+      await migrationRunner.query('ANALYZE public.leads');
+      const plan: unknown = await migrationRunner.query(
+        `EXPLAIN (FORMAT JSON)
+         SELECT lead.id FROM public.leads lead
+         WHERE lead.organization_id = $1::uuid
+           AND lower(normalize(lead.display_name, NFC)) LIKE 'ágata%'
+         ORDER BY lead.created_at DESC, lead.id DESC LIMIT 25`,
+        [planOrganizationId],
+      );
+      expect(JSON.stringify(plan)).toContain(
+        'idx_leads_org_display_name_search',
+      );
+    } finally {
+      await migrationRunner.rollbackTransaction();
     }
   });
 
@@ -424,6 +500,7 @@ describe('Lead foundation database integration', () => {
     const inbox = await service.list(ownerTenant, {
       limit: 25,
       unassigned: 'true',
+      sort: LeadListSort.CREATED_AT_DESC,
     });
     expect(inbox.items).toHaveLength(1);
     expect(inbox.items[0]).toMatchObject({
@@ -437,9 +514,181 @@ describe('Lead foundation database integration', () => {
         role: MembershipRole.MEMBER,
         membershipId: fixture.memberships[1].id,
       },
-      { limit: 25, unassigned: 'true' },
+      {
+        limit: 25,
+        unassigned: 'true',
+        sort: LeadListSort.CREATED_AT_DESC,
+      },
     );
     expect(memberInbox.items).toEqual([]);
+  });
+
+  it('serves operational projections from one authorized PostgreSQL snapshot', async () => {
+    const fixture = await createFixture();
+    const tenant = ownerTenant(fixture);
+    const commands = createLeadService();
+    const reads = createReadService();
+    const assigned = await ingest(
+      fixture,
+      randomUUID(),
+      '7'.repeat(64),
+      'manual',
+      fixture.memberships[1].id,
+      uniquePhone(),
+    );
+    const unassigned = await ingest(
+      fixture,
+      randomUUID(),
+      '8'.repeat(64),
+      'campaign',
+      null,
+      uniquePhone(),
+    );
+    await commands.update(tenant, assigned.leadId, '1', {
+      displayName: 'Ágata Prime',
+      companyName: 'Clínica Ágata',
+      email: 'agata@example.com',
+    });
+    await commands.createNextAction(
+      tenant,
+      assigned.leadId,
+      '2',
+      randomUUID(),
+      {
+        type: LeadNextActionType.CALL,
+        description: 'Confirmar proposta',
+        dueAt: '2099-07-27T12:00:00.000Z',
+      },
+    );
+
+    await owner.query(
+      `UPDATE public.leads
+       SET created_at = CASE id
+         WHEN $1::uuid THEN '2026-07-27T10:00:00.000999Z'::timestamptz
+         WHEN $2::uuid THEN '2026-07-27T10:00:00.000123Z'::timestamptz
+       END
+       WHERE organization_id = $3 AND id IN ($1::uuid, $2::uuid)`,
+      [assigned.leadId, unassigned.leadId, fixture.organization.id],
+    );
+    const microsecondFirstPage = await reads.list(tenant, {
+      limit: 1,
+      sort: LeadListSort.CREATED_AT_DESC,
+    });
+    expect(microsecondFirstPage.items.map(({ id }) => id)).toEqual([
+      assigned.leadId,
+    ]);
+    expect(microsecondFirstPage.page.nextCursor).toEqual(expect.any(String));
+    const microsecondSecondPage = await reads.list(tenant, {
+      limit: 1,
+      sort: LeadListSort.CREATED_AT_DESC,
+      cursor: microsecondFirstPage.page.nextCursor as string,
+    });
+    expect(microsecondSecondPage.items.map(({ id }) => id)).toEqual([
+      unassigned.leadId,
+    ]);
+
+    const prefix = await reads.list(tenant, {
+      q: 'ágata',
+      limit: 25,
+      sort: LeadListSort.CREATED_AT_DESC,
+    });
+    expect(prefix.items).toHaveLength(1);
+    expect(prefix.items[0]).toMatchObject({
+      id: assigned.leadId,
+      displayName: 'Ágata Prime',
+      temporalState: 'future',
+    });
+    expect(prefix.page).toMatchObject({ total: 1, nextCursor: null });
+
+    const phone = await reads.list(tenant, {
+      q: prefix.items[0]?.primaryPhone,
+      limit: 25,
+      sort: LeadListSort.CREATED_AT_DESC,
+    });
+    expect(phone.items.map(({ id }) => id)).toEqual([assigned.leadId]);
+
+    const memberTenant = {
+      userId: fixture.users[1].id,
+      membershipId: fixture.memberships[1].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.OWNER,
+    };
+    const memberVisible = await reads.list(memberTenant, {
+      limit: 25,
+      sort: LeadListSort.CREATED_AT_DESC,
+    });
+    expect(memberVisible.items.map(({ id }) => id)).toEqual([assigned.leadId]);
+
+    const explained = createExplainedReadService();
+    await explained.service.myActions(memberTenant, { limit: 25 });
+    expect(JSON.stringify(explained.plans)).toContain(
+      'idx_lead_next_actions_org_responsible_pending_due',
+    );
+
+    const myActions = await reads.myActions(memberTenant, { limit: 25 });
+    expect(myActions.items.map(({ id }) => id)).toEqual([assigned.leadId]);
+    const queue = await reads.unassigned(tenant, { limit: 25 });
+    expect(queue.items.map(({ id }) => id)).toEqual([unassigned.leadId]);
+    const board = await reads.kanban(tenant, { limit: 20 });
+    expect(board.columns).toHaveLength(5);
+    expect(board.columns.reduce((sum, column) => sum + column.total, 0)).toBe(
+      2,
+    );
+    const firstBoardPage = await reads.kanban(tenant, { limit: 1 });
+    const newColumn = firstBoardPage.columns.find(
+      ({ stage }) => stage === LeadStage.NEW,
+    );
+    expect(newColumn?.items.map(({ id }) => id)).toEqual([assigned.leadId]);
+    expect(newColumn?.page.nextCursor).toEqual(expect.any(String));
+    const secondBoardPage = await reads.kanban(tenant, {
+      stage: LeadStage.NEW,
+      cursor: newColumn?.page.nextCursor as string,
+      limit: 1,
+    });
+    expect(secondBoardPage.columns[0]?.items.map(({ id }) => id)).toEqual([
+      unassigned.leadId,
+    ]);
+
+    const detail = await reads.detail(tenant, assigned.leadId);
+    expect(detail).toMatchObject({
+      id: assigned.leadId,
+      counts: { cycles: 1, activities: 0, notes: 0 },
+      nextAction: { description: 'Confirmar proposta' },
+    });
+    const metrics = await reads.metrics(tenant, {
+      from: '2026-01-01',
+      to: '2026-12-31',
+    });
+    expect(metrics.snapshot).toMatchObject({ active: 2, unassigned: 1 });
+    expect(metrics.period.created).toBe(2);
+    await expect(
+      reads.metrics(memberTenant, { from: '2026-07-27', to: '2026-07-27' }),
+    ).rejects.toMatchObject({ status: 403 });
+
+    await commands.win(tenant, assigned.leadId, '3', randomUUID());
+    const assignedPhone = prefix.items[0]?.primaryPhone;
+    if (assignedPhone === undefined) throw new Error('Assigned phone missing.');
+    await ingest(
+      fixture,
+      randomUUID(),
+      '9'.repeat(64),
+      'campaign',
+      null,
+      assignedPhone,
+    );
+    const reviews = await reads.returnReviews(tenant, { limit: 25 });
+    expect(reviews.items).toHaveLength(1);
+    expect(reviews.items[0]?.lead.id).toBe(assigned.leadId);
+
+    await owner.getRepository(Membership).update(fixture.memberships[1].id, {
+      status: MembershipStatus.INACTIVE,
+    });
+    await expect(
+      reads.list(memberTenant, {
+        limit: 25,
+        sort: LeadListSort.CREATED_AT_DESC,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
   });
 
   it('denies runtime DML, keeps history append-only, and clears assignment on offboarding', async () => {
@@ -2217,6 +2466,61 @@ describe('Lead foundation database integration', () => {
     );
   }
 
+  function createReadService(): LeadOperationalReadService {
+    const config = leadConfig();
+    return new LeadOperationalReadService(
+      runtime,
+      { getOrThrow: () => config } as unknown as ConfigService,
+      new OperationalLeadReadiness(config, runtime),
+    );
+  }
+
+  function createExplainedReadService(): {
+    service: LeadOperationalReadService;
+    plans: unknown[];
+  } {
+    const plans: unknown[] = [];
+    const instrumented = {
+      createQueryRunner: () => {
+        const runner = runtime.createQueryRunner();
+        return {
+          connect: () => runner.connect(),
+          startTransaction: () => runner.startTransaction(),
+          commitTransaction: () => runner.commitTransaction(),
+          rollbackTransaction: () => runner.rollbackTransaction(),
+          release: () => runner.release(),
+          query: async (sql: string, parameters?: unknown[]) => {
+            if (
+              sql.includes('filtered AS NOT MATERIALIZED') &&
+              sql.includes(
+                'pending_action.responsible_membership_id = actor.id',
+              )
+            ) {
+              await runner.query('SET LOCAL enable_seqscan = off');
+              plans.push(
+                await runner.query(
+                  `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`,
+                  parameters,
+                ),
+              );
+            }
+            const result: unknown = await runner.query(sql, parameters);
+            return result;
+          },
+        } as unknown as QueryRunner;
+      },
+    } as unknown as DataSource;
+    const config = leadConfig();
+    return {
+      plans,
+      service: new LeadOperationalReadService(
+        instrumented,
+        { getOrThrow: () => config } as unknown as ConfigService,
+        new OperationalLeadReadiness(config, runtime),
+      ),
+    };
+  }
+
   function ownerTenant(fixture: Fixture) {
     return {
       userId: fixture.users[0].id,
@@ -2331,6 +2635,12 @@ describe('Lead foundation database integration', () => {
       formIpMaxAttempts: 30,
       formKeyMaxAttempts: 300,
       rateLimitMaxBuckets: 10_000,
+      readRateLimitWindowSeconds: 60,
+      readMembershipMaxAttempts: 120,
+      readIpMaxAttempts: 300,
+      metricsMembershipMaxAttempts: 30,
+      readRateLimitMaxBuckets: 10_000,
+      readStatementTimeoutMs: 3_000,
     };
   }
 });

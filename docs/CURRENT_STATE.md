@@ -3,12 +3,12 @@
 - **Última atualização:** 2026-07-27
 - **Fase concluída:** 0.2 — Identidade e multi-tenancy
 - **Fase atual:** 0.3 — CRM
-- **Tarefa em implementação local:** 0.3.3 — Atividades e Follow-up
-- **Última tarefa funcional concluída:** 0.3.2 — Pipeline comercial, fechamento e retorno
+- **Tarefa em implementação local:** 0.3.4 — Experiência Operacional do CRM
+- **Última tarefa funcional concluída:** 0.3.3 — Atividades e Follow-up
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Última subtarefa funcional concluída:** 0.3.2 — Pipeline comercial, fechamento e retorno (PR #19, squash `6fa39f103b9ebf65f93d26fcbc60504fa47d4e37`, CI pós-merge 30298541579 aprovada)
+- **Última subtarefa funcional concluída:** 0.3.3 — Atividades e Follow-up (PR #20, squash `7c39fede23fd36e2a4c2f17da5043494f5e42ac1`, CI pós-merge 30310732216 aprovada)
 
 ## Implementado
 
@@ -21,7 +21,8 @@
 - Testes unitários, E2E e de integração; CI com build Docker.
 - Fundação 0.3.1 incorporada com `Lead`, `LeadEntry`, timeline, intake manual e `genesis_form` fail-closed, deduplicação E.164, idempotência durável, inbox tenant-scoped, edição básica e assignment.
 - Pipeline 0.3.2 incorporado com ciclos comerciais imutáveis, fechamento ganho/perdido/arquivado, reativação, revisão agregada de retornos e comandos idempotentes.
-- Candidato local da 0.3.3 com Activity e Note append-only, Next Action única, timezone IANA da Organization e timeline operacional paginada.
+- Atividades e Follow-up 0.3.3 incorporados com Activity e Note append-only, Next Action única, timezone IANA da Organization e timeline operacional paginada.
+- Candidato local da 0.3.4 com busca NFC por prefixo e telefone exato, filtros e cursores opacos, filas operacionais, Kanban híbrido, detalhe consolidado e métricas owner/admin.
 
 ### Governança multiagente adotada
 
@@ -79,6 +80,11 @@
 - `POST /api/v1/members/me/leave`
 - `POST /api/v1/leads`
 - `GET /api/v1/leads`
+- `GET /api/v1/leads/kanban`
+- `GET /api/v1/leads/work/my-actions`
+- `GET /api/v1/leads/work/unassigned` (owner/admin)
+- `GET /api/v1/leads/work/return-reviews` (owner/admin)
+- `GET /api/v1/leads/metrics/summary` (owner/admin)
 - `GET /api/v1/leads/:leadId`
 - `GET /api/v1/leads/:leadId/timeline`
 - `GET /api/v1/leads/:leadId/next-action`

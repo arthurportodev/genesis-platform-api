@@ -28,8 +28,8 @@ Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado
 
 - ✅ 0.3.1 — Fundação e Inbox de Leads (PR #18, squash `dbaa1a0430c7b0a65ce28ca20d3eff277aa7cdca`).
 - ✅ 0.3.2 — Pipeline comercial, fechamento e retorno (PR #19, squash `6fa39f103b9ebf65f93d26fcbc60504fa47d4e37`).
-- 🚧 0.3.3 — Atividades e Follow-up (candidato local).
-- ⬜ Busca, métricas e demais capacidades do CRM.
+- ✅ 0.3.3 — Atividades e Follow-up (PR #20, squash `7c39fede23fd36e2a4c2f17da5043494f5e42ac1`).
+- 🚧 0.3.4 — Experiência Operacional: busca, filtros, filas, Kanban, detalhe e métricas (candidato local).
 
 ## 0.4 — Comunicação
 

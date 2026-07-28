@@ -195,3 +195,11 @@ Comandos estreitos (`move`, `win`, `lose`, `archive`, `reactivate` e `dismiss_re
 As seis mutações atravessam `app_private.execute_lead_follow_up_command`. A função mantém a ordem global de locks, revalida actor, capability, assignment, lifecycle, revisão e claim HMAC, e compõe os efeitos de conclusão, assignment, offboarding e fechamento em um único evento operacional. Triggers protegem append-only, transições terminais, unicidade da pendência e consistência diferida.
 
 O estado temporal não pertence ao snapshot estável do Lead. `GET /next-action` consulta `statement_timestamp()` e `organizations.crm_time_zone`, projeta o instante com regras IANA e retorna `no-store` sem ETag. O runtime continua sem DML direto e só recebe `SELECT` e `EXECUTE` nas superfícies enumeradas pelo readiness.
+
+## Experiência Operacional do CRM 0.3.4
+
+As projeções operacionais são consultas `SELECT` tenant-scoped. Cada statement começa por um `authorized_actor` materializado que relê Organization, User, Membership e papel atuais; a visibilidade de member é aplicada no próprio SQL pelo responsável corrente. Lista, Kanban, filas, detalhe, ciclos e métricas não confiam isoladamente no `TenantContext` capturado antes da consulta.
+
+A lista combina busca por prefixo NFC ou telefone E.164 exato com filtros allowlisted. Cursores versionados carregam apenas sort, chave temporal, UUID e MAC dos filtros; não carregam PII. O Kanban executa totais e previews das colunas no mesmo statement, e a continuação é independente por stage. Datas civis e estados temporais são convertidos pelo PostgreSQL usando `organizations.crm_time_zone`.
+
+A migration `1785606000000-AddLeadOperationalReadIndexes.ts` adiciona somente nove índices. Readiness específico verifica UTF8, validade, readiness, expressões, opclasses e predicados antes dessas superfícies. Cada projeção usa transação curta com timeout local configurável; rate limits de Membership, IP e métricas permanecem process-local. Nenhuma função, grant, DML ou dado persistido foi adicionado.

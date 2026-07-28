@@ -29,6 +29,12 @@ import {
 } from './ports/lead-readiness.port';
 import { FormSignatureService } from './security/form-signature.service';
 import { FormRateLimiter } from './services/form-rate-limiter.service';
+import { LeadOperationalReadService } from './services/lead-operational-read.service';
+import { LeadReadRateLimiter } from './services/lead-read-rate-limiter.service';
+import {
+  LeadMetricsRateLimitGuard,
+  LeadReadRateLimitGuard,
+} from './guards/lead-read-rate-limit.guards';
 import { LeadsService } from './services/leads.service';
 
 @Module({
@@ -50,8 +56,17 @@ import { LeadsService } from './services/leads.service';
   controllers: [LeadsController, FormLeadsController],
   providers: [
     LeadsService,
+    LeadOperationalReadService,
     FormSignatureService,
     FormRateLimiter,
+    {
+      provide: LeadReadRateLimiter,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =>
+        new LeadReadRateLimiter(config.getOrThrow<LeadConfig>('lead')),
+    },
+    LeadReadRateLimitGuard,
+    LeadMetricsRateLimitGuard,
     FormSignatureGuard,
     FormRateLimitGuard,
     ManualLeadReadinessGuard,

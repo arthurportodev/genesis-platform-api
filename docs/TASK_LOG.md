@@ -205,11 +205,23 @@
 
 ## 0.3.3 — Atividades e Follow-up
 
-**Status: candidato local.**
+**Concluída no PR #20, squash `7c39fede23fd36e2a4c2f17da5043494f5e42ac1`, com CI pós-merge 30310732216 aprovada.**
 
 - Activity e Note são registros tenant-scoped, append-only e vinculados ao ciclo comercial; conteúdo livre permanece nas tabelas canônicas e fora da metadata da timeline.
 - Existe no máximo uma Next Action `pending` por Lead, com comandos explícitos de criação, reagendamento, conclusão e cancelamento; conclusão gera uma Activity exatamente uma vez.
 - Assignment transfere a pendência, unassignment/offboarding limpam o responsável e fechamento cancela atomicamente com razão `lead_closed`; reativação não restaura pendência.
 - `organizations.crm_time_zone` usa IANA e default/backfill `America/Belem`; `overdue`, `today`, `future` e `none` são derivados no PostgreSQL somente na leitura dedicada.
 - Timeline passa a ser paginada por sequência e retorna referências tipadas e conteúdo canônico após autorização do Lead.
+- O intake `genesis_form` permanece implementado, fail-closed e operacionalmente desabilitado.
+
+## 0.3.4 — Experiência Operacional do CRM
+
+**Status: candidato local.**
+
+- Busca textual NFC por prefixo case-insensitive e accent-sensitive, com telefone completo normalizado por correspondência exata.
+- Lista com filtros combináveis, sorts allowlisted, paginação opaca vinculada à consulta e default que exclui somente arquivados.
+- Filas de Minhas Ações, Leads sem responsável e Return Reviews, além de Kanban híbrido com cinco previews e continuação por coluna.
+- Detalhe consolidado e métricas owner/admin sobre datas civis no timezone da Organization.
+- Toda projeção revalida Organization, User, Membership, papel atual e visibilidade por responsável no mesmo statement SQL.
+- Migration aditiva contém somente nove índices; readiness valida UTF8, definições, opclasses e predicados sem ampliar ACL.
 - O intake `genesis_form` permanece implementado, fail-closed e operacionalmente desabilitado.

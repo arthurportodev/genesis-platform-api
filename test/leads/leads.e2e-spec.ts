@@ -19,6 +19,10 @@ import { FormLeadsController } from '../../src/modules/leads/controllers/form-le
 import { LeadsController } from '../../src/modules/leads/controllers/leads.controller';
 import { FormRateLimitGuard } from '../../src/modules/leads/guards/form-rate-limit.guard';
 import { FormSignatureGuard } from '../../src/modules/leads/guards/form-signature.guard';
+import {
+  LeadMetricsRateLimitGuard,
+  LeadReadRateLimitGuard,
+} from '../../src/modules/leads/guards/lead-read-rate-limit.guards';
 import { FormLeadReadinessGuard } from '../../src/modules/leads/guards/lead-readiness.guards';
 import { ManualLeadReadinessGuard } from '../../src/modules/leads/guards/lead-readiness.guards';
 import {
@@ -29,6 +33,7 @@ import { LEAD_READINESS } from '../../src/modules/leads/ports/lead-readiness.por
 import { FormSignatureService } from '../../src/modules/leads/security/form-signature.service';
 import { FormRateLimiter } from '../../src/modules/leads/services/form-rate-limiter.service';
 import { LeadsService } from '../../src/modules/leads/services/leads.service';
+import { LeadOperationalReadService } from '../../src/modules/leads/services/lead-operational-read.service';
 import { LeadView } from '../../src/modules/leads/types/lead-api.type';
 import { MembershipRole } from '../../src/modules/memberships/enums/membership-role.enum';
 import { TenantContextGuard } from '../../src/modules/tenant-context/guards/tenant-context.guard';
@@ -109,6 +114,16 @@ describe('Lead HTTP contract (e2e)', () => {
     completeNextAction: jest.fn(),
     cancelNextAction: jest.fn(),
   };
+  const reads = {
+    list: jest.fn(),
+    kanban: jest.fn(),
+    myActions: jest.fn(),
+    unassigned: jest.fn(),
+    returnReviews: jest.fn(),
+    metrics: jest.fn(),
+    detail: jest.fn(),
+    cycles: jest.fn(),
+  };
 
   beforeAll(async () => {
     tenantGuard = new TenantFixtureGuard();
@@ -142,6 +157,7 @@ describe('Lead HTTP contract (e2e)', () => {
           },
         },
         { provide: LeadsService, useValue: leads },
+        { provide: LeadOperationalReadService, useValue: reads },
       ],
     })
       .overrideGuard(AccessTokenGuard)
@@ -151,6 +167,10 @@ describe('Lead HTTP contract (e2e)', () => {
       .overrideGuard(ManualLeadReadinessGuard)
       .useValue(allow)
       .overrideGuard(RoleGuard)
+      .useValue(allow)
+      .overrideGuard(LeadReadRateLimitGuard)
+      .useValue(allow)
+      .overrideGuard(LeadMetricsRateLimitGuard)
       .useValue(allow)
       .compile();
     app = moduleRef.createNestApplication({ rawBody: true });
@@ -560,8 +580,91 @@ describe('Lead HTTP contract (e2e)', () => {
     expect(createFromForm).toHaveBeenCalledTimes(1);
   });
 
+  it('routes the operational list, board, queues, metrics and detail contracts', async () => {
+    reads.list.mockResolvedValue({
+      items: [],
+      page: {
+        limit: 25,
+        total: 0,
+        asOf: '2026-07-27T12:00:00.000Z',
+        nextCursor: null,
+      },
+    });
+    reads.kanban.mockResolvedValue({
+      asOf: '2026-07-27T12:00:00.000Z',
+      columns: [],
+    });
+    reads.returnReviews.mockResolvedValue({
+      items: [],
+      page: {
+        limit: 25,
+        total: 0,
+        asOf: '2026-07-27T12:00:00.000Z',
+        nextCursor: null,
+      },
+    });
+    reads.metrics.mockResolvedValue({
+      asOf: '2026-07-27T12:00:00.000Z',
+      timeZone: 'America/Belem',
+      snapshot: {
+        active: 0,
+        unassigned: 0,
+        overdue: 0,
+        withoutNextAction: 0,
+        pendingReturns: 0,
+      },
+      period: {
+        from: '2026-07-27',
+        to: '2026-07-27',
+        created: 0,
+        won: 0,
+        lost: 0,
+        createdBySource: [],
+      },
+    });
+    reads.detail.mockResolvedValue({
+      ...view,
+      latestEntry: { id: randomUUID() },
+      latestCycle: null,
+      pendingReturn: null,
+      counts: { timeline: 1, cycles: 1, activities: 0, notes: 0 },
+    });
+
+    await request(app.getHttpServer() as Server)
+      .get('/api/v1/leads?q=Maria&sort=createdAt%3Adesc')
+      .expect(200)
+      .expect('Cache-Control', 'no-store');
+    expect(reads.list).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        q: 'Maria',
+        limit: 25,
+        sort: 'createdAt:desc',
+      }),
+    );
+
+    await request(app.getHttpServer() as Server)
+      .get('/api/v1/leads/kanban?limit=20')
+      .expect(200);
+    await request(app.getHttpServer() as Server)
+      .get('/api/v1/leads/work/return-reviews?limit=25')
+      .expect(200);
+    await request(app.getHttpServer() as Server)
+      .get('/api/v1/leads/metrics/summary?from=2026-07-27&to=2026-07-27')
+      .expect(200);
+    await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}`)
+      .expect(200)
+      .expect('ETag', `"lead:${leadId}:1"`);
+    expect(reads.detail).toHaveBeenCalledWith(expect.any(Object), leadId);
+
+    await request(app.getHttpServer() as Server)
+      .get('/api/v1/leads/kanban?limit=21')
+      .expect(400);
+  });
+
   it('returns uniform 404 from the resource boundary', async () => {
-    leads.get.mockRejectedValue(new NotFoundException('Lead not found.'));
+    reads.detail.mockRejectedValue(new NotFoundException('Lead not found.'));
     await request(app.getHttpServer() as Server)
       .get(`/api/v1/leads/${leadId}`)
       .expect(404)
