@@ -57,7 +57,6 @@ import {
   LeadCommercialCycleView,
   LeadCycleListResponse,
   LeadIngestResult,
-  LeadListResponse,
   LeadNextActionResponse,
   LeadNextActionSummary,
   LeadNextActionView,
@@ -182,15 +181,22 @@ export class LeadsService {
   async list(
     tenant: TenantContext,
     query: ListLeadsDto,
-  ): Promise<LeadListResponse> {
+  ): Promise<{
+    items: LeadView[];
+    page: { limit: number; nextCursor: string | null };
+  }> {
     await this.readiness.assertManualReady();
     const cursor = query.cursor ? this.decodeCursor(query.cursor) : null;
-    const parameters: unknown[] = [tenant.organizationId];
-    const predicates = ['lead.organization_id = $1'];
-    if (tenant.role === MembershipRole.MEMBER) {
-      parameters.push(tenant.membershipId);
-      predicates.push(`lead.responsible_membership_id = $${parameters.length}`);
-    }
+    const parameters: unknown[] = [
+      tenant.organizationId,
+      tenant.membershipId,
+      tenant.userId,
+    ];
+    const predicates = [
+      'lead.organization_id = $1',
+      `EXISTS (SELECT 1 FROM authorized_actor actor
+        WHERE actor.role <> 'member' OR lead.responsible_membership_id = actor.id)`,
+    ];
     if (query.unassigned === 'true') {
       predicates.push('lead.responsible_membership_id IS NULL');
     }
@@ -219,7 +225,8 @@ export class LeadsService {
     }
     parameters.push(query.limit + 1);
     const rows = await this.dataSource.query<LeadRow[]>(
-      `${this.leadSelectSql()} WHERE ${predicates.join(' AND ')}
+      `WITH ${this.authorizedActorCte(2, 3)}
+       ${this.leadSelectSql()} WHERE ${predicates.join(' AND ')}
        ORDER BY lead.created_at DESC, lead.id DESC LIMIT $${parameters.length}`,
       parameters,
     );
@@ -1181,18 +1188,35 @@ export class LeadsService {
     tenant: TenantContext,
     leadId: string,
   ): Promise<LeadRow | null> {
-    const parameters: unknown[] = [tenant.organizationId, leadId];
-    let visibility = '';
-    if (tenant.role === MembershipRole.MEMBER) {
-      parameters.push(tenant.membershipId);
-      visibility = ` AND lead.responsible_membership_id = $3`;
-    }
     const rows = await this.dataSource.query<LeadRow[]>(
-      `${this.leadSelectSql()}
-       WHERE lead.organization_id = $1 AND lead.id = $2${visibility}`,
-      parameters,
+      `WITH ${this.authorizedActorCte(3, 4)}
+       ${this.leadSelectSql()}
+       WHERE lead.organization_id = $1 AND lead.id = $2
+         AND EXISTS (SELECT 1 FROM authorized_actor actor
+           WHERE actor.role <> 'member'
+              OR lead.responsible_membership_id = actor.id)`,
+      [tenant.organizationId, leadId, tenant.membershipId, tenant.userId],
     );
     return rows[0] ?? null;
+  }
+
+  private authorizedActorCte(
+    membershipParameter: number,
+    userParameter: number,
+  ): string {
+    return `authorized_actor AS MATERIALIZED (
+      SELECT membership.id, membership.role
+      FROM public.memberships membership
+      JOIN public.users application_user
+        ON application_user.id = membership.user_id
+       AND application_user.status = 'active'
+      JOIN public.organizations organization
+        ON organization.id = membership.organization_id
+       AND organization.status = 'active'
+      WHERE organization.id = $1 AND membership.id = $${membershipParameter}
+        AND membership.user_id = $${userParameter}
+        AND membership.status = 'active'
+    )`;
   }
 
   private leadSelectSql(): string {

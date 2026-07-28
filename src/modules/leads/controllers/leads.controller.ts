@@ -32,6 +32,11 @@ import {
   CreateLeadNextActionDto,
   CreateLeadNoteDto,
   LeadParamsDto,
+  LeadKanbanDto,
+  LeadMetricsDto,
+  LeadMyActionsDto,
+  LeadReturnReviewQueueDto,
+  LeadUnassignedQueueDto,
   ListLeadCyclesDto,
   ListLeadTimelineDto,
   ListLeadsDto,
@@ -42,10 +47,18 @@ import {
   RescheduleLeadNextActionDto,
   UpdateLeadDto,
 } from '../dto/lead.dto';
-import { ManualLeadReadinessGuard } from '../guards/lead-readiness.guards';
 import { LeadsService } from '../services/leads.service';
+import { LeadOperationalReadService } from '../services/lead-operational-read.service';
+import {
+  LeadMetricsRateLimitGuard,
+  LeadReadRateLimitGuard,
+} from '../guards/lead-read-rate-limit.guards';
 import {
   LeadListResponse,
+  LeadDetailView,
+  LeadKanbanResponse,
+  LeadMetricsResponse,
+  LeadReturnReviewQueueResponse,
   LeadCycleListResponse,
   LeadCommandResult,
   LeadCreateMutationResult,
@@ -61,16 +74,14 @@ const ALL_ROLES = [
 ] as const;
 
 @Controller('leads')
-@UseGuards(
-  AccessTokenGuard,
-  TenantContextGuard,
-  ManualLeadReadinessGuard,
-  RoleGuard,
-)
+@UseGuards(AccessTokenGuard, TenantContextGuard, RoleGuard)
 @Roles(...ALL_ROLES)
 @UseInterceptors(NoStoreInterceptor)
 export class LeadsController {
-  constructor(private readonly leads: LeadsService) {}
+  constructor(
+    private readonly leads: LeadsService,
+    private readonly reads: LeadOperationalReadService,
+  ) {}
 
   @Post()
   async create(
@@ -98,25 +109,76 @@ export class LeadsController {
   }
 
   @Get()
+  @UseGuards(LeadReadRateLimitGuard)
   list(
     @CurrentTenant() tenant: TenantContext,
     @Query() query: ListLeadsDto,
   ): Promise<LeadListResponse> {
-    return this.leads.list(tenant, query);
+    return this.reads.list(tenant, query);
+  }
+
+  @Get('kanban')
+  @UseGuards(LeadReadRateLimitGuard)
+  kanban(
+    @CurrentTenant() tenant: TenantContext,
+    @Query() query: LeadKanbanDto,
+  ): Promise<LeadKanbanResponse> {
+    return this.reads.kanban(tenant, query);
+  }
+
+  @Get('work/my-actions')
+  @UseGuards(LeadReadRateLimitGuard)
+  myActions(
+    @CurrentTenant() tenant: TenantContext,
+    @Query() query: LeadMyActionsDto,
+  ): Promise<LeadListResponse> {
+    return this.reads.myActions(tenant, query);
+  }
+
+  @Get('work/unassigned')
+  @Roles(MembershipRole.OWNER, MembershipRole.ADMIN)
+  @UseGuards(LeadReadRateLimitGuard)
+  unassigned(
+    @CurrentTenant() tenant: TenantContext,
+    @Query() query: LeadUnassignedQueueDto,
+  ): Promise<LeadListResponse> {
+    return this.reads.unassigned(tenant, query);
+  }
+
+  @Get('work/return-reviews')
+  @Roles(MembershipRole.OWNER, MembershipRole.ADMIN)
+  @UseGuards(LeadReadRateLimitGuard)
+  returnReviews(
+    @CurrentTenant() tenant: TenantContext,
+    @Query() query: LeadReturnReviewQueueDto,
+  ): Promise<LeadReturnReviewQueueResponse> {
+    return this.reads.returnReviews(tenant, query);
+  }
+
+  @Get('metrics/summary')
+  @Roles(MembershipRole.OWNER, MembershipRole.ADMIN)
+  @UseGuards(LeadMetricsRateLimitGuard)
+  metrics(
+    @CurrentTenant() tenant: TenantContext,
+    @Query() query: LeadMetricsDto,
+  ): Promise<LeadMetricsResponse> {
+    return this.reads.metrics(tenant, query);
   }
 
   @Get(':leadId')
+  @UseGuards(LeadReadRateLimitGuard)
   async get(
     @CurrentTenant() tenant: TenantContext,
     @Param() params: LeadParamsDto,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<LeadView> {
-    const lead = await this.leads.get(tenant, params.leadId);
+  ): Promise<LeadDetailView> {
+    const lead = await this.reads.detail(tenant, params.leadId);
     response.setHeader('ETag', this.etag(lead));
     return lead;
   }
 
   @Get(':leadId/timeline')
+  @UseGuards(LeadReadRateLimitGuard)
   timeline(
     @CurrentTenant() tenant: TenantContext,
     @Param() params: LeadParamsDto,
@@ -126,6 +188,7 @@ export class LeadsController {
   }
 
   @Get(':leadId/next-action')
+  @UseGuards(LeadReadRateLimitGuard)
   async nextAction(
     @CurrentTenant() tenant: TenantContext,
     @Param() params: LeadParamsDto,
@@ -141,12 +204,13 @@ export class LeadsController {
   }
 
   @Get(':leadId/cycles')
+  @UseGuards(LeadReadRateLimitGuard)
   cycles(
     @CurrentTenant() tenant: TenantContext,
     @Param() params: LeadParamsDto,
     @Query() query: ListLeadCyclesDto,
   ): Promise<LeadCycleListResponse> {
-    return this.leads.cycles(tenant, params.leadId, query);
+    return this.reads.cycles(tenant, params.leadId, query);
   }
 
   @Patch(':leadId')

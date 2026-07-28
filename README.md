@@ -5,10 +5,10 @@ Esta versão contém a fundação técnica, núcleo persistente multi-tenant,
 autenticação, contexto de organização ativa, autorização por papel, convites e
 gestão de memberships/ownership.
 
-A Tarefa 0.3.2 entregou o pipeline comercial no PR #19, squash
-`6fa39f103b9ebf65f93d26fcbc60504fa47d4e37`, com CI pós-merge 30298541579
-aprovada. A branch da 0.3.3 acrescenta o candidato local de Activities, Notes,
-Next Action única, timezone organizacional e timeline paginada.
+A Tarefa 0.3.3 entregou Activities, Notes e Follow-up no PR #20, squash
+`7c39fede23fd36e2a4c2f17da5043494f5e42ac1`, com CI pós-merge 30310732216
+aprovada. A branch da 0.3.4 acrescenta o candidato local da experiência
+operacional do CRM: busca, filtros, filas, Kanban, detalhe consolidado e métricas.
 
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge
@@ -59,6 +59,17 @@ Variáveis de autenticação:
 | `AUTH_LOGIN_MAX_BUCKETS`        | limite total de contadores mantidos em memória                                     |
 | `AUTH_LOGIN_WINDOW_SECONDS`     | janela do limitador de login                                                       |
 | `TRUST_PROXY_HOPS`              | quantidade de proxies reversos confiáveis entre o cliente e a API (`0` por padrão) |
+
+Limites das projeções operacionais do CRM:
+
+| Variável                                      | Finalidade                                                    |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| `LEAD_READ_RATE_LIMIT_WINDOW_SECONDS`         | janela dos limitadores de leitura                             |
+| `LEAD_READ_MEMBERSHIP_MAX_ATTEMPTS`           | leituras permitidas por Membership na janela                  |
+| `LEAD_READ_IP_MAX_ATTEMPTS`                   | leituras permitidas por IP confiável na janela                |
+| `LEAD_METRICS_MEMBERSHIP_MAX_ATTEMPTS`        | limite adicional de métricas por Membership na janela         |
+| `LEAD_READ_RATE_LIMIT_MAX_BUCKETS`            | máximo de contadores de leitura mantidos no processo          |
+| `LEAD_READ_STATEMENT_TIMEOUT_MS`              | timeout local de cada statement operacional no PostgreSQL     |
 
 Controle de acesso ao banco:
 

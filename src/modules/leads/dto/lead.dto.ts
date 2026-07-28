@@ -19,11 +19,58 @@ import {
   LeadArchiveReason,
   LeadActivityType,
   LeadLostReason,
+  LeadListSort,
+  LeadNextActionTemporalState,
   LeadNextActionType,
   LeadSource,
   LeadStage,
   LeadStatus,
 } from '../enums/lead.enums';
+
+const CIVIL_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+export class LeadOperationalFiltersDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  q?: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  responsibleMembershipId?: string;
+
+  @IsOptional()
+  @IsIn(['true'])
+  assignedToMe?: 'true';
+
+  @IsOptional()
+  @IsIn(['true'])
+  unassigned?: 'true';
+
+  @IsOptional()
+  @IsEnum(LeadSource)
+  source?: LeadSource;
+
+  @IsOptional()
+  @IsEnum(LeadNextActionTemporalState)
+  nextActionState?: LeadNextActionTemporalState;
+
+  @IsOptional()
+  @Matches(CIVIL_DATE)
+  createdFrom?: string;
+
+  @IsOptional()
+  @Matches(CIVIL_DATE)
+  createdTo?: string;
+
+  @IsOptional()
+  @Matches(CIVIL_DATE)
+  lastEntryFrom?: string;
+
+  @IsOptional()
+  @Matches(CIVIL_DATE)
+  lastEntryTo?: string;
+}
 
 export class LeadParamsDto {
   @IsUUID('4')
@@ -166,7 +213,7 @@ export class AssignLeadDto {
   responsibleMembershipId!: string | null;
 }
 
-export class ListLeadsDto {
+export class ListLeadsDto extends LeadOperationalFiltersDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
@@ -181,10 +228,6 @@ export class ListLeadsDto {
   limit = 25;
 
   @IsOptional()
-  @IsIn(['true', 'false'])
-  unassigned?: 'true' | 'false';
-
-  @IsOptional()
   @IsEnum(LeadStatus)
   status?: LeadStatus;
 
@@ -195,6 +238,112 @@ export class ListLeadsDto {
   @IsOptional()
   @IsIn(['true', 'false'])
   returnPending?: 'true' | 'false';
+
+  @IsOptional()
+  @IsEnum(LeadListSort)
+  sort: LeadListSort = LeadListSort.CREATED_AT_DESC;
+}
+
+export class LeadKanbanDto extends LeadOperationalFiltersDto {
+  @IsOptional()
+  @IsEnum(LeadStage)
+  stage?: LeadStage;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  limit = 20;
+}
+
+export class LeadMyActionsDto {
+  @IsOptional()
+  @IsUUID('4')
+  responsibleMembershipId?: string;
+
+  @IsOptional()
+  @IsIn([
+    LeadNextActionTemporalState.OVERDUE,
+    LeadNextActionTemporalState.TODAY,
+    LeadNextActionTemporalState.FUTURE,
+  ])
+  state?: Exclude<
+    LeadNextActionTemporalState,
+    LeadNextActionTemporalState.NONE
+  >;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 25;
+}
+
+export class LeadUnassignedQueueDto extends LeadOperationalFiltersDto {
+  @IsOptional()
+  @IsEnum(LeadStatus)
+  status?: LeadStatus;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 25;
+}
+
+export class LeadReturnReviewQueueDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  q?: string;
+
+  @IsOptional()
+  @IsEnum(LeadSource)
+  source?: LeadSource;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 25;
+}
+
+export class LeadMetricsDto {
+  @IsOptional()
+  @Matches(CIVIL_DATE)
+  from?: string;
+
+  @IsOptional()
+  @Matches(CIVIL_DATE)
+  to?: string;
 }
 
 export class MoveLeadDto {

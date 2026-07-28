@@ -178,4 +178,34 @@ export const environmentValidationSchema = Joi.object({
     .min(2)
     .max(1_000_000)
     .default(10_000),
+  LEAD_READ_RATE_LIMIT_WINDOW_SECONDS: Joi.number()
+    .integer()
+    .min(1)
+    .max(86_400)
+    .default(60),
+  LEAD_READ_MEMBERSHIP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(100_000)
+    .default(120),
+  LEAD_READ_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(100_000)
+    .default(300),
+  LEAD_METRICS_MEMBERSHIP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(100_000)
+    .default(30),
+  LEAD_READ_RATE_LIMIT_MAX_BUCKETS: Joi.number()
+    .integer()
+    .min(3)
+    .max(1_000_000)
+    .default(10_000),
+  LEAD_READ_STATEMENT_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(100)
+    .max(30_000)
+    .default(3_000),
 });

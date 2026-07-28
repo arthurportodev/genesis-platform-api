@@ -167,6 +167,15 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Timeline autoriza o Lead antes dos joins, pagina por sequência e não duplica textos livres em metadata. Conclusão+Activity, fechamento+cancelamento e assignment/offboarding+transferência aparecem como um único item composto.
 - O runtime não recebe DML direto nas novas tabelas nem acesso às claims. Readiness verifica tabelas, colunas, constraints, triggers, funções, ACL e inventário global exato; rollback falha fechado depois do primeiro dado real.
 
+## Segurança das projeções operacionais 0.3.4
+
+- Lista, Kanban, filas, detalhe, ciclos e métricas revalidam no mesmo statement a Organization, o User, a Membership, o vínculo entre eles e o papel atual. Member só alcança Lead cujo responsável atual é sua própria Membership.
+- IDs de tenant e ator vêm do contexto autenticado. Filtros de responsável validam target ativo no mesmo tenant; target ausente, inativo ou cross-tenant produz `404` uniforme.
+- Busca aceita somente prefixo textual escapado ou telefone completo normalizado por igualdade. Cursores são canônicos, versionados, limitados, autenticados contra sort e filtros e não contêm nome, telefone, email, empresa ou texto de busca.
+- Métricas e filas administrativas são owner/admin. Dados livres não entram em métricas, labels, logs ou caches compartilhados; respostas tenant-scoped permanecem `no-store`.
+- Readiness dos índices e UTF8 falha com `503` somente nas projeções dependentes. O runtime conserva a ACL existente de `SELECT`, sem função privilegiada, grant ou DML novo.
+- Timeout de statement é local à transação. Limites de leitura por Membership, IP confiável e um bucket adicional de métricas são process-local e exigem topologia de uma réplica pública.
+
 - Refresh token ainda é retornado em JSON; cookie `HttpOnly` não foi implementado.
 - Rate limiter e semaphore Argon2 não são distribuídos; uma solução compartilhada será necessária antes de múltiplas réplicas públicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.

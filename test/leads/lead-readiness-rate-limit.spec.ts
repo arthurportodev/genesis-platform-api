@@ -19,6 +19,12 @@ describe('Lead readiness and rate limiting', () => {
     formIpMaxAttempts: 1,
     formKeyMaxAttempts: 1,
     rateLimitMaxBuckets: 10,
+    readRateLimitWindowSeconds: 60,
+    readMembershipMaxAttempts: 120,
+    readIpMaxAttempts: 300,
+    metricsMembershipMaxAttempts: 30,
+    readRateLimitMaxBuckets: 10,
+    readStatementTimeoutMs: 3_000,
   };
   const healthyBoundary = {
     tablesReady: true,
@@ -73,5 +79,31 @@ describe('Lead readiness and rate limiting', () => {
     expect(() => limiter.consumeIp('127.0.0.1')).toThrow('rate limit');
     limiter.consumeAuthenticatedKey(2);
     expect(() => limiter.consumeAuthenticatedKey(2)).toThrow('rate limit');
+  });
+
+  it('fails only operational reads closed when an approved index drifts', async () => {
+    const healthy = {
+      query: jest
+        .fn()
+        .mockResolvedValueOnce([healthyBoundary])
+        .mockResolvedValueOnce([{ ready: true }]),
+    } as unknown as DataSource;
+    await expect(
+      new OperationalLeadReadiness(
+        baseConfig,
+        healthy,
+      ).assertOperationalReadReady(),
+    ).resolves.toBeUndefined();
+
+    const drift = {
+      query: jest
+        .fn()
+        .mockResolvedValueOnce([healthyBoundary])
+        .mockResolvedValueOnce([{ ready: false }]),
+    } as unknown as DataSource;
+    const readiness = new OperationalLeadReadiness(baseConfig, drift);
+    await expect(readiness.assertOperationalReadReady()).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
   });
 });
