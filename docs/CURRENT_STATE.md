@@ -2,13 +2,12 @@
 
 - **Última atualização:** 2026-07-28
 - **Fase concluída:** 0.3 — CRM
-- **Fase atual:** 0.7 — Frontend operacional, com o contrato backend 0.7.0 em candidato local
-- **Candidato em implementação local:** 0.7.0 — Contrato Web de Sessão e Bootstrap (implementado, aguardando Gate 2)
-- **Última tarefa funcional concluída:** 0.3.4 — Experiência Operacional do CRM
+- **Fase atual:** 0.7 — Frontend operacional
+- **Última tarefa funcional concluída:** 0.7.0 — Contrato Web de Sessão e Bootstrap (PR #22, squash `9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`)
+- **Próxima tarefa planejada:** 0.7.1 — Fundação do Frontend Operacional
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
-- **Última subtarefa funcional concluída:** 0.3.4 — Experiência Operacional do CRM (PR #21, squash `f625745b17828a47208cc27461cc8cb6d8d9e67a`)
 
 ## Implementado
 
@@ -26,9 +25,11 @@
   `f625745b17828a47208cc27461cc8cb6d8d9e67a`, com busca NFC por prefixo e
   telefone exato, filtros e cursores opacos, filas operacionais, Kanban
   híbrido, detalhe consolidado e métricas owner/admin.
-- Candidato local da 0.7.0 com refresh exclusivamente em cookie protegido,
-  CSRF cookie-to-header, logout idempotente sem dependência de access token,
-  CORS/cache explícitos e bootstrap autenticado das Organizations disponíveis.
+- Contrato Web de Sessão e Bootstrap 0.7.0 incorporado no PR #22, squash
+  `9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`, com refresh exclusivamente em
+  cookie protegido, CSRF cookie-to-header, logout idempotente sem dependência de
+  access token, CORS/cache explícitos e bootstrap autenticado das Organizations
+  disponíveis.
 
 ### Governança multiagente adotada
 
