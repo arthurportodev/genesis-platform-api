@@ -162,9 +162,9 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
 
 ## Fronteiras
 
-- **Implementado na candidata 0.7.0:** contrato web de sessão, CSRF,
-  refresh cookie-only, logout idempotente e bootstrap de Organizations;
-  aguardando Gate 2.
+- **Implementado na 0.7.0 e incorporado pelo PR #22, squash
+  `9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`:** contrato web de sessão, CSRF,
+  refresh cookie-only, logout idempotente e bootstrap de Organizations.
 - **Implementado:** identidade, persistência multi-tenant, autenticação, sessões,
   auditoria, CI, contexto de tenant, autorização por papel, convites, gestão de
   memberships, invariantes de ownership e CRM 0.3.1–0.3.4, incluindo Activities,

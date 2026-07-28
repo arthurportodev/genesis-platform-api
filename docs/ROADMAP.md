@@ -46,11 +46,12 @@ Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado
 
 ## 0.7 — Frontend operacional
 
-- 🚧 0.7.0 — Contrato Web de Sessão e Bootstrap — candidato implementado,
-  aguardando Gate 2.
-- ⬜ 0.7.1 — Próxima tarefa planejada após a incorporação da 0.7.0: iniciar, em
-  repositório separado e sem implementação antecipada, a fundação do frontend
-  operacional sobre o contrato estabilizado.
+- ✅ 0.7.0 — Contrato Web de Sessão e Bootstrap (PR #22, squash
+  `9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`).
+- ⬜ 0.7.1 — Fundação do Frontend Operacional: próxima tarefa planejada, em
+  repositório separado e sem implementação antecipada, com implementação
+  oficial pelo Codex, GitHub como fonte da verdade, Vercel como deploy planejado
+  e Lovable somente como ferramenta visual opcional.
 
 ## 0.8 — Infraestrutura e produção
 

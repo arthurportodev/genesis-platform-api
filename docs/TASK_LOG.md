@@ -228,10 +228,11 @@
 
 ## 0.7.0 — Contrato Web de Sessão e Bootstrap
 
-**Status: candidato implementado, aguardando Gate 2.**
+**Concluída no PR #22, squash `9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`.**
 
-- Access token permanece Bearer tenant-agnostic em JSON; refresh opaco saiu do
-  JSON/body e passa exclusivamente por cookie protegido e rotacionado.
+- Access token permanece Bearer tenant-agnostic em JSON; login define o refresh
+  cookie e refresh lê, substitui e rotaciona o token exclusivamente por esse
+  cookie, sem o contrato anterior de JSON/body.
 - CSRF double-submit e validação de `Origin` protegem login, refresh, logout e
   logout-all; CORS usa origem ambiental exata e headers explícitos.
 - Logout atual tornou-se idempotente e independente do access token; logout-all
@@ -240,4 +241,6 @@
   do próprio user, com papel persistido e sem tenant header.
 - Respostas sensíveis usam `Cache-Control: no-store`; rotação transacional,
   locks, HMAC-only, reuse detection, multi-tenancy e autorização permanecem.
+- Testes unitários, E2E e de integração e a documentação durável do contrato
+  web foram incorporados com a implementação.
 - Sem migration, schema, dependência, frontend ou CRUD de Organization.

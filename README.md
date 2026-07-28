@@ -9,10 +9,10 @@ A Tarefa 0.3.4 incorporou a experiência operacional do CRM no PR #21, squash
 `f625745b17828a47208cc27461cc8cb6d8d9e67a`: busca, filtros, filas, Kanban,
 detalhe consolidado e métricas.
 
-A Tarefa 0.7.0 possui candidato local do contrato web de sessão: refresh
-exclusivamente em cookie protegido, CSRF cookie-to-header, logout idempotente e
-bootstrap autenticado de Organizations. O candidato aguarda Gate 2 e ainda não
-representa incorporação à `main`.
+A Tarefa 0.7.0 incorporou o contrato web de sessão no PR #22, squash
+`9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`: refresh exclusivamente em cookie
+protegido, CSRF cookie-to-header, logout idempotente e bootstrap autenticado de
+Organizations.
 
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge
