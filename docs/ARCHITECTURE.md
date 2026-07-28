@@ -102,11 +102,11 @@ sequenceDiagram
     A-->>C: Novo access + cookie refresh substituído
 ```
 
-O access permanece em memória no frontend futuro; refresh nunca é exposto ao
-JavaScript. CORS usa uma origem exata com credentials e allow/expose headers
-explícitos. Autenticação e rotas tenant-scoped recebem `Cache-Control: no-store`,
-inclusive quando o header de organização está ausente ou inválido. Mais detalhes
-estão no
+Na futura integração de sessão do frontend, o access permanecerá em memória;
+refresh nunca é exposto ao JavaScript. CORS usa uma origem exata com credentials
+e allow/expose headers explícitos. Autenticação e rotas tenant-scoped recebem
+`Cache-Control: no-store`, inclusive quando o header de organização está ausente
+ou inválido. Mais detalhes estão no
 [ADR-003](decisions/ADR-003-authentication-sessions.md), no
 [ADR-010](decisions/ADR-010-web-session-contract.md) e em
 [SECURITY.md](SECURITY.md).
@@ -169,12 +169,20 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
   auditoria, CI, contexto de tenant, autorização por papel, convites, gestão de
   memberships, invariantes de ownership e CRM 0.3.1–0.3.4, incluindo Activities,
   Notes, Next Action, busca, filas, Kanban, detalhe e métricas operacionais.
+- **Implementado no frontend oficial separado
+  `arthurportodev/genesis-platform-web`:** fundação 0.7.1.1 incorporada pelo PR
+  #1, squash `30b91272088dd9be03b8bd9feffbf74dac48acc7`, com SPA
+  React/Vite/TypeScript, shell administrativo, rotas provisórias, design system
+  inicial, testes, CI e Sistema Operacional de Desenvolvimento.
 - **Planejado:** matriz geral de capacidades e demais módulos comerciais.
-- **Fora do estágio atual:** frontend, integrações, deploy e microservices. A
-  fundação do frontend permanece planejada para a Tarefa 0.7.1 em repositório
-  separado, com implementação oficial pelo Codex e Lovable limitado a
-  exploração/referência visual opcional; Vercel e Hetzner são os destinos
-  planejados de frontend e backend, respectivamente.
+- **Planejado na 0.7.1.2 ou em tarefas posteriores:** integração real de sessão,
+  cliente HTTP, contexto de Organization, guards, coordenação entre abas, proxy
+  same-origin, Vercel, domínio e deploy.
+- **Fora do estágio atual:** integrações externas, deploy e microservices.
+  NestJS permanece o único backend oficial, com backend e frontend em
+  repositórios separados. Vercel e Hetzner continuam os destinos planejados do
+  frontend e backend, respectivamente; Lovable permanece apenas ferramenta
+  opcional de exploração e referência visual.
 
 ## Entrega e aceitação de convites
 

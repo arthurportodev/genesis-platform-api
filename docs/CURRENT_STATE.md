@@ -3,8 +3,9 @@
 - **Última atualização:** 2026-07-28
 - **Fase concluída:** 0.3 — CRM
 - **Fase atual:** 0.7 — Frontend operacional
-- **Última tarefa funcional concluída:** 0.7.0 — Contrato Web de Sessão e Bootstrap (PR #22, squash `9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`)
-- **Próxima tarefa planejada:** 0.7.1 — Fundação do Frontend Operacional
+- **Última tarefa funcional concluída:** 0.7.1.1 — Bootstrap do Repositório Frontend (repositório `arthurportodev/genesis-platform-web`, PR #1, squash `30b91272088dd9be03b8bd9feffbf74dac48acc7`)
+- **Próxima tarefa planejada:** 0.7.1.2 — Sessão Web, Organization Ativa e Integração com a API
+- **Reconciliação documental candidata:** 0.7.0.2 — Estado Web nos Documentos do Backend, aguardando Gate 2
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
@@ -30,6 +31,11 @@
   cookie protegido, CSRF cookie-to-header, logout idempotente sem dependência de
   access token, CORS/cache explícitos e bootstrap autenticado das Organizations
   disponíveis.
+- Fundação frontend 0.7.1.1 incorporada no repositório separado
+  `arthurportodev/genesis-platform-web` pelo PR #1, squash
+  `30b91272088dd9be03b8bd9feffbf74dac48acc7`, com React/Vite/TypeScript, shell
+  administrativo, rotas provisórias, design system inicial, testes, CI e
+  Sistema Operacional de Desenvolvimento.
 
 ### Governança multiagente adotada
 
@@ -183,14 +189,16 @@ Consulte os [ADRs](decisions/README.md).
 - A infraestrutura genérica de autorização por papel e as invariantes de
   ownership estão implementadas; permissions, matriz geral de capacidades e
   autorização por recurso permanecem futuras.
-- Coordenação de refresh concorrente entre abas pertence ao frontend futuro; o
+- Coordenação de refresh concorrente entre abas pertence à Tarefa 0.7.1.2; o
   backend preserva reuse detection sem grace period.
 - Rate limiter é local, não distribuído e perde estado ao reiniciar.
 - Não há política de retenção para sessões e auditoria.
-- Não há deploy, frontend, recuperação de senha, confirmação de email ou integrações.
-  A Tarefa 0.7.1 planeja iniciar o frontend em repositório separado, sem
-  implementação atual; Vercel é o destino planejado do frontend e Hetzner do
-  backend.
+- Não há integração real de sessão no frontend, cliente HTTP, Organization
+  ativa, guards reais, proxy same-origin, deploy, recuperação de senha,
+  confirmação de email ou integrações externas. A Tarefa 0.7.1.2 planeja a
+  integração web; Vercel é o destino planejado do frontend e Hetzner do backend.
+- Previews permanecem sem acesso à API até existir staging com origem estável e
+  nunca devem apontar para o backend de produção.
 
 ## Decisões abertas e riscos
 
@@ -204,5 +212,5 @@ Consulte os [ADRs](decisions/README.md).
 ## Fora do escopo atual
 
 Importação, comunicação, WhatsApp, automações, tracking, relatórios, billing,
-frontend e deploy permanecem planejados ou futuros.
+integração real do frontend e deploy permanecem planejados ou futuros.
 O intake `genesis_form` continua fail-closed e operacionalmente desabilitado.

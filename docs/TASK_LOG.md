@@ -244,3 +244,25 @@
 - Testes unitários, E2E e de integração e a documentação durável do contrato
   web foram incorporados com a implementação.
 - Sem migration, schema, dependência, frontend ou CRUD de Organization.
+
+## 0.7.1.1 — Bootstrap do Repositório Frontend
+
+**Concluída no repositório `arthurportodev/genesis-platform-web`, PR #1, squash `30b91272088dd9be03b8bd9feffbf74dac48acc7`.**
+
+- Fundação React/Vite/TypeScript com shell administrativo, rotas provisórias,
+  design system inicial, testes, CI e Sistema Operacional de Desenvolvimento.
+- Sessão real, cliente HTTP, Organization ativa, guards, coordenação de refresh,
+  proxy same-origin, Vercel e deploy permaneceram fora da 0.7.1.1.
+
+## 0.7.0.2 — Reconciliação do Estado Web nos Documentos do Backend
+
+**Status: candidato documental, aguardando Gate 2.**
+
+- Corrige a memória oficial após a incorporação da 0.7.0 no backend e da
+  fundação 0.7.1.1 no repositório frontend separado, sem mudança funcional.
+- Reconcilia ADR-010, segurança, arquitetura, estado atual, roadmap e histórico;
+  nenhum código, teste, contrato, schema, migration ou dependência foi alterado.
+- Previews permanecem fail-closed, sem acesso à API até existir staging com
+  origem estável, e nunca devem apontar para o backend de produção.
+- Validações do candidato: perfil `docs`, fingerprint determinístico,
+  `git diff --check` e revisão independente read-only.

@@ -77,5 +77,6 @@ tenant, membership ou papel no JWT.
 
 ## Implementação
 
-Implementado como candidato da Tarefa 0.7.0, aguardando Gate 2. Não exige
-migration, mudança de schema ou dependência nova.
+Implementado e incorporado pela Tarefa 0.7.0 no PR #22, squash
+`9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`. Não exigiu migration, mudança de
+schema ou dependência nova.
