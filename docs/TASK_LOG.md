@@ -216,7 +216,7 @@
 
 ## 0.3.4 — Experiência Operacional do CRM
 
-**Status: candidato local.**
+**Concluída no PR #21, squash `f625745b17828a47208cc27461cc8cb6d8d9e67a`.**
 
 - Busca textual NFC por prefixo case-insensitive e accent-sensitive, com telefone completo normalizado por correspondência exata.
 - Lista com filtros combináveis, sorts allowlisted, paginação opaca vinculada à consulta e default que exclui somente arquivados.
@@ -225,3 +225,19 @@
 - Toda projeção revalida Organization, User, Membership, papel atual e visibilidade por responsável no mesmo statement SQL.
 - Migration aditiva contém somente nove índices; readiness valida UTF8, definições, opclasses e predicados sem ampliar ACL.
 - O intake `genesis_form` permanece implementado, fail-closed e operacionalmente desabilitado.
+
+## 0.7.0 — Contrato Web de Sessão e Bootstrap
+
+**Status: candidato implementado, aguardando Gate 2.**
+
+- Access token permanece Bearer tenant-agnostic em JSON; refresh opaco saiu do
+  JSON/body e passa exclusivamente por cookie protegido e rotacionado.
+- CSRF double-submit e validação de `Origin` protegem login, refresh, logout e
+  logout-all; CORS usa origem ambiental exata e headers explícitos.
+- Logout atual tornou-se idempotente e independente do access token; logout-all
+  preserva Bearer e revogação global. Ambos removem cookies.
+- `GET /api/v1/auth/bootstrap` retorna user e Organizations/memberships ativas
+  do próprio user, com papel persistido e sem tenant header.
+- Respostas sensíveis usam `Cache-Control: no-store`; rotação transacional,
+  locks, HMAC-only, reuse detection, multi-tenancy e autorização permanecem.
+- Sem migration, schema, dependência, frontend ou CRUD de Organization.

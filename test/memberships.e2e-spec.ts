@@ -329,11 +329,25 @@ describe('Membership management (e2e)', () => {
   }
 
   async function login(email: string, password: string): Promise<string> {
+    const csrf = await request(app.getHttpServer() as Server)
+      .get('/api/v1/auth/csrf')
+      .expect(200);
     const response = await request(app.getHttpServer() as Server)
       .post('/api/v1/auth/login')
+      .set('Cookie', csrfCookie(csrf))
+      .set('X-CSRF-Token', (csrf.body as { csrfToken: string }).csrfToken)
       .send({ email, password })
       .expect(200);
     return (response.body as AuthTokenResponse).accessToken;
+  }
+
+  function csrfCookie(response: { headers: Record<string, unknown> }): string {
+    const header = response.headers['set-cookie'];
+    const value: unknown = Array.isArray(header)
+      ? (header as unknown[])[0]
+      : header;
+    if (typeof value !== 'string') throw new Error('Missing CSRF cookie.');
+    return value.split(';', 1)[0];
   }
 
   async function waitForMembershipCommandWaiters(expected: number) {

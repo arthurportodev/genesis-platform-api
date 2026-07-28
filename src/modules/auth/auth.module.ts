@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthSessionsModule } from '../auth-sessions/auth-sessions.module';
 import { AuthSession } from '../auth-sessions/entities/auth-session.entity';
 import { CredentialsModule } from '../credentials/credentials.module';
+import { Membership } from '../memberships/entities/membership.entity';
 import { User } from '../users/entities/user.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -12,15 +13,17 @@ import {
   AccessTokenGuard,
   DatabaseAccessTokenAuthenticator,
 } from './guards/access-token.guard';
+import { CsrfGuard } from './guards/csrf.guard';
 import { AuthAuditService } from './services/auth-audit.service';
 import { InMemoryLoginRateLimiter } from './services/in-memory-login-rate-limiter.service';
 import { LoginRateLimiter } from './services/login-rate-limiter.port';
 import { TokenService } from './services/token.service';
+import { WebSessionService } from './services/web-session.service';
 
 @Module({
   imports: [
     JwtModule.register({}),
-    TypeOrmModule.forFeature([User, AuthSession]),
+    TypeOrmModule.forFeature([User, AuthSession, Membership]),
     AuthSessionsModule,
     CredentialsModule,
   ],
@@ -35,6 +38,8 @@ import { TokenService } from './services/token.service';
       useExisting: DatabaseAccessTokenAuthenticator,
     },
     AccessTokenGuard,
+    CsrfGuard,
+    WebSessionService,
     {
       provide: LoginRateLimiter,
       useClass: InMemoryLoginRateLimiter,

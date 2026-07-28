@@ -15,7 +15,15 @@ export const environmentValidationSchema = Joi.object({
   DATABASE_RUNTIME_ROLE: Joi.string()
     .pattern(/^[a-z_][a-z0-9_]{0,62}$/)
     .required(),
-  FRONTEND_URL: Joi.string().uri().required(),
+  FRONTEND_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .custom((value: string, helpers) => {
+      const url = new URL(value);
+      return url.origin === value && !url.hostname.includes('*')
+        ? value
+        : helpers.error('any.invalid');
+    })
+    .required(),
   TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(5).default(0),
   JWT_ACCESS_SECRET: Joi.string()
     .min(32)

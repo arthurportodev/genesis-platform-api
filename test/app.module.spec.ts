@@ -1,5 +1,11 @@
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
+import {
+  buildWebCorsOptions,
+  isSensitiveWebResponse,
+  WEB_ALLOWED_HEADERS,
+  WEB_EXPOSED_HEADERS,
+} from '../src/config/app.config';
 
 describe('AppModule', () => {
   beforeAll(() => {
@@ -41,5 +47,36 @@ describe('AppModule', () => {
 
     expect(moduleRef).toBeDefined();
     await moduleRef.close();
+  });
+
+  it('uses one exact credentialed frontend origin and explicit web headers', () => {
+    expect(buildWebCorsOptions('https://app.example.com')).toEqual({
+      origin: 'https://app.example.com',
+      credentials: true,
+      allowedHeaders: [...WEB_ALLOWED_HEADERS],
+      exposedHeaders: [...WEB_EXPOSED_HEADERS],
+    });
+    expect(WEB_ALLOWED_HEADERS).not.toContain('*');
+    expect(WEB_EXPOSED_HEADERS).not.toContain('*');
+  });
+
+  it('marks auth and tenant-context responses as non-cacheable', () => {
+    expect(isSensitiveWebResponse('/api/v1/auth/bootstrap', undefined)).toBe(
+      true,
+    );
+    expect(isSensitiveWebResponse('/api/v1/leads', 'organization-id')).toBe(
+      true,
+    );
+    expect(isSensitiveWebResponse('/api/v1/leads', undefined)).toBe(true);
+    expect(isSensitiveWebResponse('/api/v1/members/member-id', undefined)).toBe(
+      true,
+    );
+    expect(
+      isSensitiveWebResponse('/api/v1/invitations/invitation-id', undefined),
+    ).toBe(true);
+    expect(
+      isSensitiveWebResponse('/api/v1/invitation-acceptance', undefined),
+    ).toBe(false);
+    expect(isSensitiveWebResponse('/api/v1/health', undefined)).toBe(false);
   });
 });

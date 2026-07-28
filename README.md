@@ -5,10 +5,14 @@ Esta versão contém a fundação técnica, núcleo persistente multi-tenant,
 autenticação, contexto de organização ativa, autorização por papel, convites e
 gestão de memberships/ownership.
 
-A Tarefa 0.3.3 entregou Activities, Notes e Follow-up no PR #20, squash
-`7c39fede23fd36e2a4c2f17da5043494f5e42ac1`, com CI pós-merge 30310732216
-aprovada. A branch da 0.3.4 acrescenta o candidato local da experiência
-operacional do CRM: busca, filtros, filas, Kanban, detalhe consolidado e métricas.
+A Tarefa 0.3.4 incorporou a experiência operacional do CRM no PR #21, squash
+`f625745b17828a47208cc27461cc8cb6d8d9e67a`: busca, filtros, filas, Kanban,
+detalhe consolidado e métricas.
+
+A Tarefa 0.7.0 possui candidato local do contrato web de sessão: refresh
+exclusivamente em cookie protegido, CSRF cookie-to-header, logout idempotente e
+bootstrap autenticado de Organizations. O candidato aguarda Gate 2 e ainda não
+representa incorporação à `main`.
 
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge
@@ -59,6 +63,7 @@ Variáveis de autenticação:
 | `AUTH_LOGIN_MAX_BUCKETS`        | limite total de contadores mantidos em memória                                     |
 | `AUTH_LOGIN_WINDOW_SECONDS`     | janela do limitador de login                                                       |
 | `TRUST_PROXY_HOPS`              | quantidade de proxies reversos confiáveis entre o cliente e a API (`0` por padrão) |
+| `FRONTEND_URL`                  | origem HTTP(S) exata permitida por CORS e validação de `Origin`, sem wildcard/path  |
 
 Limites das projeções operacionais do CRM:
 
@@ -367,7 +372,7 @@ docker compose run --rm migrate npm run seed
 A autenticação usa email e senha, Argon2id e dois tipos de token:
 
 - **Access token:** JWT HS256 curto e configurável. O payload contém somente `sub`, `sessionId`, `type: access`, `iat` e `exp`.
-- **Refresh token:** valor opaco e imprevisível no formato `sessionId.secret`. Somente o cliente recebe o token bruto; o PostgreSQL armazena HMAC-SHA-256 com `REFRESH_TOKEN_PEPPER`.
+- **Refresh token:** valor opaco e imprevisível no formato `sessionId.secret`, entregue exclusivamente em cookie `HttpOnly`; o PostgreSQL armazena somente HMAC-SHA-256 com `REFRESH_TOKEN_PEPPER`.
 
 O hash de senha e o hash de refresh token não são selecionados pelo TypeORM por padrão e nunca fazem parte das respostas. O access token não contém organização, membership, papel ou permissão.
 
@@ -387,7 +392,16 @@ revogados, e o evento é auditado. Um hash que nunca existiu retorna o mesmo
 `401` genérico e registra apenas falha; ele não revoga a sessão indicada pelo
 `sessionId` público e não gera um falso evento de reutilização.
 
-Sessões revogadas, expiradas ou pertencentes a usuário `inactive` não autenticam nem renovam tokens. Logout preserva a linha para auditoria. Uma rotina futura deverá remover sessões e logs antigos segundo uma política de retenção ainda não definida.
+Sessões revogadas, expiradas ou pertencentes a usuário `inactive` não autenticam nem renovam tokens. Logout preserva a linha para auditoria, não exige access token, limpa os cookies e responde `204` mesmo quando não identifica sessão. Uma rotina futura deverá remover sessões e logs antigos segundo uma política de retenção ainda não definida.
+
+Em produção, refresh usa `__Host-genesis_refresh` (`HttpOnly`, `Secure`,
+`SameSite=Lax`, `Path=/`, sem `Domain`) e CSRF usa
+`__Host-genesis_csrf` com os mesmos atributos, exceto `HttpOnly=false`.
+Desenvolvimento e teste usam nomes separados e `Secure=false`. Login, refresh,
+logout e logout-all exigem cookie CSRF + `X-CSRF-Token`; uma origem presente
+deve coincidir exatamente com `FRONTEND_URL`. Access token permanece no JSON e
+deve ficar somente em memória no frontend futuro; nenhum token deve ir para
+`localStorage`.
 
 Eventos persistidos em `auth_audit_logs`:
 
@@ -401,46 +415,57 @@ Senha, tokens, segredos e hashes são removidos dos metadados de auditoria. Erro
 
 Todos usam o prefixo `/api/v1/auth`:
 
-| Método | Caminho       | Autenticação          | Sucesso |
-| ------ | ------------- | --------------------- | ------- |
-| `POST` | `/login`      | pública               | `200`   |
-| `POST` | `/refresh`    | refresh token no body | `200`   |
-| `POST` | `/logout`     | Bearer access token   | `204`   |
-| `POST` | `/logout-all` | Bearer access token   | `204`   |
-| `GET`  | `/me`         | Bearer access token   | `200`   |
+| Método | Caminho       | Autenticação/defesa                  | Sucesso |
+| ------ | ------------- | ------------------------------------ | ------- |
+| `GET`  | `/csrf`       | pública                              | `200`   |
+| `POST` | `/login`      | cookie CSRF + `X-CSRF-Token`         | `200`   |
+| `POST` | `/refresh`    | refresh cookie + CSRF                | `200`   |
+| `POST` | `/logout`     | refresh cookie opcional + CSRF       | `204`   |
+| `POST` | `/logout-all` | Bearer access token + CSRF           | `204`   |
+| `GET`  | `/me`         | Bearer access token                  | `200`   |
+| `GET`  | `/bootstrap`  | Bearer access token, sem tenant      | `200`   |
 
-Exemplo de login sem credencial real:
+Exemplo de sessão web sem credencial real (`curl` usa o cookie jar):
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/auth/login \
+CSRF=$(curl -s -c cookies.txt http://localhost:3000/api/v1/auth/csrf | jq -r .csrfToken)
+curl -b cookies.txt -c cookies.txt -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: $CSRF" \
   -d '{"email":"user@example.com","password":"<defina-localmente>"}'
 ```
 
 Renovação:
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/auth/refresh \
-  -H "Content-Type: application/json" \
-  -d '{"refreshToken":"<token-opaco>"}'
+curl -b cookies.txt -c cookies.txt -X POST http://localhost:3000/api/v1/auth/refresh \
+  -H "X-CSRF-Token: $CSRF"
 ```
 
-Consulta e revogação:
+Consulta e revogação (os dois comandos de logout são alternativas para uma
+mesma sessão):
 
 ```bash
 curl http://localhost:3000/api/v1/auth/me \
   -H "Authorization: Bearer <access-token>"
-curl -X POST http://localhost:3000/api/v1/auth/logout \
+curl http://localhost:3000/api/v1/auth/bootstrap \
   -H "Authorization: Bearer <access-token>"
-curl -X POST http://localhost:3000/api/v1/auth/logout-all \
+curl -b cookies.txt -c cookies.txt -X POST http://localhost:3000/api/v1/auth/logout \
+  -H "X-CSRF-Token: $CSRF"
+curl -b cookies.txt -c cookies.txt -X POST http://localhost:3000/api/v1/auth/logout-all \
+  -H "X-CSRF-Token: $CSRF" \
   -H "Authorization: Bearer <access-token>"
 ```
 
-Payload inválido retorna `400`; credencial ou token inválido retorna `401`; excesso de tentativas retorna `429`. `403` não é usado para substituir falhas de autenticação e `503` permanece reservado à indisponibilidade real de dependências.
+Payload inválido retorna `400`; credencial ou token inválido retorna `401`;
+CSRF/origem inválidos retornam `403` genérico; excesso de tentativas retorna
+`429`. `503` permanece reservado à indisponibilidade real de dependências.
 
 O limitador atual mantém contadores separados para cada combinação de IP e email normalizado e para o total agregado por IP. Buckets expirados são removidos periodicamente e o total em memória é limitado; ao atingir a capacidade, novas chaves são recusadas com `429` sem ampliar o uso de memória. Um login bem-sucedido limpa apenas o contador específico de IP e email, preservando a proteção agregada do IP. A implementação é adequada somente a uma instância: os contadores não são compartilhados entre réplicas e são perdidos ao reiniciar. Uma implantação com múltiplas instâncias deverá substituir a implementação pela mesma abstração usando armazenamento compartilhado.
 
-Os tokens são retornados em JSON nesta etapa. O frontend poderá futuramente armazenar o refresh token em cookie `HttpOnly`, após decisão arquitetural conjunta. O backend não assume `localStorage` nem define agora a estratégia final de cookies.
+Somente o access token curto é retornado em JSON e deve permanecer em memória
+no frontend futuro. O refresh token trafega exclusivamente no cookie `HttpOnly`
+definido pelo backend; nenhum dos dois deve ser armazenado em `localStorage`.
 
 ## Testes com PostgreSQL isolado
 

@@ -94,6 +94,28 @@ describe('Authentication configuration', () => {
     ).toBeDefined();
   });
 
+  it('requires FRONTEND_URL to be one exact HTTP origin', () => {
+    expect(
+      environmentValidationSchema.validate({
+        ...validEnvironment,
+        FRONTEND_URL: 'https://app.example.com',
+      }).error,
+    ).toBeUndefined();
+    for (const frontendUrl of [
+      'https://app.example.com/',
+      'https://app.example.com/path',
+      'https://*.example.com',
+      'javascript:alert(1)',
+    ]) {
+      expect(
+        environmentValidationSchema.validate({
+          ...validEnvironment,
+          FRONTEND_URL: frontendUrl,
+        }).error,
+      ).toBeDefined();
+    }
+  });
+
   it('rejects missing, short, or placeholder secrets', () => {
     const missing = { ...validEnvironment, JWT_ACCESS_SECRET: undefined };
     const short = { ...validEnvironment, REFRESH_TOKEN_PEPPER: 'short' };

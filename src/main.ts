@@ -6,9 +6,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { AppConfig } from './config/app.config';
+import {
+  AppConfig,
+  buildWebCorsOptions,
+  isSensitiveWebResponse,
+} from './config/app.config';
 import { configureTrustProxy } from './config/trust-proxy';
 
 async function bootstrap(): Promise<void> {
@@ -20,9 +25,14 @@ async function bootstrap(): Promise<void> {
 
   configureTrustProxy(app, config.trustProxyHops);
   app.setGlobalPrefix('api/v1');
-  app.enableCors({
-    origin: config.frontendUrl,
-    credentials: true,
+  app.enableCors(buildWebCorsOptions(config.frontendUrl));
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    if (
+      isSensitiveWebResponse(request.path, request.get('x-organization-id'))
+    ) {
+      response.setHeader('Cache-Control', 'no-store');
+    }
+    next();
   });
   app.useGlobalPipes(
     new ValidationPipe({

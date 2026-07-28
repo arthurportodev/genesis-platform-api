@@ -25,7 +25,8 @@ flowchart LR
 - `OrganizationsModule`: registra `Organization`.
 - `MembershipsModule`: registra o vínculo e o papel por organização.
 - `AuthSessionsModule`: registra sessões, refresh tokens e auditoria.
-- `AuthModule`: login, refresh, logout, usuário atual, tokens, guard, auditoria e rate limit.
+- `AuthModule`: CSRF, login, refresh por cookie, logout, usuário atual,
+  bootstrap, tokens, guards, auditoria e rate limit.
 - `TenantContextModule`: valida organização e membership para requests tenant-scoped e fornece contexto tipado.
 - `AuthorizationModule`: fornece e exporta `RoleGuard` para listas explícitas de papéis, sem TypeORM, entidade, repository, service, controller, migration, estado compartilhado ou porta opaca.
 - `InvitationsModule`: administra invitations tenant-scoped, quotas,
@@ -69,15 +70,22 @@ auditoria. A função de invitations permanece separada e conserva `FOR UPDATE`.
 
 ## Autenticação implementada
 
-1. `POST /auth/login` normaliza o email, aplica rate limit e verifica Argon2id.
-2. Um login válido cria uma sessão e um refresh token persistidos em transação.
-3. O access token JWT curto contém somente `sub`, `sessionId`, `type`, `iat` e `exp`.
-4. O `AccessTokenGuard` valida assinatura/claims e consulta sessão e usuário no banco.
-5. `POST /auth/refresh` faz pré-leitura mínima dos IDs, bloqueia separadamente
+1. `GET /auth/csrf` emite cookie host-only legível pelo frontend e o token da
+   resposta; não cria sessão nem consulta credenciais.
+2. `POST /auth/login` valida CSRF/origem, normaliza o email, aplica rate limit e
+   verifica Argon2id.
+3. Um login válido cria sessão e refresh persistidos, retorna somente access em
+   JSON e define o refresh em cookie `HttpOnly`.
+4. O access token JWT curto contém somente `sub`, `sessionId`, `type`, `iat` e `exp`.
+5. O `AccessTokenGuard` valida assinatura/claims e consulta sessão e usuário no banco.
+6. `POST /auth/refresh` lê somente o cookie, valida CSRF, faz pré-leitura mínima dos IDs, bloqueia separadamente
    `User` -> `AuthSession` -> `AuthRefreshToken`, relê o estado completo e só
    então valida, consome o token e cria o substituto.
-6. Reutilização comprovada de token consumido revoga a família; um hash desconhecido não revoga sessão legítima.
-7. Logout revoga a sessão atual; logout-all revoga as sessões ativas do usuário.
+7. Reutilização comprovada de token consumido revoga a família; um hash desconhecido não revoga sessão legítima.
+8. Logout por refresh identificável revoga a sessão sem exigir access; logout-all
+   preserva Bearer e revoga todas as sessões ativas. Ambos limpam cookies.
+9. Bootstrap consulta memberships e Organizations ativas do user autenticado,
+   sem selecionar tenant, e deriva o papel exclusivamente da membership.
 
 ```mermaid
 sequenceDiagram
@@ -87,14 +95,21 @@ sequenceDiagram
     C->>A: Login com email e senha
     A->>D: Verifica usuário e cria sessão
     D-->>A: Sessão e refresh persistidos
-    A-->>C: Access JWT e refresh opaco
-    C->>A: Refresh opaco
+    A-->>C: Access JWT + cookie refresh HttpOnly
+    C->>A: Cookie refresh + CSRF
     A->>D: Bloqueia, consome e rotaciona
     D-->>A: Novo token ativo
-    A-->>C: Novo access e refresh
+    A-->>C: Novo access + cookie refresh substituído
 ```
 
-Mais detalhes estão no [ADR-003](decisions/ADR-003-authentication-sessions.md) e em [SECURITY.md](SECURITY.md).
+O access permanece em memória no frontend futuro; refresh nunca é exposto ao
+JavaScript. CORS usa uma origem exata com credentials e allow/expose headers
+explícitos. Autenticação e rotas tenant-scoped recebem `Cache-Control: no-store`,
+inclusive quando o header de organização está ausente ou inválido. Mais detalhes
+estão no
+[ADR-003](decisions/ADR-003-authentication-sessions.md), no
+[ADR-010](decisions/ADR-010-web-session-contract.md) e em
+[SECURITY.md](SECURITY.md).
 
 ### Fronteiras modulares dos guards
 
@@ -147,10 +162,19 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
 
 ## Fronteiras
 
-- **Implementado:** identidade, persistência multi-tenant, autenticação, sessões, auditoria, CI, contexto de tenant, autorização por papel, convites, gestão de memberships, invariantes de ownership, fundação tenant-scoped de Leads e lifecycle comercial com ciclos e revisão de retornos.
-- **Em implementação local:** Activities, Notes, Next Action, timezone organizacional e timeline paginada.
-- **Planejado:** matriz geral de capacidades, busca, métricas e demais módulos comerciais.
-- **Fora do estágio atual:** frontend, integrações, deploy e microservices.
+- **Implementado na candidata 0.7.0:** contrato web de sessão, CSRF,
+  refresh cookie-only, logout idempotente e bootstrap de Organizations;
+  aguardando Gate 2.
+- **Implementado:** identidade, persistência multi-tenant, autenticação, sessões,
+  auditoria, CI, contexto de tenant, autorização por papel, convites, gestão de
+  memberships, invariantes de ownership e CRM 0.3.1–0.3.4, incluindo Activities,
+  Notes, Next Action, busca, filas, Kanban, detalhe e métricas operacionais.
+- **Planejado:** matriz geral de capacidades e demais módulos comerciais.
+- **Fora do estágio atual:** frontend, integrações, deploy e microservices. A
+  fundação do frontend permanece planejada para a Tarefa 0.7.1 em repositório
+  separado, com implementação oficial pelo Codex e Lovable limitado a
+  exploração/referência visual opcional; Vercel e Hetzner são os destinos
+  planejados de frontend e backend, respectivamente.
 
 ## Entrega e aceitação de convites
 
@@ -197,6 +221,9 @@ As seis mutações atravessam `app_private.execute_lead_follow_up_command`. A fu
 O estado temporal não pertence ao snapshot estável do Lead. `GET /next-action` consulta `statement_timestamp()` e `organizations.crm_time_zone`, projeta o instante com regras IANA e retorna `no-store` sem ETag. O runtime continua sem DML direto e só recebe `SELECT` e `EXECUTE` nas superfícies enumeradas pelo readiness.
 
 ## Experiência Operacional do CRM 0.3.4
+
+Esta etapa foi incorporada no PR #21, squash
+`f625745b17828a47208cc27461cc8cb6d8d9e67a`.
 
 As projeções operacionais são consultas `SELECT` tenant-scoped. Cada statement começa por um `authorized_actor` materializado que relê Organization, User, Membership e papel atuais; a visibilidade de member é aplicada no próprio SQL pelo responsável corrente. Lista, Kanban, filas, detalhe, ciclos e métricas não confiam isoladamente no `TenantContext` capturado antes da consulta.
 
