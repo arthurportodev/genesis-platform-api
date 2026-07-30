@@ -256,13 +256,93 @@
 
 ## 0.7.0.2 — Reconciliação do Estado Web nos Documentos do Backend
 
-**Status: candidato documental, aguardando Gate 2.**
+**Concluída no PR #24, squash
+`57f6955b3a90a29517d5477e75aac97032425ed1`.**
 
 - Corrige a memória oficial após a incorporação da 0.7.0 no backend e da
   fundação 0.7.1.1 no repositório frontend separado, sem mudança funcional.
 - Reconcilia ADR-010, segurança, arquitetura, estado atual, roadmap e histórico;
   nenhum código, teste, contrato, schema, migration ou dependência foi alterado.
-- Previews permanecem fail-closed, sem acesso à API até existir staging com
-  origem estável, e nunca devem apontar para o backend de produção.
-- Validações do candidato: perfil `docs`, fingerprint determinístico,
-  `git diff --check` e revisão independente read-only.
+- A incorporação preservou Preview fail-closed e nenhum acesso à produção.
+- Validações: perfil `docs`, fingerprint determinístico, `git diff --check` e
+  revisão independente read-only.
+
+## 0.7.1.2 — Sessão Web, Organization Ativa e HTTP
+
+**Concluída no frontend, PR #2, squash
+`633ace9b55ec25e70f1f88089865f89db464ed5f`.**
+
+- Sessão em memória, refresh cookie-only, CSRF, coordenação multiaba,
+  bootstrap, Organization ativa, cache tenant, guards e cliente HTTP.
+- Backend canônico lido no SHA
+  `57f6955b3a90a29517d5477e75aac97032425ed1`; sem alteração backend.
+
+## 0.7.2 — Inbox e Detalhe
+
+**Concluída no frontend, PR #3, squash
+`859823501bbdee03441a9fa865d823f3890be07a`.**
+
+- Inbox, filtros, paginação, detalhe, timeline, próxima ação, ciclos,
+  diretório por papel e mutações server-confirmed.
+
+## 0.7.3 — Pipeline Kanban
+
+**Concluída no frontend, PR #4, squash
+`1040523fa4b415e1cdf25d7f61085c3765f33eb9`.**
+
+- Cinco estágios canônicos, filtros, paginação por coluna, PII minimizada e
+  movimento server-confirmed com ETag, If-Match e Idempotency-Key.
+
+## 0.7.4 — Follow-up e Filas Operacionais
+
+**Concluída no frontend, PR #5, squash
+`f9fc37dd31fa2116a66354d46938c60d566fe101`.**
+
+- Filas por papel, ações atrasadas/de hoje/futuras, sem responsável, retornos
+  para revisão e ações rápidas server-confirmed.
+
+## 0.7.5 — Métricas Operacionais
+
+**Concluída no frontend, PR #6, squash
+`1ac7e26cda535cbf3e5c02dd78da4e0fb95a2e9e`.**
+
+- Snapshot, período civil, origem e taxa de ganho para owner/admin, com
+  timezone da Organization e sem polling.
+
+## 0.7.6 — Criação Manual de Leads
+
+**Concluída no frontend, PR #7, squash
+`4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`.**
+
+- `/app/leads/new`, contrato server-confirmed, respostas por papel,
+  idempotência somente em memória, incerteza explícita e proteção de PII.
+- Sem importação, formulário público, comunicação externa, Vercel ou deploy.
+
+## Fase 0.7 — Frontend operacional
+
+**Concluída.** O ciclo funcional documentado é criar Lead → Inbox → detalhe →
+Pipeline → Follow-up → métricas. Importação, formulário público conectado,
+WhatsApp, automações, calendário, estágios customizáveis, drag-and-drop e
+produção permanecem indisponíveis.
+
+## 0.8.0 — Arquitetura e Plano de Produção
+
+- Natureza: Gate 1 técnico e operacional, estritamente read-only.
+- Resultado: Gate 1 recomendado com decisões humanas pendentes; decisões
+  aprovadas pelo Product Owner em 30 de julho de 2026.
+- Evidências negativas: sem branch, alteração de arquivo, PR, build, migration,
+  seed, mudança em Vercel/DNS/Hetzner ou deploy.
+- Decisão: Vercel + proxy `/api/v1` + origem protegida + Traefik + API NestJS
+  - PostgreSQL, com uma réplica pública e abertura controlada.
+
+## 0.8.1 — Reconciliação Canônica da Documentação
+
+- Classe/perfil: Normal / docs.
+- Responsabilidade: frontend e backend, com um único builder e consistência
+  entre os dois candidatos.
+- Resultado esperado: memória canônica, decisões aceitas, plano
+  `0.8.1`–`0.8.11`, DAG e critérios de produção.
+- Limites: exclusivamente documental; sem código, infraestrutura ou operação
+  remota.
+
+A incorporação deste conjunto documental conclui a tarefa 0.8.1.

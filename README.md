@@ -14,6 +14,12 @@ A Tarefa 0.7.0 incorporou o contrato web de sessão no PR #22, squash
 protegido, CSRF cookie-to-header, logout idempotente e bootstrap autenticado de
 Organizations.
 
+A Fase `0.7` foi concluída no frontend oficial até a criação manual de Leads
+(`0.7.6`, PR #7, squash
+`4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`). A Fase `0.8` é a atual e prepara
+a primeira produção; nenhuma infraestrutura foi publicada e a aplicação ainda
+não está autorizada para dados reais.
+
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge
 29952145756 aprovada.
@@ -25,7 +31,10 @@ estarem explícitas e a API pública operar com uma única réplica.
 
 ## Documentação do projeto
 
-A memória oficial começa em [`docs/START_HERE.md`](docs/START_HERE.md). Consulte também o [estado atual](docs/CURRENT_STATE.md), o [roadmap](docs/ROADMAP.md), a [arquitetura](docs/ARCHITECTURE.md) e os [ADRs](docs/decisions/README.md).
+A memória oficial começa em [`docs/START_HERE.md`](docs/START_HERE.md). Consulte
+também o [estado atual](docs/CURRENT_STATE.md), o [roadmap](docs/ROADMAP.md), a
+[arquitetura](docs/ARCHITECTURE.md), o [plano canônico de produção](docs/PRODUCTION.md)
+e os [ADRs](docs/decisions/README.md).
 
 O arquivo [`AGENTS.md`](AGENTS.md) define o protocolo obrigatório de reidratação e continuidade para agentes e desenvolvedores.
 
@@ -63,18 +72,18 @@ Variáveis de autenticação:
 | `AUTH_LOGIN_MAX_BUCKETS`        | limite total de contadores mantidos em memória                                     |
 | `AUTH_LOGIN_WINDOW_SECONDS`     | janela do limitador de login                                                       |
 | `TRUST_PROXY_HOPS`              | quantidade de proxies reversos confiáveis entre o cliente e a API (`0` por padrão) |
-| `FRONTEND_URL`                  | origem HTTP(S) exata permitida por CORS e validação de `Origin`, sem wildcard/path  |
+| `FRONTEND_URL`                  | origem HTTP(S) exata permitida por CORS e validação de `Origin`, sem wildcard/path |
 
 Limites das projeções operacionais do CRM:
 
-| Variável                                      | Finalidade                                                    |
-| --------------------------------------------- | ------------------------------------------------------------- |
-| `LEAD_READ_RATE_LIMIT_WINDOW_SECONDS`         | janela dos limitadores de leitura                             |
-| `LEAD_READ_MEMBERSHIP_MAX_ATTEMPTS`           | leituras permitidas por Membership na janela                  |
-| `LEAD_READ_IP_MAX_ATTEMPTS`                   | leituras permitidas por IP confiável na janela                |
-| `LEAD_METRICS_MEMBERSHIP_MAX_ATTEMPTS`        | limite adicional de métricas por Membership na janela         |
-| `LEAD_READ_RATE_LIMIT_MAX_BUCKETS`            | máximo de contadores de leitura mantidos no processo          |
-| `LEAD_READ_STATEMENT_TIMEOUT_MS`              | timeout local de cada statement operacional no PostgreSQL     |
+| Variável                               | Finalidade                                                |
+| -------------------------------------- | --------------------------------------------------------- |
+| `LEAD_READ_RATE_LIMIT_WINDOW_SECONDS`  | janela dos limitadores de leitura                         |
+| `LEAD_READ_MEMBERSHIP_MAX_ATTEMPTS`    | leituras permitidas por Membership na janela              |
+| `LEAD_READ_IP_MAX_ATTEMPTS`            | leituras permitidas por IP confiável na janela            |
+| `LEAD_METRICS_MEMBERSHIP_MAX_ATTEMPTS` | limite adicional de métricas por Membership na janela     |
+| `LEAD_READ_RATE_LIMIT_MAX_BUCKETS`     | máximo de contadores de leitura mantidos no processo      |
+| `LEAD_READ_STATEMENT_TIMEOUT_MS`       | timeout local de cada statement operacional no PostgreSQL |
 
 Controle de acesso ao banco:
 
@@ -400,7 +409,7 @@ Em produção, refresh usa `__Host-genesis_refresh` (`HttpOnly`, `Secure`,
 Desenvolvimento e teste usam nomes separados e `Secure=false`. Login, refresh,
 logout e logout-all exigem cookie CSRF + `X-CSRF-Token`; uma origem presente
 deve coincidir exatamente com `FRONTEND_URL`. Access token permanece no JSON e
-deve ficar somente em memória no frontend futuro; nenhum token deve ir para
+fica somente em memória no frontend implementado; nenhum token deve ir para
 `localStorage`.
 
 Eventos persistidos em `auth_audit_logs`:
@@ -415,15 +424,15 @@ Senha, tokens, segredos e hashes são removidos dos metadados de auditoria. Erro
 
 Todos usam o prefixo `/api/v1/auth`:
 
-| Método | Caminho       | Autenticação/defesa                  | Sucesso |
-| ------ | ------------- | ------------------------------------ | ------- |
-| `GET`  | `/csrf`       | pública                              | `200`   |
-| `POST` | `/login`      | cookie CSRF + `X-CSRF-Token`         | `200`   |
-| `POST` | `/refresh`    | refresh cookie + CSRF                | `200`   |
-| `POST` | `/logout`     | refresh cookie opcional + CSRF       | `204`   |
-| `POST` | `/logout-all` | Bearer access token + CSRF           | `204`   |
-| `GET`  | `/me`         | Bearer access token                  | `200`   |
-| `GET`  | `/bootstrap`  | Bearer access token, sem tenant      | `200`   |
+| Método | Caminho       | Autenticação/defesa             | Sucesso |
+| ------ | ------------- | ------------------------------- | ------- |
+| `GET`  | `/csrf`       | pública                         | `200`   |
+| `POST` | `/login`      | cookie CSRF + `X-CSRF-Token`    | `200`   |
+| `POST` | `/refresh`    | refresh cookie + CSRF           | `200`   |
+| `POST` | `/logout`     | refresh cookie opcional + CSRF  | `204`   |
+| `POST` | `/logout-all` | Bearer access token + CSRF      | `204`   |
+| `GET`  | `/me`         | Bearer access token             | `200`   |
+| `GET`  | `/bootstrap`  | Bearer access token, sem tenant | `200`   |
 
 Exemplo de sessão web sem credencial real (`curl` usa o cookie jar):
 
@@ -464,7 +473,7 @@ CSRF/origem inválidos retornam `403` genérico; excesso de tentativas retorna
 O limitador atual mantém contadores separados para cada combinação de IP e email normalizado e para o total agregado por IP. Buckets expirados são removidos periodicamente e o total em memória é limitado; ao atingir a capacidade, novas chaves são recusadas com `429` sem ampliar o uso de memória. Um login bem-sucedido limpa apenas o contador específico de IP e email, preservando a proteção agregada do IP. A implementação é adequada somente a uma instância: os contadores não são compartilhados entre réplicas e são perdidos ao reiniciar. Uma implantação com múltiplas instâncias deverá substituir a implementação pela mesma abstração usando armazenamento compartilhado.
 
 Somente o access token curto é retornado em JSON e deve permanecer em memória
-no frontend futuro. O refresh token trafega exclusivamente no cookie `HttpOnly`
+no frontend. O refresh token trafega exclusivamente no cookie `HttpOnly`
 definido pelo backend; nenhum dos dois deve ser armazenado em `localStorage`.
 
 ## Testes com PostgreSQL isolado

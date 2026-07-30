@@ -16,6 +16,38 @@ flowchart LR
     Checks --> Image["Build Docker local"]
 ```
 
+Esse Compose e o Dockerfile atuais servem ao desenvolvimento e à validação;
+não constituem manifests de produção aprovados.
+
+## Arquitetura alvo de produção
+
+A decisão aceita em 30 de julho de 2026, ainda não implementada, é:
+
+```text
+Navegador
+→ app.agenciagenesis.com.br
+→ Vercel
+→ proxy server-side de /api/v1
+→ origin-api.agenciagenesis.com.br
+→ Traefik
+→ API NestJS (uma réplica pública)
+→ PostgreSQL 17 dedicado na mesma VPS, se o inventário aprovar
+```
+
+A porta `3000` e o PostgreSQL `5432` não serão publicados. A origem usa HTTPS,
+reconhece somente o proxy esperado e bloqueia bypass. A API runtime usa role
+separada da role temporária de migrations. Secrets ficam em secret files ou
+cofre; o fallback é arquivo root-owned `0600`, fora do Git e da imagem. Imagens
+privadas são identificadas por SHA e digest no GHCR, nunca por `latest` como
+fonte de verdade.
+
+O banco na mesma VPS é uma decisão inicial condicionada ao inventário de
+capacidade, segurança, armazenamento, backup e conflitos operacionais. Se a VPS
+for insuficiente, VPS separada ou PostgreSQL gerenciado deverão ser
+reavaliados. Detalhes operacionais, DAG e critérios estão em
+[PRODUCTION.md](PRODUCTION.md) e no
+[ADR-011](decisions/ADR-011-production-architecture.md).
+
 ## Módulos existentes
 
 - `ConfigurationModule`: carrega e valida ambiente com Joi.
@@ -102,7 +134,7 @@ sequenceDiagram
     A-->>C: Novo access + cookie refresh substituído
 ```
 
-Na futura integração de sessão do frontend, o access permanecerá em memória;
+Na integração de sessão implementada no frontend, o access permanece em memória;
 refresh nunca é exposto ao JavaScript. CORS usa uma origem exata com credentials
 e allow/expose headers explícitos. Autenticação e rotas tenant-scoped recebem
 `Cache-Control: no-store`, inclusive quando o header de organização está ausente
@@ -170,19 +202,19 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
   memberships, invariantes de ownership e CRM 0.3.1–0.3.4, incluindo Activities,
   Notes, Next Action, busca, filas, Kanban, detalhe e métricas operacionais.
 - **Implementado no frontend oficial separado
-  `arthurportodev/genesis-platform-web`:** fundação 0.7.1.1 incorporada pelo PR
-  #1, squash `30b91272088dd9be03b8bd9feffbf74dac48acc7`, com SPA
-  React/Vite/TypeScript, shell administrativo, rotas provisórias, design system
-  inicial, testes, CI e Sistema Operacional de Desenvolvimento.
+  `arthurportodev/genesis-platform-web`:** fundação `0.7.1.1` e tarefas
+  `0.7.1.2`–`0.7.6` incorporadas pelos PRs #1–#7. Existem sessão, Organization
+  ativa, HTTP, Inbox, detalhe, Pipeline, Follow-up, métricas e criação manual
+  de Leads; a última incorporação é o squash
+  `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`.
 - **Planejado:** matriz geral de capacidades e demais módulos comerciais.
-- **Planejado na 0.7.1.2 ou em tarefas posteriores:** integração real de sessão,
-  cliente HTTP, contexto de Organization, guards, coordenação entre abas, proxy
-  same-origin, Vercel, domínio e deploy.
-- **Fora do estágio atual:** integrações externas, deploy e microservices.
+- **Planejado na Fase 0.8:** proxy same-origin de produção, Vercel, origem,
+  domínio, banco, backup/restore, observabilidade, bootstrap e abertura.
+- **Fora do estado atual:** integrações externas, deploy e microservices.
   NestJS permanece o único backend oficial, com backend e frontend em
-  repositórios separados. Vercel e Hetzner continuam os destinos planejados do
-  frontend e backend, respectivamente; Lovable permanece apenas ferramenta
-  opcional de exploração e referência visual.
+  repositórios separados. Vercel e Hetzner são os destinos aprovados do
+  frontend e backend; a decisão ainda não está implementada. Lovable permanece
+  apenas ferramenta opcional de exploração e referência visual.
 
 ## Entrega e aceitação de convites
 

@@ -161,17 +161,38 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 
 ## Limitações e decisões abertas
 
-- A fundação do frontend oficial existe no repositório separado
-  `arthurportodev/genesis-platform-web`; a Tarefa 0.7.1.1 foi incorporada no PR
-  #1, squash `30b91272088dd9be03b8bd9feffbf74dac48acc7`.
-- A integração real de sessão, access token em memória no runtime frontend,
-  cliente HTTP, Organization ativa, guards, coordenação de refresh entre abas e
-  proxy same-origin pertencem à Tarefa 0.7.1.2 e ainda não foram implementados.
-- Deploy e ambientes também não foram implementados. Previews permanecem sem
-  acesso à API até existir staging com origem estável e nunca devem apontar para
-  o backend de produção.
+- O frontend oficial concluiu as tarefas `0.7.1.1`–`0.7.6`, com sessão, access
+  em memória, HTTP, Organization ativa, guards, coordenação entre abas e CRM.
+  A última incorporação é o PR #7, squash
+  `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`.
+- Proxy same-origin de produção, Vercel, domínio, DNS, Hetzner, banco, secrets,
+  backup/restore, observabilidade e deploy ainda não foram implementados.
+  Preview permanece sem API e nunca aponta para produção; staging não será
+  criado inicialmente.
 - Não há grace period backend: duas abas que reapresentem o mesmo refresh podem
   acionar reuse detection e revogar a família, conforme a política existente.
+
+## Controles aprovados para produção
+
+A decisão aceita, ainda não implementada, usa uma única réplica pública da API
+atrás de Traefik e da origem HTTPS protegida
+`origin-api.agenciagenesis.com.br`. As portas `3000` e `5432` não serão
+publicadas. Forwarded headers e `TRUST_PROXY_HOPS` serão validados com o caminho
+real, e acesso que contorne o proxy será bloqueado.
+
+A role runtime do PostgreSQL permanece distinta da role temporária de
+migrations. Credenciais de migration não ficam disponíveis ao processo da API.
+Secrets usam secret files ou cofre; o fallback é arquivo root-owned `0600`,
+fora do Git e da imagem. Imagens privadas usam GHCR, SHA e digest imutável;
+`latest` não autoriza deploy ou rollback.
+
+Backups criptografados por `pg_dump --format=custom` serão enviados para
+armazenamento externo à VPS, inicialmente a cada seis horas, com alerta de
+atraso. Snapshot Hetzner é apenas camada adicional. Restore sintético,
+observabilidade, rotação da credencial inicial e smoke cross-tenant são
+obrigatórios antes de dados reais. O provedor de object storage, a ferramenta
+de monitoramento e a capacidade da VPS ainda precisam ser definidos ou
+confirmados.
 
 ## Segurança da fundação de Leads 0.3.1
 
@@ -210,12 +231,13 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Readiness dos índices e UTF8 falha com `503` somente nas projeções dependentes. O runtime conserva a ACL existente de `SELECT`, sem função privilegiada, grant ou DML novo.
 - Timeout de statement é local à transação. Limites de leitura por Membership, IP confiável e um bucket adicional de métricas são process-local e exigem topologia de uma réplica pública.
 
-- O proxy same-origin e a coordenação de refresh entre abas pertencem à
-  integração frontend planejada na Tarefa 0.7.1.2; tokens não devem ser
-  persistidos em `localStorage`.
+- Proxy same-origin local e coordenação de refresh entre abas estão
+  implementados no frontend; o proxy de produção pertence à tarefa `0.8.6`.
+  Tokens continuam proibidos em `localStorage`.
 - Rate limiter e semaphore Argon2 não são distribuídos; uma solução compartilhada será necessária antes de múltiplas réplicas públicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.
-- Rotação operacional de segredos não foi definida.
+- A estratégia de armazenamento de secrets foi aprovada, mas rotação e
+  recuperação operacionais ainda precisam ser implementadas e testadas.
 - Outras entidades comerciais tenant-scoped e seus filtros por `organization_id` ainda não foram implementados.
 - PostgreSQL RLS com `FORCE` protege a auditoria organizacional append-only;
   RLS geral para as demais tabelas continua uma possibilidade futura.

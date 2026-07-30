@@ -1,11 +1,15 @@
 # Estado atual
 
-- **Última atualização:** 2026-07-28
-- **Fase concluída:** 0.3 — CRM
-- **Fase atual:** 0.7 — Frontend operacional
-- **Última tarefa funcional concluída:** 0.7.1.1 — Bootstrap do Repositório Frontend (repositório `arthurportodev/genesis-platform-web`, PR #1, squash `30b91272088dd9be03b8bd9feffbf74dac48acc7`)
-- **Próxima tarefa planejada:** 0.7.1.2 — Sessão Web, Organization Ativa e Integração com a API
-- **Reconciliação documental candidata:** 0.7.0.2 — Estado Web nos Documentos do Backend, aguardando Gate 2
+- **Última atualização:** 2026-07-30
+- **Fase concluída:** 0.7 — Frontend operacional
+- **Fase atual:** 0.8 — Infraestrutura e produção
+- **Última tarefa funcional concluída:** 0.7.6 — Criação Manual de Leads
+  (repositório `arthurportodev/genesis-platform-web`, PR #7, squash
+  `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`)
+- **Gate técnico concluído:** 0.8.0 — Arquitetura e Plano de Produção,
+  estritamente read-only; decisões humanas aprovadas em 30 de julho de 2026
+- **Tarefa documental atual:** 0.8.1 — Reconciliação Canônica da Documentação.
+  A incorporação deste conjunto documental conclui a tarefa 0.8.1.
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
@@ -36,6 +40,10 @@
   `30b91272088dd9be03b8bd9feffbf74dac48acc7`, com React/Vite/TypeScript, shell
   administrativo, rotas provisórias, design system inicial, testes, CI e
   Sistema Operacional de Desenvolvimento.
+- Sessão web e Organization ativa `0.7.1.2`, Inbox/detalhe `0.7.2`, Pipeline
+  `0.7.3`, Follow-up `0.7.4`, Metrics `0.7.5` e criação manual `0.7.6`
+  incorporados no frontend pelos PRs #2–#7, com os squashes canônicos
+  registrados no [TASK_LOG.md](TASK_LOG.md).
 
 ### Governança multiagente adotada
 
@@ -189,28 +197,31 @@ Consulte os [ADRs](decisions/README.md).
 - A infraestrutura genérica de autorização por papel e as invariantes de
   ownership estão implementadas; permissions, matriz geral de capacidades e
   autorização por recurso permanecem futuras.
-- Coordenação de refresh concorrente entre abas pertence à Tarefa 0.7.1.2; o
-  backend preserva reuse detection sem grace period.
+- Coordenação de refresh concorrente entre abas está implementada no frontend;
+  o backend preserva reuse detection sem grace period.
 - Rate limiter é local, não distribuído e perde estado ao reiniciar.
 - Não há política de retenção para sessões e auditoria.
-- Não há integração real de sessão no frontend, cliente HTTP, Organization
-  ativa, guards reais, proxy same-origin, deploy, recuperação de senha,
-  confirmação de email ou integrações externas. A Tarefa 0.7.1.2 planeja a
-  integração web; Vercel é o destino planejado do frontend e Hetzner do backend.
-- Previews permanecem sem acesso à API até existir staging com origem estável e
-  nunca devem apontar para o backend de produção.
+- Sessão, cliente HTTP, Organization ativa, guards e CRM estão implementados no
+  frontend. Proxy same-origin de produção, projeto Vercel, domínio, DNS,
+  Hetzner, banco de produção, restore, observabilidade e deploy não estão.
+- Preview permanece sem API e nunca aponta para produção; staging não será
+  criado inicialmente.
 
 ## Decisões abertas e riscos
 
-- Estratégia operacional do proxy same-origin no frontend futuro.
+- Implementação e validação da estratégia same-origin já aprovada.
 - Retenção e limpeza de sessões, tokens e logs de auditoria.
 - Rotação operacional de segredos.
 - Armazenamento distribuído do rate limiter quando houver múltiplas réplicas.
 - Momento e desenho de uma defesa adicional no banco, como PostgreSQL RLS.
-- Topologia e controles do primeiro ambiente de produção.
+- Inventário e confirmação da capacidade da VPS para a topologia aprovada.
+- Provedor de object storage para backups e ferramenta de monitoramento.
 
 ## Fora do escopo atual
 
-Importação, comunicação, WhatsApp, automações, tracking, relatórios, billing,
-integração real do frontend e deploy permanecem planejados ou futuros.
+Importação, comunicação, WhatsApp, automações, tracking, relatórios, billing e
+deploy permanecem planejados ou futuros.
 O intake `genesis_form` continua fail-closed e operacionalmente desabilitado.
+Dados reais permanecem bloqueados até restore, smoke sintético, alertas,
+proteção da origem, bloqueio das portas internas, rotação da credencial inicial
+e aprovação humana específica.
