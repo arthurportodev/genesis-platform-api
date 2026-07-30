@@ -8,8 +8,9 @@
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`)
 - **Gate técnico concluído:** 0.8.0 — Arquitetura e Plano de Produção,
   estritamente read-only; decisões humanas aprovadas em 30 de julho de 2026
-- **Tarefa documental atual:** 0.8.1 — Reconciliação Canônica da Documentação.
-  A incorporação deste conjunto documental conclui a tarefa 0.8.1.
+- **Tarefa de governança atual:** 0.8.1.1 — Evolução do Sistema Operacional de
+  Desenvolvimento. O backend implementa primeiro a autoridade canônica; o
+  candidato frontend e sua paridade permanecem etapa sequencial obrigatória.
 - **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
@@ -52,11 +53,17 @@
 - Gate 1 aprova arquitetura quando exigida, Gate 2 aprova a implementação e Gate 3 autoriza explicitamente o merge.
 - Correções mecânicas e funcionais locais dentro do contrato congelado podem ser corrigidas e reverificadas autonomamente; produto, segurança, tenant, dados, schema, API, ownership, concorrência ou expansão material interrompem o trabalho.
 - Código, testes e documentação durável devem integrar um único Pull Request por tarefa; evidências transitórias permanecem no GitHub.
-- As Skills `genesis-project-context` e `genesis-task-classification` são candidatas futuras e ainda não foram criadas.
+- As Skills repo-local `genesis-task-orchestrator` e
+  `genesis-independent-verifier` substituem as candidatas anteriores. Schemas,
+  scripts, testes e CI permanecem a autoridade determinística.
+- Task Manifest V2 coexiste com V1; fingerprints separam conteúdo, estado Git e
+  candidate ID; a CI valida as ferramentas operacionais.
 - O GitHub permite somente squash merge; merge commits e rebase merges estão desabilitados, e branches remotas incorporadas são excluídas automaticamente. Nenhuma aprovação obrigatória é prevista enquanto não houver segundo mantenedor humano elegível.
 - `.gitattributes` define `* text=auto eol=lf`: arquivos textuais tracked usam LF canônico e binários detectados permanecem sem conversão de texto.
 - O inventário atual não exige exceção CRLF nem regra binária específica; falsos diffs `Delete-CR` foram eliminados sem alterar `core.autocrlf`.
-- A Tarefa 0.2.2.6 concluiu o primeiro piloto do modelo multiagente. As Skills continuam ausentes; o bloco 0.2.5 e a Fase 0.2 foram concluídos.
+- A Tarefa 0.2.2.6 concluiu o primeiro piloto do modelo multiagente; a
+  lacuna de Skills repo-local foi encerrada pela Tarefa 0.8.1.1, e o bloco
+  0.2.5 e a Fase 0.2 permanecem concluídos.
 
 ### Tenant context implementado
 

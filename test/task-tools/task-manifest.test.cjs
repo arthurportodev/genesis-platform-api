@@ -9,7 +9,11 @@ const {
   matchesAny,
   validateManifest,
 } = require('../../scripts/lib/task-manifest.cjs');
-const { DEFAULT_SCRIPTS, defaultManifest } = require('./helpers.cjs');
+const {
+  DEFAULT_SCRIPTS,
+  defaultManifest,
+  v2Manifest,
+} = require('./helpers.cjs');
 
 const SHA = 'a'.repeat(40);
 const PACKAGE_JSON = { scripts: DEFAULT_SCRIPTS };
@@ -21,6 +25,8 @@ function validate(overrides = {}) {
 test('accepts a valid manifest', () => {
   const manifest = validate();
   assert.equal(manifest.version, 1);
+  assert.equal(manifest.normalizedVersion, 2);
+  assert.equal(manifest.contractVersion, '2.0.0');
   assert.equal(manifest.git.baseSha, SHA);
   assert.equal(manifest.git.requireCleanStage, true);
 });
@@ -37,13 +43,51 @@ test('rejects invalid JSON', () => {
   );
 });
 
-test('rejects unsupported version and unknown relevant fields', () => {
-  assert.throws(() => validate({ version: 2 }), /version must be 1/u);
+test('accepts V2 and rejects unsupported versions and unknown fields', () => {
+  const v2 = validateManifest(v2Manifest(SHA), PACKAGE_JSON);
+  assert.equal(v2.version, 2);
+  assert.deepEqual(v2.git.expectedTransitions, ['untracked-to-tracked']);
+  assert.equal(v2.autonomy.allowHighCorrections, true);
+  assert.throws(() => validate({ version: 3 }), /version must be 1 or 2/u);
   const raw = defaultManifest(SHA);
   raw.scope.unreviewed = true;
   assert.throws(
     () => validateManifest(raw, PACKAGE_JSON),
     /unknown field.*unreviewed/u,
+  );
+});
+
+test('requires V2 contract authority, levels and independent Critical reverification', () => {
+  const invalidAuthority = v2Manifest(SHA);
+  invalidAuthority.contracts.authorityRepository = 'example/other';
+  assert.throws(
+    () => validateManifest(invalidAuthority, PACKAGE_JSON),
+    /authorityRepository/u,
+  );
+
+  const missingLevel = v2Manifest(SHA);
+  missingLevel.validation.levels = ['immediate', 'focused'];
+  assert.throws(
+    () => validateManifest(missingLevel, PACKAGE_JSON),
+    /requires validation level: integration/u,
+  );
+
+  const critical = v2Manifest(SHA, {
+    task: { id: 'critical.2', title: 'Critical v2', class: 'critical' },
+    artifacts: { taskPacket: '.codex/task-packets/critical.2.md' },
+    validation: {
+      profile: 'critical',
+      focusedScripts: [],
+      levels: ['immediate', 'focused', 'integration', 'complete'],
+    },
+    autonomy: {
+      allowHighCorrections: true,
+      requireIndependentReverification: false,
+    },
+  });
+  assert.throws(
+    () => validateManifest(critical, PACKAGE_JSON),
+    /independent reverification/u,
   );
 });
 

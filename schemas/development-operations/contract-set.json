@@ -1,0 +1,43 @@
+{
+  "contractVersion": "2.0.0",
+  "authorityRepository": "arthurportodev/genesis-platform-api",
+  "authorityBaseSha": "6a1a5bafc14195cbd8cf6f8b85077a4e1081381c",
+  "files": [
+    {
+      "path": ".agents/skills/genesis-task-orchestrator/SKILL.md",
+      "sha256": "4ffeb876a8f0e2c543d630edba83ec915c9f4c51806a3aea93456fc32f69048b"
+    },
+    {
+      "path": ".agents/skills/genesis-task-orchestrator/agents/openai.yaml",
+      "sha256": "50fc2078dcaf27c721f962b1df323a49b3bc02104136499ef7e11b75d11db97f"
+    },
+    {
+      "path": ".agents/skills/genesis-independent-verifier/SKILL.md",
+      "sha256": "ac54adf9f8a293b5064f294d80e06345c1a8553d8f8a4374c4a67f6499e8910b"
+    },
+    {
+      "path": ".agents/skills/genesis-independent-verifier/agents/openai.yaml",
+      "sha256": "15e1d3ae3fe293a7f27eab61b13dad7b6784cc8628bf7f20b440715716f57085"
+    },
+    {
+      "path": "schemas/development-operations/task-manifest.v2.schema.json",
+      "sha256": "5f881821277a49996bb7910dde95a90ebc2a34a2bf644822caffe2cae235613a"
+    },
+    {
+      "path": "schemas/development-operations/finding.v1.schema.json",
+      "sha256": "5b3321d27d37ff31675e53594682dae0ba4ddaf19c4190f5a70dd869b29a8584"
+    },
+    {
+      "path": "schemas/development-operations/verifier-evidence.v1.schema.json",
+      "sha256": "898574fd2b4af980b06e5bb82bc3205fbc7f04b6e78f2491d3f91d2152e90b23"
+    },
+    {
+      "path": "schemas/development-operations/handoff.v1.schema.json",
+      "sha256": "bc39f40adc2d095ae7781b90b81ff7f5d576ec2d6e22c1a401e575dd0a270a00"
+    },
+    {
+      "path": "schemas/development-operations/evidence-manifest.v1.schema.json",
+      "sha256": "b1066db4aa9a21f9e0808c4d032218fc3244ed475830731924b7f9cf7d2673bc"
+    }
+  ]
+}

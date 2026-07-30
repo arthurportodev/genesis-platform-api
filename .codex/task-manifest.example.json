@@ -1,14 +1,16 @@
 {
-  "version": 1,
+  "version": 2,
+  "contractVersion": "2.0.0",
   "task": {
     "id": "X.Y",
     "title": "Example critical task",
     "class": "critical"
   },
   "git": {
-    "branch": "feature/example-critical-task",
+    "branch": "agent/example-critical-task",
     "baseSha": "0000000000000000000000000000000000000000",
-    "requireCleanStage": true
+    "requireCleanStage": true,
+    "expectedTransitions": ["untracked-to-tracked"]
   },
   "scope": {
     "allowedPaths": ["src/modules/example/**", "test/example/**", "docs/**"],
@@ -22,6 +24,29 @@
   },
   "validation": {
     "profile": "critical",
-    "focusedScripts": []
+    "focusedScripts": [],
+    "levels": ["immediate", "focused", "integration", "complete"]
+  },
+  "rehydration": {
+    "directSources": [
+      "AGENTS.md",
+      "docs/TASK_CLASSIFICATION.md",
+      "docs/DEVELOPMENT_WORKFLOW.md"
+    ],
+    "expansionTriggers": [
+      "base drift",
+      "conflicting authority",
+      "protected contract impact",
+      "High finding without a local cause",
+      "Critical finding"
+    ]
+  },
+  "autonomy": {
+    "allowHighCorrections": true,
+    "requireIndependentReverification": true
+  },
+  "contracts": {
+    "authorityRepository": "arthurportodev/genesis-platform-api",
+    "contractSet": "schemas/development-operations/contract-set.json"
   }
 }

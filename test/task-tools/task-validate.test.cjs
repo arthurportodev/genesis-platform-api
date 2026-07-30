@@ -38,13 +38,18 @@ test('critical delegates to the existing full Gate 2 validation', () => {
   );
 });
 
-test('focused runs only preflight and declared allowlisted package scripts', () => {
+test('focused runs contracts, declared scripts and candidate fingerprint', () => {
   const plan = buildValidationPlan(manifest('focused', ['test:task-tools']), {
     npm_execpath: '/npm/cli.js',
   });
   assert.deepEqual(
     plan.map((entry) => entry.label),
-    ['npm run task:preflight', 'npm run test:task-tools'],
+    [
+      'npm run task:preflight',
+      'npm run task:contracts',
+      'npm run test:task-tools',
+      'npm run task:fingerprint -- --json',
+    ],
   );
 });
 
@@ -54,12 +59,14 @@ test('normal includes static checks, build, task-tool tests and unit tests', () 
   }).map((entry) => entry.label);
   assert.deepEqual(labels, [
     'npm run task:preflight',
+    'npm run task:contracts',
     'npm run format:check:task-tools',
     'npm run format:check',
     'npm run lint',
     'npm run build',
     'npm run test:task-tools',
     'npm test -- --runInBand',
+    'npm run task:fingerprint -- --json',
   ]);
 });
 

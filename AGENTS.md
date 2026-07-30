@@ -4,22 +4,25 @@
 
 O projeto não pode depender da memória de uma pessoa, conversa ou agente de IA. O repositório é a memória oficial e deve permitir reconstruir o contexto antes de qualquer decisão ou implementação.
 
-## Ordem de leitura obrigatória
+## Reidratação orientada pelo delta
 
-Antes de planejar ou implementar:
+Antes de planejar ou implementar, responda:
 
-1. [docs/START_HERE.md](docs/START_HERE.md)
-2. [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
-3. [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md)
-4. [docs/ROADMAP.md](docs/ROADMAP.md)
-5. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-6. [classificação da tarefa](docs/TASK_CLASSIFICATION.md)
-7. [modelo operacional multiagente](docs/MULTI_AGENT_OPERATING_MODEL.md)
-8. [ADRs relacionados](docs/decisions/README.md)
-9. migrations relacionadas
-10. último Pull Request mesclado
-11. Pull Requests e Issues abertos
-12. código e testes relacionados à tarefa
+1. O que esta tarefa muda?
+2. Quais contratos ela toca?
+3. Quais arquivos são autoridades?
+4. Quais riscos são novos?
+
+Leia primeiro a classificação, o fluxo operacional e somente as fontes
+diretas do contrato. Em seguida, inspecione implementação, testes, CI e estado
+remoto relacionados. Amplie a leitura apenas diante de um gatilho concreto e
+registre fonte, gatilho e motivo. Base inesperada, autoridade contraditória,
+fronteira protegida, finding High sem causa local e qualquer finding Critical
+são gatilhos de expansão.
+
+Use [docs/START_HERE.md](docs/START_HERE.md) como roteador, não como obrigação
+de ler todo o projeto. A recuperação completa continua obrigatória quando o
+delta não explicar o comportamento ou as fontes permanecerem inconsistentes.
 
 ## Hierarquia das fontes
 
@@ -38,6 +41,11 @@ Não corrija uma divergência por suposição. Identifique a fonte autoritativa 
 ## Operação por tarefa
 
 Toda tarefa deve ser classificada como Simple, Normal ou Critical antes da escrita. A execução usa quatro papéis: coordenador, builder, verifier e operador de entrega. Um único writer é owner de cada arquivo em cada fase; writers paralelos exigem worktrees isolados.
+
+Use `$genesis-task-orchestrator` para intake e reidratação e
+`$genesis-independent-verifier` para revisão independente. A invocação das duas
+Skills é explícita em tarefas Critical. Skills orientam o processo; schemas,
+scripts, testes e CI permanecem o enforcement determinístico.
 
 Os gates são: Gate 1 para arquitetura quando exigida, Gate 2 para aprovação da implementação e Gate 3 para autorização explícita do merge. Interrompa quando surgir decisão ausente, elevação de classe, expansão material de escopo ou correção fora da autonomia aprovada.
 

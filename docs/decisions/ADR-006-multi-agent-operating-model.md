@@ -55,7 +55,11 @@ O projeto precisa permitir colaboração entre agentes sem escrita concorrente, 
 - [Templates de prompts](../PROMPT_TEMPLATES.md)
 - [Fluxo de desenvolvimento](../DEVELOPMENT_WORKFLOW.md)
 - [Protocolo de continuidade](../../AGENTS.md)
+- [ADR-012 — Development Operating System v2](ADR-012-development-operating-system-v2.md), que estende reidratação, autonomia, evidências, Skills e fingerprints sem substituir classes, papéis ou Gates
 
 ## Implementação
 
 Implementado documentalmente na Tarefa de Governança 0.2.2.4. A Tarefa 0.2.2.5 aplicou squash-only e exclusão automática de branches sem alterar o ruleset ou adicionar aprovação obrigatória. A Tarefa 0.2.2.6 concluiu a normalização de EOL como primeiro piloto: coordenador, um único builder e verifier independente atuaram de forma sequencial, com ownership e handoffs aplicados. A decisão original permaneceu inalterada, e as Skills continuam adiadas. Nenhuma funcionalidade da API foi criada por estas tarefas de governança.
+
+O ADR-012 posteriormente criou as duas Skills repo-local e os contratos
+machine-readable. Esta evolução não altera a topologia institucional deste ADR.

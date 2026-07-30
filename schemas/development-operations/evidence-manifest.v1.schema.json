@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/arthurportodev/genesis-platform-api/schemas/development-operations/evidence-manifest.v1.schema.json",
+  "title": "Genesis Remote Operation Evidence Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "mode",
+    "taskId",
+    "repository",
+    "commitSha",
+    "imageDigest",
+    "configHash",
+    "resourcesChanged",
+    "initialState",
+    "finalState",
+    "migration",
+    "backup",
+    "restoreTest",
+    "health",
+    "readiness",
+    "smoke",
+    "rollbackTarget",
+    "findings",
+    "residualRisks",
+    "operator",
+    "occurredAt",
+    "provenance",
+    "manifestHash"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "evidence-manifest.v1" },
+    "mode": { "enum": ["dry-run", "execution"] },
+    "taskId": { "type": "string", "minLength": 1 },
+    "repository": { "type": "string", "minLength": 1 },
+    "commitSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "imageDigest": { "type": ["string", "null"] },
+    "configHash": { "type": ["string", "null"] },
+    "resourcesChanged": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "initialState": { "type": "object" },
+    "finalState": { "type": "object" },
+    "migration": { "type": ["object", "null"] },
+    "backup": { "type": ["object", "null"] },
+    "restoreTest": { "type": ["object", "null"] },
+    "health": { "type": "object" },
+    "readiness": { "type": "object" },
+    "smoke": { "type": "object" },
+    "rollbackTarget": { "type": ["object", "null"] },
+    "findings": { "type": "array" },
+    "residualRisks": { "type": "array", "items": { "type": "string" } },
+    "operator": {
+      "type": "object",
+      "required": ["id", "authorizationEnvelope"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "authorizationEnvelope": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "provenance": { "type": "object" },
+    "manifestHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

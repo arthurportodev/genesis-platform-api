@@ -1,4 +1,4 @@
-const { existsSync } = require('node:fs');
+const { existsSync, lstatSync } = require('node:fs');
 const { join } = require('node:path');
 const {
   MANIFEST_PATH,
@@ -68,15 +68,25 @@ function runPreflight({ cwd = process.cwd(), startedAt = Date.now() } = {}) {
     failures.push('task manifest is not ignored.');
   if (isTracked(MANIFEST_PATH, cwd)) failures.push('task manifest is tracked.');
 
-  const packet = manifest.artifacts.taskPacket;
-  if (packet) {
-    const packetPath = join(cwd, ...packet.split('/'));
-    if (!existsSync(packetPath))
-      failures.push(`Task Packet is missing: ${packet}.`);
-    if (!isIgnored(packet, cwd))
-      failures.push(`Task Packet is not ignored: ${packet}.`);
-    if (isTracked(packet, cwd))
-      failures.push(`Task Packet is tracked: ${packet}.`);
+  const artifactLabels = {
+    taskPacket: 'Task Packet',
+    findings: 'findings artifact',
+    verifierEvidence: 'verifier evidence artifact',
+    handoff: 'handoff artifact',
+  };
+  for (const [key, artifact] of Object.entries(manifest.artifacts)) {
+    if (!artifact) continue;
+    const label = artifactLabels[key] ?? `${key} artifact`;
+    const artifactPath = join(cwd, ...artifact.split('/'));
+    if (!existsSync(artifactPath)) {
+      failures.push(`${label} is missing: ${artifact}.`);
+    } else if (!lstatSync(artifactPath).isFile()) {
+      failures.push(`${label} is not a regular file: ${artifact}.`);
+    }
+    if (!isIgnored(artifact, cwd))
+      failures.push(`${label} is not ignored: ${artifact}.`);
+    if (isTracked(artifact, cwd))
+      failures.push(`${label} is tracked: ${artifact}.`);
   }
 
   failures.push(...candidate.failures);
@@ -89,12 +99,20 @@ function runPreflight({ cwd = process.cwd(), startedAt = Date.now() } = {}) {
     status: failures.length === 0 ? 'passed' : 'failed',
     durationMs: Date.now() - startedAt,
     task: manifest.task.id,
+    manifestSourceVersion: manifest.version,
+    normalizedManifestVersion: manifest.normalizedVersion,
+    contractVersion: manifest.contractVersion,
     branch,
     sha,
     baseSha: manifest.git.baseSha,
     stagedFiles: staged.length,
     trackedFiles: candidate.tracked.length,
     untrackedFiles: candidate.untracked.length,
+    candidatePaths: [
+      ...new Set([...candidate.tracked, ...candidate.untracked]),
+    ].sort(),
+    expectedTransitions: manifest.git.expectedTransitions,
+    validationLevels: manifest.validation.levels,
     failures: [...new Set(failures)].sort(),
   };
   return result;

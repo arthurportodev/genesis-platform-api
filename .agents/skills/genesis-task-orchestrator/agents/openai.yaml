@@ -1,0 +1,6 @@
+interface:
+  display_name: 'Genesis Task Orchestrator'
+  short_description: 'Plan Genesis tasks from the approved delta'
+  default_prompt: 'Use $genesis-task-orchestrator to plan this Genesis task from its approved delta.'
+policy:
+  allow_implicit_invocation: true

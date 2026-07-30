@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/arthurportodev/genesis-platform-api/schemas/development-operations/task-manifest.v2.schema.json",
+  "title": "Genesis Task Manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "contractVersion",
+    "task",
+    "git",
+    "scope",
+    "artifacts",
+    "validation",
+    "rehydration",
+    "autonomy",
+    "contracts"
+  ],
+  "properties": {
+    "version": { "const": 2 },
+    "contractVersion": { "const": "2.0.0" },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "class"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "class": { "enum": ["simple", "normal", "critical"] }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch",
+        "baseSha",
+        "requireCleanStage",
+        "expectedTransitions"
+      ],
+      "properties": {
+        "branch": { "type": "string", "minLength": 1 },
+        "baseSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "requireCleanStage": { "type": "boolean" },
+        "expectedTransitions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["untracked-to-tracked"] }
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowedPaths", "protectedPaths"],
+      "properties": {
+        "allowedPaths": { "$ref": "#/$defs/pathList" },
+        "protectedPaths": { "$ref": "#/$defs/pathList" },
+        "allowBroadPaths": { "type": "boolean" }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "taskPacket": { "$ref": "#/$defs/repoPath" },
+        "findings": { "$ref": "#/$defs/repoPath" },
+        "verifierEvidence": { "$ref": "#/$defs/repoPath" },
+        "handoff": { "$ref": "#/$defs/repoPath" }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "focusedScripts", "levels"],
+      "properties": {
+        "profile": { "enum": ["docs", "focused", "normal", "critical"] },
+        "focusedScripts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "levels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["immediate", "focused", "integration", "complete"]
+          }
+        }
+      }
+    },
+    "rehydration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["directSources", "expansionTriggers"],
+      "properties": {
+        "directSources": { "$ref": "#/$defs/pathList" },
+        "expansionTriggers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "autonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowHighCorrections", "requireIndependentReverification"],
+      "properties": {
+        "allowHighCorrections": { "type": "boolean" },
+        "requireIndependentReverification": { "type": "boolean" }
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorityRepository", "contractSet"],
+      "properties": {
+        "authorityRepository": {
+          "const": "arthurportodev/genesis-platform-api"
+        },
+        "contractSet": {
+          "const": "schemas/development-operations/contract-set.json"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "repoPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "pathList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/repoPath" }
+    }
+  }
+}

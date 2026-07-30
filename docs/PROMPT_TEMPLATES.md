@@ -13,6 +13,34 @@ Parâmetros entre `<...>` são obrigatórios quando aplicáveis. Uma operação 
 
 Cada prompt contém somente o delta: objetivo, escopo, contratos e invariantes específicos, riscos, critérios de aceite e diferenças em relação às políticas canônicas. Não copie integralmente os documentos referenciados acima.
 
+## Envelope mínimo orientado pelo delta
+
+```text
+Tarefa:
+Classe:
+Base SHA:
+Branch:
+Objetivo:
+Contrato específico:
+Delta:
+- O que muda:
+- Contratos tocados:
+- Autoridades:
+- Riscos novos:
+Documentos canônicos:
+Arquivos diretamente relacionados:
+Escopo autorizado:
+Fora do escopo:
+Critérios de aceitação:
+Validação proporcional:
+Autonomia permitida:
+Condições de interrupção:
+Handoff esperado:
+```
+
+Em Critical, comece com `$genesis-task-orchestrator` e encerre a revisão com
+`$genesis-independent-verifier`. Não dependa de invocação implícita.
+
 ## Tarefa Simple
 
 ```text
@@ -52,7 +80,7 @@ Delta: <Gate 1 ou justificativa de dispensa, escopo, contratos, riscos, aceite e
 Manifesto: <obrigatório para Critical; opcional para Normal; perfil de validação>
 Objetivo: implementar código, testes e documentação afetada até ficar pronta para Gate 2.
 Papéis: coordenador; um builder <nome>; verifier final <nome/modo>; verifier incremental somente por risco; sem operador remoto salvo autorização separada.
-Autonomia: correções mecânicas e funcionais locais dentro do contrato congelado; rodadas são telemetria.
+Autonomia: aplicar o predicado estruturado; High exige regressão específica, Critical final, novo candidato e reverificação independente.
 Restrições: um writer por arquivo; worktrees para writers paralelos; <fora do escopo>; sem Git remoto.
 Gates: Gate 1 deve estar satisfeito quando exigido; não ultrapassar Gate 2.
 Interromper: condições do modelo operacional, conflito semântico, classe elevada ou autonomia excedida.
@@ -70,7 +98,7 @@ Papéis: verifier independente read-only; coordenador; builder apenas para corre
 Autonomia: classificar findings; builder corrige baixos e uma iteração média permitida; verifier reverifica.
 Restrições: verifier não escreve nem aprova trabalho próprio; sem entrega remota ou mudança de contrato.
 Gates: recomendar aprovar Gate 2 somente sem finding médio/alto pendente.
-Interromper: finding médio restrito, finding alto, expansão de escopo, decisão ausente ou impossibilidade de independência.
+Interromper: finding sem envelope autônomo válido, Critical não reclassificável, expansão de escopo, decisão ausente, candidato instável ou impossibilidade de independência.
 Handoff: findings com severidade/evidência, cobertura revisada, correções, reverificação, riscos residuais e recomendação do Gate 2.
 ```
 

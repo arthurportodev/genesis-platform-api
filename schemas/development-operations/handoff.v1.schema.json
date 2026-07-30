@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/arthurportodev/genesis-platform-api/schemas/development-operations/handoff.v1.schema.json",
+  "title": "Genesis Task Handoff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "task",
+    "contract",
+    "class",
+    "baseSha",
+    "files",
+    "fingerprints",
+    "validations",
+    "initialFindings",
+    "corrections",
+    "finalFindings",
+    "deviations",
+    "residualRisks",
+    "gitPerformed",
+    "gitNotPerformed",
+    "recommendation"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "handoff.v1" },
+    "task": { "type": "string", "minLength": 1 },
+    "contract": { "type": "string", "minLength": 1 },
+    "class": { "enum": ["simple", "normal", "critical"] },
+    "baseSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "files": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "fingerprints": {
+      "type": "object",
+      "required": ["contentFingerprint", "gitStateFingerprint", "candidateId"],
+      "properties": {
+        "contentFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "gitStateFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "candidateId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": true
+    },
+    "validations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "initialFindings": { "type": "array", "items": { "type": "string" } },
+    "corrections": { "type": "array", "items": { "type": "string" } },
+    "finalFindings": { "type": "array", "items": { "type": "string" } },
+    "deviations": { "type": "array", "items": { "type": "string" } },
+    "residualRisks": { "type": "array", "items": { "type": "string" } },
+    "gitPerformed": { "type": "array", "items": { "type": "string" } },
+    "gitNotPerformed": { "type": "array", "items": { "type": "string" } },
+    "recommendation": { "enum": ["approve-gate-2", "conditional", "block"] },
+    "infrastructure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "commitSha": { "type": ["string", "null"] },
+        "imageDigest": { "type": ["string", "null"] },
+        "configHash": { "type": ["string", "null"] },
+        "migrationState": { "type": ["string", "null"] },
+        "backup": { "type": ["string", "null"] },
+        "restore": { "type": ["string", "null"] },
+        "health": { "type": ["string", "null"] },
+        "readiness": { "type": ["string", "null"] },
+        "smoke": { "type": ["string", "null"] },
+        "rollbackTarget": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

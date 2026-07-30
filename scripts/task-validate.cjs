@@ -21,34 +21,42 @@ function npmCommand(args, env = process.env, platform = process.platform) {
 function buildValidationPlan(manifest, env = process.env) {
   const npm = (...args) => npmCommand(args, env);
   const preflight = npm('run', 'task:preflight');
+  const contracts = npm('run', 'task:contracts');
   const taskFormat = npm('run', 'format:check:task-tools');
+  const fingerprint = npm('run', 'task:fingerprint', '--', '--json');
   switch (manifest.validation.profile) {
     case 'docs':
       return [
         preflight,
+        contracts,
         taskFormat,
         {
           label: 'git diff --check',
           command: 'git',
           args: ['diff', '--check'],
         },
+        fingerprint,
       ];
     case 'focused':
       return [
         preflight,
+        contracts,
         ...manifest.validation.focusedScripts.map((script) =>
           npm('run', script),
         ),
+        fingerprint,
       ];
     case 'normal':
       return [
         preflight,
+        contracts,
         taskFormat,
         npm('run', 'format:check'),
         npm('run', 'lint'),
         npm('run', 'build'),
         npm('run', 'test:task-tools'),
         npm('test', '--', '--runInBand'),
+        fingerprint,
       ];
     case 'critical':
       return [npm('run', 'gate2:validate')];

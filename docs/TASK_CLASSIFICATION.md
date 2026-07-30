@@ -57,11 +57,11 @@ O Product Owner autoriza explicitamente o merge depois de confirmar Pull Request
 
 ## Matriz mínima
 
-| Classe   | Papéis mínimos                                                                                                            | Gates                                                               | Validação mínima                                                                                                 |
-| -------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Classe   | Papéis mínimos                                                                                    | Gates                                                                      | Validação mínima                                                                                                 |
+| -------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | Simple   | um builder pode acumular coordenação e verifier por checklist; operador somente quando autorizado | sem Task Packet ou Gate 1 separado; Gate 2 proporcional; Gate 3 para merge | checks focados no diff e validações estáticas aplicáveis                                                         |
-| Normal   | coordenador, um builder e verifier final focado; operador quando autorizado                        | Gate 1 quando houver decisão nova; manifesto opcional; Gates 2 e 3             | checks focados, build e suítes afetadas; CI no PR                                                                |
-| Critical | coordenador, um builder, verifier independente e operador autorizado                               | manifesto e Task Packet obrigatórios; Gates 1, 2 e 3                           | validação completa aplicável, casos adversariais, segurança e CI; migration, integração e Docker quando afetados |
+| Normal   | coordenador, um builder e verifier final focado; operador quando autorizado                       | Gate 1 quando houver decisão nova; manifesto opcional; Gates 2 e 3         | checks focados, build e suítes afetadas; CI no PR                                                                |
+| Critical | coordenador, um builder, verifier independente e operador autorizado                              | manifesto e Task Packet obrigatórios; Gates 1, 2 e 3                       | validação completa aplicável, casos adversariais, segurança e CI; migration, integração e Docker quando afetados |
 
 As responsabilidades detalhadas e as regras de acumulação de papéis estão no [modelo operacional](MULTI_AGENT_OPERATING_MODEL.md).
 
@@ -72,6 +72,26 @@ As responsabilidades detalhadas e as regras de acumulação de papéis estão no
 - Não reduza a classe durante a implementação apenas porque o diff ficou pequeno.
 - Uma redução posterior exige nova avaliação do coordenador e não elimina gates já abertos sem aprovação.
 - Finding preexistente fora do escopo deve ser registrado separadamente; se bloquear segurança ou validade da tarefa, interrompe o trabalho.
+
+Finding Critical interrompe por padrão. Ele só pode ser reclassificado sem nova
+aprovação humana quando um verifier independente comprovar objetivamente falso
+positivo ou classificação incorreta, não houver decisão material nem mudança
+de arquitetura, segurança ou contrato, e base, `contentFingerprint` e
+`candidateId` permanecerem idênticos. A evidência e a justificativa são
+obrigatórias; falhar qualquer condição devolve a decisão ao Product Owner.
+
+## Severidade e autonomia
+
+A severidade determina o rigor da validação; a natureza da correção determina
+se existe decisão humana. Low, Medium ou High podem ser corrigidos
+autonomamente somente quando o invariante já estiver aprovado, houver correção
+dominante, local, reversível, objetivamente verificável e dentro do escopo, sem
+nova decisão ou fronteira proibida.
+
+Todo High autônomo exige finding estruturado inicial, teste de regressão
+específico, validações focadas, validação Critical final, novo
+`contentFingerprint` e `candidateId`, resolução estruturada e reverificação
+independente, mesmo quando a tarefa não começou como Critical.
 
 ## Arquitetura separada
 
