@@ -47,6 +47,43 @@ function defaultManifest(baseSha, overrides = {}) {
   };
 }
 
+function v2Manifest(baseSha, overrides = {}) {
+  return {
+    version: 2,
+    contractVersion: '2.0.0',
+    task: { id: 'test.2', title: 'Task tools v2 test', class: 'normal' },
+    git: {
+      branch: 'task/test-tools',
+      baseSha,
+      requireCleanStage: true,
+      expectedTransitions: ['untracked-to-tracked'],
+    },
+    scope: {
+      allowedPaths: ['docs/**'],
+      protectedPaths: ['src/auth/**'],
+    },
+    artifacts: {},
+    validation: {
+      profile: 'normal',
+      focusedScripts: ['test:task-tools'],
+      levels: ['immediate', 'focused', 'integration'],
+    },
+    rehydration: {
+      directSources: ['docs/DEVELOPMENT_WORKFLOW.md'],
+      expansionTriggers: ['base drift'],
+    },
+    autonomy: {
+      allowHighCorrections: true,
+      requireIndependentReverification: false,
+    },
+    contracts: {
+      authorityRepository: 'arthurportodev/genesis-platform-api',
+      contractSet: 'schemas/development-operations/contract-set.json',
+    },
+    ...overrides,
+  };
+}
+
 function createTestRepository({
   manifestOverrides = {},
   packetIgnored = false,
@@ -84,6 +121,7 @@ module.exports = {
   DEFAULT_SCRIPTS,
   createTestRepository,
   defaultManifest,
+  v2Manifest,
   git,
   write,
 };

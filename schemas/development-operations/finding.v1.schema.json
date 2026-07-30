@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/arthurportodev/genesis-platform-api/schemas/development-operations/finding.v1.schema.json",
+  "title": "Genesis Structured Finding v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "severity",
+    "category",
+    "decisionRequired",
+    "autonomousFixAllowed",
+    "evidence",
+    "expectedInvariant",
+    "remediation",
+    "validation",
+    "status",
+    "relatedFiles",
+    "fingerprintBinding"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "finding.v1" },
+    "id": { "type": "string", "pattern": "^F-[0-9]{3,}$" },
+    "groupId": { "type": ["string", "null"] },
+    "severity": { "enum": ["low", "medium", "high", "critical"] },
+    "category": {
+      "enum": [
+        "correctness",
+        "security",
+        "integrity",
+        "governance",
+        "tests",
+        "documentation",
+        "operations"
+      ]
+    },
+    "decisionRequired": { "type": "boolean" },
+    "autonomousFixAllowed": { "type": "boolean" },
+    "scopeStatus": {
+      "enum": ["within-authorized-scope", "outside-authorized-scope"]
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["claim"],
+        "properties": {
+          "path": { "type": "string" },
+          "line": { "type": "integer", "minimum": 1 },
+          "claim": { "type": "string", "minLength": 1 },
+          "sourceHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "expectedInvariant": { "type": "string", "minLength": 1 },
+    "remediation": { "type": "string", "minLength": 1 },
+    "validation": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "status": {
+      "enum": ["open", "resolved", "accepted", "deferred", "reclassified"]
+    },
+    "relatedFiles": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "fingerprintBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseSha", "contentFingerprint", "candidateId"],
+      "properties": {
+        "baseSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "contentFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "candidateId": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "autonomyEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approvedInvariant",
+        "dominantFix",
+        "local",
+        "reversible",
+        "objectivelyVerifiable",
+        "specificRegressionTest",
+        "focusedValidation",
+        "criticalFinalValidation",
+        "independentReverification",
+        "materialDecision",
+        "forbiddenBoundaryChange"
+      ],
+      "properties": {
+        "approvedInvariant": { "const": true },
+        "dominantFix": { "const": true },
+        "local": { "const": true },
+        "reversible": { "const": true },
+        "objectivelyVerifiable": { "const": true },
+        "specificRegressionTest": { "const": true },
+        "focusedValidation": { "const": true },
+        "criticalFinalValidation": { "const": true },
+        "independentReverification": { "const": true },
+        "materialDecision": { "const": false },
+        "forbiddenBoundaryChange": { "const": false }
+      }
+    },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "regressionTest",
+        "validationRuns",
+        "independentVerifierRunId",
+        "beforeFingerprintBinding",
+        "afterFingerprintBinding"
+      ],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "regressionTest": { "type": "string", "minLength": 1 },
+        "validationRuns": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "independentVerifierRunId": { "type": "string", "minLength": 1 },
+        "beforeFingerprintBinding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["baseSha", "contentFingerprint", "candidateId"],
+          "properties": {
+            "baseSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+            "contentFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "candidateId": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }
+        },
+        "afterFingerprintBinding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["baseSha", "contentFingerprint", "candidateId"],
+          "properties": {
+            "baseSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+            "contentFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "candidateId": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }
+        }
+      }
+    },
+    "reclassification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "reason",
+        "verifierRunId",
+        "objectiveEvidence",
+        "candidateUnchanged",
+        "materialDecision",
+        "architectureChange",
+        "securityChange",
+        "contractChange",
+        "baseSha",
+        "contentFingerprint",
+        "candidateId"
+      ],
+      "properties": {
+        "from": { "enum": ["critical", "high", "medium", "low"] },
+        "to": { "enum": ["high", "medium", "low"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "verifierRunId": { "type": "string", "minLength": 1 },
+        "objectiveEvidence": { "type": "string", "minLength": 1 },
+        "candidateUnchanged": { "const": true },
+        "materialDecision": { "const": false },
+        "architectureChange": { "const": false },
+        "securityChange": { "const": false },
+        "contractChange": { "const": false },
+        "baseSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "contentFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "candidateId": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "severity": { "const": "critical" } },
+        "required": ["severity"]
+      },
+      "then": { "properties": { "autonomousFixAllowed": { "const": false } } }
+    },
+    {
+      "if": {
+        "properties": { "autonomousFixAllowed": { "const": true } },
+        "required": ["autonomousFixAllowed"]
+      },
+      "then": {
+        "properties": {
+          "decisionRequired": { "const": false },
+          "scopeStatus": { "const": "within-authorized-scope" }
+        },
+        "required": ["scopeStatus"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "severity": { "const": "high" },
+          "autonomousFixAllowed": { "const": true }
+        },
+        "required": ["severity", "autonomousFixAllowed"]
+      },
+      "then": {
+        "required": ["autonomyEvidence"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "resolved" } },
+        "required": ["status"]
+      },
+      "then": { "required": ["resolution"] }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "reclassified" } },
+        "required": ["status"]
+      },
+      "then": { "required": ["reclassification"] }
+    }
+  ]
+}

@@ -72,6 +72,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate development-operation contracts
+        run: npm run task:contracts
+
+      - name: Check task-tool formatting
+        run: npm run format:check:task-tools
+
+      - name: Run task-tool tests
+        run: npm run test:task-tools
+
       - name: Check formatting
         run: npm run format:check
 

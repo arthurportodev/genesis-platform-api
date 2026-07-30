@@ -154,6 +154,24 @@ runtime; migration incompatível exige procedimento específico e não é revert
 automaticamente. Perda ou corrupção de dados aciona o runbook de restore, não
 uma tentativa improvisada sobre o banco ativo.
 
+## Contrato futuro do operador remoto
+
+O operador de mutação remota não é o operador de entrega Git e ainda não está
+implementado. Antes da primeira mutação, ele deverá consumir um envelope com
+Task ID, ambiente, validade, aprovadores, commit, image digest, config hash,
+estado inicial esperado, allowlist de recursos e ações, locks, limite de blast
+radius, digest do dry run e rollback autorizado.
+
+A execução será serial, com um writer por recurso compartilhado. Drift,
+recurso fora da allowlist, lock indisponível, segredo em log, health falho ou
+efeito diferente do dry run interrompem a operação. O rollback só executa ações
+pré-autorizadas; qualquer alternativa retorna ao Gate humano.
+
+Dry run e execução real produzirão `evidence-manifest.v1` com commit, imagem,
+configuração, recursos, estados inicial/final, migration, backup/restore,
+health, readiness, smoke, rollback, findings, riscos, operador, provenance e
+hash canônico. Este contrato não prova configuração nem autoriza produção.
+
 ## Ambientes e Preview
 
 - **Local/teste:** recursos locais ou descartáveis; nenhum dado real.

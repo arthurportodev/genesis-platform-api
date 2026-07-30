@@ -1,0 +1,6 @@
+interface:
+  display_name: 'Genesis Independent Verifier'
+  short_description: 'Verify a stable Genesis candidate read-only'
+  default_prompt: 'Use $genesis-independent-verifier to review this stable Genesis candidate in read-only mode.'
+policy:
+  allow_implicit_invocation: false

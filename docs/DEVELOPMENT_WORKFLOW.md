@@ -25,17 +25,69 @@ O prompt de uma tarefa registra objetivo, escopo, contratos e invariantes espec�
 - **Normal:** contrato curto, um builder, verifier final focado, validação proporcional e manifesto opcional.
 - **Critical:** decisão de produto quando aplicável, Gate 1, manifesto e Task Packet obrigatórios, verifier incremental por risco, verifier independente final, Gate 2 integral e Gate 3 humano.
 
+O registro de cobertura separa fontes diretas, fontes expandidas, gatilho e
+motivo. Recuperação ampla é fail-safe para autoridade ausente, contradição ou
+risco que as fontes diretas não expliquem.
+
 ## Manifesto operacional local
 
 Tarefas Normal quando útil e todas as tarefas Critical usam `.codex/task-manifest.json`. O arquivo é transitório, não contém segredos, permanece ignorado somente por `.git/info/exclude` e não substitui documentação durável. O exemplo versionado está em `.codex/task-manifest.example.json`.
 
-O manifesto declara versão, identidade e classe da tarefa, branch e base SHA, paths permitidos e protegidos, Task Packet opcional, perfil de validação e scripts focados opcionais. Os comandos genéricos são:
+O manifesto V2 declara versão de contrato, identidade e classe, branch, base,
+transições Git esperadas, paths permitidos/protegidos, artefatos locais, perfil,
+níveis, reidratação, autonomia e autoridade dos contratos. O parser mantém
+dual-read e normaliza V1/V2; V1 não é removido nesta etapa. Os comandos são:
 
 - `npm run task:preflight`: valida manifesto, Git, escopo e artefatos sem modificar o repositório;
-- `npm run task:fingerprint`: calcula o SHA-256 determinístico do candidato; `-- --json` produz saída machine-readable;
+- `npm run task:fingerprint`: calcula o SHA-256 determinístico do candidato; `-- --json` produz saída machine-readable e `-- --verify-transition <referencia.json>` compara o index/commit com a referência pré-stage;
+- `npm run task:contracts`: valida schemas, o manifesto-exemplo, Skills e hashes do conjunto canônico; `-- --validate-instance <schema> <arquivo.json>` aplica o schema completo e as invariantes semânticas a uma evidência;
 - `npm run task:validate`: executa o perfil `docs`, `focused`, `normal` ou `critical`.
 
 O perfil `focused` aceita somente nomes existentes em `package.json` que também pertençam à allowlist versionada de validações read-only; não aceita comandos shell, scripts mutantes, recursivos ou lifecycle hooks pelo manifesto. O perfil `critical` delega à validação integral canônica e uma tarefa Critical não pode selecionar perfil inferior nem omitir o Task Packet.
+
+## Identidade do candidato
+
+O dual-output preserva o fingerprint V1 e acrescenta:
+
+- `contentFingerprint`: path, tipo, modo e identidade de conteúdo após os clean
+  filters do Git, estável em `untracked -> tracked` quando esses elementos não
+  mudam, inclusive sob normalização de EOL;
+- `gitStateFingerprint`: branch, base, HEAD, committed, stage, unstaged e
+  untracked;
+- `candidateId`: task, base, versão do contrato e `contentFingerprint`.
+
+Conteúdo, path, arquivo adicional, modo, symlink, deleção e tipo irregular
+continuam detectados. Gate e verifier vinculam aprovação ao `candidateId`.
+Uma mudança de estado só é aceita automaticamente quando conteúdo, candidate
+ID e paths permanecem estáveis; `untracked -> tracked` precisa estar declarado
+em `expectedTransitions`. Antes do stage, a saída JSON é preservada como
+referência transitória. Depois do stage e depois do commit,
+`--verify-transition` exige candidato integral, index canônico equivalente e
+ausência de conteúdo unstaged ou untracked; partial stage, index stale, modo ou
+blob divergente bloqueiam a transição.
+
+Task Packet, findings, evidência do verifier e handoff só ficam fora do candidato
+quando são arquivos regulares locais, ignorados e não rastreados. Um path de
+artefato rastreado ou não ignorado continua visível ao fingerprint e reprova o
+preflight; o manifesto não pode ser usado como pathspec de ocultação.
+
+## Validação proporcional e evidências
+
+Nível 1 é imediato; Nível 2 fecha um bloco; Nível 3 cobre integrações; Nível 4
+executa uma vez no candidato final. Critical usa focadas durante a construção,
+integração, Critical final, fingerprints e verifier. Mudança do
+`contentFingerprint` após o Nível 4 exige reverificação da cobertura afetada.
+
+Findings usam `finding.v1`, revisão Critical usa `verifier-evidence.v1` e o
+handoff usa `handoff.v1`. O enforcement valida tipos, enums, padrões,
+obrigatoriedade, propriedades adicionais, condicionais e referências entre
+schemas antes das invariantes semânticas. Evidências transitórias ficam fora do
+candidato ou no GitHub, conforme o Task Packet.
+
+Ao validar `verifier-evidence.v1`, o CLI recompõe os paths do candidato atual e
+os compara a `candidatePaths`, `reviewedFiles` e à contagem de cobertura. Uma
+recomendação `approve` não é aceita sem esse contexto, com limitation, finding
+pendente ou binding divergente.
 
 ## Gate 3 conciso
 

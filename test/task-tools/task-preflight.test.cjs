@@ -3,13 +3,19 @@ const assert = require('node:assert/strict');
 const { mkdirSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { runPreflight } = require('../../scripts/task-preflight.cjs');
-const { createTestRepository, git, write } = require('./helpers.cjs');
+const {
+  createTestRepository,
+  git,
+  v2Manifest,
+  write,
+} = require('./helpers.cjs');
 
 test('passes a valid scoped candidate', () => {
   const { cwd } = createTestRepository();
   write(cwd, 'docs/change.md', 'valid\n');
   const result = runPreflight({ cwd });
   assert.equal(result.status, 'passed');
+  assert.equal(result.normalizedManifestVersion, 2);
   assert.equal(result.untrackedFiles, 1);
 });
 
@@ -65,6 +71,32 @@ test('detects a non-ignored Task Packet', () => {
   const result = runPreflight({ cwd });
   assert.equal(result.status, 'failed');
   assert.match(result.failures.join('\n'), /Task Packet is not ignored/u);
+});
+
+test('cannot hide a tracked candidate behind a V2 artifact path', () => {
+  const { cwd, baseSha } = createTestRepository();
+  write(
+    cwd,
+    '.codex/task-manifest.json',
+    `${JSON.stringify(
+      v2Manifest(baseSha, {
+        artifacts: { verifierEvidence: 'docs/evidence.json' },
+      }),
+      null,
+      2,
+    )}\n`,
+  );
+  write(cwd, 'docs/evidence.json', '{"candidate":"hidden"}\n');
+  git(cwd, 'add', 'docs/evidence.json');
+
+  const result = runPreflight({ cwd });
+
+  assert.equal(result.status, 'failed');
+  assert.ok(result.candidatePaths.includes('docs/evidence.json'));
+  assert.match(
+    result.failures.join('\n'),
+    /verifier evidence artifact is tracked/u,
+  );
 });
 
 test('detects staged files when a clean stage is required', () => {

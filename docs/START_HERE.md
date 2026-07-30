@@ -1,8 +1,10 @@
 # Comece aqui
 
-Este diretório é a memória versionada da Genesis Platform. Leia somente o necessário para a tarefa, mas sempre comece pela sequência abaixo.
+Este diretório é a memória versionada da Genesis Platform. Comece pelo delta
+da tarefa e use as fontes abaixo como roteamento; não leia a sequência inteira
+sem um gatilho concreto.
 
-## Ordem recomendada
+## Roteamento de fontes
 
 1. [Visão do produto](PROJECT_OVERVIEW.md): propósito, público e limites do produto.
 2. [Estado atual](CURRENT_STATE.md): fotografia curta do que existe e do próximo passo.
@@ -19,6 +21,11 @@ Este diretório é a memória versionada da Genesis Platform. Leia somente o nec
 13. [ADRs](decisions/README.md): decisões arquiteturais e suas justificativas.
 
 O protocolo obrigatório para pessoas e agentes está em [AGENTS.md](../AGENTS.md).
+
+Para intake, classificação e plano mínimo, invoque explicitamente
+`$genesis-task-orchestrator` em tarefas Critical. Para a revisão Critical final,
+invoque `$genesis-independent-verifier`. O fallback sem Skills é aplicar
+diretamente `AGENTS.md`, a classificação, o fluxo e os templates versionados.
 
 ## Como recuperar contexto
 

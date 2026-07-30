@@ -44,3 +44,4 @@ Crie ADR quando a decisão afetar múltiplas tarefas, segurança, dados, isolame
 - [ADR-009 — Activities, Notes e Next Action tipadas](ADR-009-lead-activities-follow-up.md) — Accepted; implementado na tarefa 0.3.3
 - [ADR-010 — Contrato web de sessão e bootstrap](ADR-010-web-session-contract.md) — Accepted; incorporado na tarefa 0.7.0 pelo PR #22, squash `9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`
 - [ADR-011 — Arquitetura da primeira produção](ADR-011-production-architecture.md) — Accepted em 30 de julho de 2026; ainda não implementado
+- [ADR-012 — Development Operating System v2](ADR-012-development-operating-system-v2.md) — Accepted em 30 de julho de 2026; autoridade backend em implementação sequencial

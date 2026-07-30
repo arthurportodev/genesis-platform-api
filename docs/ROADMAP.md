@@ -55,8 +55,11 @@ Esses itens não são compromissos de escopo sem nova decisão de produto.
 
 - ✅ `0.8.0` — Arquitetura e Plano de Produção: Gate 1 read-only; decisões
   humanas aprovadas em 30 de julho de 2026.
-- 🚧 `0.8.1` — Reconciliação Canônica da Documentação (`Normal / docs`, dois
+- ✅ `0.8.1` — Reconciliação Canônica da Documentação (`Normal / docs`, dois
   repositórios).
+- 🚧 `0.8.1.1` — Evolução do Sistema Operacional de Desenvolvimento
+  (`Critical / critical`): autoridade backend primeiro, depois cópia controlada
+  e paridade frontend; sem produção.
 - ⬜ `0.8.2` — Hardening e Imagem de Produção da API (`Critical / critical`):
   Dockerfile, manifests, readiness, logs, secrets, limits e GHCR; sem deploy.
 - ⬜ `0.8.3` — PostgreSQL, Roles, Migrations e Restore (`Critical / critical`):

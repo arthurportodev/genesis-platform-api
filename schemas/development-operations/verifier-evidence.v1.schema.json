@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/arthurportodev/genesis-platform-api/schemas/development-operations/verifier-evidence.v1.schema.json",
+  "title": "Genesis Independent Verifier Evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "verifierRunId",
+    "taskId",
+    "executorId",
+    "builderExecutorId",
+    "implementedCandidate",
+    "readOnly",
+    "readOnlyEvidence",
+    "baseSha",
+    "candidateId",
+    "contentFingerprintBefore",
+    "contentFingerprintAfter",
+    "gitStateFingerprintBefore",
+    "gitStateFingerprintAfter",
+    "candidatePaths",
+    "reviewedFiles",
+    "sourcesConsulted",
+    "coverage",
+    "findings",
+    "recommendation"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "verifier-evidence.v1" },
+    "verifierRunId": { "type": "string", "minLength": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "executorId": { "type": "string", "minLength": 1 },
+    "builderExecutorId": { "type": "string", "minLength": 1 },
+    "implementedCandidate": { "const": false },
+    "readOnly": { "const": true },
+    "readOnlyEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["beforeStatusHash", "afterStatusHash", "writeOperations"],
+      "properties": {
+        "beforeStatusHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "afterStatusHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "writeOperations": { "const": 0 },
+        "executionLog": { "type": ["string", "null"] }
+      }
+    },
+    "baseSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "candidateId": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "contentFingerprintBefore": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "contentFingerprintAfter": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "gitStateFingerprintBefore": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "gitStateFingerprintAfter": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "candidatePaths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "reviewedFiles": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "sourcesConsulted": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "mode", "reason"],
+        "properties": {
+          "source": { "type": "string", "minLength": 1 },
+          "mode": { "enum": ["direct", "expanded"] },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidatePathsReviewed", "limitations"],
+      "properties": {
+        "candidatePathsReviewed": { "type": "integer", "minimum": 1 },
+        "limitations": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "finding.v1.schema.json" }
+    },
+    "recommendation": { "enum": ["approve", "conditional", "block"] }
+  }
+}

@@ -42,6 +42,11 @@ O coordenador não deve aprovar a própria implementação quando for exigido ve
 - classifica findings e reverifica as correções permitidas;
 - não altera arquivos nem aprova trabalho que ele próprio implementou quando a independência for obrigatória.
 
+Em Critical, o verifier usa execução distinta, registra identidade diferente do
+builder, estado e fingerprints antes/depois, arquivos revisados, fontes,
+cobertura, findings e recomendação em `verifier-evidence.v1`. Mudança do
+candidato ou do estado Git invalida a execução.
+
 ### Operador de entrega
 
 - executa preflight, stage, commit, push, Pull Request, acompanhamento de CI, merge e limpeza somente quando autorizados;
@@ -123,10 +128,17 @@ O builder pode corrigir autonomamente, com validação e reverificação proporc
 
 Toda correção deve ser comunicada ao coordenador e reverificada. Quantidade de rodadas é telemetria, não limite automático de autoridade. Persistência sem convergência ou mudança de natureza exige diagnóstico e pode interromper o trabalho.
 
+Severidade não é sinônimo de decisão. Um finding High pode ser corrigido sem
+interrupção apenas quando o schema comprovar invariante aprovado, solução
+dominante, escopo autorizado, localidade, reversibilidade, verificação
+objetiva, teste específico, validações focadas e Critical final, novo candidato
+e reverificação independente.
+
 Não são autônomos:
 
 - finding médio de segurança, tenant, dados, schema, API ou ownership;
-- finding alto ou crítico;
+- finding High sem o envelope completo acima;
+- finding Critical, salvo reclassificação formal nas condições da classificação;
 - nova dependência, migration, endpoint ou papel permanente não aprovado;
 - mudança de arquitetura, gate, produto ou regra de negócio;
 - mudança de API pública, semântica concorrente ou integração externa;
@@ -153,6 +165,18 @@ Um único operador executa operações Git remotas. Commit, push, criação de P
 Cada tarefa deve produzir um único Pull Request, com a documentação durável integrada ao mesmo diff funcional. O merge desse PR deve tornar o estado documentado verdadeiro. Branch, SHAs transitórios, run IDs, job IDs, timestamps e conversas permanecem no GitHub, salvo requisito explícito de auditoria.
 
 Squash é o método normal de integração e a branch incorporada deve ser removida após sincronização e comprovação do merge. A configuração desejada de squash-only e exclusão automática de branch é distinta da política documentada e não deve ser tratada como aplicada antes de sua alteração efetiva no GitHub.
+
+O operador de entrega Git não é operador de mutação remota. Produção exige
+envelope, allowlist, dry run, locks por recurso, um writer por recurso,
+Evidence Manifest e autorização próprios.
+
+## Skills e fallback
+
+`genesis-task-orchestrator` produz o plano mínimo de reidratação e
+`genesis-independent-verifier` conduz a revisão read-only. Ambas são
+repo-local e explicitamente invocadas em Critical. Elas nunca substituem
+manifesto, schemas, preflight, fingerprint, testes, CI ou Gates. Sem suporte a
+Skills, os mesmos contratos são aplicados pelos documentos e scripts.
 
 ## Métricas do piloto
 

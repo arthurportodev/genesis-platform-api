@@ -48,6 +48,9 @@ function runNpm(args, options = {}) {
 let exitCode = 0;
 try {
   runNpm(['run', 'task:preflight']);
+  runNpm(['run', 'task:contracts']);
+  runNpm(['run', 'format:check:task-tools']);
+  runNpm(['run', 'test:task-tools']);
   runNpm(['run', 'db:test:env']);
   runNpm(['run', 'test:db:up']);
   databaseStarted = true;
@@ -65,6 +68,7 @@ try {
     'genesis-platform-api:gate2-local',
     '.',
   ]);
+  runNpm(['run', 'task:fingerprint', '--', '--json']);
 } catch (error) {
   exitCode = Number(error.exitCode) || 1;
 } finally {
