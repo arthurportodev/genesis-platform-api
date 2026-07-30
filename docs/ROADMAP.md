@@ -57,9 +57,10 @@ Esses itens não são compromissos de escopo sem nova decisão de produto.
   humanas aprovadas em 30 de julho de 2026.
 - ✅ `0.8.1` — Reconciliação Canônica da Documentação (`Normal / docs`, dois
   repositórios).
-- 🚧 `0.8.1.1` — Evolução do Sistema Operacional de Desenvolvimento
-  (`Critical / critical`): autoridade backend primeiro, depois cópia controlada
-  e paridade frontend; sem produção.
+- ✅ `0.8.1.1` — Evolução do Sistema Operacional de Desenvolvimento
+  (`Critical / critical`): backend incorporado pelo PR #26 no squash
+  `27d85416507ae4d8391d74b4181f8400c6d61301` e frontend incorporado pelo PR #9
+  no squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`, com paridade 9/9 e sem produção.
 - ⬜ `0.8.2` — Hardening e Imagem de Produção da API (`Critical / critical`):
   Dockerfile, manifests, readiness, logs, secrets, limits e GHCR; sem deploy.
 - ⬜ `0.8.3` — PostgreSQL, Roles, Migrations e Restore (`Critical / critical`):
@@ -80,6 +81,8 @@ Esses itens não são compromissos de escopo sem nova decisão de produto.
   reais ou convites.
 - ⬜ `0.8.11` — Smoke e Abertura Controlada: dados sintéticos, desktop/mobile,
   sessão, CRM, isolamento cross-tenant, rollback e decisão humana.
+
+A próxima tarefa sequencial é `0.8.2`, que permanece planejada e não iniciada.
 
 Dependências e DAG canônicos estão em [PRODUCTION.md](PRODUCTION.md). Nenhuma
 tarefa planejada prova publicação, prontidão operacional ou autorização para
