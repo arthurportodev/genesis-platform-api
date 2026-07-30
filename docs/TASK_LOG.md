@@ -345,4 +345,26 @@ produção permanecem indisponíveis.
 - Limites: exclusivamente documental; sem código, infraestrutura ou operação
   remota.
 
-A incorporação deste conjunto documental conclui a tarefa 0.8.1.
+A tarefa foi incorporada no backend pelo PR #25, squash
+`6a1a5bafc14195cbd8cf6f8b85077a4e1081381c`, e no frontend pelo PR #8,
+squash `bfe7c81fca34f723677e2fe5097598d92f487838`.
+
+## 0.8.1.1 — Sistema Operacional de Desenvolvimento V2
+
+- Classe/perfil: Critical / critical.
+- Estado: incorporada serialmente no backend pelo PR #26, squash
+  `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
+  squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
+- CIs pós-merge: backend `30567270626` e frontend `30567803632`, ambas
+  aprovadas sem checks pendentes.
+- Entrega: contrato operacional V2 vigente, Task Manifest dual-read V1/V2,
+  fingerprints separados, candidate ID, Skills repo-local, schemas, checks e
+  evidência independente.
+- Autoridade e paridade: backend canônico; frontend com os nove contratos
+  compartilhados byte a byte equivalentes à árvore incorporada no backend.
+- Findings: F-001 a F-008 resolvidos; zero findings novos e zero limitações no
+  fechamento dos candidatos aprovados.
+- Limites: operador remoto ainda não implementado; sem deploy, infraestrutura,
+  banco, migrations, secrets ou mutação de produção.
+- Próxima tarefa: `0.8.2` — Hardening e Imagem de Produção da API, ainda não
+  iniciada.

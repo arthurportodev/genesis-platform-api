@@ -8,10 +8,12 @@
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`)
 - **Gate técnico concluído:** 0.8.0 — Arquitetura e Plano de Produção,
   estritamente read-only; decisões humanas aprovadas em 30 de julho de 2026
-- **Tarefa de governança atual:** 0.8.1.1 — Evolução do Sistema Operacional de
-  Desenvolvimento. O backend implementa primeiro a autoridade canônica; o
-  candidato frontend e sua paridade permanecem etapa sequencial obrigatória.
-- **Última tarefa de governança concluída:** 0.2.2.6 — Normalização de EOL
+- **Última tarefa de governança concluída:** 0.8.1.1 — Evolução do Sistema
+  Operacional de Desenvolvimento, incorporada no backend pelo PR #26, squash
+  `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
+  squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
+- **Próxima tarefa:** 0.8.2 — Hardening e Imagem de Produção da API, ainda não
+  iniciada e sem autorização de deploy ou mutação de produção.
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
 
@@ -58,6 +60,13 @@
   scripts, testes e CI permanecem a autoridade determinística.
 - Task Manifest V2 coexiste com V1; fingerprints separam conteúdo, estado Git e
   candidate ID; a CI valida as ferramentas operacionais.
+- A Tarefa 0.8.1.1 está incorporada: o backend é a autoridade canônica do
+  contrato operacional V2 no squash `27d85416507ae4d8391d74b4181f8400c6d61301`,
+  e o frontend preserva paridade dos nove contratos compartilhados no squash
+  `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`. As CIs pós-merge
+  `30567270626` e `30567803632` foram aprovadas.
+- O operador remoto permanece conceitual e não implementado; nenhuma operação
+  de produção foi habilitada pela 0.8.1.1.
 - O GitHub permite somente squash merge; merge commits e rebase merges estão desabilitados, e branches remotas incorporadas são excluídas automaticamente. Nenhuma aprovação obrigatória é prevista enquanto não houver segundo mantenedor humano elegível.
 - `.gitattributes` define `* text=auto eol=lf`: arquivos textuais tracked usam LF canônico e binários detectados permanecem sem conversão de texto.
 - O inventário atual não exige exceção CRLF nem regra binária específica; falsos diffs `Delete-CR` foram eliminados sem alterar `core.autocrlf`.
