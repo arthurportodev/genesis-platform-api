@@ -134,17 +134,24 @@ function listGitState(baseSha, cwd = process.cwd(), exclusions = []) {
   };
 }
 
-function gitModeForPath(baseSha, path, cwd = process.cwd()) {
-  const raw = gitText(
-    ['diff', '--raw', '--no-abbrev', '--no-renames', baseSha, '--', path],
-    { cwd },
-  );
-  const rawMatch = raw.match(
-    /^:[0-7]{6} ([0-7]{6}) [a-f0-9]+ [a-f0-9]+ [A-Z]/mu,
-  );
-  if (rawMatch) return rawMatch[1];
+function gitDiffHasChanges(args, cwd = process.cwd()) {
+  const command = ['diff', '--quiet', ...args];
+  const result = runGit(command, { cwd, allowFailure: true });
+  if (result.status === 0) return false;
+  if (result.status === 1) return true;
+  throw new GitCommandError(command, result);
+}
+
+function gitModeForPath(path, cwd = process.cwd()) {
   const indexed = gitText(['ls-files', '--stage', '--', path], { cwd });
-  return indexed.match(/^([0-7]{6})\s/u)?.[1] ?? null;
+  const indexMode = indexed.match(/^([0-7]{6})\s/u)?.[1] ?? null;
+  if (!indexMode) return null;
+
+  if (gitDiffHasChanges(['--cached', 'HEAD', '--', path], cwd)) {
+    return indexMode;
+  }
+  if (gitDiffHasChanges(['--', path], cwd)) return null;
+  return indexMode;
 }
 
 function pathExistsInBase(baseSha, path, cwd = process.cwd()) {
@@ -170,6 +177,7 @@ function isTracked(path, cwd = process.cwd()) {
 module.exports = {
   GitCommandError,
   binaryDiff,
+  gitDiffHasChanges,
   gitModeForPath,
   gitNulEntries,
   gitText,

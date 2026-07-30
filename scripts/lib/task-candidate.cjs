@@ -137,7 +137,7 @@ function readCandidateEntry(cwd, path, baseSha = null) {
   return {
     type: 'file',
     mode:
-      (baseSha && gitModeForPath(baseSha, path, cwd)) ??
+      (baseSha && gitModeForPath(path, cwd)) ??
       (stats.mode & 0o111 ? '100755' : '100644'),
     content: readFileSync(absolutePath),
   };

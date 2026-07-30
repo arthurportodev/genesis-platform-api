@@ -1,7 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
-const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} = require('node:fs');
 const { join } = require('node:path');
 const {
   calculateFingerprint,
@@ -9,6 +14,10 @@ const {
   serializeUntrackedEntry,
   verifyExpectedGitTransition,
 } = require('../../scripts/task-fingerprint.cjs');
+const {
+  readCandidateEntry,
+  readIndexCandidateEntry,
+} = require('../../scripts/lib/task-candidate.cjs');
 const {
   createTestRepository,
   git,
@@ -50,6 +59,7 @@ test('keeps content identity stable across untracked to tracked', () => {
   const untracked = calculateFingerprint({ cwd });
   git(cwd, 'add', 'docs/change.md');
   const tracked = calculateFingerprint({ cwd });
+  assert.equal(readIndexCandidateEntry(cwd, 'docs/change.md').mode, '100644');
   assert.equal(untracked.contentFingerprint, tracked.contentFingerprint);
   assert.equal(untracked.candidateId, tracked.candidateId);
   assert.notEqual(untracked.gitStateFingerprint, tracked.gitStateFingerprint);
@@ -86,6 +96,19 @@ test('keeps content identity stable across untracked to tracked', () => {
       untracked.expectedTransitions,
     ).failures.join('\n'),
     /declared Git transitions changed/u,
+  );
+
+  git(cwd, 'commit', '-m', 'commit candidate with the same mode');
+  const committed = calculateFingerprint({ cwd });
+  assert.equal(tracked.contentFingerprint, committed.contentFingerprint);
+  assert.equal(tracked.candidateId, committed.candidateId);
+  assert.equal(
+    committed.contentFingerprint,
+    committed.indexSnapshot.contentFingerprint,
+  );
+  assert.deepEqual(
+    verifyExpectedGitTransition(untracked, committed, ['untracked-to-tracked']),
+    { allowed: true, stateChanged: true, failures: [] },
   );
 });
 
@@ -133,7 +156,7 @@ test('uses Git clean-filter identity across EOL normalization', () => {
   );
 });
 
-test('detects additional paths and executable mode changes', () => {
+test('detects an additional candidate path', () => {
   const { cwd } = createTestRepository();
   write(cwd, 'docs/change.md', 'candidate\n');
   git(cwd, 'add', 'docs/change.md');
@@ -141,11 +164,90 @@ test('detects additional paths and executable mode changes', () => {
   write(cwd, 'docs/additional.md', 'additional\n');
   const additional = calculateFingerprint({ cwd });
   assert.notEqual(regular.contentFingerprint, additional.contentFingerprint);
+});
 
-  require('node:fs').unlinkSync(join(cwd, 'docs', 'additional.md'));
+test('uses staged index mode and fingerprints 100755 distinctly', () => {
+  const { cwd } = createTestRepository();
+  git(cwd, 'config', 'core.filemode', 'true');
+  write(cwd, 'docs/change.md', 'candidate\n');
+  git(cwd, 'add', 'docs/change.md');
+  const regularEntry = readIndexCandidateEntry(cwd, 'docs/change.md');
+  const regular = calculateFingerprint({ cwd });
+
+  assert.equal(regularEntry.type, 'file');
+  assert.equal(regularEntry.mode, '100644');
+  assert.equal(
+    regular.contentFingerprint,
+    regular.indexSnapshot.contentFingerprint,
+  );
+
   git(cwd, 'update-index', '--chmod=+x', 'docs/change.md');
+  const executableEntry = readIndexCandidateEntry(cwd, 'docs/change.md');
+  const executable = calculateFingerprint({ cwd });
+
+  assert.equal(executableEntry.type, 'file');
+  assert.equal(executableEntry.mode, '100755');
+  assert.notEqual(regular.contentFingerprint, executable.contentFingerprint);
+  assert.notEqual(regular.candidateId, executable.candidateId);
+  assert.notEqual(
+    regular.indexSnapshot.contentFingerprint,
+    executable.indexSnapshot.contentFingerprint,
+  );
+  assert.equal(
+    executable.contentFingerprint,
+    executable.indexSnapshot.contentFingerprint,
+  );
+});
+
+test('detects a worktree chmod before staging when supported', (t) => {
+  const { cwd } = createTestRepository();
+  git(cwd, 'config', 'core.filemode', 'true');
+  write(cwd, 'docs/change.md', 'base\n');
+  git(cwd, 'add', 'docs/change.md');
+  git(cwd, 'commit', '-m', 'tracked regular file');
+  const baseSha = git(cwd, 'rev-parse', 'HEAD');
+  setManifestBase(cwd, baseSha);
+
+  write(cwd, 'docs/change.md', 'candidate\n');
+  chmodSync(join(cwd, 'docs', 'change.md'), 0o644);
+  const regular = calculateFingerprint({ cwd });
+  chmodSync(join(cwd, 'docs', 'change.md'), 0o755);
+  const executableEntry = readCandidateEntry(cwd, 'docs/change.md', baseSha);
+
+  if (executableEntry.mode !== '100755') {
+    t.skip('filesystem does not expose executable mode changes');
+    return;
+  }
+
   const executable = calculateFingerprint({ cwd });
   assert.notEqual(regular.contentFingerprint, executable.contentFingerprint);
+  assert.notEqual(regular.candidateId, executable.candidateId);
+});
+
+test('distinguishes a real Git index symlink from a regular file', () => {
+  const { cwd } = createTestRepository();
+  write(cwd, 'docs/link-target.txt', '../target\n');
+  const objectId = git(cwd, 'hash-object', '-w', 'docs/link-target.txt');
+
+  git(
+    cwd,
+    'update-index',
+    '--add',
+    '--cacheinfo',
+    `100644,${objectId},docs/link`,
+  );
+  const regular = readIndexCandidateEntry(cwd, 'docs/link');
+  git(cwd, 'update-index', '--cacheinfo', `120000,${objectId},docs/link`);
+  const symlink = readIndexCandidateEntry(cwd, 'docs/link');
+
+  assert.equal(regular.type, 'file');
+  assert.equal(regular.mode, '100644');
+  assert.equal(symlink.type, 'symlink');
+  assert.equal(symlink.mode, '120000');
+  assert.notDeepEqual(
+    serializeCanonicalEntry('docs/link', regular),
+    serializeCanonicalEntry('docs/link', symlink),
+  );
 });
 
 test('does not change when only Task Packet content changes', () => {
@@ -221,10 +323,6 @@ test('represents deleted and irregular entries distinctly', () => {
   assert.notDeepEqual(deleted, irregular);
   const { cwd } = createTestRepository();
   mkdirSync(join(cwd, 'docs'));
-  const entry =
-    require('../../scripts/lib/task-candidate.cjs').readCandidateEntry(
-      cwd,
-      'docs',
-    );
+  const entry = readCandidateEntry(cwd, 'docs');
   assert.equal(entry.type, 'other');
 });
