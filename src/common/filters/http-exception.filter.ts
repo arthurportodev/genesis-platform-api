@@ -4,9 +4,13 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
-  Logger,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import {
+  ContextRequest,
+  getRequestContext,
+} from '../logging/request-context.middleware';
+import { writeStructuredLog } from '../logging/structured-logger';
 
 interface ErrorResponse {
   statusCode: number;
@@ -17,12 +21,10 @@ interface ErrorResponse {
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(HttpExceptionFilter.name);
-
   catch(exception: unknown, host: ArgumentsHost): void {
     const context = host.switchToHttp();
     const response = context.getResponse<Response>();
-    const request = context.getRequest<Request>();
+    const request = context.getRequest<ContextRequest>();
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
@@ -31,7 +33,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
       exception instanceof HttpException ? exception.getResponse() : null;
 
     if (!(exception instanceof HttpException)) {
-      this.logger.error('Unhandled application error');
+      const requestContext = getRequestContext(request);
+      const route = request.route as { path?: unknown } | undefined;
+      writeStructuredLog('error', {
+        event: 'http.unhandled_error',
+        requestId: requestContext.requestId,
+        correlationId: requestContext.correlationId,
+        method: request.method,
+        route: typeof route?.path === 'string' ? route.path : 'unknown',
+        status,
+        errorType: 'internal_error',
+      });
     }
 
     if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
@@ -45,7 +57,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         typeof exceptionResponse === 'string'
           ? exceptionResponse
           : 'Internal server error',
-      path: request.url,
+      path: request.path,
       timestamp: new Date().toISOString(),
     };
     response.status(status).json(body);

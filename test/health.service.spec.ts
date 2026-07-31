@@ -1,39 +1,59 @@
-import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { HealthService } from '../src/health/health.service';
+import { RuntimeHealthStateService } from '../src/health/runtime-health-state.service';
 
 describe('HealthService', () => {
-  const configService = {
-    getOrThrow: jest.fn().mockReturnValue({ version: '0.1.0' }),
-  } as unknown as ConfigService;
+  it('keeps liveness independent from PostgreSQL', () => {
+    const query = jest.fn();
+    const dataSource = { query } as unknown as DataSource;
+    const runtime = new RuntimeHealthStateService();
+    const service = new HealthService(dataSource, runtime);
 
-  it('returns a healthy response when PostgreSQL responds', async () => {
+    expect(service.checkLiveness()).toEqual({ status: 'ok' });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('returns unavailable readiness until startup completes', async () => {
+    const query = jest.fn();
+    const dataSource = { query } as unknown as DataSource;
+    const runtime = new RuntimeHealthStateService();
+    const service = new HealthService(dataSource, runtime);
+
+    await expect(service.checkReadiness()).resolves.toEqual({
+      status: 'unavailable',
+    });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('returns a minimal ready response when PostgreSQL responds', async () => {
     const dataSource = {
       query: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
     } as unknown as DataSource;
-    const response = await new HealthService(dataSource, configService).check();
+    const runtime = new RuntimeHealthStateService();
+    runtime.markReady();
 
-    expect(response).toMatchObject({
-      status: 'ok',
-      service: 'genesis-platform-api',
-      version: '0.1.0',
-      database: 'connected',
-    });
-    expect(new Date(response.timestamp).toISOString()).toBe(response.timestamp);
+    await expect(
+      new HealthService(dataSource, runtime).checkReadiness(),
+    ).resolves.toEqual({ status: 'ok' });
   });
 
-  it('returns an unhealthy response without exposing the database error', async () => {
+  it('returns unavailable without exposing a PostgreSQL error', async () => {
     const dataSource = {
       query: jest
         .fn()
-        .mockRejectedValue(new Error('sensitive connection details')),
+        .mockRejectedValue(
+          new Error('postgres://user:secret@database/internal'),
+        ),
     } as unknown as DataSource;
-    const response = await new HealthService(dataSource, configService).check();
+    const runtime = new RuntimeHealthStateService();
+    runtime.markReady();
 
-    expect(response).toMatchObject({
-      status: 'error',
-      database: 'disconnected',
-    });
-    expect(response).not.toHaveProperty('error');
+    const response = await new HealthService(
+      dataSource,
+      runtime,
+    ).checkReadiness();
+
+    expect(response).toEqual({ status: 'unavailable' });
+    expect(JSON.stringify(response)).not.toContain('secret');
   });
 });

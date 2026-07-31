@@ -6,7 +6,7 @@ import databaseConfig from './database.config';
 import invitationConfig from './invitation.config';
 import leadConfig from './lead.config';
 import membershipConfig from './membership.config';
-import { environmentValidationSchema } from './environment.validation';
+import { validateEnvironment } from './environment.validation';
 
 @Module({
   imports: [
@@ -21,8 +21,7 @@ import { environmentValidationSchema } from './environment.validation';
         leadConfig,
         membershipConfig,
       ],
-      validationSchema: environmentValidationSchema,
-      validationOptions: { abortEarly: false },
+      validate: validateEnvironment,
     }),
   ],
 })

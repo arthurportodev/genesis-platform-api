@@ -1,0 +1,4 @@
+check-for-app-update: false
+fail-on-severity: high
+only-fixed: false
+ignore: []

@@ -119,8 +119,9 @@ export default registerAs('invitation', (): InvitationConfig => {
   const resendApiKey = process.env.RESEND_API_KEY?.trim() || null;
   const emailFrom = process.env.INVITATION_EMAIL_FROM ?? '';
   const workerEnabled = enabled('INVITATION_WORKER_ENABLED');
+  const issuanceRequested = enabled('INVITATION_ISSUANCE_READINESS');
   const issuanceReady =
-    enabled('INVITATION_ISSUANCE_READINESS') &&
+    issuanceRequested &&
     acceptanceReady &&
     activationReady &&
     workerEnabled &&
@@ -129,6 +130,19 @@ export default registerAs('invitation', (): InvitationConfig => {
     emailFrom !== '' &&
     resendApiKey !== null &&
     tokenCurrentVersion !== null;
+  if (issuanceRequested && !issuanceReady) {
+    throw new Error(
+      'Invitation issuance was enabled without complete runtime configuration.',
+    );
+  }
+  if (
+    (acceptanceReady || activationReady || workerEnabled) &&
+    tokenCurrentVersion === null
+  ) {
+    throw new Error(
+      'Invitation runtime was enabled without a current token key.',
+    );
+  }
   return {
     issuanceReady,
     acceptanceReady,

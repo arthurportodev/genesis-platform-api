@@ -75,20 +75,35 @@ export default registerAs('lead', (): LeadConfig => {
     'LEAD_IDEMPOTENCY_KEYS',
     process.env.LEAD_IDEMPOTENCY_KEYS,
   );
-  return {
-    formReadiness: process.env.LEAD_FORM_READINESS === 'true',
-    formOrganizationId: process.env.LEAD_FORM_ORGANIZATION_ID?.trim() || null,
-    formCurrentKeyVersion: parseCurrentVersion(
-      'LEAD_FORM_KEY_CURRENT_VERSION',
-      process.env.LEAD_FORM_KEY_CURRENT_VERSION,
-      formKeys,
-    ),
+  const formReadiness = process.env.LEAD_FORM_READINESS === 'true';
+  const formOrganizationId =
+    process.env.LEAD_FORM_ORGANIZATION_ID?.trim() || null;
+  const formCurrentKeyVersion = parseCurrentVersion(
+    'LEAD_FORM_KEY_CURRENT_VERSION',
+    process.env.LEAD_FORM_KEY_CURRENT_VERSION,
     formKeys,
-    idempotencyCurrentKeyVersion: parseCurrentVersion(
-      'LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION',
-      process.env.LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION,
-      idempotencyKeys,
-    ),
+  );
+  const idempotencyCurrentKeyVersion = parseCurrentVersion(
+    'LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION',
+    process.env.LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION,
+    idempotencyKeys,
+  );
+  if (
+    formReadiness &&
+    (formOrganizationId === null ||
+      formCurrentKeyVersion === null ||
+      idempotencyCurrentKeyVersion === null)
+  ) {
+    throw new Error(
+      'Lead form was enabled without complete runtime configuration.',
+    );
+  }
+  return {
+    formReadiness,
+    formOrganizationId,
+    formCurrentKeyVersion,
+    formKeys,
+    idempotencyCurrentKeyVersion,
     idempotencyKeys,
     publicReplicaCount: resolveApiPublicReplicaCount(),
     rateLimitWindowSeconds: Number(

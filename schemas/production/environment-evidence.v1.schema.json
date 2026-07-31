@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/arthurportodev/genesis-platform-api/schemas/production/environment-evidence.v1.schema.json",
+  "title": "Genesis production environment evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "baseSha",
+    "candidateId",
+    "builderExecutorId",
+    "executor",
+    "environment",
+    "baseImage",
+    "candidateImage",
+    "commands",
+    "artifacts",
+    "invariants",
+    "startedAt",
+    "completedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "environment-evidence.v1" },
+    "taskId": { "const": "0.8.2" },
+    "baseSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "candidateId": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "builderExecutorId": { "type": "string", "minLength": 1 },
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "readOnly", "writeOperations"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["builder", "verifier"] },
+        "readOnly": { "type": "boolean" },
+        "writeOperations": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "kernel",
+        "architecture",
+        "dockerVersion",
+        "buildxVersion"
+      ],
+      "properties": {
+        "os": { "const": "linux" },
+        "kernel": { "type": "string", "minLength": 1 },
+        "architecture": { "const": "amd64" },
+        "dockerVersion": { "type": "string", "minLength": 1 },
+        "buildxVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "baseImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "indexDigest", "manifestDigest"],
+      "properties": {
+        "reference": {
+          "const": "gcr.io/distroless/nodejs24-debian13:nonroot-amd64@sha256:b1386d556b478c420927eb212236bfb31be9834a4549850a060a6351f7fff514"
+        },
+        "indexDigest": {
+          "const": "sha256:af85d11ce7ef10172855a6e3649e3e8125b1b9e3ca41849ec2918036f05cb212"
+        },
+        "manifestDigest": {
+          "const": "sha256:b1386d556b478c420927eb212236bfb31be9834a4549850a060a6351f7fff514"
+        }
+      }
+    },
+    "candidateImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "imageId", "platform"],
+      "properties": {
+        "reference": { "type": "string", "minLength": 1 },
+        "imageId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "platform": { "const": "linux/amd64" }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "command",
+          "startedAt",
+          "completedAt",
+          "exitCode",
+          "stdoutSha256",
+          "stderrSha256"
+        ],
+        "properties": {
+          "command": { "type": "string", "minLength": 1 },
+          "startedAt": { "$ref": "#/$defs/timestamp" },
+          "completedAt": { "$ref": "#/$defs/timestamp" },
+          "exitCode": { "type": "integer" },
+          "stdoutSha256": { "$ref": "#/$defs/hash" },
+          "stderrSha256": { "$ref": "#/$defs/hash" }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtimeLogSha256", "sbomSha256", "scanSha256"],
+      "properties": {
+        "runtimeLogSha256": { "$ref": "#/$defs/hash" },
+        "sbomSha256": { "$ref": "#/$defs/hash" },
+        "scanSha256": { "$ref": "#/$defs/hash" },
+        "sourceEvidenceSha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "required", "result", "evidence"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "required": { "const": true },
+          "result": { "enum": ["passed", "failed"] },
+          "evidence": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "startedAt": { "$ref": "#/$defs/timestamp" },
+    "completedAt": { "$ref": "#/$defs/timestamp" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+    }
+  }
+}

@@ -46,11 +46,16 @@ describe('invitation production rollout configuration', () => {
     ['INVITATION_WORKER_ENABLED', 'false'],
     ['API_PUBLIC_REPLICA_COUNT', '2'],
     ['RESEND_API_KEY', ''],
-  ])('fails issuance closed when %s is not ready', (name, value) => {
-    configureCompleteRollout();
-    process.env[name] = value;
-    expect(invitationConfig().issuanceReady).toBe(false);
-  });
+  ])(
+    'fails fast when issuance requests %s without readiness',
+    (name, value) => {
+      configureCompleteRollout();
+      process.env[name] = value;
+      expect(() => invitationConfig()).toThrow(
+        'Invitation issuance was enabled without complete runtime configuration.',
+      );
+    },
+  );
 
   it('temporarily accepts the legacy replica name and rejects conflicts', () => {
     configureCompleteRollout();

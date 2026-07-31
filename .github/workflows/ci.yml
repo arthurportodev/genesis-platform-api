@@ -20,11 +20,11 @@ jobs:
   validate:
     name: Validate backend
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17-alpine@sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a
         env:
           POSTGRES_DB: genesis_platform_test
           POSTGRES_USER: genesis_test
@@ -51,15 +51,18 @@ jobs:
       DATABASE_RUNTIME_ROLE: genesis_runtime_test
       DATABASE_MIGRATION_USER: genesis_test
       DATABASE_MIGRATION_PASSWORD: test-only
+      PRODUCTION_IMAGE: genesis-platform-api:ci
+      SBOM_PATH: genesis-platform-api.spdx.json
+      SCAN_PATH: grype-report.json
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: .nvmrc
+          node-version: 24.18.0
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -67,7 +70,9 @@ jobs:
         run: |
           node --version
           npm --version
-          node -e "if (process.versions.node.split('.')[0] !== '24') process.exit(1)"
+          docker version
+          docker buildx version
+          node -e "if (process.versions.node !== '24.18.0') process.exit(1)"
 
       - name: Install dependencies
         run: npm ci
@@ -80,6 +85,9 @@ jobs:
 
       - name: Run task-tool tests
         run: npm run test:task-tools
+
+      - name: Run production-tool tests
+        run: npm run test:production-tools
 
       - name: Check formatting
         run: npm run format:check
@@ -99,5 +107,61 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
 
-      - name: Build Docker image
-        run: docker build --tag genesis-platform-api:ci .
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Resolve immutable OCI metadata
+        run: |
+          echo "OCI_CREATED=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+          echo "OCI_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Build Linux production image without push
+        run: >-
+          docker buildx build
+          --platform linux/amd64
+          --target runtime
+          --load
+          --tag "$PRODUCTION_IMAGE"
+          --build-arg OCI_REVISION="$GITHUB_SHA"
+          --build-arg OCI_VERSION="$OCI_VERSION"
+          --build-arg OCI_CREATED="$OCI_CREATED"
+          .
+
+      - name: Generate SPDX JSON SBOM from final image
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0, Syft 1.42.3
+        with:
+          image: genesis-platform-api:ci
+          format: spdx-json
+          output-file: genesis-platform-api.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Scan final image with Grype
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: genesis-platform-api:ci
+          fail-build: true
+          severity-cutoff: high
+          only-fixed: false
+          output-format: json
+          output-file: grype-report.json
+          config: .grype.yaml
+
+      - name: Verify hardened Linux runtime
+        run: npm run image:verify
+
+      - name: Verify environmental evidence contract
+        run: >-
+          npm run environment:evidence:verify --
+          .codex/task-packets/0.8.2-environment.json
+
+      - name: Upload supply-chain and runtime evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-image-evidence-${{ github.sha }}
+          path: |
+            genesis-platform-api.spdx.json
+            grype-report.json
+            .codex/task-packets/0.8.2-environment.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,157 @@
+name: Publish production image
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Full commit SHA already merged into main and approved by its Gate
+        required: true
+        type: string
+
+concurrency:
+  group: publish-production-image
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Scan, publish, and attest approved image
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: production-image-publication
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+    env:
+      PRODUCTION_IMAGE: genesis-platform-api:publication-candidate
+      SBOM_PATH: genesis-platform-api.spdx.json
+      SCAN_PATH: grype-report.json
+
+    steps:
+      - name: Validate full commit SHA input
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          if [[ ! "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "commit_sha must be a full lowercase commit SHA" >&2
+            exit 1
+          fi
+
+      - name: Checkout approved commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 0
+
+      - name: Require commit already merged into remote main
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
+          git merge-base --is-ancestor "$COMMIT_SHA" origin/main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install and validate production dependencies
+        run: |
+          npm ci
+          npm audit --omit=dev --audit-level=high
+
+      - name: Resolve immutable OCI metadata
+        run: |
+          echo "OCI_CREATED=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+          echo "OCI_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Build approved Linux image once
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: >-
+          docker buildx build
+          --platform linux/amd64
+          --target runtime
+          --load
+          --tag "$PRODUCTION_IMAGE"
+          --build-arg OCI_REVISION="$COMMIT_SHA"
+          --build-arg OCI_VERSION="$OCI_VERSION"
+          --build-arg OCI_CREATED="$OCI_CREATED"
+          .
+
+      - name: Generate SPDX JSON SBOM from final image
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0, Syft 1.42.3
+        with:
+          image: genesis-platform-api:publication-candidate
+          format: spdx-json
+          output-file: genesis-platform-api.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Scan final image with Grype before publication
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: genesis-platform-api:publication-candidate
+          fail-build: true
+          severity-cutoff: high
+          only-fixed: false
+          output-format: json
+          output-file: grype-report.json
+          config: .grype.yaml
+
+      - name: Verify hardened runtime before publication
+        run: npm run image:verify
+
+      - name: Authenticate to GHCR only after successful verification
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the exact scanned local image
+        id: publish
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          IMAGE_REF="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/genesis-platform-api:sha-$COMMIT_SHA"
+          docker tag "$PRODUCTION_IMAGE" "$IMAGE_REF"
+          docker push "$IMAGE_REF"
+          REPO_DIGEST=$(docker image inspect --format='{{index .RepoDigests 0}}' "$IMAGE_REF")
+          DIGEST="${REPO_DIGEST#*@}"
+          test "$DIGEST" != "$REPO_DIGEST"
+          echo "image=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance for the published digest
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
+        with:
+          subject-name: ${{ steps.publish.outputs.image }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest SBOM for the same published digest
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
+        with:
+          subject-name: ${{ steps.publish.outputs.image }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          sbom-path: genesis-platform-api.spdx.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Upload publication evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-image-publication-${{ inputs.commit_sha }}
+          path: |
+            genesis-platform-api.spdx.json
+            grype-report.json
+            .codex/task-packets/0.8.2-environment.json
+          if-no-files-found: error
+          retention-days: 30

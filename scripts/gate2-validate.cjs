@@ -1,4 +1,6 @@
 const { spawnSync } = require('node:child_process');
+const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const { dirname, resolve } = require('node:path');
 
 const npmCli = process.env.npm_execpath;
 const results = [];
@@ -8,7 +10,7 @@ function run(command, args, options = {}) {
   const startedAt = Date.now();
   const result = spawnSync(command, args, {
     encoding: 'utf8',
-    env: process.env,
+    env: options.env ?? process.env,
   });
   process.stdout.write(result.stdout ?? '');
   process.stderr.write(result.stderr ?? '');
@@ -33,6 +35,31 @@ function run(command, args, options = {}) {
   return entry;
 }
 
+function runToFile(command, args, outputPath, options = {}) {
+  const startedAt = Date.now();
+  const result = spawnSync(command, args, {
+    encoding: 'utf8',
+    env: process.env,
+  });
+  const resolvedOutputPath = resolve(outputPath);
+  mkdirSync(dirname(resolvedOutputPath), { recursive: true });
+  writeFileSync(resolvedOutputPath, result.stdout ?? '', 'utf8');
+  process.stderr.write(result.stderr ?? '');
+  const entry = {
+    command: options.displayCommand ?? [command, ...args].join(' '),
+    durationMs: Date.now() - startedAt,
+    output: outputPath,
+    status: result.status === 0 ? 'passed' : 'failed',
+    exitCode: result.status ?? 1,
+  };
+  results.push(entry);
+  console.log(JSON.stringify(entry));
+  if (result.status !== 0) {
+    throw Object.assign(new Error(entry.command), { exitCode: entry.exitCode });
+  }
+  return entry;
+}
+
 function runNpm(args, options = {}) {
   if (!npmCli) {
     throw Object.assign(new Error('npm_execpath is unavailable.'), {
@@ -47,10 +74,30 @@ function runNpm(args, options = {}) {
 
 let exitCode = 0;
 try {
+  const candidateImage =
+    process.env.PRODUCTION_IMAGE ?? 'genesis-platform-api:gate2-local';
+  const sbomPath =
+    process.env.SBOM_PATH ?? '.codex/task-packets/0.8.2-sbom.spdx.json';
+  const scanPath =
+    process.env.SCAN_PATH ?? '.codex/task-packets/0.8.2-grype.json';
+  const environmentEvidencePath =
+    process.env.ENVIRONMENT_EVIDENCE_PATH ??
+    '.codex/task-packets/0.8.2-environment.json';
+  const syft = process.env.SYFT_COMMAND ?? 'syft';
+  const grype = process.env.GRYPE_COMMAND ?? 'grype';
+  const headSha = spawnSync('git', ['rev-parse', 'HEAD'], {
+    encoding: 'utf8',
+  }).stdout.trim();
+  const created = spawnSync('git', ['show', '-s', '--format=%cI', 'HEAD'], {
+    encoding: 'utf8',
+  }).stdout.trim();
+  const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+
   runNpm(['run', 'task:preflight']);
   runNpm(['run', 'task:contracts']);
   runNpm(['run', 'format:check:task-tools']);
   runNpm(['run', 'test:task-tools']);
+  runNpm(['run', 'test:production-tools']);
   runNpm(['run', 'db:test:env']);
   runNpm(['run', 'test:db:up']);
   databaseStarted = true;
@@ -61,13 +108,43 @@ try {
   runNpm(['run', 'test:integration']);
   runNpm(['run', 'test:e2e', '--', '--runInBand']);
   run('docker', [
+    'buildx',
     'build',
+    '--platform',
+    'linux/amd64',
     '--target',
-    'production',
+    'runtime',
+    '--load',
     '-t',
-    'genesis-platform-api:gate2-local',
+    candidateImage,
+    '--build-arg',
+    `OCI_REVISION=${headSha}`,
+    '--build-arg',
+    `OCI_VERSION=${version}`,
+    '--build-arg',
+    `OCI_CREATED=${created}`,
     '.',
   ]);
+  runNpm(['audit', '--omit=dev', '--audit-level=high']);
+  runToFile(syft, [candidateImage, '-o', 'spdx-json'], sbomPath, {
+    displayCommand: 'syft <candidate-image> -o spdx-json',
+  });
+  runToFile(
+    grype,
+    [candidateImage, '--fail-on', 'high', '--output', 'json'],
+    scanPath,
+    { displayCommand: 'grype <candidate-image> --fail-on high --output json' },
+  );
+  runNpm(['run', 'image:verify'], {
+    env: {
+      ...process.env,
+      PRODUCTION_IMAGE: candidateImage,
+      SBOM_PATH: sbomPath,
+      SCAN_PATH: scanPath,
+      ENVIRONMENT_EVIDENCE_PATH: environmentEvidencePath,
+    },
+  });
+  runNpm(['run', 'environment:evidence:verify', '--', environmentEvidencePath]);
   runNpm(['run', 'task:fingerprint', '--', '--json']);
 } catch (error) {
   exitCode = Number(error.exitCode) || 1;

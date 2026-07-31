@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { API_RUNTIME_SECRET_NAMES, resolveSecretFiles } from './secret-file';
 
 export const environmentValidationSchema = Joi.object({
   NODE_ENV: Joi.string()
@@ -217,3 +218,15 @@ export const environmentValidationSchema = Joi.object({
     .max(30_000)
     .default(3_000),
 });
+
+export function validateEnvironment(
+  environment: Record<string, unknown>,
+): Record<string, unknown> {
+  const resolved = resolveSecretFiles(environment, API_RUNTIME_SECRET_NAMES);
+  const result = environmentValidationSchema.validate(resolved, {
+    abortEarly: false,
+    allowUnknown: true,
+  });
+  if (result.error) throw result.error;
+  return result.value as Record<string, unknown>;
+}
