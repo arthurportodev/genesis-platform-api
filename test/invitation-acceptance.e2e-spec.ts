@@ -51,9 +51,46 @@ describe('Invitation acceptance (e2e)', () => {
   const recipientPassword = randomBytes(24).toString('base64url');
   const otherUserPassword = randomBytes(24).toString('base64url');
   const ownerPassword = randomBytes(24).toString('base64url');
-  const invitationKeys = new Map([[2, Buffer.alloc(32, 0x32)]]);
+  const invitationKeyVersion = 2;
+  const invitationKey = Buffer.alloc(32, 0x32);
+  const fixtureEnvironmentNames = [
+    'NODE_ENV',
+    'PORT',
+    'APP_NAME',
+    'APP_VERSION',
+    'DATABASE_HOST',
+    'DATABASE_PORT',
+    'DATABASE_NAME',
+    'DATABASE_RUNTIME_ROLE',
+    'DATABASE_USER',
+    'DATABASE_PASSWORD',
+    'DATABASE_MIGRATION_USER',
+    'DATABASE_MIGRATION_PASSWORD',
+    'FRONTEND_URL',
+    'TRUST_PROXY_HOPS',
+    'JWT_ACCESS_SECRET',
+    'JWT_ACCESS_EXPIRES_IN',
+    'REFRESH_TOKEN_EXPIRES_IN_DAYS',
+    'REFRESH_TOKEN_PEPPER',
+    'AUTH_LOGIN_MAX_ATTEMPTS',
+    'AUTH_LOGIN_IP_MAX_ATTEMPTS',
+    'AUTH_LOGIN_MAX_BUCKETS',
+    'AUTH_LOGIN_WINDOW_SECONDS',
+    'INVITATION_TOKEN_KEYS',
+    'INVITATION_TOKEN_CURRENT_VERSION',
+    'INVITATION_INSPECT_IP_MAX_ATTEMPTS',
+    'INVITATION_ACCEPT_IP_MAX_ATTEMPTS',
+    'INVITATION_ACCEPT_USER_IP_MAX_ATTEMPTS',
+    'INVITATION_ACTIVATION_READINESS',
+    'INVITATION_ACTIVATION_IP_MAX_ATTEMPTS',
+    'INVITATION_ACTIVATION_INVITATION_IP_MAX_ATTEMPTS',
+    'INVITATION_ACTIVATION_HASH_CONCURRENCY',
+    'INVITATION_PUBLIC_REPLICA_COUNT',
+  ] as const;
+  const originalEnvironment = new Map<string, string | undefined>();
+  const invitationKeys = new Map([[invitationKeyVersion, invitationKey]]);
   const keyring = {
-    currentVersion: () => 2,
+    currentVersion: () => invitationKeyVersion,
     keyFor: (version: number) => {
       const key = invitationKeys.get(version);
       if (key === undefined) throw new Error('missing test key');
@@ -62,6 +99,10 @@ describe('Invitation acceptance (e2e)', () => {
   };
 
   beforeAll(async () => {
+    for (const name of fixtureEnvironmentNames) {
+      originalEnvironment.set(name, process.env[name]);
+    }
+
     process.env.NODE_ENV = 'test';
     process.env.PORT = '3000';
     process.env.APP_NAME = 'Genesis Platform API';
@@ -88,6 +129,10 @@ describe('Invitation acceptance (e2e)', () => {
     process.env.INVITATION_INSPECT_IP_MAX_ATTEMPTS = '100';
     process.env.INVITATION_ACCEPT_IP_MAX_ATTEMPTS = '100';
     process.env.INVITATION_ACCEPT_USER_IP_MAX_ATTEMPTS = '100';
+    process.env.INVITATION_TOKEN_KEYS = JSON.stringify({
+      [invitationKeyVersion]: invitationKey.toString('base64'),
+    });
+    process.env.INVITATION_TOKEN_CURRENT_VERSION = String(invitationKeyVersion);
     process.env.INVITATION_ACTIVATION_READINESS = 'true';
     process.env.INVITATION_ACTIVATION_IP_MAX_ATTEMPTS = '100';
     process.env.INVITATION_ACTIVATION_INVITATION_IP_MAX_ATTEMPTS = '100';
@@ -205,10 +250,27 @@ describe('Invitation acceptance (e2e)', () => {
   });
 
   afterAll(async () => {
-    if (app !== undefined) await app.close();
-    if (connection?.isInitialized) {
-      await connection.dropDatabase();
-      await connection.destroy();
+    try {
+      if (app !== undefined) await app.close();
+    } finally {
+      try {
+        if (connection?.isInitialized) {
+          try {
+            await connection.dropDatabase();
+          } finally {
+            await connection.destroy();
+          }
+        }
+      } finally {
+        for (const name of fixtureEnvironmentNames) {
+          const value = originalEnvironment.get(name);
+          if (value === undefined) delete process.env[name];
+          else process.env[name] = value;
+        }
+        for (const name of fixtureEnvironmentNames) {
+          expect(process.env[name]).toBe(originalEnvironment.get(name));
+        }
+      }
     }
   });
 
