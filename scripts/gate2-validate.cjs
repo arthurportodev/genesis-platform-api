@@ -60,6 +60,30 @@ function runToFile(command, args, outputPath, options = {}) {
   return entry;
 }
 
+function runExpectedFailure(command, args, options = {}) {
+  const startedAt = Date.now();
+  const result = spawnSync(command, args, {
+    encoding: 'utf8',
+    env: options.env ?? process.env,
+  });
+  process.stdout.write(result.stdout ?? '');
+  process.stderr.write(result.stderr ?? '');
+  const passed = result.status !== 0;
+  const entry = {
+    command: options.displayCommand ?? [command, ...args].join(' '),
+    durationMs: Date.now() - startedAt,
+    status: passed ? 'passed' : 'failed',
+    expectedResult: 'blocked',
+    exitCode: result.status ?? 1,
+  };
+  results.push(entry);
+  console.log(JSON.stringify(entry));
+  if (!passed) {
+    throw Object.assign(new Error(entry.command), { exitCode: 1 });
+  }
+  return entry;
+}
+
 function runNpm(args, options = {}) {
   if (!npmCli) {
     throw Object.assign(new Error('npm_execpath is unavailable.'), {
@@ -83,6 +107,15 @@ try {
   const environmentEvidencePath =
     process.env.ENVIRONMENT_EVIDENCE_PATH ??
     '.codex/task-packets/0.8.2-environment.json';
+  const acceptancePath =
+    process.env.RISK_ACCEPTANCE_PATH ??
+    'security/risk-acceptances/0.8.2-f012.json';
+  const policyEvidencePath =
+    process.env.POLICY_EVIDENCE_PATH ??
+    '.codex/task-packets/0.8.2-vulnerability-policy.json';
+  const publicationPolicyEvidencePath =
+    process.env.PUBLICATION_POLICY_EVIDENCE_PATH ??
+    '.codex/task-packets/0.8.2-vulnerability-policy-publication.json';
   const syft = process.env.SYFT_COMMAND ?? 'syft';
   const grype = process.env.GRYPE_COMMAND ?? 'grype';
   const headSha = spawnSync('git', ['rev-parse', 'HEAD'], {
@@ -131,9 +164,12 @@ try {
   });
   runToFile(
     grype,
-    [candidateImage, '--fail-on', 'high', '--output', 'json'],
+    [candidateImage, '--config', '.grype.yaml', '--output', 'json'],
     scanPath,
-    { displayCommand: 'grype <candidate-image> --fail-on high --output json' },
+    {
+      displayCommand:
+        'grype <candidate-image> --config .grype.yaml --output json',
+    },
   );
   runNpm(['run', 'image:verify'], {
     env: {
@@ -145,6 +181,44 @@ try {
     },
   });
   runNpm(['run', 'environment:evidence:verify', '--', environmentEvidencePath]);
+  run(process.execPath, [
+    'scripts/verify-vulnerability-policy.cjs',
+    '--image',
+    candidateImage,
+    '--sbom',
+    sbomPath,
+    '--scan',
+    scanPath,
+    '--acceptance',
+    acceptancePath,
+    '--environment-evidence',
+    environmentEvidencePath,
+    '--output',
+    policyEvidencePath,
+    '--mode',
+    'ci-validation',
+  ]);
+  runExpectedFailure(
+    process.execPath,
+    [
+      'scripts/verify-vulnerability-policy.cjs',
+      '--image',
+      candidateImage,
+      '--sbom',
+      sbomPath,
+      '--scan',
+      scanPath,
+      '--acceptance',
+      acceptancePath,
+      '--environment-evidence',
+      environmentEvidencePath,
+      '--output',
+      publicationPolicyEvidencePath,
+      '--mode',
+      'publication',
+    ],
+    { displayCommand: 'verify vulnerability policy --mode publication' },
+  );
   runNpm(['run', 'task:fingerprint', '--', '--json']);
 } catch (error) {
   exitCode = Number(error.exitCode) || 1;

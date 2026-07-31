@@ -6,13 +6,19 @@ const {
   readFileSync,
   writeFileSync,
 } = require('node:fs');
-const { dirname, resolve } = require('node:path');
+const { dirname, join, resolve } = require('node:path');
 const { calculateFingerprint } = require('./task-fingerprint.cjs');
 const {
   validateEnvironmentEvidence,
 } = require('./verify-environment-evidence.cjs');
+const {
+  calculateRuntimeSecuritySubject,
+  stableStringify,
+} = require('./verify-vulnerability-policy.cjs');
 
 const BASE_SHA = 'aedafa41eff756ce0e66ed559e91e0ae2d610847';
+const F012_SOURCE_HEAD = 'c8a58f0fddcdc1523a7387cd0329d66246442868';
+const RISK_ACCEPTANCE_PATH = 'security/risk-acceptances/0.8.2-f012.json';
 const BASE_REFERENCE =
   'gcr.io/distroless/nodejs24-debian13:nonroot-amd64@sha256:b1386d556b478c420927eb212236bfb31be9834a4549850a060a6351f7fff514';
 const BASE_INDEX_DIGEST =
@@ -39,6 +45,7 @@ const REQUIRED_INVARIANTS = [
   'postgres-unavailable',
   'postgres-recovery',
   'dns',
+  'cve-2026-5435-unreachable-runtime',
   'ca-certificates',
   'secret-absence',
   'sigterm',
@@ -47,6 +54,98 @@ const REQUIRED_INVARIANTS = [
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function gitText(args) {
+  const result = spawnSync('git', args, {
+    encoding: 'utf8',
+    env: process.env,
+    timeout: 60_000,
+  });
+  if (result.status !== 0) {
+    throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`);
+  }
+  return result.stdout.trim();
+}
+
+function calculatePortableCandidateIdentity(cwd = process.cwd()) {
+  const tracked = gitText([
+    '-C',
+    cwd,
+    'diff',
+    '--name-only',
+    '--diff-filter=ACMRTUXB',
+    BASE_SHA,
+    '--',
+  ])
+    .split(/\r?\n/u)
+    .filter(Boolean);
+  const untracked = gitText([
+    '-C',
+    cwd,
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+  ])
+    .split(/\r?\n/u)
+    .filter(Boolean);
+  const candidatePaths = [...new Set([...tracked, ...untracked])].sort();
+  const hash = createHash('sha256');
+  hash.update('GENESIS_TASK_CONTENT_FINGERPRINT_V2\0');
+  for (const path of candidatePaths) {
+    const stage = gitText(['-C', cwd, 'ls-files', '--stage', '--', path]);
+    const mode = stage ? stage.split(/\s/u)[0] : '100644';
+    if (!['100644', '100755'].includes(mode)) {
+      throw new Error(`portable candidate path is not a regular file: ${path}`);
+    }
+    const objectId = gitText([
+      '-C',
+      cwd,
+      'hash-object',
+      `--path=${path}`,
+      '--',
+      join(cwd, ...path.split('/')),
+    ]);
+    const content = Buffer.from(objectId, 'ascii');
+    hash.update(Buffer.from(`${path}\0file\0${mode}\0${content.length}\0`));
+    hash.update(content);
+    hash.update('\0');
+  }
+  const contentFingerprint = hash.digest('hex');
+  const candidateId = sha256(
+    `GENESIS_TASK_CANDIDATE_ID_V2\0${stableStringify({
+      taskId: '0.8.2',
+      baseSha: BASE_SHA,
+      contractVersion: '2.0.0',
+      contentFingerprint,
+    })}`,
+  );
+  return { candidateId, candidatePaths, contentFingerprint };
+}
+
+function candidateIdentity() {
+  if (existsSync('.codex/task-manifest.json')) return calculateFingerprint();
+  return calculatePortableCandidateIdentity();
+}
+
+function assertRuntimeInputsUnchanged() {
+  const changed = gitText([
+    'diff',
+    '--name-only',
+    F012_SOURCE_HEAD,
+    '--',
+    'Dockerfile',
+    'package.json',
+    'package-lock.json',
+    'src',
+  ])
+    .split(/\r?\n/u)
+    .filter(Boolean);
+  if (changed.length > 0) {
+    throw new Error(
+      `runtime inputs changed after F-012: ${changed.join(', ')}`,
+    );
+  }
 }
 
 function run(command, args, options = {}) {
@@ -124,7 +223,7 @@ function main() {
     throw new Error('SCAN_PATH must reference the final image scan JSON.');
   }
 
-  const fingerprint = calculateFingerprint();
+  const fingerprint = candidateIdentity();
   const candidateId =
     process.env.EXPECTED_CANDIDATE_ID ?? fingerprint.candidateId;
   const suffix = `${process.pid}-${Date.now()}`;
@@ -138,6 +237,9 @@ function main() {
   let imageInspect;
   let dockerInfo;
   let buildxVersion;
+  const riskAcceptance = JSON.parse(
+    readFileSync(resolve(RISK_ACCEPTANCE_PATH), 'utf8'),
+  );
 
   try {
     const info = docker(['info', '--format', '{{json .}}'], {
@@ -190,6 +292,18 @@ function main() {
       }
     }
     invariants.push(invariant('base-digest', BASE_MANIFEST_DIGEST));
+    const sbom = JSON.parse(readFileSync(resolve(sbomPath), 'utf8'));
+    const runtimeSubject = calculateRuntimeSecuritySubject({
+      imageInspect,
+      sbom,
+      baseDigest: BASE_MANIFEST_DIGEST,
+    });
+    if (runtimeSubject.id !== riskAcceptance.runtimeSecuritySubjectId) {
+      throw new Error(
+        'runtime security subject differs from the accepted subject.',
+      );
+    }
+    assertRuntimeInputsUnchanged();
 
     const history = docker(['history', '--no-trunc', image]);
     commands.push(history.evidence);
@@ -387,6 +501,19 @@ function main() {
       invariant('ca-certificates', 'Debian CA bundle and Node roots present'),
     );
 
+    const processMaps = dockerExec(
+      api,
+      "const fs=require('fs');const maps=fs.readFileSync('/proc/1/maps','utf8');if(maps.includes('libresolv.so.2'))process.exit(1)",
+      'docker exec api <CVE-2026-5435 reachability assertion>',
+    );
+    commands.push(processMaps.evidence);
+    invariants.push(
+      invariant(
+        'cve-2026-5435-unreachable-runtime',
+        `libresolv.so.2=not-loaded; ffi=unchanged; native-addons=unchanged; runtimeSecuritySubjectId=${runtimeSubject.id}; dns=node-dns-promises; runtime-inputs=unchanged`,
+      ),
+    );
+
     const stopPostgres = docker(['stop', '--time', '5', postgres]);
     commands.push(stopPostgres.evidence);
     const unavailable = waitFor('readiness after PostgreSQL loss', () =>
@@ -562,6 +689,9 @@ module.exports = {
   BASE_INDEX_DIGEST,
   BASE_MANIFEST_DIGEST,
   BASE_REFERENCE,
+  F012_SOURCE_HEAD,
   POSTGRES_IMAGE,
   REQUIRED_INVARIANTS,
+  RISK_ACCEPTANCE_PATH,
+  calculatePortableCandidateIdentity,
 };

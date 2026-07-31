@@ -89,7 +89,23 @@ test('keeps pull-request CI strictly non-publishing', () => {
   assert.doesNotMatch(ciWorkflow, /docker\s+(?:image\s+)?push/u);
   assert.doesNotMatch(ciWorkflow, /docker\/login-action/u);
   assert.match(ciWorkflow, /--platform linux\/amd64/u);
-  assert.match(ciWorkflow, /severity-cutoff: high/u);
+  assert.match(ciWorkflow, /fetch-depth: 0/u);
+  assert.match(ciWorkflow, /fail-build: false/u);
+  assert.doesNotMatch(ciWorkflow, /severity-cutoff:/u);
+  const scan = ciWorkflow.indexOf('Scan final image with Grype');
+  const runtime = ciWorkflow.indexOf('Verify hardened Linux runtime');
+  const policy = ciWorkflow.indexOf('Apply vulnerability risk policy');
+  assert.ok(scan > -1 && scan < runtime && runtime < policy);
+  assert.match(ciWorkflow, /--mode ci-validation/u);
+  assert.match(ciWorkflow, /Upload raw scanner evidence\n\s+if: always\(\)/u);
+  assert.match(
+    ciWorkflow,
+    /Preserve immutable image metadata\n\s+if: always\(\)/u,
+  );
+  assert.match(
+    ciWorkflow,
+    /Upload policy and runtime evidence\n\s+if: always\(\)/u,
+  );
 });
 
 test('publishes exactly the scanned image under an immutable SHA tag', () => {
@@ -99,7 +115,21 @@ test('publishes exactly the scanned image under an immutable SHA tag', () => {
   assert.doesNotMatch(publishWorkflow, /:latest/u);
   assert.equal(publishWorkflow.match(/docker buildx build/gu)?.length, 1);
   const scan = publishWorkflow.indexOf('Scan final image with Grype');
+  const policy = publishWorkflow.indexOf(
+    'Apply vulnerability publication policy',
+  );
   const login = publishWorkflow.indexOf('Authenticate to GHCR');
   const push = publishWorkflow.indexOf('docker push');
-  assert.ok(scan > -1 && scan < login && login < push);
+  assert.ok(scan > -1 && scan < policy && policy < login && login < push);
+  assert.match(publishWorkflow, /--mode publication/u);
+  assert.match(publishWorkflow, /fail-build: false/u);
+  assert.doesNotMatch(publishWorkflow, /severity-cutoff:/u);
+  assert.match(
+    publishWorkflow,
+    /Upload raw scanner evidence\n\s+if: always\(\)/u,
+  );
+  assert.match(
+    publishWorkflow,
+    /Preserve immutable image metadata\n\s+if: always\(\)/u,
+  );
 });

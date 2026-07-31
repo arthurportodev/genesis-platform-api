@@ -54,10 +54,17 @@ jobs:
       PRODUCTION_IMAGE: genesis-platform-api:ci
       SBOM_PATH: genesis-platform-api.spdx.json
       SCAN_PATH: grype-report.json
+      IMAGE_METADATA_PATH: production-image-inspect.json
+      ENVIRONMENT_EVIDENCE_PATH: .codex/task-packets/0.8.2-environment.json
+      RISK_ACCEPTANCE_PATH: security/risk-acceptances/0.8.2-f012.json
+      POLICY_EVIDENCE_PATH: .codex/task-packets/0.8.2-vulnerability-policy.json
+      EVIDENCE_HASHES_PATH: .codex/task-packets/0.8.2-evidence.sha256
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -140,12 +147,15 @@ jobs:
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
           image: genesis-platform-api:ci
-          fail-build: true
-          severity-cutoff: high
+          fail-build: false
           only-fixed: false
           output-format: json
           output-file: grype-report.json
           config: .grype.yaml
+
+      - name: Preserve immutable image metadata
+        if: always()
+        run: docker image inspect "$PRODUCTION_IMAGE" > "$IMAGE_METADATA_PATH"
 
       - name: Verify hardened Linux runtime
         run: npm run image:verify
@@ -153,15 +163,49 @@ jobs:
       - name: Verify environmental evidence contract
         run: >-
           npm run environment:evidence:verify --
-          .codex/task-packets/0.8.2-environment.json
+          "$ENVIRONMENT_EVIDENCE_PATH"
 
-      - name: Upload supply-chain and runtime evidence
+      - name: Apply vulnerability risk policy
+        if: always()
+        run: >-
+          node scripts/verify-vulnerability-policy.cjs
+          --image "$PRODUCTION_IMAGE"
+          --sbom "$SBOM_PATH"
+          --scan "$SCAN_PATH"
+          --acceptance "$RISK_ACCEPTANCE_PATH"
+          --environment-evidence "$ENVIRONMENT_EVIDENCE_PATH"
+          --output "$POLICY_EVIDENCE_PATH"
+          --mode ci-validation
+
+      - name: Hash preserved evidence
+        if: always()
+        run: |
+          mkdir -p "$(dirname "$EVIDENCE_HASHES_PATH")"
+          for artifact in "$SBOM_PATH" "$SCAN_PATH" "$IMAGE_METADATA_PATH" "$ENVIRONMENT_EVIDENCE_PATH" "$POLICY_EVIDENCE_PATH"; do
+            if test -f "$artifact"; then sha256sum "$artifact"; fi
+          done > "$EVIDENCE_HASHES_PATH"
+
+      - name: Upload raw scanner evidence
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: production-image-evidence-${{ github.sha }}
+          name: production-image-raw-scan-${{ github.sha }}
           path: |
             genesis-platform-api.spdx.json
             grype-report.json
+            production-image-inspect.json
+            .codex/task-packets/0.8.2-evidence.sha256
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload policy and runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-image-policy-${{ github.sha }}
+          path: |
             .codex/task-packets/0.8.2-environment.json
-          if-no-files-found: error
+            .codex/task-packets/0.8.2-vulnerability-policy.json
+            .codex/task-packets/0.8.2-evidence.sha256
+          if-no-files-found: warn
           retention-days: 30
