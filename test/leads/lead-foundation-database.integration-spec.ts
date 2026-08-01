@@ -48,6 +48,506 @@ interface IngestResult {
   responseStatus: number;
 }
 
+type ExplainPlanNode = Record<string, unknown>;
+
+interface MyActionsPlanContractInput {
+  plan: unknown;
+  indexDefinitions: Record<string, string>;
+  resultLeadIds: string[];
+  expectedLeadIds: string[];
+}
+
+interface InvalidMyActionsPlanScenario {
+  name: string;
+  mutate: (plan: unknown) => void;
+  definitions?: Record<string, string>;
+  resultLeadIds: string[];
+  error: string;
+  plan?: unknown;
+}
+
+const MY_ACTIONS_PENDING_INDEXES = new Set([
+  'idx_lead_next_actions_org_pending_due',
+  'idx_lead_next_actions_org_responsible_pending_due',
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readHttpStatus(value: unknown): number | undefined {
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 100 &&
+    value <= 599
+    ? value
+    : undefined;
+}
+
+function isUnknownReturningFunction(value: unknown): value is () => unknown {
+  return typeof value === 'function';
+}
+
+function exceptionStatus(reason: unknown): number | undefined {
+  if (!isRecord(reason)) return undefined;
+
+  const directStatus = readHttpStatus(reason['status']);
+  if (directStatus !== undefined) return directStatus;
+
+  const directStatusCode = readHttpStatus(reason['statusCode']);
+  if (directStatusCode !== undefined) return directStatusCode;
+
+  const getStatus = reason['getStatus'];
+  if (isUnknownReturningFunction(getStatus)) {
+    try {
+      const methodStatus = readHttpStatus(getStatus.call(reason));
+      if (methodStatus !== undefined) return methodStatus;
+    } catch {
+      return undefined;
+    }
+  }
+
+  const response = reason['response'];
+  if (!isRecord(response)) return undefined;
+  return (
+    readHttpStatus(response['statusCode']) ?? readHttpStatus(response['status'])
+  );
+}
+
+function readOptionalExplainText(
+  value: unknown,
+  field: string,
+): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    throw new Error(`EXPLAIN field ${field} must be a string`);
+  }
+  return value;
+}
+
+function readRequiredExplainText(value: unknown, field: string): string {
+  const text = readOptionalExplainText(value, field);
+  if (text === undefined) {
+    throw new Error(`EXPLAIN field ${field} must be a string`);
+  }
+  return text;
+}
+
+function readOptionalExplainTextArray(
+  value: unknown,
+  field: string,
+): string[] | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new Error(`EXPLAIN field ${field} must be an array of strings`);
+  }
+  const entries: unknown[] = value;
+  const strings: string[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== 'string') {
+      throw new Error(`EXPLAIN field ${field} must be an array of strings`);
+    }
+    strings.push(entry);
+  }
+  return strings;
+}
+
+function collectExplainPlanNodes(value: unknown): ExplainPlanNode[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => collectExplainPlanNodes(entry));
+  }
+  if (!isRecord(value)) return [];
+  const current = Object.prototype.hasOwnProperty.call(value, 'Node Type')
+    ? [value]
+    : [];
+  return [
+    ...current,
+    ...Object.values(value).flatMap((entry) => collectExplainPlanNodes(entry)),
+  ];
+}
+
+function planConditionText(nodes: ExplainPlanNode[]): string {
+  const conditionFields = [
+    'Index Cond',
+    'Recheck Cond',
+    'Filter',
+    'Join Filter',
+    'Hash Cond',
+    'Merge Cond',
+  ];
+  return nodes
+    .flatMap((node) => [
+      ...conditionFields.map(
+        (field) => readOptionalExplainText(node[field], field) ?? '',
+      ),
+      ...(readOptionalExplainTextArray(node['Sort Key'], 'Sort Key') ?? []),
+    ])
+    .map((value) => value.toLowerCase())
+    .join(' ');
+}
+
+function assertMyActionsPlanContract({
+  plan,
+  indexDefinitions,
+  resultLeadIds,
+  expectedLeadIds,
+}: MyActionsPlanContractInput): string[] {
+  const nodes = collectExplainPlanNodes(plan);
+  if (nodes.length === 0)
+    throw new Error('myActions plan is empty or malformed');
+
+  for (const node of nodes) {
+    readRequiredExplainText(node['Node Type'], 'Node Type');
+    readOptionalExplainText(node['Relation Name'], 'Relation Name');
+    readOptionalExplainText(node['Index Name'], 'Index Name');
+    readOptionalExplainText(node['Sort Method'], 'Sort Method');
+    readOptionalExplainText(node['Sort Space Type'], 'Sort Space Type');
+    readOptionalExplainTextArray(node['Sort Key'], 'Sort Key');
+  }
+
+  const leadNextActionNodes = nodes.filter(
+    (node) =>
+      (
+        readOptionalExplainText(node['Relation Name'], 'Relation Name') ?? ''
+      ).toLowerCase() === 'lead_next_actions',
+  );
+  if (
+    leadNextActionNodes.some(
+      (node) =>
+        readRequiredExplainText(
+          node['Node Type'],
+          'Node Type',
+        ).toLowerCase() === 'seq scan',
+    )
+  ) {
+    throw new Error(
+      'myActions plan uses a Sequential Scan on lead_next_actions',
+    );
+  }
+
+  const indexNodeTypes = new Set([
+    'index scan',
+    'index only scan',
+    'bitmap index scan',
+  ]);
+  const indexedAccess = nodes.filter((node) =>
+    indexNodeTypes.has(
+      readRequiredExplainText(node['Node Type'], 'Node Type').toLowerCase(),
+    ),
+  );
+  const actionIndexNames = [
+    ...new Set(
+      indexedAccess
+        .map((node) =>
+          (
+            readOptionalExplainText(node['Index Name'], 'Index Name') ?? ''
+          ).toLowerCase(),
+        )
+        .filter((name) =>
+          (indexDefinitions[name] ?? '')
+            .toLowerCase()
+            .includes('on public.lead_next_actions'),
+        ),
+    ),
+  ];
+  if (actionIndexNames.length === 0) {
+    throw new Error(
+      'myActions plan does not use a relevant pending-action index',
+    );
+  }
+  if (
+    !leadNextActionNodes.some((node) =>
+      new Set(['index scan', 'index only scan', 'bitmap heap scan']).has(
+        readRequiredExplainText(node['Node Type'], 'Node Type').toLowerCase(),
+      ),
+    )
+  ) {
+    throw new Error('myActions plan lacks indexed lead_next_actions access');
+  }
+
+  const conditions = planConditionText(nodes);
+  for (const indexName of actionIndexNames) {
+    const definition = (indexDefinitions[indexName] ?? '').toLowerCase();
+    const pendingIsIndexed = /where\s+\(?status\s*=\s*'pending'/u.test(
+      definition,
+    );
+    const pendingIsFiltered =
+      conditions.includes('status') && conditions.includes('pending');
+    if (
+      !definition.includes('on public.lead_next_actions') ||
+      (!definition.includes('organization_id') &&
+        !definition.includes('lead_id')) ||
+      (!pendingIsIndexed && !pendingIsFiltered)
+    ) {
+      throw new Error(
+        `myActions index is not semantically pending-aware: ${indexName}`,
+      );
+    }
+    if (
+      indexName.includes('_responsible_') &&
+      !definition.includes('responsible_membership_id')
+    ) {
+      throw new Error(
+        `myActions responsible index lacks responsible_membership_id: ${indexName}`,
+      );
+    }
+  }
+
+  if (!conditions.includes('organization_id')) {
+    throw new Error('myActions plan lacks the organization condition');
+  }
+  if (
+    !conditions.includes('responsible_membership_id') ||
+    !conditions.includes('actor')
+  ) {
+    throw new Error('myActions plan lacks the responsible-member condition');
+  }
+  const dueAtIsOrdered = nodes.some(
+    (node) =>
+      readRequiredExplainText(node['Node Type'], 'Node Type').toLowerCase() ===
+        'sort' &&
+      (readOptionalExplainTextArray(node['Sort Key'], 'Sort Key') ?? []).some(
+        (key) => key.toLowerCase().includes('due_at'),
+      ),
+  );
+  const dueAtIsIndexed = actionIndexNames.every((indexName) =>
+    indexDefinitions[indexName]?.toLowerCase().includes('due_at'),
+  );
+  if (!dueAtIsOrdered && !dueAtIsIndexed) {
+    throw new Error('myActions plan lacks due_at ordering or indexed access');
+  }
+  if (
+    nodes.some(
+      (node) =>
+        readRequiredExplainText(
+          node['Node Type'],
+          'Node Type',
+        ).toLowerCase() === 'sort' &&
+        (
+          readOptionalExplainText(node['Sort Space Type'], 'Sort Space Type') ??
+          ''
+        ).toLowerCase() === 'disk',
+    )
+  ) {
+    throw new Error('myActions plan spills its due_at ordering to disk');
+  }
+  if (
+    resultLeadIds.length !== expectedLeadIds.length ||
+    resultLeadIds.some((leadId, index) => leadId !== expectedLeadIds[index])
+  ) {
+    throw new Error('myActions result is not limited to the expected member');
+  }
+  return actionIndexNames;
+}
+
+function syntheticMyActionsPlan(
+  indexName = 'idx_lead_next_actions_org_responsible_pending_due',
+): unknown {
+  return [
+    {
+      'QUERY PLAN': [
+        {
+          Plan: {
+            'Node Type': 'Sort',
+            'Sort Key': ['pending_action.due_at', 'lead.id'],
+            'Sort Method': 'quicksort',
+            'Sort Space Type': 'Memory',
+            Plans: [
+              {
+                'Node Type': 'Nested Loop',
+                'Join Filter':
+                  'pending_action.responsible_membership_id = actor.id',
+                Plans: [
+                  {
+                    'Node Type': 'Index Scan',
+                    'Relation Name': 'lead_next_actions',
+                    'Index Name': indexName,
+                    'Index Cond': 'organization_id = actor.organization_id',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  ];
+}
+
+function semanticIndexDefinition(indexName: string): string {
+  const responsible = indexName.includes('_responsible_')
+    ? ', responsible_membership_id'
+    : '';
+  return `CREATE INDEX ${indexName} ON public.lead_next_actions
+    (organization_id${responsible}, due_at, lead_id)
+    WHERE status = 'pending'`;
+}
+
+describe('myActions EXPLAIN contract', () => {
+  it.each([...MY_ACTIONS_PENDING_INDEXES])(
+    'accepts the semantically valid indexed plan %s',
+    (indexName) => {
+      expect(
+        assertMyActionsPlanContract({
+          plan: syntheticMyActionsPlan(indexName),
+          indexDefinitions: {
+            [indexName]: semanticIndexDefinition(indexName),
+          },
+          resultLeadIds: ['expected-lead'],
+          expectedLeadIds: ['expected-lead'],
+        }),
+      ).toEqual([indexName]);
+    },
+  );
+
+  const invalidPlanScenarios: InvalidMyActionsPlanScenario[] = [
+    {
+      name: 'Sequential Scan',
+      mutate: (plan: unknown) => {
+        const scan = collectExplainPlanNodes(plan).find(
+          (node) => node['Relation Name'] === 'lead_next_actions',
+        );
+        if (scan) {
+          scan['Node Type'] = 'Seq Scan';
+          delete scan['Index Name'];
+        }
+      },
+      definitions: {},
+      resultLeadIds: ['expected-lead'],
+      error: 'Sequential Scan',
+    },
+    {
+      name: 'missing organization',
+      mutate: (plan: unknown) => {
+        const scan = collectExplainPlanNodes(plan).find(
+          (node) => node['Relation Name'] === 'lead_next_actions',
+        );
+        if (scan) scan['Index Cond'] = 'due_at IS NOT NULL';
+      },
+      resultLeadIds: ['expected-lead'],
+      error: 'organization condition',
+    },
+    {
+      name: 'missing responsible',
+      mutate: (plan: unknown) => {
+        const join = collectExplainPlanNodes(plan).find(
+          (node) => node['Node Type'] === 'Nested Loop',
+        );
+        if (join) join['Join Filter'] = 'lead.id = pending_action.lead_id';
+      },
+      resultLeadIds: ['expected-lead'],
+      error: 'responsible-member condition',
+    },
+    {
+      name: 'missing pending',
+      mutate: () => undefined,
+      definitions: {
+        idx_lead_next_actions_org_responsible_pending_due:
+          'CREATE INDEX idx_unscoped ON public.lead_next_actions (organization_id, responsible_membership_id, due_at, lead_id)',
+      },
+      resultLeadIds: ['expected-lead'],
+      error: 'not semantically pending-aware',
+    },
+    {
+      name: 'unrelated index',
+      mutate: (plan: unknown) => {
+        const scan = collectExplainPlanNodes(plan).find(
+          (node) => node['Relation Name'] === 'lead_next_actions',
+        );
+        if (scan) scan['Index Name'] = 'idx_unrelated';
+      },
+      definitions: {
+        idx_unrelated:
+          'CREATE INDEX idx_unrelated ON public.lead_next_actions (created_at)',
+      },
+      resultLeadIds: ['expected-lead'],
+      error: 'not semantically pending-aware',
+    },
+    {
+      name: 'another member result',
+      mutate: () => undefined,
+      resultLeadIds: ['another-member-lead'],
+      error: 'expected member',
+    },
+    {
+      name: 'object-valued textual field',
+      mutate: (plan: unknown) => {
+        const scan = collectExplainPlanNodes(plan).find(
+          (node) => node['Relation Name'] === 'lead_next_actions',
+        );
+        if (scan) scan['Relation Name'] = { unexpected: true };
+      },
+      resultLeadIds: ['expected-lead'],
+      error: 'EXPLAIN field Relation Name must be a string',
+    },
+    {
+      name: 'empty plan',
+      plan: [],
+      mutate: () => undefined,
+      definitions: {},
+      resultLeadIds: ['expected-lead'],
+      error: 'empty or malformed',
+    },
+  ];
+
+  it.each(invalidPlanScenarios)('rejects $name', (scenario) => {
+    const indexName = 'idx_lead_next_actions_org_responsible_pending_due';
+    const plan = scenario.plan ?? syntheticMyActionsPlan(indexName);
+    scenario.mutate(plan);
+    expect(() =>
+      assertMyActionsPlanContract({
+        plan,
+        indexDefinitions: scenario.definitions ?? {
+          [indexName]: semanticIndexDefinition(indexName),
+        },
+        resultLeadIds: scenario.resultLeadIds,
+        expectedLeadIds: ['expected-lead'],
+      }),
+    ).toThrow(scenario.error);
+  });
+});
+
+describe('exceptionStatus HTTP contract', () => {
+  it.each([
+    { name: 'direct status', reason: { status: 403 }, expected: 403 },
+    { name: 'direct statusCode', reason: { statusCode: 404 }, expected: 404 },
+    { name: 'getStatus()', reason: { getStatus: () => 403 }, expected: 403 },
+    {
+      name: 'response.statusCode',
+      reason: { response: { statusCode: 404 } },
+      expected: 404,
+    },
+    {
+      name: 'response.status',
+      reason: { response: { status: 403 } },
+      expected: 403,
+    },
+  ])('extracts $name', ({ reason, expected }) => {
+    expect(exceptionStatus(reason)).toBe(expected);
+  });
+
+  it.each([
+    {
+      name: 'malformed nested object',
+      reason: { response: { statusCode: { value: 403 } } },
+    },
+    {
+      name: 'getStatus returning a string',
+      reason: { getStatus: () => '403' },
+    },
+    { name: 'status outside the HTTP range', reason: { status: 99 } },
+    {
+      name: 'untranslated QueryFailedError',
+      reason: {
+        name: 'QueryFailedError',
+        driverError: { code: '23503', status: 403 },
+      },
+    },
+  ])('rejects $name', ({ reason }) => {
+    expect(exceptionStatus(reason)).toBeUndefined();
+  });
+});
+
 describe('Lead foundation database integration', () => {
   let owner: DataSource;
   let runtime: DataSource;
@@ -619,11 +1119,87 @@ describe('Lead foundation database integration', () => {
     });
     expect(memberVisible.items.map(({ id }) => id)).toEqual([assigned.leadId]);
 
-    const explained = createExplainedReadService();
-    await explained.service.myActions(memberTenant, { limit: 25 });
-    expect(JSON.stringify(explained.plans)).toContain(
-      'idx_lead_next_actions_org_responsible_pending_due',
+    const planOrganizationId = randomUUID();
+    const planUserId = randomUUID();
+    const planMembershipId = randomUUID();
+    await owner.query(
+      `INSERT INTO public.users (id, email, name)
+       VALUES ($1::uuid, 'f018-plan-' || $1::text || '@example.com', 'F018 plan fixture')`,
+      [planUserId],
     );
+    await owner.query(
+      `INSERT INTO public.organizations (id, name, slug, status)
+       VALUES ($1::uuid, 'F018 plan fixture', 'f018-plan-' || $1::text, 'inactive')`,
+      [planOrganizationId],
+    );
+    await owner.query(
+      `INSERT INTO public.memberships
+        (id, user_id, organization_id, role, status)
+       VALUES ($1::uuid, $2::uuid, $3::uuid, 'owner', 'active')`,
+      [planMembershipId, planUserId, planOrganizationId],
+    );
+    await owner.transaction(async (manager) => {
+      await manager.query(
+        `INSERT INTO public.leads
+        (id, organization_id, display_name, primary_phone,
+         responsible_membership_id, created_by_membership_id)
+       SELECT md5($1::text || ':lead:' || sequence::text)::uuid,
+         $1::uuid, 'F018 plan lead ' || sequence::text,
+         '+5577' || lpad(sequence::text, 11, '0'), $2::uuid, $2::uuid
+       FROM generate_series(1, 1000) AS sequence`,
+        [planOrganizationId, planMembershipId],
+      );
+      await manager.query(
+        `INSERT INTO public.lead_commercial_cycles
+        (id, organization_id, lead_id, cycle_number, opening_reason,
+         starting_stage, opened_by_membership_id, opened_at)
+       SELECT md5($1::text || ':cycle:' || sequence::text)::uuid,
+         $1::uuid, md5($1::text || ':lead:' || sequence::text)::uuid,
+         1, 'created', 'new', $2::uuid, transaction_timestamp()
+       FROM generate_series(1, 1000) AS sequence`,
+        [planOrganizationId, planMembershipId],
+      );
+      await manager.query(
+        `INSERT INTO public.lead_next_actions
+        (id, organization_id, lead_id, cycle_id, type, description, due_at,
+         responsible_membership_id, status, created_by_membership_id,
+         created_at, updated_at)
+       SELECT md5($1::text || ':action:' || sequence::text)::uuid,
+         $1::uuid, md5($1::text || ':lead:' || sequence::text)::uuid,
+         md5($1::text || ':cycle:' || sequence::text)::uuid,
+         'call', 'F018 plan action ' || sequence::text,
+         transaction_timestamp() + sequence * interval '1 minute',
+         $2::uuid, 'pending', $2::uuid,
+         transaction_timestamp(), transaction_timestamp()
+       FROM generate_series(1, 1000) AS sequence`,
+        [planOrganizationId, planMembershipId],
+      );
+    });
+    await owner.query('ANALYZE public.lead_next_actions');
+    const explained = createExplainedReadService();
+    const explainedActions = await explained.service.myActions(memberTenant, {
+      limit: 25,
+    });
+    const definitions = await owner.query<
+      Array<{ indexName: string; definition: string }>
+    >(
+      `SELECT indexname AS "indexName", indexdef AS definition
+       FROM pg_indexes
+       WHERE schemaname = 'public' AND tablename = 'lead_next_actions'`,
+    );
+    expect(
+      assertMyActionsPlanContract({
+        plan: explained.plans,
+        indexDefinitions: Object.fromEntries(
+          definitions.map(({ indexName, definition }) => [
+            indexName.toLowerCase(),
+            definition,
+          ]),
+        ),
+        resultLeadIds: explainedActions.items.map(({ id }) => id),
+        expectedLeadIds: [assigned.leadId],
+      }),
+    ).toEqual(expect.arrayContaining([expect.any(String)]));
 
     const myActions = await reads.myActions(memberTenant, { limit: 25 });
     expect(myActions.items.map(({ id }) => id)).toEqual([assigned.leadId]);
@@ -2496,7 +3072,6 @@ describe('Lead foundation database integration', () => {
                 'pending_action.responsible_membership_id = actor.id',
               )
             ) {
-              await runner.query('SET LOCAL enable_seqscan = off');
               plans.push(
                 await runner.query(
                   `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`,
@@ -2569,12 +3144,6 @@ describe('Lead foundation database integration', () => {
     expect(statuses).toContain(
       loser?.status === 'rejected' ? exceptionStatus(loser.reason) : undefined,
     );
-  }
-
-  function exceptionStatus(reason: unknown): number | undefined {
-    if (typeof reason !== 'object' || reason === null) return undefined;
-    const status = (reason as { status?: unknown }).status;
-    return typeof status === 'number' ? status : undefined;
   }
 
   async function databaseNow(): Promise<string> {

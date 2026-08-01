@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/arthurportodev/genesis-platform-api/schemas/production/runtime-security-subject.v2.schema.json",
+  "title": "Genesis portable runtime security subject v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "baseManifestDigest",
+    "platform",
+    "runtimeFilesystemContentId",
+    "functionalPackageInventory",
+    "nodeVersion",
+    "libc6Version",
+    "runtimeFunctionalConfig"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "runtime-security-subject.v2" },
+    "baseManifestDigest": { "$ref": "#/$defs/digest" },
+    "platform": { "const": "linux/amd64" },
+    "runtimeFilesystemContentId": { "$ref": "#/$defs/digest" },
+    "functionalPackageInventory": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type", "version", "purl"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "version": { "type": "string" },
+          "purl": { "type": "string" }
+        }
+      }
+    },
+    "nodeVersion": { "const": "24.18.0" },
+    "libc6Version": { "const": "2.41-12+deb13u3" },
+    "runtimeFunctionalConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "user",
+        "entrypoint",
+        "command",
+        "workingDirectory",
+        "environment",
+        "functionalLabels",
+        "healthcheck",
+        "stopSignal",
+        "exposedPorts",
+        "volumes",
+        "shell",
+        "argsEscaped"
+      ],
+      "properties": {
+        "user": { "type": "string" },
+        "entrypoint": { "$ref": "#/$defs/strings" },
+        "command": { "$ref": "#/$defs/strings" },
+        "workingDirectory": { "type": "string" },
+        "environment": { "$ref": "#/$defs/strings" },
+        "functionalLabels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "org.opencontainers.image.revision",
+                "org.opencontainers.image.created",
+                "org.opencontainers.image.version"
+              ]
+            }
+          }
+        },
+        "healthcheck": { "type": ["object", "null"] },
+        "stopSignal": { "type": "string" },
+        "exposedPorts": { "$ref": "#/$defs/strings" },
+        "volumes": { "$ref": "#/$defs/strings" },
+        "shell": { "$ref": "#/$defs/strings" },
+        "argsEscaped": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "strings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

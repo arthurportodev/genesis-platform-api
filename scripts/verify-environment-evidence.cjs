@@ -2,14 +2,28 @@ const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 const Ajv2020 = require('ajv/dist/2020').default;
 
-const SCHEMA_PATH = 'schemas/production/environment-evidence.v1.schema.json';
+const SCHEMA_PATHS = {
+  'environment-evidence.v1':
+    'schemas/production/environment-evidence.v1.schema.json',
+  'environment-evidence.v2':
+    'schemas/production/environment-evidence.v2.schema.json',
+};
 
 function readJson(path) {
   return JSON.parse(readFileSync(resolve(path), 'utf8'));
 }
 
 function validateEnvironmentEvidence(evidence, options = {}) {
-  const schema = readJson(options.schemaPath ?? SCHEMA_PATH);
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+    throw new Error('environment evidence is missing or is not an object.');
+  }
+  const schemaPath = options.schemaPath ?? SCHEMA_PATHS[evidence.schemaVersion];
+  if (!schemaPath) {
+    throw new Error(
+      `unsupported environment evidence version: ${evidence.schemaVersion}`,
+    );
+  }
+  const schema = readJson(schemaPath);
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   const validate = ajv.compile(schema);
   const failures = [];
@@ -21,6 +35,11 @@ function validateEnvironmentEvidence(evidence, options = {}) {
       ),
     );
   }
+  if (failures.length > 0) {
+    const error = new Error([...new Set(failures)].sort().join('\n'));
+    error.failures = failures;
+    throw error;
+  }
   if (Date.parse(evidence.startedAt) > Date.parse(evidence.completedAt)) {
     failures.push('completedAt precedes startedAt.');
   }
@@ -30,14 +49,24 @@ function validateEnvironmentEvidence(evidence, options = {}) {
         `command completedAt precedes startedAt: ${command.command}`,
       );
     }
-    if (command.exitCode !== 0) {
+    if (evidence.result !== 'failed' && command.exitCode !== 0) {
       failures.push(`command failed: ${command.command}`);
     }
   }
   for (const invariant of evidence.invariants ?? []) {
-    if (invariant.required !== true || invariant.result !== 'passed') {
+    if (
+      evidence.result !== 'failed' &&
+      (invariant.required !== true || invariant.result !== 'passed')
+    ) {
       failures.push(`required invariant did not pass: ${invariant.name}`);
     }
+  }
+  if (
+    evidence.schemaVersion === 'environment-evidence.v2' &&
+    evidence.result === 'failed' &&
+    evidence.failureReasons.length === 0
+  ) {
+    failures.push('failed evidence must contain failureReasons.');
   }
   if (
     evidence.executor?.role === 'verifier' &&
@@ -79,12 +108,14 @@ function main() {
   console.log(
     JSON.stringify({
       command: 'verify-environment-evidence',
-      status: 'passed',
+      status: evidence.result,
       candidateId: evidence.candidateId,
       executor: evidence.executor.id,
       invariants: evidence.invariants.length,
+      failures: evidence.failureReasons?.length ?? 0,
     }),
   );
+  if (evidence.result === 'failed') process.exitCode = 1;
 }
 
 if (require.main === module) {
@@ -96,4 +127,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { SCHEMA_PATH, validateEnvironmentEvidence };
+module.exports = { SCHEMA_PATHS, validateEnvironmentEvidence };

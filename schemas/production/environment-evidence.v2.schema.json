@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/arthurportodev/genesis-platform-api/schemas/production/environment-evidence.v2.schema.json",
+  "title": "Genesis production environment evidence v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "baseSha",
+    "candidateId",
+    "builderExecutorId",
+    "executor",
+    "result",
+    "environment",
+    "baseImage",
+    "candidateImage",
+    "buildInstance",
+    "runtimeSecuritySubject",
+    "runtimeFilesystem",
+    "commands",
+    "artifacts",
+    "invariants",
+    "failedInvariants",
+    "failureReasons",
+    "startedAt",
+    "completedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "environment-evidence.v2" },
+    "taskId": { "const": "0.8.2" },
+    "baseSha": { "$ref": "#/$defs/gitSha" },
+    "candidateId": { "$ref": "#/$defs/hash" },
+    "builderExecutorId": { "type": "string", "minLength": 1 },
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "readOnly", "writeOperations"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["builder", "verifier"] },
+        "readOnly": { "type": "boolean" },
+        "writeOperations": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "result": { "enum": ["passed", "failed"] },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "kernel",
+        "architecture",
+        "dockerVersion",
+        "buildxVersion"
+      ],
+      "properties": {
+        "os": { "enum": ["linux", "unavailable"] },
+        "kernel": { "type": "string", "minLength": 1 },
+        "architecture": { "enum": ["amd64", "unavailable"] },
+        "dockerVersion": { "type": "string", "minLength": 1 },
+        "buildxVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "baseImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "indexDigest", "manifestDigest"],
+      "properties": {
+        "reference": { "type": "string", "minLength": 1 },
+        "indexDigest": { "$ref": "#/$defs/digest" },
+        "manifestDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "candidateImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "imageId", "platform"],
+      "properties": {
+        "reference": { "type": "string", "minLength": 1 },
+        "imageId": { "$ref": "#/$defs/digest" },
+        "platform": { "type": "string", "minLength": 1 }
+      }
+    },
+    "buildInstance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "imageConfigId",
+        "runtimeManifest",
+        "descriptor",
+        "rootfsDiffIds",
+        "ociRevision",
+        "ociCreated",
+        "ociVersion",
+        "sbomSha256",
+        "grypeSha256",
+        "builder",
+        "buildKitVersion"
+      ],
+      "properties": {
+        "imageConfigId": { "$ref": "#/$defs/digest" },
+        "runtimeManifest": { "$ref": "#/$defs/digest" },
+        "descriptor": { "$ref": "#/$defs/digest" },
+        "rootfsDiffIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/digest" }
+        },
+        "ociRevision": { "type": "string" },
+        "ociCreated": { "type": "string" },
+        "ociVersion": { "type": "string" },
+        "sbomSha256": { "$ref": "#/$defs/hash" },
+        "grypeSha256": { "$ref": "#/$defs/hash" },
+        "builder": { "type": "string", "minLength": 1 },
+        "buildKitVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "runtimeSecuritySubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subjectVersion", "expectedId", "actualId", "componentDiff"],
+      "properties": {
+        "subjectVersion": { "const": "runtime-security-subject.v2" },
+        "expectedId": { "$ref": "#/$defs/digest" },
+        "actualId": { "$ref": "#/$defs/digest" },
+        "componentDiff": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "expectedHash", "actualHash", "equivalent"],
+            "properties": {
+              "field": { "type": "string", "minLength": 1 },
+              "expectedHash": { "$ref": "#/$defs/hash" },
+              "actualHash": { "$ref": "#/$defs/hash" },
+              "equivalent": { "const": false }
+            }
+          }
+        }
+      }
+    },
+    "runtimeFilesystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "entryCount", "manifestSha256"],
+      "properties": {
+        "schemaVersion": { "const": "runtime-filesystem-content.v1" },
+        "id": { "$ref": "#/$defs/digest" },
+        "entryCount": { "type": "integer", "minimum": 0 },
+        "manifestSha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "command",
+          "startedAt",
+          "completedAt",
+          "exitCode",
+          "stdoutSha256",
+          "stderrSha256"
+        ],
+        "properties": {
+          "command": { "type": "string", "minLength": 1 },
+          "startedAt": { "$ref": "#/$defs/timestamp" },
+          "completedAt": { "$ref": "#/$defs/timestamp" },
+          "exitCode": { "type": "integer" },
+          "stdoutSha256": { "$ref": "#/$defs/hash" },
+          "stderrSha256": { "$ref": "#/$defs/hash" }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeLogSha256",
+        "sbomSha256",
+        "scanSha256",
+        "runtimeFilesystemSha256"
+      ],
+      "properties": {
+        "runtimeLogSha256": { "$ref": "#/$defs/hash" },
+        "sbomSha256": { "$ref": "#/$defs/hash" },
+        "scanSha256": { "$ref": "#/$defs/hash" },
+        "runtimeFilesystemSha256": { "$ref": "#/$defs/hash" },
+        "sourceEvidenceSha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "required", "result", "evidence"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "required": { "const": true },
+          "result": { "enum": ["passed", "failed"] },
+          "evidence": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "failedInvariants": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "failureReasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "startedAt": { "$ref": "#/$defs/timestamp" },
+    "completedAt": { "$ref": "#/$defs/timestamp" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "gitSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+    }
+  }
+}

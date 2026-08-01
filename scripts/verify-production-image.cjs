@@ -12,13 +12,19 @@ const {
   validateEnvironmentEvidence,
 } = require('./verify-environment-evidence.cjs');
 const {
-  calculateRuntimeSecuritySubject,
+  calculateRuntimeFilesystemContent,
+  calculateRuntimeSecuritySubjectV2,
+  runtimeFilesystemProbeSource,
   stableStringify,
-} = require('./verify-vulnerability-policy.cjs');
+} = require('./runtime-security-subject.cjs');
 
 const BASE_SHA = 'aedafa41eff756ce0e66ed559e91e0ae2d610847';
 const F012_SOURCE_HEAD = 'c8a58f0fddcdc1523a7387cd0329d66246442868';
-const RISK_ACCEPTANCE_PATH = 'security/risk-acceptances/0.8.2-f012.json';
+const RISK_ACCEPTANCE_PATH = 'security/risk-acceptances/0.8.2-f014-v2.json';
+const RISK_PROPOSAL_PATH =
+  'security/risk-acceptances/0.8.2-f014-v2-proposal.json';
+const ZERO_HASH = '0'.repeat(64);
+const ZERO_DIGEST = `sha256:${ZERO_HASH}`;
 const BASE_REFERENCE =
   'gcr.io/distroless/nodejs24-debian13:nonroot-amd64@sha256:b1386d556b478c420927eb212236bfb31be9834a4549850a060a6351f7fff514';
 const BASE_INDEX_DIGEST =
@@ -32,6 +38,8 @@ const REQUIRED_INVARIANTS = [
   'linux-runtime',
   'amd64-image',
   'base-digest',
+  'portable-runtime-security-subject',
+  'image-scan-binding',
   'runtime-files',
   'production-dependencies-only',
   'non-root',
@@ -154,6 +162,7 @@ function run(command, args, options = {}) {
     encoding: 'utf8',
     env: process.env,
     timeout: options.timeout ?? 60_000,
+    maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
   });
   const completedAt = new Date().toISOString();
   const stdout = result.stdout ?? '';
@@ -208,12 +217,34 @@ function invariant(name, evidence) {
   return { name, required: true, result: 'passed', evidence };
 }
 
+function fileSha256(path) {
+  return path && existsSync(resolve(path))
+    ? sha256(readFileSync(resolve(path)))
+    : ZERO_HASH;
+}
+
+function scanImageBindingMatches(imageInspect, scan) {
+  const target = scan?.source?.target;
+  if (!imageInspect?.Id || !target?.imageID) return false;
+  if (imageInspect.Id === target.imageID) return true;
+  const inspectRepoDigests = imageInspect.RepoDigests ?? [];
+  const scanRepoDigests = target.repoDigests ?? [];
+  return (
+    inspectRepoDigests.length > 0 &&
+    scanRepoDigests.length > 0 &&
+    inspectRepoDigests.some((entry) => scanRepoDigests.includes(entry))
+  );
+}
+
 function main() {
   const image =
     process.env.PRODUCTION_IMAGE ?? 'genesis-platform-api:gate2-local';
   const outputPath =
     process.env.ENVIRONMENT_EVIDENCE_PATH ??
     '.codex/task-packets/0.8.2-environment.json';
+  const runtimeFilesystemPath =
+    process.env.RUNTIME_FILESYSTEM_EVIDENCE_PATH ??
+    '.codex/task-packets/0.8.2-runtime-filesystem.json';
   const sbomPath = process.env.SBOM_PATH;
   const scanPath = process.env.SCAN_PATH;
   if (!sbomPath || !existsSync(sbomPath)) {
@@ -237,6 +268,15 @@ function main() {
   let imageInspect;
   let dockerInfo;
   let buildxVersion;
+  let runtimeSubject;
+  let runtimeFilesystem;
+  let runtimeFilesystemSha256 = ZERO_HASH;
+  let scan;
+  const failureReasons = [];
+  const failedInvariants = [];
+  const riskProposal = JSON.parse(
+    readFileSync(resolve(RISK_PROPOSAL_PATH), 'utf8'),
+  );
   const riskAcceptance = JSON.parse(
     readFileSync(resolve(RISK_ACCEPTANCE_PATH), 'utf8'),
   );
@@ -293,14 +333,84 @@ function main() {
     }
     invariants.push(invariant('base-digest', BASE_MANIFEST_DIGEST));
     const sbom = JSON.parse(readFileSync(resolve(sbomPath), 'utf8'));
-    const runtimeSubject = calculateRuntimeSecuritySubject({
+    scan = JSON.parse(readFileSync(resolve(scanPath), 'utf8'));
+    const filesystemProbe = docker(
+      [
+        'run',
+        '--rm',
+        '--entrypoint',
+        RUNTIME_NODE,
+        image,
+        '-e',
+        runtimeFilesystemProbeSource(),
+      ],
+      {
+        displayCommand: 'docker run <runtime filesystem probe>',
+        maxBuffer: 128 * 1024 * 1024,
+      },
+    );
+    commands.push(filesystemProbe.evidence);
+    runtimeFilesystem = calculateRuntimeFilesystemContent(
+      JSON.parse(filesystemProbe.stdout),
+    );
+    const resolvedRuntimeFilesystemPath = resolve(runtimeFilesystemPath);
+    mkdirSync(dirname(resolvedRuntimeFilesystemPath), { recursive: true });
+    writeFileSync(
+      resolvedRuntimeFilesystemPath,
+      `${JSON.stringify(runtimeFilesystem, null, 2)}\n`,
+      { encoding: 'utf8', mode: 0o600 },
+    );
+    runtimeFilesystemSha256 = sha256(
+      readFileSync(resolvedRuntimeFilesystemPath),
+    );
+    runtimeSubject = calculateRuntimeSecuritySubjectV2({
       imageInspect,
       sbom,
       baseDigest: BASE_MANIFEST_DIGEST,
+      runtimeFilesystem,
     });
-    if (runtimeSubject.id !== riskAcceptance.runtimeSecuritySubjectId) {
-      throw new Error(
-        'runtime security subject differs from the accepted subject.',
+    const approvedRuntimeSubjectId =
+      riskAcceptance.approvedRuntimeSecuritySubject.id;
+    if (
+      riskProposal.proposedRuntimeSecuritySubject.id !==
+      approvedRuntimeSubjectId
+    ) {
+      failureReasons.push(
+        'runtime-security-subject-v2-decision-proposal-mismatch',
+      );
+    }
+    if (runtimeSubject.id !== approvedRuntimeSubjectId) {
+      failureReasons.push('runtime-security-subject-v2-approved-mismatch');
+      failedInvariants.push('portable-runtime-security-subject');
+      invariants.push({
+        name: 'portable-runtime-security-subject',
+        required: true,
+        result: 'failed',
+        evidence: `approved=${approvedRuntimeSubjectId};actual=${runtimeSubject.id}`,
+      });
+    } else {
+      invariants.push(
+        invariant(
+          'portable-runtime-security-subject',
+          `approved-subject-match=true;id=${runtimeSubject.id};filesystem=${runtimeFilesystem.id};entries=${runtimeFilesystem.entryCount}`,
+        ),
+      );
+    }
+    if (!scanImageBindingMatches(imageInspect, scan)) {
+      failureReasons.push('scan-image-binding-mismatch');
+      failedInvariants.push('image-scan-binding');
+      invariants.push({
+        name: 'image-scan-binding',
+        required: true,
+        result: 'failed',
+        evidence: `inspect=${imageInspect.Id};scan=${scan?.source?.target?.imageID ?? 'missing'};inspectRepoDigests=${(imageInspect.RepoDigests ?? []).join(',')};scanRepoDigests=${(scan?.source?.target?.repoDigests ?? []).join(',')}`,
+      });
+    } else {
+      invariants.push(
+        invariant(
+          'image-scan-binding',
+          `imageId=${imageInspect.Id};repoDigestsOptional=true`,
+        ),
       );
     }
     assertRuntimeInputsUnchanged();
@@ -584,8 +694,21 @@ function main() {
     );
 
     const completedAt = new Date().toISOString();
+    const sbomSha256 = sha256(readFileSync(resolve(sbomPath)));
+    const scanSha256 = sha256(readFileSync(resolve(scanPath)));
+    const subjectDiff =
+      runtimeSubject.id === approvedRuntimeSubjectId
+        ? []
+        : [
+            {
+              field: 'runtimeSecuritySubjectId',
+              expectedHash: sha256(approvedRuntimeSubjectId),
+              actualHash: sha256(runtimeSubject.id),
+              equivalent: false,
+            },
+          ];
     const evidence = {
-      schemaVersion: 'environment-evidence.v1',
+      schemaVersion: 'environment-evidence.v2',
       taskId: '0.8.2',
       baseSha: BASE_SHA,
       candidateId,
@@ -597,6 +720,7 @@ function main() {
         writeOperations:
           process.env.ENVIRONMENT_EXECUTOR_ROLE === 'verifier' ? 0 : 1,
       },
+      result: failureReasons.length === 0 ? 'passed' : 'failed',
       environment: {
         os: 'linux',
         kernel: dockerInfo.KernelVersion,
@@ -614,11 +738,44 @@ function main() {
         imageId: imageInspect.Id,
         platform: 'linux/amd64',
       },
+      buildInstance: {
+        imageConfigId: imageInspect.Id,
+        runtimeManifest: scan?.source?.target?.manifestDigest ?? ZERO_DIGEST,
+        descriptor:
+          imageInspect.RepoDigests?.[0]?.split('@').at(-1) ?? ZERO_DIGEST,
+        rootfsDiffIds: [...imageInspect.RootFS.Layers],
+        ociRevision:
+          imageInspect.Config.Labels?.['org.opencontainers.image.revision'] ??
+          '',
+        ociCreated:
+          imageInspect.Config.Labels?.['org.opencontainers.image.created'] ??
+          '',
+        ociVersion:
+          imageInspect.Config.Labels?.['org.opencontainers.image.version'] ??
+          '',
+        sbomSha256,
+        grypeSha256: scanSha256,
+        builder: dockerInfo.Name ?? 'docker',
+        buildKitVersion: buildxVersion,
+      },
+      runtimeSecuritySubject: {
+        subjectVersion: 'runtime-security-subject.v2',
+        expectedId: approvedRuntimeSubjectId,
+        actualId: runtimeSubject.id,
+        componentDiff: subjectDiff,
+      },
+      runtimeFilesystem: {
+        schemaVersion: runtimeFilesystem.schemaVersion,
+        id: runtimeFilesystem.id,
+        entryCount: runtimeFilesystem.entryCount,
+        manifestSha256: runtimeFilesystemSha256,
+      },
       commands,
       artifacts: {
         runtimeLogSha256: sha256(runtimeLogs),
-        sbomSha256: sha256(readFileSync(resolve(sbomPath))),
-        scanSha256: sha256(readFileSync(resolve(scanPath))),
+        sbomSha256,
+        scanSha256,
+        runtimeFilesystemSha256,
         ...(process.env.SOURCE_EVIDENCE_PATH
           ? {
               sourceEvidenceSha256: sha256(
@@ -628,6 +785,8 @@ function main() {
           : {}),
       },
       invariants,
+      failedInvariants: [...new Set(failedInvariants)].sort(),
+      failureReasons: [...new Set(failureReasons)].sort(),
       startedAt,
       completedAt,
     };
@@ -653,13 +812,125 @@ function main() {
     console.log(
       JSON.stringify({
         command: 'npm run image:verify',
-        status: 'passed',
+        status: evidence.result,
         candidateId,
         imageId: imageInspect.Id,
+        runtimeSecuritySubjectId: runtimeSubject.id,
         invariants: invariants.length,
+        failures: evidence.failureReasons,
         evidence: outputPath,
       }),
     );
+    if (evidence.result !== 'passed') process.exitCode = 1;
+  } catch (error) {
+    failureReasons.push(`runtime-verifier-failure:${error.message}`);
+    const completedAt = new Date().toISOString();
+    const approvedRuntimeSubjectId =
+      riskAcceptance.approvedRuntimeSecuritySubject.id;
+    const actualRuntimeSubjectId = runtimeSubject?.id ?? ZERO_DIGEST;
+    const evidence = {
+      schemaVersion: 'environment-evidence.v2',
+      taskId: '0.8.2',
+      baseSha: BASE_SHA,
+      candidateId,
+      builderExecutorId: process.env.BUILDER_EXECUTOR_ID ?? 'codex-builder',
+      executor: {
+        id: process.env.ENVIRONMENT_EXECUTOR_ID ?? 'codex-builder',
+        role: process.env.ENVIRONMENT_EXECUTOR_ROLE ?? 'builder',
+        readOnly: process.env.ENVIRONMENT_EXECUTOR_ROLE === 'verifier',
+        writeOperations:
+          process.env.ENVIRONMENT_EXECUTOR_ROLE === 'verifier' ? 0 : 1,
+      },
+      result: 'failed',
+      environment: {
+        os: dockerInfo?.OSType ?? 'unavailable',
+        kernel: dockerInfo?.KernelVersion ?? 'unavailable',
+        architecture:
+          dockerInfo?.Architecture === 'x86_64' ? 'amd64' : 'unavailable',
+        dockerVersion: dockerInfo?.ServerVersion ?? 'unavailable',
+        buildxVersion: buildxVersion ?? 'unavailable',
+      },
+      baseImage: {
+        reference: BASE_REFERENCE,
+        indexDigest: BASE_INDEX_DIGEST,
+        manifestDigest: BASE_MANIFEST_DIGEST,
+      },
+      candidateImage: {
+        reference: image,
+        imageId: imageInspect?.Id ?? ZERO_DIGEST,
+        platform:
+          imageInspect?.Os && imageInspect?.Architecture
+            ? `${imageInspect.Os}/${imageInspect.Architecture}`
+            : 'unavailable',
+      },
+      buildInstance: {
+        imageConfigId: imageInspect?.Id ?? ZERO_DIGEST,
+        runtimeManifest: scan?.source?.target?.manifestDigest ?? ZERO_DIGEST,
+        descriptor:
+          imageInspect?.RepoDigests?.[0]?.split('@').at(-1) ?? ZERO_DIGEST,
+        rootfsDiffIds: [...(imageInspect?.RootFS?.Layers ?? [])],
+        ociRevision:
+          imageInspect?.Config?.Labels?.['org.opencontainers.image.revision'] ??
+          '',
+        ociCreated:
+          imageInspect?.Config?.Labels?.['org.opencontainers.image.created'] ??
+          '',
+        ociVersion:
+          imageInspect?.Config?.Labels?.['org.opencontainers.image.version'] ??
+          '',
+        sbomSha256: fileSha256(sbomPath),
+        grypeSha256: fileSha256(scanPath),
+        builder: dockerInfo?.Name ?? 'unavailable',
+        buildKitVersion: buildxVersion ?? 'unavailable',
+      },
+      runtimeSecuritySubject: {
+        subjectVersion: 'runtime-security-subject.v2',
+        expectedId: approvedRuntimeSubjectId,
+        actualId: actualRuntimeSubjectId,
+        componentDiff:
+          actualRuntimeSubjectId === approvedRuntimeSubjectId
+            ? []
+            : [
+                {
+                  field: 'runtimeSecuritySubjectId',
+                  expectedHash: sha256(approvedRuntimeSubjectId),
+                  actualHash: sha256(actualRuntimeSubjectId),
+                  equivalent: false,
+                },
+              ],
+      },
+      runtimeFilesystem: {
+        schemaVersion: 'runtime-filesystem-content.v1',
+        id: runtimeFilesystem?.id ?? ZERO_DIGEST,
+        entryCount: runtimeFilesystem?.entryCount ?? 0,
+        manifestSha256: runtimeFilesystemSha256,
+      },
+      commands,
+      artifacts: {
+        runtimeLogSha256: sha256(runtimeLogs),
+        sbomSha256: fileSha256(sbomPath),
+        scanSha256: fileSha256(scanPath),
+        runtimeFilesystemSha256,
+      },
+      invariants,
+      failedInvariants: [...new Set(failedInvariants)].sort(),
+      failureReasons: [...new Set(failureReasons)].sort(),
+      startedAt,
+      completedAt,
+    };
+    validateEnvironmentEvidence(evidence, {
+      expectedCandidateId: candidateId,
+      expectedBaseSha: BASE_SHA,
+    });
+    const resolvedOutputPath = resolve(outputPath);
+    mkdirSync(dirname(resolvedOutputPath), { recursive: true });
+    writeFileSync(
+      resolvedOutputPath,
+      `${JSON.stringify(evidence, null, 2)}\n`,
+      { encoding: 'utf8', mode: 0o600 },
+    );
+    console.error(`FAIL: ${error.message}`);
+    process.exitCode = 1;
   } finally {
     docker(['rm', '-f', api], {
       allowFailure: true,
@@ -694,4 +965,5 @@ module.exports = {
   REQUIRED_INVARIANTS,
   RISK_ACCEPTANCE_PATH,
   calculatePortableCandidateIdentity,
+  scanImageBindingMatches,
 };

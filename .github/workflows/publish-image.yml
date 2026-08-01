@@ -25,21 +25,21 @@ jobs:
       attestations: write
 
     env:
+      SOURCE_SHA: ${{ inputs.commit_sha }}
       PRODUCTION_IMAGE: genesis-platform-api:publication-candidate
       SBOM_PATH: genesis-platform-api.spdx.json
       SCAN_PATH: grype-report.json
       IMAGE_METADATA_PATH: production-image-inspect.json
       ENVIRONMENT_EVIDENCE_PATH: .codex/task-packets/0.8.2-environment.json
-      RISK_ACCEPTANCE_PATH: security/risk-acceptances/0.8.2-f012.json
+      RISK_ACCEPTANCE_PATH: security/risk-acceptances/0.8.2-f014-v2.json
       POLICY_EVIDENCE_PATH: .codex/task-packets/0.8.2-vulnerability-policy.json
+      RUNTIME_FILESYSTEM_EVIDENCE_PATH: .codex/task-packets/0.8.2-runtime-filesystem.json
       EVIDENCE_HASHES_PATH: .codex/task-packets/0.8.2-evidence.sha256
 
     steps:
       - name: Validate full commit SHA input
-        env:
-          COMMIT_SHA: ${{ inputs.commit_sha }}
         run: |
-          if [[ ! "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "commit_sha must be a full lowercase commit SHA" >&2
             exit 1
           fi
@@ -47,16 +47,15 @@ jobs:
       - name: Checkout approved commit
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.commit_sha }}
+          ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
 
       - name: Require commit already merged into remote main
-        env:
-          COMMIT_SHA: ${{ inputs.commit_sha }}
         run: |
           git fetch --no-tags origin main
-          test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
-          git merge-base --is-ancestor "$COMMIT_SHA" origin/main
+          git cat-file -e "$SOURCE_SHA^{commit}"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -72,19 +71,17 @@ jobs:
 
       - name: Resolve immutable OCI metadata
         run: |
-          echo "OCI_CREATED=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+          echo "OCI_CREATED=$(git show -s --format=%cI "$SOURCE_SHA")" >> "$GITHUB_ENV"
           echo "OCI_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
 
       - name: Build approved Linux image once
-        env:
-          COMMIT_SHA: ${{ inputs.commit_sha }}
         run: >-
           docker buildx build
           --platform linux/amd64
           --target runtime
           --load
           --tag "$PRODUCTION_IMAGE"
-          --build-arg OCI_REVISION="$COMMIT_SHA"
+          --build-arg OCI_REVISION="$SOURCE_SHA"
           --build-arg OCI_VERSION="$OCI_VERSION"
           --build-arg OCI_CREATED="$OCI_CREATED"
           .
@@ -116,6 +113,7 @@ jobs:
         run: npm run image:verify
 
       - name: Verify environmental evidence contract
+        if: always()
         run: >-
           npm run environment:evidence:verify --
           "$ENVIRONMENT_EVIDENCE_PATH"
@@ -136,7 +134,7 @@ jobs:
         if: always()
         run: |
           mkdir -p "$(dirname "$EVIDENCE_HASHES_PATH")"
-          for artifact in "$SBOM_PATH" "$SCAN_PATH" "$IMAGE_METADATA_PATH" "$ENVIRONMENT_EVIDENCE_PATH" "$POLICY_EVIDENCE_PATH"; do
+          for artifact in "$SBOM_PATH" "$SCAN_PATH" "$IMAGE_METADATA_PATH" "$RUNTIME_FILESYSTEM_EVIDENCE_PATH" "$ENVIRONMENT_EVIDENCE_PATH" "$POLICY_EVIDENCE_PATH"; do
             if test -f "$artifact"; then sha256sum "$artifact"; fi
           done > "$EVIDENCE_HASHES_PATH"
 
@@ -144,7 +142,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: production-image-publication-raw-${{ inputs.commit_sha }}
+          name: production-image-publication-raw-${{ env.SOURCE_SHA }}
           path: |
             genesis-platform-api.spdx.json
             grype-report.json
@@ -157,8 +155,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: production-image-publication-policy-${{ inputs.commit_sha }}
+          name: production-image-publication-policy-${{ env.SOURCE_SHA }}
           path: |
+            .codex/task-packets/0.8.2-runtime-filesystem.json
             .codex/task-packets/0.8.2-environment.json
             .codex/task-packets/0.8.2-vulnerability-policy.json
             .codex/task-packets/0.8.2-evidence.sha256
@@ -174,10 +173,8 @@ jobs:
 
       - name: Publish the exact scanned local image
         id: publish
-        env:
-          COMMIT_SHA: ${{ inputs.commit_sha }}
         run: |
-          IMAGE_REF="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/genesis-platform-api:sha-$COMMIT_SHA"
+          IMAGE_REF="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/genesis-platform-api:sha-$SOURCE_SHA"
           docker tag "$PRODUCTION_IMAGE" "$IMAGE_REF"
           docker push "$IMAGE_REF"
           REPO_DIGEST=$(docker image inspect --format='{{index .RepoDigests 0}}' "$IMAGE_REF")

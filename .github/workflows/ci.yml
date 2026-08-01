@@ -56,8 +56,9 @@ jobs:
       SCAN_PATH: grype-report.json
       IMAGE_METADATA_PATH: production-image-inspect.json
       ENVIRONMENT_EVIDENCE_PATH: .codex/task-packets/0.8.2-environment.json
-      RISK_ACCEPTANCE_PATH: security/risk-acceptances/0.8.2-f012.json
+      RISK_ACCEPTANCE_PATH: security/risk-acceptances/0.8.2-f014-v2.json
       POLICY_EVIDENCE_PATH: .codex/task-packets/0.8.2-vulnerability-policy.json
+      RUNTIME_FILESYSTEM_EVIDENCE_PATH: .codex/task-packets/0.8.2-runtime-filesystem.json
       EVIDENCE_HASHES_PATH: .codex/task-packets/0.8.2-evidence.sha256
 
     steps:
@@ -65,6 +66,30 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+
+      - name: Resolve and verify source SHA
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            SOURCE_SHA="$PR_HEAD_SHA"
+          else
+            SOURCE_SHA="$EVENT_SHA"
+          fi
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source SHA must be a full lowercase commit SHA" >&2
+            exit 1
+          fi
+          git cat-file -e "$SOURCE_SHA^{commit}"
+          CHECKOUT_TREE="$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE="$(git rev-parse "$SOURCE_SHA^{tree}")"
+          if [[ "$CHECKOUT_TREE" != "$SOURCE_TREE" ]]; then
+            echo "checkout tree does not match source SHA tree" >&2
+            exit 1
+          fi
+          echo "SOURCE_SHA=$SOURCE_SHA" >> "$GITHUB_ENV"
+          echo "SOURCE_TREE=$SOURCE_TREE" >> "$GITHUB_ENV"
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -119,7 +144,7 @@ jobs:
 
       - name: Resolve immutable OCI metadata
         run: |
-          echo "OCI_CREATED=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+          echo "OCI_CREATED=$(git show -s --format=%cI "$SOURCE_SHA")" >> "$GITHUB_ENV"
           echo "OCI_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
 
       - name: Build Linux production image without push
@@ -129,7 +154,7 @@ jobs:
           --target runtime
           --load
           --tag "$PRODUCTION_IMAGE"
-          --build-arg OCI_REVISION="$GITHUB_SHA"
+          --build-arg OCI_REVISION="$SOURCE_SHA"
           --build-arg OCI_VERSION="$OCI_VERSION"
           --build-arg OCI_CREATED="$OCI_CREATED"
           .
@@ -161,6 +186,7 @@ jobs:
         run: npm run image:verify
 
       - name: Verify environmental evidence contract
+        if: always()
         run: >-
           npm run environment:evidence:verify --
           "$ENVIRONMENT_EVIDENCE_PATH"
@@ -181,7 +207,7 @@ jobs:
         if: always()
         run: |
           mkdir -p "$(dirname "$EVIDENCE_HASHES_PATH")"
-          for artifact in "$SBOM_PATH" "$SCAN_PATH" "$IMAGE_METADATA_PATH" "$ENVIRONMENT_EVIDENCE_PATH" "$POLICY_EVIDENCE_PATH"; do
+          for artifact in "$SBOM_PATH" "$SCAN_PATH" "$IMAGE_METADATA_PATH" "$RUNTIME_FILESYSTEM_EVIDENCE_PATH" "$ENVIRONMENT_EVIDENCE_PATH" "$POLICY_EVIDENCE_PATH"; do
             if test -f "$artifact"; then sha256sum "$artifact"; fi
           done > "$EVIDENCE_HASHES_PATH"
 
@@ -189,7 +215,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: production-image-raw-scan-${{ github.sha }}
+          name: production-image-raw-scan-${{ env.SOURCE_SHA }}
           path: |
             genesis-platform-api.spdx.json
             grype-report.json
@@ -202,8 +228,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: production-image-policy-${{ github.sha }}
+          name: production-image-policy-${{ env.SOURCE_SHA }}
           path: |
+            .codex/task-packets/0.8.2-runtime-filesystem.json
             .codex/task-packets/0.8.2-environment.json
             .codex/task-packets/0.8.2-vulnerability-policy.json
             .codex/task-packets/0.8.2-evidence.sha256
