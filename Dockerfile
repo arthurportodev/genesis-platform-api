@@ -5,7 +5,7 @@ ARG DISTROLESS_BASE=gcr.io/distroless/nodejs24-debian13:nonroot-amd64@sha256:b13
 
 FROM ${NODE_BUILD_BASE} AS dependencies
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY --chmod=0644 package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --include=dev --no-audit --no-fund
 
@@ -16,7 +16,7 @@ RUN npm run build
 
 FROM ${NODE_BUILD_BASE} AS production-dependencies
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY --chmod=0644 package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev --no-audit --no-fund
 
@@ -40,7 +40,7 @@ ENV NODE_ENV=production \
 
 COPY --from=production-dependencies --chown=65532:65532 /app/node_modules ./node_modules
 COPY --from=build --chown=65532:65532 /app/dist ./dist
-COPY --chown=65532:65532 package.json ./package.json
+COPY --chown=65532:65532 --chmod=0644 package.json ./package.json
 
 USER nonroot
 EXPOSE 3000

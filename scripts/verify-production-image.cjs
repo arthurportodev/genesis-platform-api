@@ -20,9 +20,10 @@ const {
 
 const BASE_SHA = 'aedafa41eff756ce0e66ed559e91e0ae2d610847';
 const F012_SOURCE_HEAD = 'c8a58f0fddcdc1523a7387cd0329d66246442868';
-const RISK_ACCEPTANCE_PATH = 'security/risk-acceptances/0.8.2-f014-v2.json';
+const RISK_ACCEPTANCE_PATH = 'security/risk-acceptances/0.8.2-f020-v2.json';
 const RISK_PROPOSAL_PATH =
   'security/risk-acceptances/0.8.2-f014-v2-proposal.json';
+const F014_APPROVED_DECISION_ID = '0.8.2-f014-subject-v2-migration-2026-07-31';
 const ZERO_HASH = '0'.repeat(64);
 const ZERO_DIGEST = `sha256:${ZERO_HASH}`;
 const BASE_REFERENCE =
@@ -41,6 +42,7 @@ const REQUIRED_INVARIANTS = [
   'portable-runtime-security-subject',
   'image-scan-binding',
   'runtime-files',
+  'runtime-package-json',
   'production-dependencies-only',
   'non-root',
   'read-only-app',
@@ -142,7 +144,6 @@ function assertRuntimeInputsUnchanged() {
     '--name-only',
     F012_SOURCE_HEAD,
     '--',
-    'Dockerfile',
     'package.json',
     'package-lock.json',
     'src',
@@ -234,6 +235,37 @@ function scanImageBindingMatches(imageInspect, scan) {
     scanRepoDigests.length > 0 &&
     inspectRepoDigests.some((entry) => scanRepoDigests.includes(entry))
   );
+}
+
+function evaluateRuntimePackageJsonInvariant(runtimeFilesystem) {
+  const entry = runtimeFilesystem?.entries?.find(
+    (candidate) => candidate.path === 'package.json',
+  );
+  const failures = [];
+  const mode = Number.isInteger(entry?.mode)
+    ? entry.mode.toString(8).padStart(4, '0')
+    : String(entry?.mode ?? 'missing');
+  if (!entry) {
+    failures.push('missing');
+  } else {
+    if (entry.type !== 'file') failures.push(`type=${entry.type}`);
+    if (entry.mode !== 0o644) failures.push(`mode=${mode}`);
+    if (Number.isInteger(entry.mode) && (entry.mode & 0o111) !== 0)
+      failures.push('executable=true');
+    if (entry.uid !== 65532) failures.push(`uid=${entry.uid}`);
+    if (entry.gid !== 65532) failures.push(`gid=${entry.gid}`);
+    if (!Number.isInteger(entry.size) || entry.size <= 0)
+      failures.push(`size=${entry.size}`);
+    if (!/^[a-f0-9]{64}$/u.test(entry.sha256 ?? ''))
+      failures.push('sha256=invalid');
+  }
+  return {
+    passed: failures.length === 0,
+    failures,
+    evidence: entry
+      ? `path=/app/package.json;type=${entry.type};mode=${mode};uid=${entry.uid};gid=${entry.gid};executable=${Number.isInteger(entry.mode) && (entry.mode & 0o111) !== 0};size=${entry.size};sha256=${entry.sha256 ?? 'missing'}`
+      : 'path=/app/package.json;missing=true',
+  };
 }
 
 function main() {
@@ -363,6 +395,22 @@ function main() {
     runtimeFilesystemSha256 = sha256(
       readFileSync(resolvedRuntimeFilesystemPath),
     );
+    const runtimePackageJson =
+      evaluateRuntimePackageJsonInvariant(runtimeFilesystem);
+    if (!runtimePackageJson.passed) {
+      failureReasons.push('runtime-package-json-contract-mismatch');
+      failedInvariants.push('runtime-package-json');
+      invariants.push({
+        name: 'runtime-package-json',
+        required: true,
+        result: 'failed',
+        evidence: `${runtimePackageJson.evidence};failures=${runtimePackageJson.failures.join(',')}`,
+      });
+    } else {
+      invariants.push(
+        invariant('runtime-package-json', runtimePackageJson.evidence),
+      );
+    }
     runtimeSubject = calculateRuntimeSecuritySubjectV2({
       imageInspect,
       sbom,
@@ -371,10 +419,16 @@ function main() {
     });
     const approvedRuntimeSubjectId =
       riskAcceptance.approvedRuntimeSecuritySubject.id;
-    if (
-      riskProposal.proposedRuntimeSecuritySubject.id !==
-      approvedRuntimeSubjectId
-    ) {
+    const proposalSubjectId = riskProposal.proposedRuntimeSecuritySubject.id;
+    const proposalBindingIsValid =
+      (riskAcceptance.decisionType === 'subject-migration' &&
+        proposalSubjectId === approvedRuntimeSubjectId) ||
+      (riskAcceptance.decisionType ===
+        'deterministic-runtime-mode-normalization' &&
+        riskAcceptance.predecessorDecisionId === F014_APPROVED_DECISION_ID &&
+        riskAcceptance.previousApprovedRuntimeSecuritySubject?.id ===
+          proposalSubjectId);
+    if (!proposalBindingIsValid) {
       failureReasons.push(
         'runtime-security-subject-v2-decision-proposal-mismatch',
       );
@@ -965,5 +1019,6 @@ module.exports = {
   REQUIRED_INVARIANTS,
   RISK_ACCEPTANCE_PATH,
   calculatePortableCandidateIdentity,
+  evaluateRuntimePackageJsonInvariant,
   scanImageBindingMatches,
 };

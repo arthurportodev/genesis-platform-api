@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const test = require('node:test');
 const {
+  evaluateRuntimePackageJsonInvariant,
   scanImageBindingMatches,
 } = require('../../scripts/verify-production-image.cjs');
 
@@ -121,6 +122,58 @@ test('enforces the image-owned hardening invariants', () => {
   assert.doesNotMatch(dockerfile, /npm prune/u);
 });
 
+test('normalizes every context package manifest and the final runtime package.json to 0644', () => {
+  const contextCopies = dockerfile.match(
+    /^COPY --chmod=0644 package\.json package-lock\.json \.\/$/gmu,
+  );
+  assert.equal(contextCopies?.length, 2);
+
+  const runtimeStage = dockerfile.slice(
+    dockerfile.indexOf('FROM ${DISTROLESS_BASE} AS runtime'),
+  );
+  const runtimePackageCopies = runtimeStage
+    .split(/\r?\n/u)
+    .filter((line) => /^COPY .*package\.json/u.test(line));
+  assert.deepEqual(runtimePackageCopies, [
+    'COPY --chown=65532:65532 --chmod=0644 package.json ./package.json',
+  ]);
+  assertOrdered(runtimeStage, [
+    'WORKDIR /app',
+    'COPY --chown=65532:65532 --chmod=0644 package.json ./package.json',
+    'USER nonroot',
+  ]);
+  assert.doesNotMatch(runtimeStage, /package\.json.*(?:0755|\+x)/u);
+});
+
+test('requires an exact non-executable 0644 runtime package.json contract', () => {
+  const entry = {
+    path: 'package.json',
+    type: 'file',
+    mode: 0o644,
+    uid: 65532,
+    gid: 65532,
+    size: 3957,
+    sha256: 'a'.repeat(64),
+  };
+  assert.equal(
+    evaluateRuntimePackageJsonInvariant({ entries: [entry] }).passed,
+    true,
+  );
+  for (const mode of [0o755, 0o744, 0o640, 0o664, 0o777]) {
+    const result = evaluateRuntimePackageJsonInvariant({
+      entries: [{ ...entry, mode }],
+    });
+    assert.equal(result.passed, false, `mode ${mode.toString(8)} must fail`);
+    assert.ok(
+      result.failures.includes(`mode=${mode.toString(8).padStart(4, '0')}`),
+    );
+    assert.equal(
+      result.failures.includes('executable=true'),
+      (mode & 0o111) !== 0,
+    );
+  }
+});
+
 test('uses an allowlisted build context', () => {
   assert.match(dockerignore, /^\*\*/mu);
   for (const required of [
@@ -178,7 +231,7 @@ test('binds both workflows exclusively to the approved active V2 decision', () =
   for (const workflow of [ciWorkflow, publishWorkflow]) {
     assert.match(
       workflow,
-      /RISK_ACCEPTANCE_PATH: security\/risk-acceptances\/0\.8\.2-f014-v2\.json/u,
+      /RISK_ACCEPTANCE_PATH: security\/risk-acceptances\/0\.8\.2-f020-v2\.json/u,
     );
     assert.doesNotMatch(
       workflow,
@@ -329,7 +382,7 @@ test('creates the filesystem manifest before evaluating runtime invariants', () 
 test('activates the approved subject while preserving failed evidence and a nonzero exit code', () => {
   assert.match(
     verifyProductionImage,
-    /security\/risk-acceptances\/0\.8\.2-f014-v2\.json/u,
+    /security\/risk-acceptances\/0\.8\.2-f020-v2\.json/u,
   );
   assert.match(
     verifyProductionImage,
@@ -338,6 +391,10 @@ test('activates the approved subject while preserving failed evidence and a nonz
   assert.doesNotMatch(
     verifyProductionImage,
     /failureReasons\.push\('runtime-subject-migration-pending-human-approval'\)/u,
+  );
+  assert.match(
+    verifyProductionImage,
+    /previousApprovedRuntimeSecuritySubject\?\.id[\s\S]*?proposalSubjectId/u,
   );
   assert.match(
     verifyProductionImage,

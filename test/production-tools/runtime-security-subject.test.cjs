@@ -80,6 +80,15 @@ function fixture() {
         size: 3,
         sha256: '2'.repeat(64),
       },
+      {
+        path: 'package.json',
+        type: 'file',
+        mode: 420,
+        uid: 65532,
+        gid: 65532,
+        size: 3957,
+        sha256: '5'.repeat(64),
+      },
     ]),
   };
 }
@@ -262,6 +271,15 @@ test('subject v2 changes for mode, UID, or GID drift', () => {
     replaceFilesystemEntry(changed, 1, changes);
     assert.notEqual(subjectV2(changed), subjectV2(original));
   }
+});
+
+test('subject v2 preserves package.json mode sensitivity instead of normalizing identity', () => {
+  const canonical = fixture();
+  const executable = fixture();
+  replaceFilesystemEntry(executable, 2, { mode: 0o755 });
+  assert.equal(canonical.runtimeFilesystem.entries[2].mode, 0o644);
+  assert.equal(executable.runtimeFilesystem.entries[2].mode, 0o755);
+  assert.notEqual(subjectV2(executable), subjectV2(canonical));
 });
 
 test('subject v2 changes for base digest or architecture drift', () => {

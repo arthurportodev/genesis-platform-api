@@ -56,7 +56,7 @@ jobs:
       SCAN_PATH: grype-report.json
       IMAGE_METADATA_PATH: production-image-inspect.json
       ENVIRONMENT_EVIDENCE_PATH: .codex/task-packets/0.8.2-environment.json
-      RISK_ACCEPTANCE_PATH: security/risk-acceptances/0.8.2-f014-v2.json
+      RISK_ACCEPTANCE_PATH: security/risk-acceptances/0.8.2-f020-v2.json
       POLICY_EVIDENCE_PATH: .codex/task-packets/0.8.2-vulnerability-policy.json
       RUNTIME_FILESYSTEM_EVIDENCE_PATH: .codex/task-packets/0.8.2-runtime-filesystem.json
       EVIDENCE_HASHES_PATH: .codex/task-packets/0.8.2-evidence.sha256
