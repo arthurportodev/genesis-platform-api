@@ -1,4 +1,10 @@
-import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { HealthResponse, HealthService } from './health.service';
 
 @Controller('health')
@@ -6,10 +12,25 @@ export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
   @Get()
-  async check(): Promise<HealthResponse> {
-    const result = await this.healthService.check();
+  @Header('Cache-Control', 'no-store')
+  async compatibilityReadiness(): Promise<HealthResponse> {
+    return this.ready();
+  }
 
-    if (result.status === 'error') {
+  @Get('live')
+  @Header('Cache-Control', 'no-store')
+  live(): HealthResponse {
+    return this.requireAvailable(this.healthService.checkLiveness());
+  }
+
+  @Get('ready')
+  @Header('Cache-Control', 'no-store')
+  async ready(): Promise<HealthResponse> {
+    return this.requireAvailable(await this.healthService.checkReadiness());
+  }
+
+  private requireAvailable(result: HealthResponse): HealthResponse {
+    if (result.status === 'unavailable') {
       throw new HttpException(result, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
