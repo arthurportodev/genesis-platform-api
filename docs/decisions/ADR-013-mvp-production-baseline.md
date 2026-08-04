@@ -71,9 +71,10 @@ São obrigatórios:
 
 ### Runtime health
 
-O runtime health foi implementado no commit local
-`c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, ainda sem push, Pull Request ou
-merge na `main`.
+O runtime health foi implementado no commit
+`c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e está publicado com a rebaseline
+documental do commit `696085f6a3d9a89ad985e4da210ea2a97a70062b` no PR draft
+#29. Os dois commits ainda não estão na `main`.
 
 - lifecycle monotônico `starting → ready → draining → stopped`;
 - liveness independente do PostgreSQL;
@@ -120,7 +121,7 @@ ser revista quando usuários, dados e receita crescerem.
 
 ## Implementação
 
-O runtime health está implementado somente no commit local identificado acima.
-Os demais componentes seguem a sequência `0.8-MVP-02`–`0.8-MVP-09`; cada delta
-exige seu próprio escopo e validação. Este ADR não publica infraestrutura, não
-autoriza dados reais e não incorpora o commit técnico à `main`.
+O runtime health e a documentação estão publicados no PR draft #29 nos commits
+identificados acima, ainda sem incorporação à `main`. Os demais componentes
+seguem a sequência `0.8-MVP-02`–`0.8-MVP-09`; cada delta exige seu próprio escopo
+e validação. Este ADR não publica infraestrutura e não autoriza dados reais.

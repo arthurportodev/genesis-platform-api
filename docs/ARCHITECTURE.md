@@ -50,8 +50,9 @@ são **PENDING HUMAN DECISION**. Detalhes operacionais estão em
 
 ## Runtime health
 
-O commit local `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, ainda sem push,
-Pull Request ou merge, implementa o lifecycle monotônico:
+O commit técnico `c2e39cee2ea05f6e0a23edd150268024b2ebe94c` está publicado no
+PR draft #29, mas ainda não foi incorporado à `main`. Ele implementa o
+lifecycle monotônico:
 
 ```text
 starting → ready → draining → stopped

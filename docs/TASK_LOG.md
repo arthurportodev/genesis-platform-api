@@ -398,8 +398,8 @@ explícita após os hooks e recebeu regressão focal.
 O candidato corrigido passou por code review, testes focais e regressivos e
 verificação independente autocontida, com cobertura 9/9, prova de shutdown de
 processo e zero finding remanescente. A implementação foi registrada no commit
-local `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, sem push, Pull Request ou
-merge na `main`.
+`c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e depois publicada com a rebaseline
+documental no PR draft #29; ambos os commits ainda não estão na `main`.
 
 ## 0.8-MVP-02 — Rebaseline documental de produção
 
@@ -407,3 +407,13 @@ merge na `main`.
 ADR-013, marcar o ADR-011 como superseded, substituir a antiga autoridade
 operacional e registrar a nova sequência linear `0.8-MVP`. Não inclui código,
 Docker, infraestrutura, remoto, publicação ou dados reais.
+
+## 0.8-MVP-02.1 — Reconciliação do contrato documental da CI
+
+**Em andamento no PR draft #29.** A branch `agent/0.8-mvp-production` foi
+publicada com os commits de runtime health e rebaseline documental. A execução
+de CI `30867100158` falhou em `test:task-tools` porque a rebaseline removeu
+acidentalmente o registro conceitual do operador remoto. A correção o restaura
+somente como backlog futuro, sujeito a tarefa própria e autorização humana
+separada, e não como requisito do primeiro MVP. Nenhum deploy foi executado e
+nenhum dado real está autorizado.

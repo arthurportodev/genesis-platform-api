@@ -33,16 +33,21 @@ experimento é promovido automaticamente para o MVP.
 
 ## 0.8-MVP — Primeira produção 🚧
 
-### Concluído localmente
+### Implementado e publicado no PR draft
 
 - ✅ `0.8-MVP-01` — Runtime health.
-  - implementação concluída no commit local
+  - implementação concluída no commit
     `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`;
-  - ainda sem push, Pull Request ou merge na `main`.
+  - publicado no PR draft #29 com a rebaseline documental do commit
+    `696085f6a3d9a89ad985e4da210ea2a97a70062b`;
+  - ainda não incorporado à `main`; a correção do contrato documental da CI
+    está em andamento.
 
 ### Tarefa atual
 
 - 🚧 `0.8-MVP-02` — Rebaseline documental de produção.
+  - publicada no PR draft #29 e pendente da conclusão da CI;
+  - correção atual: `0.8-MVP-02.1` — Reconciliação do contrato documental da CI.
 
 ### Próximos deltas planejados
 

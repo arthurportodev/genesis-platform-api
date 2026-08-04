@@ -17,11 +17,12 @@ Organizations.
 A Fase `0.7` foi concluída no frontend oficial até a criação manual de Leads
 (`0.7.6`, PR #7, squash
 `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`). A fase atual é `0.8-MVP`. O
-runtime health foi concluído no commit local
-`c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, ainda sem push, Pull Request ou
-merge na `main`; `0.8-MVP-02` restabelece agora a baseline documental da
-primeira produção. Nenhuma infraestrutura foi publicada e dados reais não
-estão autorizados.
+runtime health no commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e a
+rebaseline documental no commit `696085f6a3d9a89ad985e4da210ea2a97a70062b`
+estão publicados no PR draft #29, mas ainda não foram incorporados à `main`. A
+primeira CI do PR encontrou uma divergência no contrato documental das task
+tools, agora tratada pela `0.8-MVP-02.1`. Nenhuma infraestrutura foi publicada
+e dados reais não estão autorizados.
 
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge

@@ -41,17 +41,19 @@ infraestrutura definitiva. A baseline aceita usa Vercel + proxy same-origin
 `/api/v1` + origem HTTPS protegida + Traefik + uma API NestJS + PostgreSQL 17
 privado em uma VPS Hostinger KVM 2 dedicada (2 vCPU, 8 GB RAM e 100 GB NVMe).
 
-O runtime health foi concluído no commit local
-`c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, ainda sem push, Pull Request ou
-merge. A VPS Hostinger KVM 2 já foi contratada e é o destino previsto, mas seu
-inventário, configuração e adequação à topologia do MVP ainda precisam ser
+O runtime health no commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e a
+rebaseline documental no commit `696085f6a3d9a89ad985e4da210ea2a97a70062b`
+estão publicados no PR draft #29, ainda sem merge na `main`. A CI inicial do PR
+encontrou uma divergência no contrato documental das task tools, agora em
+correção. A VPS Hostinger KVM 2 já foi contratada e é o destino previsto, mas
+seu inventário, configuração e adequação à topologia do MVP ainda precisam ser
 comprovados. O estado de Vercel, DNS, origem, GHCR, banco, secrets, backup,
 restore, monitoramento e deploy permanece pendente de inventário, configuração
 ou validação para esta baseline. A aplicação não está pronta para dados reais.
 
-Preview jamais acessará a API de produção. A tarefa atual é `0.8-MVP-02`,
-Rebaseline documental de produção; a próxima é `0.8-MVP-03`, Container e
-Compose de produção. Consulte [PRODUCTION.md](PRODUCTION.md) e o
+Preview jamais acessará a API de produção. A tarefa atual é `0.8-MVP-02.1`,
+Reconciliação do contrato documental da CI; a próxima é `0.8-MVP-03`, Container
+e Compose de produção. Consulte [PRODUCTION.md](PRODUCTION.md) e o
 [ADR-013](decisions/ADR-013-mvp-production-baseline.md) para a baseline e os
 critérios de prontidão.
 

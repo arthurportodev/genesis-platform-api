@@ -14,14 +14,17 @@ documento; requisitos avançados permanecem no backlog pós-MVP.
 
 ## Estado atual
 
-O runtime health foi implementado no commit local
-`c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, sem push, Pull Request ou merge na
-`main`. A aplicação ainda não foi publicada. A VPS Hostinger KVM 2 já foi
-contratada e é o destino previsto; seu inventário, configuração e adequação à
-topologia do MVP ainda precisam ser comprovados. O estado de DNS, origem,
-Vercel, GHCR, PostgreSQL da aplicação, secrets, backup, restore, monitoramento e
-deploy ainda não foi comprovado, configurado ou validado para esta baseline.
-Nenhum dado real está autorizado.
+O runtime health no commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e a
+rebaseline documental no commit `696085f6a3d9a89ad985e4da210ea2a97a70062b`
+estão publicados no PR draft #29, mas ainda não foram incorporados à `main`. A
+CI inicial do PR, execução `30867100158`, falhou no contrato documental das task
+tools; a correção está em andamento na `0.8-MVP-02.1`. A infraestrutura da
+aplicação ainda não foi publicada. A VPS Hostinger KVM 2 já foi contratada e é
+o destino previsto; seu inventário, configuração e adequação à topologia do MVP
+ainda precisam ser comprovados. O estado de DNS, origem, Vercel, GHCR,
+PostgreSQL da aplicação, secrets, backup, restore, monitoramento e deploy ainda
+não foi comprovado, configurado ou validado para esta baseline. Nenhum dado
+real está autorizado.
 
 O Dockerfile e os arquivos Compose atuais continuam sendo superfícies de
 desenvolvimento e validação; não são a stack de produção aprovada.
@@ -218,6 +221,18 @@ completa, pipeline customizado de supply chain e deploy totalmente automatizado.
 
 Esses controles podem ser promovidos quando adoção, dados, compliance ou risco
 justificarem.
+
+## Operador remoto futuro
+
+O operador remoto continua conceitual e ainda não está implementado. Ele não
+integra a stack mínima, não é requisito para o primeiro MVP e não substitui o
+deploy manual documentado. Qualquer implementação ou execução futura exige
+tarefa própria e autorização humana separada.
+
+Se implementado futuramente, deverá manter um writer por recurso compartilhado
+e produzir `evidence-manifest.v1` com o estado e o resultado da operação.
+Esses controles permanecem no backlog de maturidade e não são gates da
+primeira publicação do MVP.
 
 ## Decisões humanas pendentes
 

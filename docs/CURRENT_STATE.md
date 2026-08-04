@@ -6,17 +6,20 @@
 - **Última tarefa funcional concluída:** 0.7.6 — Criação Manual de Leads
   (repositório `arthurportodev/genesis-platform-web`, PR #7, squash
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`)
-- **Último delta técnico local:** 0.8-MVP-01 — Runtime health, concluído no
-  commit local `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, sem push, Pull
-  Request ou merge na `main`
+- **Candidato do MVP:** os commits de runtime health
+  `c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e rebaseline documental
+  `696085f6a3d9a89ad985e4da210ea2a97a70062b` estão publicados na branch remota
+  `agent/0.8-mvp-production` e no PR draft #29, ainda sem merge na `main`
 - **Última tarefa de governança concluída:** 0.8.1.1 — Evolução do Sistema
   Operacional de Desenvolvimento, incorporada no backend pelo PR #26, squash
   `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
   squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
-- **Tarefa atual:** 0.8-MVP-02 — Rebaseline documental de produção
+- **Tarefa atual:** 0.8-MVP-02.1 — Reconciliação do contrato documental da CI
 - **Próxima tarefa planejada:** 0.8-MVP-03 — Container e Compose de produção
-- **Produção:** aplicação ainda não publicada; nenhum dado real autorizado
-- **CI da `main`:** aprovado
+- **Produção:** infraestrutura ainda não publicada; nenhum dado real autorizado
+- **CI do PR #29:** a execução inicial `30867100158` falhou no contrato
+  documental de `test:task-tools`; correção em andamento nesta tarefa
+- **CI da `main`:** último estado aprovado, sem incorporação deste candidato
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
 
 ## Implementado
@@ -24,10 +27,10 @@
 - Fundação NestJS 11, Node.js 24, TypeScript estrito e API sob `/api/v1`.
 - Configuração validada com Joi, PostgreSQL 17, TypeORM com `synchronize: false`, Docker e health check.
 - Módulos de configuração, banco, health, users, organizations, memberships, auth, auth-sessions, tenant-context e authorization.
-- Runtime health local com estados `starting`, `ready`, `draining` e `stopped`,
+- Runtime health publicado no PR draft #29 com estados `starting`, `ready`,
+  `draining` e `stopped`,
   liveness independente do banco, readiness com `SELECT 1`, shutdown
-  coordenado e respostas sanitizadas; o commit técnico ainda não está na
-  `main`.
+  coordenado e respostas sanitizadas; o commit técnico ainda não está na `main`.
 - Usuários globais, organizações e memberships com papéis `owner`, `admin` e `member`.
 - Autenticação por email e senha, sessões persistidas, refresh rotativo e auditoria.
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
