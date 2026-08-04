@@ -16,13 +16,13 @@ Organizations.
 
 A Fase `0.7` foi concluída no frontend oficial até a criação manual de Leads
 (`0.7.6`, PR #7, squash
-`4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`). A fase atual é `0.8-MVP`. O
-runtime health no commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e a
-rebaseline documental no commit `696085f6a3d9a89ad985e4da210ea2a97a70062b`
-estão publicados no PR draft #29, mas ainda não foram incorporados à `main`. A
-primeira CI do PR encontrou uma divergência no contrato documental das task
-tools, agora tratada pela `0.8-MVP-02.1`. Nenhuma infraestrutura foi publicada
-e dados reais não estão autorizados.
+`4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`). A fase atual é `0.8-MVP`. A
+baseline com `0.8-MVP-01`, `0.8-MVP-02` e `0.8-MVP-02.1` foi incorporada à
+`main` pelo PR #29 no squash
+`5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`; a CI pós-merge `30892867828` foi
+aprovada integralmente. A tarefa atual é `0.8-MVP-03 — Container e Compose de
+produção`, cuja implementação ainda não começou nem foi aprovada. Nenhuma
+infraestrutura foi publicada e dados reais não estão autorizados.
 
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge
@@ -549,6 +549,7 @@ Os módulos de users e organizations não expõem CRUD. Invitations, memberships
 
 ## Próxima tarefa
 
-Depois da rebaseline documental `0.8-MVP-02`, o próximo delta planejado é
-`0.8-MVP-03 — Container e Compose de produção`. Comunicação, automações e
-integrações genéricas continuam futuras e sem escopo automaticamente aprovado.
+A baseline documental foi incorporada à `main`; a tarefa atual é
+`0.8-MVP-03 — Container e Compose de produção`. Esse registro não inicia nem
+aprova sua implementação. Comunicação, automações e integrações genéricas
+continuam futuras e sem escopo automaticamente aprovado.

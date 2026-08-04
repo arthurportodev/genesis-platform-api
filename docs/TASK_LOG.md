@@ -385,7 +385,7 @@ de produção foi autorizada pela criação do workspace.
 
 ## 0.8-MVP-01 — Runtime health
 
-**Concluída localmente.** Implementou lifecycle
+**Concluída e incorporada.** Implementou lifecycle
 `starting → ready → draining → stopped`, liveness independente do PostgreSQL,
 readiness com `SELECT 1`, endpoints públicos e internos sanitizados e shutdown
 coordenado com deadline finito.
@@ -398,22 +398,33 @@ explícita após os hooks e recebeu regressão focal.
 O candidato corrigido passou por code review, testes focais e regressivos e
 verificação independente autocontida, com cobertura 9/9, prova de shutdown de
 processo e zero finding remanescente. A implementação foi registrada no commit
-`c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e depois publicada com a rebaseline
-documental no PR draft #29; ambos os commits ainda não estão na `main`.
+`c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e incorporada à `main` pelo PR #29
+no squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`.
 
 ## 0.8-MVP-02 — Rebaseline documental de produção
 
-**Em andamento.** Tarefa Critical exclusivamente documental para criar o
-ADR-013, marcar o ADR-011 como superseded, substituir a antiga autoridade
-operacional e registrar a nova sequência linear `0.8-MVP`. Não inclui código,
+**Concluída e incorporada.** Tarefa Critical exclusivamente documental que
+criou o ADR-013, marcou o ADR-011 como superseded, substituiu a antiga autoridade
+operacional e registrou a nova sequência linear `0.8-MVP`. Não incluiu código,
 Docker, infraestrutura, remoto, publicação ou dados reais.
 
 ## 0.8-MVP-02.1 — Reconciliação do contrato documental da CI
 
-**Em andamento no PR draft #29.** A branch `agent/0.8-mvp-production` foi
-publicada com os commits de runtime health e rebaseline documental. A execução
-de CI `30867100158` falhou em `test:task-tools` porque a rebaseline removeu
-acidentalmente o registro conceitual do operador remoto. A correção o restaura
-somente como backlog futuro, sujeito a tarefa própria e autorização humana
-separada, e não como requisito do primeiro MVP. Nenhum deploy foi executado e
-nenhum dado real está autorizado.
+**Concluída e incorporada.** A execução inicial de CI `30867100158` falhou em
+`test:task-tools` porque a rebaseline removeu acidentalmente o registro
+conceitual do operador remoto. A correção no commit
+`f94eab1a4f02b520f176ed99b5898b25d2be8d97` o restaurou somente como backlog
+futuro, sujeito a tarefa própria e autorização humana separada, e não como
+requisito do primeiro MVP. A CI do head `30891501079` foi aprovada.
+
+## 0.8-MVP-02.2 — Closeout pós-merge e transição para 0.8-MVP-03
+
+**Closeout documental de 4 de agosto de 2026.** O Gate 3 do PR #29 foi aprovado
+e a baseline com `0.8-MVP-01`, `0.8-MVP-02` e `0.8-MVP-02.1` foi incorporada à
+`main` no squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`. A CI pós-merge
+`30892867828` foi aprovada integralmente. O PR #28 foi superseded pelo PR #29,
+fechado sem merge e preservado apenas como histórico, sem promoção para o MVP.
+
+Nenhum deploy, infraestrutura, imagem ou dado real foi publicado ou autorizado
+por esse merge. A tarefa atual passa a ser `0.8-MVP-03 — Container e Compose de
+produção`; esse registro não inicia nem aprova sua implementação.
