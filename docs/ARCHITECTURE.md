@@ -18,12 +18,15 @@ flowchart LR
     Checks --> Image["Build Docker local"]
 ```
 
-Esse Compose e o Dockerfile atuais servem ao desenvolvimento e à validação;
-não constituem manifests de produção aprovados.
+O runtime health e a baseline arquitetural do MVP estão incorporados à `main`
+pelo PR #29, squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`. Esse
+Compose e o Dockerfile atuais servem ao desenvolvimento e à validação; não
+constituem manifests de produção aprovados.
 
 ## Arquitetura de produção do MVP
 
-A baseline aceita em 3 de agosto de 2026, ainda não publicada, é:
+A baseline aceita em 3 de agosto de 2026 e incorporada à `main` em 4 de agosto
+de 2026 continua planejada, mas ainda não foi publicada operacionalmente:
 
 ```text
 Navegador
@@ -50,9 +53,10 @@ são **PENDING HUMAN DECISION**. Detalhes operacionais estão em
 
 ## Runtime health
 
-O commit técnico `c2e39cee2ea05f6e0a23edd150268024b2ebe94c` está publicado no
-PR draft #29, mas ainda não foi incorporado à `main`. Ele implementa o
-lifecycle monotônico:
+O runtime health do commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c` foi
+incorporado à `main` pelo PR #29 no squash
+`5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`. Ele implementa o lifecycle
+monotônico:
 
 ```text
 starting → ready → draining → stopped
@@ -232,10 +236,11 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
   de Leads; a última incorporação é o squash
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`.
 - **Planejado:** matriz geral de capacidades e demais módulos comerciais.
-- **Implementado localmente em `0.8-MVP-01`:** runtime health e shutdown
-  coordenado no commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, ainda
-  fora da `main`.
-- **Planejado na Fase 0.8-MVP:** container e Compose de produção, CI/GHCR,
+- **Implementado e incorporado em `0.8-MVP-01`:** runtime health e shutdown
+  coordenado no commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, presente
+  na `main` pelo squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`.
+- **Atual na Fase 0.8-MVP, ainda não iniciado:** container e Compose de produção
+  em `0.8-MVP-03`; depois, CI/GHCR,
   Hostinger KVM 2, PostgreSQL privado, Traefik/HTTPS, backup/restore,
   observabilidade básica, Vercel/proxy e abertura controlada.
 - **Fora do estado atual:** integrações externas, deploy e microservices.

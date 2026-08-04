@@ -14,17 +14,16 @@ documento; requisitos avançados permanecem no backlog pós-MVP.
 
 ## Estado atual
 
-O runtime health no commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e a
-rebaseline documental no commit `696085f6a3d9a89ad985e4da210ea2a97a70062b`
-estão publicados no PR draft #29, mas ainda não foram incorporados à `main`. A
-CI inicial do PR, execução `30867100158`, falhou no contrato documental das task
-tools; a correção está em andamento na `0.8-MVP-02.1`. A infraestrutura da
-aplicação ainda não foi publicada. A VPS Hostinger KVM 2 já foi contratada e é
-o destino previsto; seu inventário, configuração e adequação à topologia do MVP
-ainda precisam ser comprovados. O estado de DNS, origem, Vercel, GHCR,
-PostgreSQL da aplicação, secrets, backup, restore, monitoramento e deploy ainda
-não foi comprovado, configurado ou validado para esta baseline. Nenhum dado
-real está autorizado.
+O runtime health e a rebaseline documental foram incorporados à `main` pelo PR
+#29 no squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`. A CI pós-merge
+`30892867828` foi aprovada integralmente. Isso comprova o conteúdo incorporado,
+mas não uma produção operacional: a infraestrutura da aplicação ainda não foi
+publicada e nenhuma imagem foi publicada pelo merge. A VPS Hostinger KVM 2 já
+foi contratada e é o destino previsto; seu inventário, configuração e adequação
+à topologia do MVP ainda precisam ser comprovados. O estado de DNS, origem,
+Vercel, Traefik, GHCR, PostgreSQL da aplicação, secrets, backup, restore,
+monitoramento e deploy ainda não foi comprovado, configurado ou validado para
+esta baseline. Nenhum dado real está autorizado.
 
 O Dockerfile e os arquivos Compose atuais continuam sendo superfícies de
 desenvolvimento e validação; não são a stack de produção aprovada.

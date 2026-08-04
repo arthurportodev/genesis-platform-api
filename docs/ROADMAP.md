@@ -33,25 +33,27 @@ experimento é promovido automaticamente para o MVP.
 
 ## 0.8-MVP — Primeira produção 🚧
 
-### Implementado e publicado no PR draft
+### Concluído e incorporado
 
 - ✅ `0.8-MVP-01` — Runtime health.
   - implementação concluída no commit
     `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`;
-  - publicado no PR draft #29 com a rebaseline documental do commit
-    `696085f6a3d9a89ad985e4da210ea2a97a70062b`;
-  - ainda não incorporado à `main`; a correção do contrato documental da CI
-    está em andamento.
+  - incorporada à `main` pelo PR #29 no squash
+    `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`.
+- ✅ `0.8-MVP-02` — Rebaseline documental de produção.
+  - concluída e incorporada à `main` pelo PR #29.
+- ✅ `0.8-MVP-02.1` — Reconciliação do contrato documental da CI.
+  - concluída no commit `f94eab1a4f02b520f176ed99b5898b25d2be8d97` e
+    incorporada pelo mesmo squash;
+  - CI pós-merge `30892867828` aprovada integralmente.
 
 ### Tarefa atual
 
-- 🚧 `0.8-MVP-02` — Rebaseline documental de produção.
-  - publicada no PR draft #29 e pendente da conclusão da CI;
-  - correção atual: `0.8-MVP-02.1` — Reconciliação do contrato documental da CI.
+- 🚧 `0.8-MVP-03` — Container e Compose de produção.
+  - tarefa atual, ainda não implementada nem aprovada para execução.
 
 ### Próximos deltas planejados
 
-- ⬜ `0.8-MVP-03` — Container e Compose de produção.
 - ⬜ `0.8-MVP-04` — CI essencial, GHCR e imagem identificável.
 - ⬜ `0.8-MVP-05` — VPS, PostgreSQL, secrets e migrations.
 - ⬜ `0.8-MVP-06` — Traefik, HTTPS e exposição controlada da API.

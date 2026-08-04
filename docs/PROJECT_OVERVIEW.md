@@ -22,7 +22,9 @@ Follow-up e métricas sem fragmentar identidade, contexto e autorização.
 
 O backend implementa identidade, multi-tenancy, autenticação, sessões,
 convites, memberships/ownership e o CRM 0.3.1–0.3.4 com intake, Inbox,
-Pipeline, Activities, Notes, Follow-up, filas, detalhe e métricas.
+Pipeline, Activities, Notes, Follow-up, filas, detalhe e métricas. O runtime
+health e a baseline de produção do MVP também estão presentes na `main` desde o
+PR #29, squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`.
 
 O frontend oficial concluiu a Fase `0.7`: sessão e Organization ativa, cliente
 HTTP, Inbox, detalhe, Pipeline, Follow-up, métricas e criação manual de Leads.
@@ -41,19 +43,18 @@ infraestrutura definitiva. A baseline aceita usa Vercel + proxy same-origin
 `/api/v1` + origem HTTPS protegida + Traefik + uma API NestJS + PostgreSQL 17
 privado em uma VPS Hostinger KVM 2 dedicada (2 vCPU, 8 GB RAM e 100 GB NVMe).
 
-O runtime health no commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e a
-rebaseline documental no commit `696085f6a3d9a89ad985e4da210ea2a97a70062b`
-estão publicados no PR draft #29, ainda sem merge na `main`. A CI inicial do PR
-encontrou uma divergência no contrato documental das task tools, agora em
-correção. A VPS Hostinger KVM 2 já foi contratada e é o destino previsto, mas
-seu inventário, configuração e adequação à topologia do MVP ainda precisam ser
-comprovados. O estado de Vercel, DNS, origem, GHCR, banco, secrets, backup,
-restore, monitoramento e deploy permanece pendente de inventário, configuração
-ou validação para esta baseline. A aplicação não está pronta para dados reais.
+O runtime health e a rebaseline documental foram concluídos pelo PR #29; a CI
+pós-merge `30892867828` foi aprovada. A próxima etapa é a tarefa atual
+`0.8-MVP-03 — Container e Compose de produção`, ainda sem implementação
+iniciada ou aprovada. A VPS Hostinger KVM 2 já foi contratada e é o destino
+previsto, mas seu inventário, configuração e adequação à topologia do MVP ainda
+precisam ser comprovados. O estado de Vercel, DNS, origem, GHCR, banco, secrets,
+backup, restore, monitoramento e deploy permanece pendente de inventário,
+configuração ou validação para esta baseline. A infraestrutura real permanece
+pendente e a aplicação não está pronta para dados reais.
 
-Preview jamais acessará a API de produção. A tarefa atual é `0.8-MVP-02.1`,
-Reconciliação do contrato documental da CI; a próxima é `0.8-MVP-03`, Container
-e Compose de produção. Consulte [PRODUCTION.md](PRODUCTION.md) e o
+Preview jamais acessará a API de produção. Consulte
+[PRODUCTION.md](PRODUCTION.md) e o
 [ADR-013](decisions/ADR-013-mvp-production-baseline.md) para a baseline e os
 critérios de prontidão.
 
