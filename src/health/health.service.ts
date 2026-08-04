@@ -1,40 +1,54 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { AppConfig } from '../config/app.config';
+import { RuntimeHealthStateService } from './runtime-health-state.service';
 
 export interface HealthResponse {
-  status: 'ok' | 'error';
-  service: string;
-  version: string;
-  database: 'connected' | 'disconnected';
-  timestamp: string;
+  status: 'ok' | 'unavailable';
 }
+
+export const READINESS_TIMEOUT_MS = 1_500;
 
 @Injectable()
 export class HealthService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly configService: ConfigService,
+    private readonly runtimeState: RuntimeHealthStateService,
   ) {}
 
-  async check(): Promise<HealthResponse> {
-    const app = this.configService.getOrThrow<AppConfig>('app');
-    let database: HealthResponse['database'] = 'connected';
+  checkLiveness(): HealthResponse {
+    return { status: this.runtimeState.isLive() ? 'ok' : 'unavailable' };
+  }
+
+  async checkReadiness(): Promise<HealthResponse> {
+    if (!this.runtimeState.isReady()) return { status: 'unavailable' };
 
     try {
-      await this.dataSource.query('SELECT 1');
+      await this.queryDatabaseWithinDeadline();
     } catch {
-      database = 'disconnected';
+      return { status: 'unavailable' };
     }
 
-    return {
-      status: database === 'connected' ? 'ok' : 'error',
-      service: 'genesis-platform-api',
-      version: app.version,
-      database,
-      timestamp: new Date().toISOString(),
-    };
+    return { status: this.runtimeState.isReady() ? 'ok' : 'unavailable' };
+  }
+
+  private queryDatabaseWithinDeadline(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Readiness deadline exceeded')),
+        READINESS_TIMEOUT_MS,
+      );
+
+      void this.dataSource.query('SELECT 1').then(
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        (error: unknown) => {
+          clearTimeout(timer);
+          reject(error instanceof Error ? error : new Error('Query failed'));
+        },
+      );
+    });
   }
 }

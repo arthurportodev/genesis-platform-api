@@ -366,5 +366,54 @@ squash `bfe7c81fca34f723677e2fe5097598d92f487838`.
   fechamento dos candidatos aprovados.
 - Limites: operador remoto ainda não implementado; sem deploy, infraestrutura,
   banco, migrations, secrets ou mutação de produção.
-- Próxima tarefa: `0.8.2` — Hardening e Imagem de Produção da API, ainda não
-  iniciada.
+- Próxima tarefa registrada à época: `0.8.2` — Hardening e Imagem de Produção
+  da API, ainda não iniciada; essa sequência foi posteriormente superseded.
+
+## Rebaseline da primeira produção do MVP
+
+**Decisão de 3 de agosto de 2026.** A estratégia de produção descrita pelo
+ADR-011 e pela sequência histórica `0.8.2`–`0.8.11` foi superseded por uma
+baseline proporcional ao MVP. O experimento legado, inclusive o PR #28, não é
+fonte para promoção automática de implementação. O ADR-013 passa a registrar a
+decisão vigente.
+
+## Workspace independente da 0.8-MVP
+
+**Criado e validado.** A nova sequência usa workspace e branch independentes,
+sem reutilizar a branch ou os commits do experimento anterior. Nenhuma mutação
+de produção foi autorizada pela criação do workspace.
+
+## 0.8-MVP-01 — Runtime health
+
+**Concluída localmente.** Implementou lifecycle
+`starting → ready → draining → stopped`, liveness independente do PostgreSQL,
+readiness com `SELECT 1`, endpoints públicos e internos sanitizados e shutdown
+coordenado com deadline finito.
+
+O code review identificou o finding bloqueante `MVP-RH-001`: o listener
+customizado podia absorver o segundo sinal emitido pelo Nest e permitir que o
+deadline expirasse após hooks bem-sucedidos. A correção habilitou saída
+explícita após os hooks e recebeu regressão focal.
+
+O candidato corrigido passou por code review, testes focais e regressivos e
+verificação independente autocontida, com cobertura 9/9, prova de shutdown de
+processo e zero finding remanescente. A implementação foi registrada no commit
+`c2e39cee2ea05f6e0a23edd150268024b2ebe94c` e depois publicada com a rebaseline
+documental no PR draft #29; ambos os commits ainda não estão na `main`.
+
+## 0.8-MVP-02 — Rebaseline documental de produção
+
+**Em andamento.** Tarefa Critical exclusivamente documental para criar o
+ADR-013, marcar o ADR-011 como superseded, substituir a antiga autoridade
+operacional e registrar a nova sequência linear `0.8-MVP`. Não inclui código,
+Docker, infraestrutura, remoto, publicação ou dados reais.
+
+## 0.8-MVP-02.1 — Reconciliação do contrato documental da CI
+
+**Em andamento no PR draft #29.** A branch `agent/0.8-mvp-production` foi
+publicada com os commits de runtime health e rebaseline documental. A execução
+de CI `30867100158` falhou em `test:task-tools` porque a rebaseline removeu
+acidentalmente o registro conceitual do operador remoto. A correção o restaura
+somente como backlog futuro, sujeito a tarefa própria e autorização humana
+separada, e não como requisito do primeiro MVP. Nenhum deploy foi executado e
+nenhum dado real está autorizado.
