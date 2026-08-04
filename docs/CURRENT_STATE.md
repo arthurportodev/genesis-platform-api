@@ -1,19 +1,21 @@
 # Estado atual
 
-- **Última atualização:** 2026-07-30
+- **Última atualização:** 2026-08-03
 - **Fase concluída:** 0.7 — Frontend operacional
-- **Fase atual:** 0.8 — Infraestrutura e produção
+- **Fase atual:** 0.8-MVP — Primeira produção mínima viável
 - **Última tarefa funcional concluída:** 0.7.6 — Criação Manual de Leads
   (repositório `arthurportodev/genesis-platform-web`, PR #7, squash
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`)
-- **Gate técnico concluído:** 0.8.0 — Arquitetura e Plano de Produção,
-  estritamente read-only; decisões humanas aprovadas em 30 de julho de 2026
+- **Último delta técnico local:** 0.8-MVP-01 — Runtime health, concluído no
+  commit local `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, sem push, Pull
+  Request ou merge na `main`
 - **Última tarefa de governança concluída:** 0.8.1.1 — Evolução do Sistema
   Operacional de Desenvolvimento, incorporada no backend pelo PR #26, squash
   `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
   squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
-- **Próxima tarefa:** 0.8.2 — Hardening e Imagem de Produção da API, ainda não
-  iniciada e sem autorização de deploy ou mutação de produção.
+- **Tarefa atual:** 0.8-MVP-02 — Rebaseline documental de produção
+- **Próxima tarefa planejada:** 0.8-MVP-03 — Container e Compose de produção
+- **Produção:** aplicação ainda não publicada; nenhum dado real autorizado
 - **CI da `main`:** aprovado
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
 
@@ -22,6 +24,10 @@
 - Fundação NestJS 11, Node.js 24, TypeScript estrito e API sob `/api/v1`.
 - Configuração validada com Joi, PostgreSQL 17, TypeORM com `synchronize: false`, Docker e health check.
 - Módulos de configuração, banco, health, users, organizations, memberships, auth, auth-sessions, tenant-context e authorization.
+- Runtime health local com estados `starting`, `ready`, `draining` e `stopped`,
+  liveness independente do banco, readiness com `SELECT 1`, shutdown
+  coordenado e respostas sanitizadas; o commit técnico ainda não está na
+  `main`.
 - Usuários globais, organizações e memberships com papéis `owner`, `admin` e `member`.
 - Autenticação por email e senha, sessões persistidas, refresh rotativo e auditoria.
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
@@ -94,7 +100,10 @@
 
 ### Endpoints
 
+- `GET /health`
 - `GET /api/v1/health`
+- `GET /api/v1/health/live`
+- `GET /api/v1/health/ready`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/csrf`
 - `POST /api/v1/auth/refresh`
@@ -218,8 +227,12 @@ Consulte os [ADRs](decisions/README.md).
 - Rate limiter é local, não distribuído e perde estado ao reiniciar.
 - Não há política de retenção para sessões e auditoria.
 - Sessão, cliente HTTP, Organization ativa, guards e CRM estão implementados no
-  frontend. Proxy same-origin de produção, projeto Vercel, domínio, DNS,
-  Hetzner, banco de produção, restore, observabilidade e deploy não estão.
+  frontend. A VPS Hostinger KVM 2 já foi contratada e é o destino previsto; seu
+  inventário, configuração operacional e adequação à topologia do MVP ainda
+  precisam ser comprovados.
+- A configuração de produção do proxy same-origin e o estado de Vercel,
+  domínio, DNS, banco, restore, observabilidade e deploy ainda precisam ser
+  inventariados, configurados ou validados para esta baseline.
 - Preview permanece sem API e nunca aponta para produção; staging não será
   criado inicialmente.
 
@@ -230,7 +243,8 @@ Consulte os [ADRs](decisions/README.md).
 - Rotação operacional de segredos.
 - Armazenamento distribuído do rate limiter quando houver múltiplas réplicas.
 - Momento e desenho de uma defesa adicional no banco, como PostgreSQL RLS.
-- Inventário e confirmação da capacidade da VPS para a topologia aprovada.
+- Inventário e confirmação operacional da Hostinger KVM 2 para a topologia
+  aprovada.
 - Provedor de object storage para backups e ferramenta de monitoramento.
 
 ## Fora do escopo atual

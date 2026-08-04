@@ -1,7 +1,8 @@
 # ADR-011 — Arquitetura da primeira produção
 
-- Status: Accepted
+- Status: Superseded
 - Data: 2026-07-30
+- Superseded by: [ADR-013](ADR-013-mvp-production-baseline.md)
 
 ## Contexto
 
@@ -14,6 +15,10 @@ PostgreSQL diretamente.
 O Gate 1 técnico da tarefa `0.8.0` foi estritamente read-only e recomendou uma
 arquitetura com decisões humanas pendentes. O Product Owner aprovou as decisões
 abaixo em 30 de julho de 2026.
+
+Esta decisão foi superseded em 3 de agosto de 2026 pelo ADR-013. O conteúdo
+abaixo permanece como registro histórico da primeira estratégia e não é mais
+autoridade operacional vigente.
 
 ## Decisão
 
@@ -122,10 +127,14 @@ prova prontidão operacional.
 - O [ADR-010](ADR-010-web-session-contract.md) continua definindo sessão web,
   cookies, CSRF, Origin, CORS e bootstrap.
 - O ADR-008 do frontend registra a parte Vercel/same-origin desta decisão.
-- [PRODUCTION.md](../PRODUCTION.md) é o plano operacional e o DAG canônico.
+- O [ADR-013](ADR-013-mvp-production-baseline.md) supersede esta decisão e
+  define a baseline mínima vigente.
+- [PRODUCTION.md](../PRODUCTION.md) é a autoridade operacional atual e não usa
+  mais o DAG registrado neste ADR.
 
 ## Implementação
 
-A decisão será implementada pelas tarefas `0.8.2`–`0.8.11`. A tarefa `0.8.1`
-apenas reconcilia a documentação. Nenhuma parte operacional é declarada pronta
-antes da tarefa, validação e Gate correspondentes.
+A sequência `0.8.2`–`0.8.11` pertence somente ao plano histórico desta decisão
+e não é mais a baseline ativa. Nenhuma implementação, branch ou Pull Request
+da estratégia anterior deve ser promovido automaticamente ao MVP. A execução
+vigente segue o ADR-013 e a sequência `0.8-MVP` documentada no roadmap.

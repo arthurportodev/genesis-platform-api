@@ -4,7 +4,9 @@
 
 A API é um monólito modular NestJS executado em Node.js 24. PostgreSQL 17 é o banco relacional, TypeORM faz o mapeamento e migrations versionadas controlam o schema. Docker empacota a aplicação e o GitHub Actions valida cada Pull Request/push da `main`.
 
-O bootstrap aplica o prefixo `/api/v1`, CORS para a origem configurada, validação com whitelist, serialização, filtro global de exceções, trust proxy por número de saltos e shutdown hooks.
+O bootstrap aplica o prefixo `/api/v1`, CORS para a origem configurada,
+validação com whitelist, serialização, filtro global de exceções, trust proxy
+por número de saltos, runtime health e shutdown coordenado.
 
 ```mermaid
 flowchart LR
@@ -19,40 +21,61 @@ flowchart LR
 Esse Compose e o Dockerfile atuais servem ao desenvolvimento e à validação;
 não constituem manifests de produção aprovados.
 
-## Arquitetura alvo de produção
+## Arquitetura de produção do MVP
 
-A decisão aceita em 30 de julho de 2026, ainda não implementada, é:
+A baseline aceita em 3 de agosto de 2026, ainda não publicada, é:
 
 ```text
 Navegador
-→ app.agenciagenesis.com.br
-→ Vercel
-→ proxy server-side de /api/v1
-→ origin-api.agenciagenesis.com.br
+→ frontend na Vercel em app.<domínio>
+→ proxy same-origin de /api/v1
+→ origem HTTPS protegida em origin-api.<domínio>
 → Traefik
-→ API NestJS (uma réplica pública)
-→ PostgreSQL 17 dedicado na mesma VPS, se o inventário aprovar
+→ uma instância da API NestJS
+→ PostgreSQL 17 em rede privada
 ```
 
-A porta `3000` e o PostgreSQL `5432` não serão publicados. A origem usa HTTPS,
-reconhece somente o proxy esperado e bloqueia bypass. A API runtime usa role
-separada da role temporária de migrations. Secrets ficam em secret files ou
-cofre; o fallback é arquivo root-owned `0600`, fora do Git e da imagem. Imagens
-privadas são identificadas por SHA e digest no GHCR, nunca por `latest` como
-fonte de verdade.
+A infraestrutura inicial prevista é uma VPS Hostinger KVM 2 dedicada, com 2
+vCPU, 8 GB de RAM e 100 GB NVMe. Apenas o Traefik publica a origem; as portas da
+API e do PostgreSQL permanecem privadas. A API runtime usa role separada da
+role de migrations, e secrets ficam fora do Git, frontend, imagem e logs. A
+primeira topologia mantém uma réplica enquanto rate limits e semáforos forem
+process-local.
 
-O banco na mesma VPS é uma decisão inicial condicionada ao inventário de
-capacidade, segurança, armazenamento, backup e conflitos operacionais. Se a VPS
-for insuficiente, VPS separada ou PostgreSQL gerenciado deverão ser
-reavaliados. Detalhes operacionais, DAG e critérios estão em
+O navegador continua usando exclusivamente o proxy same-origin `/api/v1`; não
+há migração silenciosa para chamadas cross-origin diretas. Os domínios finais
+são **PENDING HUMAN DECISION**. Detalhes operacionais estão em
 [PRODUCTION.md](PRODUCTION.md) e no
-[ADR-011](decisions/ADR-011-production-architecture.md).
+[ADR-013](decisions/ADR-013-mvp-production-baseline.md).
+
+## Runtime health
+
+O commit local `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, ainda sem push,
+Pull Request ou merge, implementa o lifecycle monotônico:
+
+```text
+starting → ready → draining → stopped
+```
+
+- `GET /health`: readiness pública para infraestrutura;
+- `GET /api/v1/health`: alias de compatibilidade da readiness;
+- `GET /api/v1/health/live`: liveness independente do PostgreSQL;
+- `GET /api/v1/health/ready`: readiness explícita.
+
+Liveness permanece positiva durante `starting`, `ready` e `draining`, sem
+consultar o banco, e torna-se indisponível em `stopped`. Readiness exige estado
+`ready`, executa somente `SELECT 1` e possui deadline de resposta de 1,5
+segundo; o estado é revalidado após a query. Ao receber `SIGTERM` ou `SIGINT`, o
+runtime entra em `draining`, deixa de aceitar readiness, executa os hooks e
+encerra normalmente; um deadline de 12 segundos termina com erro somente se o
+shutdown não concluir. As respostas são mínimas, sanitizadas e `no-store`.
 
 ## Módulos existentes
 
 - `ConfigurationModule`: carrega e valida ambiente com Joi.
 - `DatabaseModule`: configura TypeORM sem sincronização ou migrations automáticas.
-- `HealthModule`: expõe health check e verifica PostgreSQL com `SELECT 1`.
+- `HealthModule`: mantém o estado de runtime e expõe liveness e readiness; só
+  readiness verifica PostgreSQL com `SELECT 1`.
 - `UsersModule`: registra a entidade global `User`.
 - `OrganizationsModule`: registra `Organization`.
 - `MembershipsModule`: registra o vínculo e o papel por organização.
@@ -208,12 +231,16 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
   de Leads; a última incorporação é o squash
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`.
 - **Planejado:** matriz geral de capacidades e demais módulos comerciais.
-- **Planejado na Fase 0.8:** proxy same-origin de produção, Vercel, origem,
-  domínio, banco, backup/restore, observabilidade, bootstrap e abertura.
+- **Implementado localmente em `0.8-MVP-01`:** runtime health e shutdown
+  coordenado no commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, ainda
+  fora da `main`.
+- **Planejado na Fase 0.8-MVP:** container e Compose de produção, CI/GHCR,
+  Hostinger KVM 2, PostgreSQL privado, Traefik/HTTPS, backup/restore,
+  observabilidade básica, Vercel/proxy e abertura controlada.
 - **Fora do estado atual:** integrações externas, deploy e microservices.
   NestJS permanece o único backend oficial, com backend e frontend em
-  repositórios separados. Vercel e Hetzner são os destinos aprovados do
-  frontend e backend; a decisão ainda não está implementada. Lovable permanece
+  repositórios separados. Vercel e Hostinger KVM 2 são os destinos previstos
+  do frontend e backend; a decisão ainda não foi publicada. Lovable permanece
   apenas ferramenta opcional de exploração e referência visual.
 
 ## Entrega e aceitação de convites

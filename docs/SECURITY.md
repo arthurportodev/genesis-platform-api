@@ -64,6 +64,20 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Strings de metadata são limitadas a 256 caracteres e user agent a 512.
 - O filtro global não devolve detalhes de erros internos; health indisponível não expõe o erro do banco.
 
+## Runtime health
+
+- `GET /api/v1/health/live` não consulta PostgreSQL e revela apenas `ok` ou
+  `unavailable`.
+- `/health`, `/api/v1/health` e `/api/v1/health/ready` compartilham a readiness
+  vinculada ao estado do runtime e a `SELECT 1`.
+- Respostas usam `Cache-Control: no-store` e não expõem versão, topologia,
+  credencial, erro, stack ou causa interna.
+- O deadline de readiness é de 1,5 segundo; ele encerra a decisão HTTP, mas não
+  cancela fisicamente uma query já enviada.
+- Durante shutdown, readiness falha imediatamente, liveness permanece positiva
+  em `draining` e torna-se indisponível em `stopped`. Os hooks possuem deadline
+  de 12 segundos e saída normal quando concluem.
+
 ## Rate limit e proxy
 
 - Há buckets por IP+email normalizado e agregados por IP.
@@ -159,40 +173,56 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   process-local. O nome legado é somente compatibilidade temporária e conflito
   entre ambos falha fechado.
 
+## Baseline obrigatória de produção do MVP
+
+- Toda rota tenant-scoped preserva isolamento entre Organizations; o smoke de
+  abertura inclui caso cross-tenant adversarial.
+- Autenticação, autorização e papéis `owner`, `admin` e `member` permanecem
+  ativos e fail-closed.
+- Secrets ficam fora do Git, frontend, imagem e logs; HTTPS protege todos os
+  hops públicos.
+- Somente o Traefik publica a origem. API e PostgreSQL permanecem em rede
+  privada, sem bind público.
+- PostgreSQL usa persistência, role runtime restrita, role de migrations
+  separada e migrations controladas.
+- Backup e restore testado, logs sanitizados, health, monitoramento básico e
+  rollback são requisitos para dados reais.
+- Vulnerabilidade Critical aplicável bloqueia a abertura até correção ou
+  decisão humana explícita.
+
+A VPS Hostinger KVM 2 já foi contratada e é o destino previsto para uma réplica
+da API. Seu inventário, configuração e adequação à topologia do MVP ainda
+precisam ser comprovados. O frontend na Vercel preserva o proxy same-origin
+`/api/v1`; Preview não recebe a origem de produção. Domínios finais, provedor
+de backup e ferramenta de monitoramento são **PENDING HUMAN DECISION**.
+
+## Controles avançados adiados
+
+Não são bloqueadores automáticos do primeiro MVP: binder multidomínio
+customizado, reconciliação formal de todas as identidades OCI, atomic
+output-set avançado, packages reconstruíveis de alta garantia, verificador
+independente em toda alteração, equivalência Windows/Linux em todo delta,
+banco Grype formalmente selado, SBOM como gate obrigatório, attestations
+avançadas, auditoria criptográfica completa, pipeline customizado de supply
+chain e deploy totalmente automatizado.
+
+Esses controles não são declarados implementados. Eles pertencem ao backlog de
+maturidade e podem ser promovidos conforme adoção, dados, compliance e risco.
+
 ## Limitações e decisões abertas
 
-- O frontend oficial concluiu as tarefas `0.7.1.1`–`0.7.6`, com sessão, access
-  em memória, HTTP, Organization ativa, guards, coordenação entre abas e CRM.
-  A última incorporação é o PR #7, squash
-  `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`.
-- Proxy same-origin de produção, Vercel, domínio, DNS, Hetzner, banco, secrets,
-  backup/restore, observabilidade e deploy ainda não foram implementados.
-  Preview permanece sem API e nunca aponta para produção; staging não será
-  criado inicialmente.
+- O frontend oficial concluiu sessão, access em memória, HTTP, Organization
+  ativa, guards, coordenação entre abas e CRM; a produção ainda não foi
+  publicada.
+- A existência da VPS não comprova os controles de produção: isolamento,
+  firewall, redes, portas, PostgreSQL da aplicação, secrets, backup, restore e
+  monitoramento ainda precisam ser verificados ou configurados nela.
+- A configuração do proxy same-origin de produção e o estado de Vercel,
+  domínio, DNS e deploy ainda precisam ser inventariados ou validados para esta
+  baseline.
 - Não há grace period backend: duas abas que reapresentem o mesmo refresh podem
   acionar reuse detection e revogar a família, conforme a política existente.
-
-## Controles aprovados para produção
-
-A decisão aceita, ainda não implementada, usa uma única réplica pública da API
-atrás de Traefik e da origem HTTPS protegida
-`origin-api.agenciagenesis.com.br`. As portas `3000` e `5432` não serão
-publicadas. Forwarded headers e `TRUST_PROXY_HOPS` serão validados com o caminho
-real, e acesso que contorne o proxy será bloqueado.
-
-A role runtime do PostgreSQL permanece distinta da role temporária de
-migrations. Credenciais de migration não ficam disponíveis ao processo da API.
-Secrets usam secret files ou cofre; o fallback é arquivo root-owned `0600`,
-fora do Git e da imagem. Imagens privadas usam GHCR, SHA e digest imutável;
-`latest` não autoriza deploy ou rollback.
-
-Backups criptografados por `pg_dump --format=custom` serão enviados para
-armazenamento externo à VPS, inicialmente a cada seis horas, com alerta de
-atraso. Snapshot Hetzner é apenas camada adicional. Restore sintético,
-observabilidade, rotação da credencial inicial e smoke cross-tenant são
-obrigatórios antes de dados reais. O provedor de object storage, a ferramenta
-de monitoramento e a capacidade da VPS ainda precisam ser definidos ou
-confirmados.
+- Rate limits e semáforos process-local exigem uma única réplica pública.
 
 ## Segurança da fundação de Leads 0.3.1
 
@@ -232,7 +262,8 @@ confirmados.
 - Timeout de statement é local à transação. Limites de leitura por Membership, IP confiável e um bucket adicional de métricas são process-local e exigem topologia de uma réplica pública.
 
 - Proxy same-origin local e coordenação de refresh entre abas estão
-  implementados no frontend; o proxy de produção pertence à tarefa `0.8.6`.
+  implementados no frontend; o proxy de produção pertence ao delta
+  `0.8-MVP-08`.
   Tokens continuam proibidos em `localStorage`.
 - Rate limiter e semaphore Argon2 não são distribuídos; uma solução compartilhada será necessária antes de múltiplas réplicas públicas.
 - Política de retenção/limpeza de sessões, tokens e auditoria não foi definida.

@@ -16,9 +16,12 @@ Organizations.
 
 A Fase `0.7` foi concluída no frontend oficial até a criação manual de Leads
 (`0.7.6`, PR #7, squash
-`4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`). A Fase `0.8` é a atual e prepara
-a primeira produção; nenhuma infraestrutura foi publicada e a aplicação ainda
-não está autorizada para dados reais.
+`4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`). A fase atual é `0.8-MVP`. O
+runtime health foi concluído no commit local
+`c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, ainda sem push, Pull Request ou
+merge na `main`; `0.8-MVP-02` restabelece agora a baseline documental da
+primeira produção. Nenhuma infraestrutura foi publicada e dados reais não
+estão autorizados.
 
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge
@@ -33,8 +36,10 @@ estarem explícitas e a API pública operar com uma única réplica.
 
 A memória oficial começa em [`docs/START_HERE.md`](docs/START_HERE.md). Consulte
 também o [estado atual](docs/CURRENT_STATE.md), o [roadmap](docs/ROADMAP.md), a
-[arquitetura](docs/ARCHITECTURE.md), o [plano canônico de produção](docs/PRODUCTION.md)
-e os [ADRs](docs/decisions/README.md).
+[arquitetura](docs/ARCHITECTURE.md), a
+[baseline operacional do MVP](docs/PRODUCTION.md), o
+[ADR-013](docs/decisions/ADR-013-mvp-production-baseline.md) e o
+[índice de ADRs](docs/decisions/README.md).
 
 O arquivo [`AGENTS.md`](AGENTS.md) define o protocolo obrigatório de reidratação e continuidade para agentes e desenvolvedores.
 
@@ -144,23 +149,15 @@ Para apagar também os dados locais do PostgreSQL, execute conscientemente `dock
 
 ## Health check
 
-```http
-GET http://localhost:3000/api/v1/health
-```
+- `GET /health`: readiness pública para a infraestrutura.
+- `GET /api/v1/health`: alias de compatibilidade da readiness.
+- `GET /api/v1/health/live`: liveness independente do PostgreSQL.
+- `GET /api/v1/health/ready`: readiness do runtime e do PostgreSQL.
 
-Resposta saudável (`200`):
-
-```json
-{
-  "status": "ok",
-  "service": "genesis-platform-api",
-  "version": "0.1.0",
-  "database": "connected",
-  "timestamp": "2026-07-18T12:00:00.000Z"
-}
-```
-
-Quando o PostgreSQL não responde, o endpoint retorna `503`, `status: "error"` e `database: "disconnected"`, sem expor detalhes internos.
+Sucesso responde `200` com `{"status":"ok"}`. Indisponibilidade responde
+`503` com `{"status":"unavailable"}`. Todas as respostas são mínimas,
+sanitizadas e usam `Cache-Control: no-store`. O contrato completo está na
+[arquitetura](docs/ARCHITECTURE.md).
 
 ## Qualidade e testes
 
@@ -531,7 +528,8 @@ Os módulos de users e organizations não expõem CRUD. Invitations, memberships
 - **TypeORM:** integração nativa com NestJS, driver PostgreSQL maduro e suporte direto a migrations versionadas.
 - **Schema sem sincronização automática:** `synchronize` permanece desabilitado em todos os ambientes; migrations serão a fonte de verdade.
 - **Configuração centralizada:** `@nestjs/config` e Joi validam o ambiente; os consumidores usam `ConfigService`.
-- **Health check explícito:** uma consulta `SELECT 1` confirma a dependência real do PostgreSQL.
+- **Runtime health separado:** liveness não consulta PostgreSQL; readiness
+  executa `SELECT 1` para validar a dependência do banco.
 - **UUID no PostgreSQL:** `gen_random_uuid()` mantém a geração consistente inclusive em inserts fora do TypeORM. A migration habilita `pgcrypto` quando necessário e o rollback não remove a extensão, pois ela pode ser compartilhada.
 - **Exclusão conservadora:** FKs `RESTRICT` impedem que exclusões de user/organization removam silenciosamente memberships ou entidades do outro lado.
 - **Credenciais:** senhas usam Argon2id; refresh tokens usam HMAC-SHA-256 com pepper e rotação transacional.
@@ -548,6 +546,8 @@ Os módulos de users e organizations não expõem CRUD. Invitations, memberships
 - **Porta ocupada:** altere `PORT` no `.env`.
 - **Versão incompatível do Node:** execute `nvm use` ou instale Node 24.
 
-## Próximos módulos previstos
+## Próxima tarefa
 
-A Tarefa 0.2.5 e a Fase 0.2 estão concluídas. A 0.3.1 entregou a fundação e Inbox de Leads; a 0.3.2 implementa localmente pipeline, fechamento, ciclos e retorno para revisão. Atividades, comunicação e integrações genéricas continuam futuras.
+Depois da rebaseline documental `0.8-MVP-02`, o próximo delta planejado é
+`0.8-MVP-03 — Container e Compose de produção`. Comunicação, automações e
+integrações genéricas continuam futuras e sem escopo automaticamente aprovado.
