@@ -41,7 +41,10 @@
     "seed": "npm run prepare:runtime && node dist/database/seeds/initial-tenant.seed.js",
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f api"
+    "docker:logs": "docker compose logs -f api",
+    "production:compose:validate": "node scripts/validate-production-compose.cjs",
+    "test:production": "node --test test/production/*.test.cjs",
+    "format:check:production": "prettier --check compose.production.yml package.json scripts/validate-production-compose.cjs test/production/*.test.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",

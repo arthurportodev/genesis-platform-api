@@ -1,0 +1,135 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:?DATABASE_NAME is required}
+      POSTGRES_USER: ${DATABASE_MIGRATION_USER:?DATABASE_MIGRATION_USER is required}
+      POSTGRES_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:?DATABASE_MIGRATION_PASSWORD is required}
+      DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
+      DATABASE_RUNTIME_PASSWORD: ${DATABASE_RUNTIME_PASSWORD:?DATABASE_RUNTIME_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-runtime-role.sh:/docker-entrypoint-initdb.d/10-runtime-role.sh:ro
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    cpus: ${POSTGRES_CPUS:-1.0}
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-2g}
+    pids_limit: ${POSTGRES_PIDS_LIMIT:-256}
+    logging: &rotating-logs
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+    networks:
+      - database
+
+  migrate:
+    image: ${GENESIS_API_IMAGE:?GENESIS_API_IMAGE is required}
+    restart: 'no'
+    init: true
+    command:
+      [
+        'node',
+        'node_modules/typeorm/cli.js',
+        '-d',
+        'dist/database/data-source.js',
+        'migration:run',
+      ]
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=${MIGRATE_NODE_MAX_OLD_SPACE_MB:-640}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${DATABASE_NAME:?DATABASE_NAME is required}
+      DATABASE_MIGRATION_USER: ${DATABASE_MIGRATION_USER:?DATABASE_MIGRATION_USER is required}
+      DATABASE_MIGRATION_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:?DATABASE_MIGRATION_PASSWORD is required}
+      DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cpus: ${MIGRATE_CPUS:-0.75}
+    mem_limit: ${MIGRATE_MEMORY_LIMIT:-1g}
+    pids_limit: ${MIGRATE_PIDS_LIMIT:-128}
+    logging: *rotating-logs
+    networks:
+      - database
+
+  api:
+    image: ${GENESIS_API_IMAGE:?GENESIS_API_IMAGE is required}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=${API_NODE_MAX_OLD_SPACE_MB:-640}
+      PORT: 3000
+      APP_NAME: ${APP_NAME:-Genesis Platform API}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${DATABASE_NAME:?DATABASE_NAME is required}
+      DATABASE_USER: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
+      DATABASE_PASSWORD: ${DATABASE_RUNTIME_PASSWORD:?DATABASE_RUNTIME_PASSWORD is required}
+      DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-30}
+      REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER:?REFRESH_TOKEN_PEPPER is required}
+      API_PUBLIC_REPLICA_COUNT: 1
+      INVITATION_ISSUANCE_READINESS: 'false'
+      INVITATION_ACCEPTANCE_READINESS: 'false'
+      INVITATION_ACTIVATION_READINESS: 'false'
+      INVITATION_WORKER_ENABLED: 'false'
+      LEAD_FORM_READINESS: 'false'
+    expose:
+      - '3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cpus: ${API_CPUS:-0.75}
+    mem_limit: ${API_MEMORY_LIMIT:-1g}
+    pids_limit: ${API_PIDS_LIMIT:-128}
+    logging: *rotating-logs
+    networks:
+      - database
+      - edge
+
+volumes:
+  postgres_data:
+
+networks:
+  database:
+    driver: bridge
+    internal: true
+  edge:
+    driver: bridge

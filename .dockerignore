@@ -4,8 +4,13 @@ coverage
 *.tsbuildinfo
 .git
 .gitignore
-.env
 .env.*
-!.env.example
+.env
+.agents
+.codex
+.github
+docs
+test
+compose*.yml
 *.log
 README.md
