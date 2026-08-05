@@ -44,7 +44,10 @@
     "docker:logs": "docker compose logs -f api",
     "production:compose:validate": "node scripts/validate-production-compose.cjs",
     "test:production": "node --test test/production/*.test.cjs",
-    "format:check:production": "prettier --check compose.production.yml package.json scripts/validate-production-compose.cjs test/production/*.test.cjs"
+    "format:check:production": "prettier --check compose.production.yml package.json scripts/validate-production-compose.cjs test/production/*.test.cjs",
+    "ci:contract:validate": "node scripts/validate-ci-workflow.cjs",
+    "test:ci": "node --test test/ci/*.test.cjs",
+    "format:check:ci": "prettier --check .github/workflows/ci.yml package.json scripts/validate-ci-workflow.cjs test/ci/*.test.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",

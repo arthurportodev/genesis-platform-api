@@ -431,11 +431,13 @@ produção`; esse registro não inicia nem aprova sua implementação.
 
 ## 0.8-MVP-03 — Container e Compose de produção
 
-**Candidata local pronta para verificação independente.** Consolidou o target
-Docker `production` com Node.js 24, UID/GID fixos não-root e conteúdo mínimo;
-criou `compose.production.yml` com `postgres`, `migrate` e `api`; separou roles e
-credenciais; manteve banco e API sem portas publicadas; e aplicou health,
-filesystem read-only, hardening, limites provisórios e rotação de logs.
+**Concluída e incorporada.** O PR #31 foi incorporado no squash
+`a568745025091bd3d309052ebd780374da405e3c`, com CI pós-merge `31000957615`
+aprovada. Consolidou o target Docker `production` com Node.js 24, UID/GID fixos
+não-root e conteúdo mínimo; criou `compose.production.yml` com `postgres`,
+`migrate` e `api`; separou roles e credenciais; manteve banco e API sem portas
+publicadas; e aplicou health, filesystem read-only, hardening, limites
+provisórios e rotação de logs.
 
 A validação local usou imagem identificável, project name e volume exclusivos,
 valores sintéticos e nenhuma infraestrutura real. Comprovou migrations
@@ -444,5 +446,51 @@ restart, transição e recuperação da readiness, liveness independente, ausên
 de secrets nos logs e shutdown por SIGTERM dentro da tolerância. O volume de
 evidência local foi preservado; containers e redes transitórios foram removidos.
 
-Gate 2 permanece pendente de verifier independente. Não houve stage, commit,
-push, PR, publicação de imagem, deploy, acesso à VPS ou uso de dados reais.
+O merge não publicou imagem, não implantou infraestrutura e não acessou VPS ou
+dados reais.
+
+## 0.8-MVP-04 — CI essencial, GHCR e imagem identificável
+
+**Candidata local corrigida, pendente da Gate 2.** Divide a CI em `validate`,
+`build-and-scan` para PR/manual e `publish-image` somente para push da `main`.
+O build usa o target `production` para `linux/amd64`, aplica seis labels OCI e
+uma única tag `sha-<SHA completo>`. Trivy v0.70.0 bloqueia Critical, inclusive
+sem correção, antes de qualquer push.
+
+O publicador usa somente `GITHUB_TOKEN`, com `packages: write` restrito ao job.
+Tag ausente segue build único, registra o config digest local, executa runtime e
+scan, revalida a mesma configuração no único push e seleciona o digest reportado
+por ele. A confirmação final consulta somente essa referência imutável e compara
+os digests de manifesto e configuração esperados. Tag existente é validada e
+reescaneada por digest sem rebuild ou overwrite, preservando os dois digests.
+`image-identity.json` registra digest, commit, run e labels por 14 dias. Actions
+são fixadas por SHA completo e contratos Node-stdlib cobrem eventos, permissões,
+ordem, identidade, idempotência e limites de supply chain.
+
+Formatação, lint, build, unitários, E2E, integração, task-tools, contratos da
+CI, 34 testes de produção e validação real do Compose foram aprovados. O scan
+local inicial encontrou `CVE-2026-59873`, Critical, em `tar` 7.5.16 da
+superfície npm herdada pelo runtime. Arthur ampliou a Gate 1 de 9 para 11 paths,
+adicionando somente `Dockerfile` e o teste estrutural da imagem.
+
+Os estágios de dependências/build usam `node:24-alpine3.24`; o estágio final usa
+Alpine 3.24 e copia apenas o binário Node, `libstdc++`, dependências podadas,
+`dist` e `package.json`. Inspeção real confirmou Node e TypeORM CLI funcionais,
+UID/GID 10001, CMD direto, seis labels e ausência de npm, npx, Yarn, Corepack,
+módulos globais, conteúdo de desenvolvimento e pacote npm `tar`. Migration
+exit 0, readiness 200/healthy e SIGTERM concluído em 2,26 s com exit 0. Trivy
+v0.70.0 com base atualizada retornou zero vulnerabilidades Critical, sem ignore
+ou allowlist.
+
+A primeira verificação independente cobriu 11/11 paths e bloqueou a Gate 2 com
+dois findings High: o artefato ainda podia reinspecionar a tag mutável depois do
+scan, e os resultados finais estavam resumidos sem logs brutos vinculados por
+hash. A correção substituiu a releitura da tag pelo encadeamento de outputs
+imutáveis descrito acima e ampliou os contratos da CI para 29 casos, incluindo
+mutações adversariais de digest hard-coded, referência alheia, perda da igualdade
+de digests e troca da configuração local. A matriz e as provas operacionais e de
+Trivy serão regeneradas como evidência raw/hash-bound antes da reverificação.
+
+Nesta etapa local não houve login ou publicação no GHCR, stage, commit, push,
+PR, merge, mudança remota, infraestrutura ou deploy. A primeira criação do
+package privado permanece vinculada à autorização humana explícita da Gate 3.

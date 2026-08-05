@@ -15,20 +15,22 @@ documento; requisitos avançados permanecem no backlog pós-MVP.
 ## Estado atual
 
 O runtime health e a rebaseline documental foram incorporados à `main` pelo PR
-#29 no squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`. A CI pós-merge
-`30892867828` foi aprovada integralmente. Isso comprova o conteúdo incorporado,
-mas não uma produção operacional: a infraestrutura da aplicação ainda não foi
-publicada e nenhuma imagem foi publicada pelo merge. A VPS Hostinger KVM 2 já
+#29 no squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`. O container e o Compose
+de produção foram incorporados pelo PR #31 no squash
+`a568745025091bd3d309052ebd780374da405e3c`; a CI pós-merge `31000957615` foi
+aprovada. Isso comprova o conteúdo incorporado, mas não uma produção
+operacional: a infraestrutura da aplicação ainda não foi publicada e nenhuma
+imagem foi publicada por esses merges. A VPS Hostinger KVM 2 já
 foi contratada e é o destino previsto; seu inventário, configuração e adequação
 à topologia do MVP ainda precisam ser comprovados. O estado de DNS, origem,
 Vercel, Traefik, GHCR, PostgreSQL da aplicação, secrets, backup, restore,
 monitoramento e deploy ainda não foi comprovado, configurado ou validado para
 esta baseline. Nenhum dado real está autorizado.
 
-O target `production` do Dockerfile e `compose.production.yml` definem a
-candidata local da stack base da `0.8-MVP-03`. A imagem e a stack foram
-validadas somente em Docker Desktop com dados sintéticos; não foram publicadas,
-implantadas na VPS nem autorizadas para dados reais. `compose.yml` e
+O target `production` do Dockerfile e `compose.production.yml` definem a stack
+base incorporada pela `0.8-MVP-03`. A imagem e a stack foram validadas somente
+em Docker Desktop com dados sintéticos; não foram publicadas, implantadas na VPS
+nem autorizadas para dados reais. `compose.yml` e
 `compose.test.yml` permanecem superfícies separadas de desenvolvimento e teste.
 
 ## Arquitetura
@@ -128,10 +130,39 @@ topologia, credencial ou causa interna.
 
 ## CI e imagem
 
-A CI essencial deve executar as validações proporcionais ao delta e produzir a
-imagem Docker. A imagem aprovada será publicada no GHCR com tag do commit e terá
-seu digest registrado. `latest` não é identidade suficiente para deploy ou
-rollback. Credenciais de publicação e pull usam o menor escopo possível.
+A candidata da `0.8-MVP-04` divide a CI em `validate`, `build-and-scan` e
+`publish-image`, todos em `ubuntu-24.04`. `validate` preserva o perfil completo e
+acrescenta contratos da CI, os 34 testes focados de produção e validação real
+do Compose com valores sintéticos. Em Pull Requests e execuções manuais,
+`build-and-scan` produz uma única imagem local do target `production` para
+`linux/amd64` e a submete ao Trivy antes de terminar, sem login ou publicação.
+
+Somente `push` da `main` habilita `publish-image`, com `contents: read` e
+`packages: write` limitados ao job. A identidade canônica é
+`ghcr.io/arthurportodev/genesis-platform-api:sha-<SHA completo>`. O fluxo de tag
+nova constrói uma vez, carrega, registra o config digest local, verifica as seis
+labels OCI, bloqueia toda vulnerabilidade Critical e revalida esse config digest
+imediatamente antes do único push. O digest reportado pelo push forma a
+referência imutável; a verificação final consulta somente essa referência e
+exige igualdade tanto do digest do manifesto quanto do config digest escaneado.
+O fluxo de tag existente não reconstrói nem sobrescreve: valida identidade,
+reescaneia a referência por digest e preserva os mesmos digests de manifesto e
+configuração até o artefato final, falhando fechado diante de divergência.
+
+`image-identity.json`, retido por 14 dias, registra repositório, tag, digest,
+commit, run e labels. A referência autoritativa para deploy e rollback é
+`ghcr.io/arthurportodev/genesis-platform-api@sha256:<digest>`. Não existem tags
+`latest` ou `main`; provenance, SBOM, assinatura, multiarch e cache remoto de
+build permanecem fora desta entrega. O package nasce privado quando a primeira
+publicação for autorizada e executada. A candidata local e sua verificação
+independente não publicam package ou imagem.
+
+O runtime final usa `alpine:3.24`; `node:24-alpine3.24` fica restrito aos
+estágios que executam npm e build. A imagem final recebe somente o executável
+Node, `libstdc++`, dependências podadas, `dist` e `package.json`. npm, npx, Yarn,
+Corepack, módulos globais e o pacote npm `tar` não entram no runtime. O contrato
+estrutural e a inspeção da imagem real verificam esse limite antes do Trivy e de
+qualquer push, tanto no caminho de imagem nova quanto em rerun por digest.
 
 Essa entrega não depende de cadeia customizada de evidências. Controles
 avançados de supply chain são backlog pós-MVP.

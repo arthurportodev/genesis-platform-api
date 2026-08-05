@@ -13,14 +13,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
-    name: Validate backend
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: Validate backend and production contracts
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
 
     services:
       postgres:
@@ -54,10 +56,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -81,7 +83,58 @@ jobs:
       - name: Run task-tool tests
         run: npm run test:task-tools
 
-      - name: Check formatting
+      - name: Validate CI workflow contract
+        run: npm run ci:contract:validate
+
+      - name: Check CI workflow formatting
+        run: npm run format:check:ci
+
+      - name: Run CI workflow contract tests
+        run: npm run test:ci
+
+      - name: Check production surface formatting
+        run: npm run format:check:production
+
+      - name: Create synthetic production Compose environment
+        shell: bash
+        run: |
+          cat > "${{ runner.temp }}/genesis-production-ci.env" <<'ENV'
+          GENESIS_API_IMAGE=ghcr.io/arthurportodev/genesis-platform-api:sha-${{ github.sha }}
+          DATABASE_NAME=genesis_platform
+          DATABASE_MIGRATION_USER=genesis_owner
+          DATABASE_MIGRATION_PASSWORD=ci-migration-only
+          DATABASE_RUNTIME_ROLE=genesis_runtime
+          DATABASE_RUNTIME_PASSWORD=ci-runtime-only
+          APP_NAME=Genesis Platform API
+          APP_VERSION=0.1.0
+          FRONTEND_URL=https://app.example.invalid
+          TRUST_PROXY_HOPS=0
+          JWT_ACCESS_SECRET=ci-only-access-secret-with-at-least-thirty-two-characters
+          JWT_ACCESS_EXPIRES_IN=15m
+          REFRESH_TOKEN_EXPIRES_IN_DAYS=30
+          REFRESH_TOKEN_PEPPER=ci-only-refresh-pepper-with-at-least-thirty-two-characters
+          API_CPUS=0.75
+          API_MEMORY_LIMIT=1g
+          API_PIDS_LIMIT=128
+          API_NODE_MAX_OLD_SPACE_MB=640
+          MIGRATE_CPUS=0.75
+          MIGRATE_MEMORY_LIMIT=1g
+          MIGRATE_PIDS_LIMIT=128
+          MIGRATE_NODE_MAX_OLD_SPACE_MB=640
+          POSTGRES_CPUS=1.0
+          POSTGRES_MEMORY_LIMIT=2g
+          POSTGRES_PIDS_LIMIT=256
+          ENV
+
+      - name: Validate production Compose with Docker
+        run: npm run production:compose:validate
+        env:
+          GENESIS_PRODUCTION_ENV_FILE: ${{ runner.temp }}/genesis-production-ci.env
+
+      - name: Run focused production tests
+        run: npm run test:production
+
+      - name: Check application formatting
         run: npm run format:check
 
       - name: Run lint
@@ -99,5 +152,401 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
 
-      - name: Build Docker image
-        run: docker build --tag genesis-platform-api:ci .
+  build-and-scan:
+    name: Build and scan production image
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: validate
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
+      IMAGE_REF: ghcr.io/arthurportodev/genesis-platform-api:sha-${{ github.sha }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Read image identity
+        id: identity
+        shell: bash
+        run: |
+          node -e "const p=require('./package.json'); console.log('title='+p.name); console.log('description='+p.description); console.log('created='+new Date().toISOString())" >> "$GITHUB_OUTPUT"
+
+      - name: Generate immutable image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/arthurportodev/genesis-platform-api
+          flavor: latest=false
+          tags: type=raw,value=sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=sha-${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.identity.outputs.created }}
+            org.opencontainers.image.title=${{ steps.identity.outputs.title }}
+            org.opencontainers.image.description=${{ steps.identity.outputs.description }}
+
+      - name: Build one local production image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          target: production
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+          push: false
+          provenance: false
+          sbom: false
+
+      - name: Verify local image identity
+        shell: bash
+        run: |
+          docker image inspect "$IMAGE_REF" > "${{ runner.temp }}/local-image.json"
+          IMAGE_JSON="${{ runner.temp }}/local-image.json" node <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const [image] = JSON.parse(readFileSync(process.env.IMAGE_JSON, 'utf8'));
+          const labels = image?.Config?.Labels ?? {};
+          const packageJson = require('./package.json');
+          const expected = {
+            'org.opencontainers.image.source': `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}`,
+            'org.opencontainers.image.revision': process.env.GITHUB_SHA,
+            'org.opencontainers.image.version': `sha-${process.env.GITHUB_SHA}`,
+            'org.opencontainers.image.title': packageJson.name,
+            'org.opencontainers.image.description': packageJson.description,
+          };
+          if (image?.Os !== 'linux' || image?.Architecture !== 'amd64') throw new Error('local image platform mismatch');
+          for (const [key, value] of Object.entries(expected)) if (labels[key] !== value) throw new Error(`local image label mismatch: ${key}`);
+          if (Number.isNaN(Date.parse(labels['org.opencontainers.image.created']))) throw new Error('local image created label is invalid');
+          NODE
+
+      - name: Validate local production runtime
+        env:
+          PRODUCTION_IMAGE_UNDER_TEST: ${{ env.IMAGE_REF }}
+        run: node --test test/production/production-image.test.cjs
+
+      - name: Scan local production image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_REF }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: false
+          scanners: vuln
+          severity: CRITICAL
+          version: v0.70.0
+          cache: false
+
+  publish-image:
+    name: Publish verified immutable image
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: validate
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
+      IMAGE_REPOSITORY: ghcr.io/arthurportodev/genesis-platform-api
+      IMAGE_TAG: sha-${{ github.sha }}
+      IMAGE_REF: ghcr.io/arthurportodev/genesis-platform-api:sha-${{ github.sha }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Read image identity
+        id: identity
+        shell: bash
+        run: |
+          node -e "const p=require('./package.json'); console.log('title='+p.name); console.log('description='+p.description); console.log('created='+new Date().toISOString())" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine whether immutable tag exists
+        id: existence
+        shell: bash
+        run: |
+          set +e
+          docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/existing-manifest.json" 2> "${{ runner.temp }}/existing-error.txt"
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif grep -Eiq 'manifest unknown|name unknown|no such manifest|ghcr\.io/arthurportodev/genesis-platform-api.*not found' "${{ runner.temp }}/existing-error.txt"; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Registry inspection failed with an unclassified error." >&2
+            exit "$status"
+          fi
+
+      - name: Validate existing image identity
+        id: existing
+        if: ${{ steps.existence.outputs.exists == 'true' }}
+        shell: bash
+        run: |
+          docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/remote-manifest.json"
+          docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Image}}' > "${{ runner.temp }}/remote-image.json"
+          REMOTE_MANIFEST_JSON="${{ runner.temp }}/remote-manifest.json" REMOTE_IMAGE_JSON="${{ runner.temp }}/remote-image.json" node <<'NODE' > "${{ runner.temp }}/immutable-ref.txt"
+          const { readFileSync } = require('node:fs');
+          const manifest = JSON.parse(readFileSync(process.env.REMOTE_MANIFEST_JSON, 'utf8'));
+          const image = JSON.parse(readFileSync(process.env.REMOTE_IMAGE_JSON, 'utf8'));
+          const labels = image?.config?.Labels ?? {};
+          const packageJson = require('./package.json');
+          const expected = {
+            'org.opencontainers.image.source': `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}`,
+            'org.opencontainers.image.revision': process.env.GITHUB_SHA,
+            'org.opencontainers.image.version': `sha-${process.env.GITHUB_SHA}`,
+            'org.opencontainers.image.title': packageJson.name,
+            'org.opencontainers.image.description': packageJson.description,
+          };
+          if (!/^sha256:[a-f0-9]{64}$/.test(manifest?.digest ?? '')) throw new Error('existing image digest identity is invalid');
+          if (!/^sha256:[a-f0-9]{64}$/.test(manifest?.config?.digest ?? '')) throw new Error('existing image config identity is invalid');
+          if (image?.os !== 'linux' || image?.architecture !== 'amd64') throw new Error('existing image platform mismatch');
+          for (const [key, value] of Object.entries(expected)) if (labels[key] !== value) throw new Error(`existing image label mismatch: ${key}`);
+          if (Number.isNaN(Date.parse(labels['org.opencontainers.image.created']))) throw new Error('existing image created label is invalid');
+          process.stdout.write(`${process.env.IMAGE_REPOSITORY}@${manifest.digest}\n${manifest.config.digest}`);
+          NODE
+          mapfile -t existing_identity < "${{ runner.temp }}/immutable-ref.txt"
+          if [ "${#existing_identity[@]}" -ne 2 ]; then
+            echo "Existing image identity is incomplete." >&2
+            exit 1
+          fi
+          immutable_ref="${existing_identity[0]%$'\r'}"
+          config_digest="${existing_identity[1]%$'\r'}"
+          echo "immutable_ref=$immutable_ref" >> "$GITHUB_OUTPUT"
+          echo "config_digest=$config_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Generate immutable image metadata
+        id: meta
+        if: ${{ steps.existence.outputs.exists == 'false' }}
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/arthurportodev/genesis-platform-api
+          flavor: latest=false
+          tags: type=raw,value=sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=sha-${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.identity.outputs.created }}
+            org.opencontainers.image.title=${{ steps.identity.outputs.title }}
+            org.opencontainers.image.description=${{ steps.identity.outputs.description }}
+
+      - name: Build one local production image
+        if: ${{ steps.existence.outputs.exists == 'false' }}
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          target: production
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+          push: false
+          provenance: false
+          sbom: false
+
+      - name: Verify new local image identity
+        id: local
+        if: ${{ steps.existence.outputs.exists == 'false' }}
+        shell: bash
+        run: |
+          docker image inspect "$IMAGE_REF" > "${{ runner.temp }}/local-image.json"
+          IMAGE_JSON="${{ runner.temp }}/local-image.json" node <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const [image] = JSON.parse(readFileSync(process.env.IMAGE_JSON, 'utf8'));
+          const labels = image?.Config?.Labels ?? {};
+          const packageJson = require('./package.json');
+          const expected = {
+            'org.opencontainers.image.source': `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}`,
+            'org.opencontainers.image.revision': process.env.GITHUB_SHA,
+            'org.opencontainers.image.version': `sha-${process.env.GITHUB_SHA}`,
+            'org.opencontainers.image.title': packageJson.name,
+            'org.opencontainers.image.description': packageJson.description,
+          };
+          if (image?.Os !== 'linux' || image?.Architecture !== 'amd64') throw new Error('new image platform mismatch');
+          for (const [key, value] of Object.entries(expected)) if (labels[key] !== value) throw new Error(`new image label mismatch: ${key}`);
+          if (Number.isNaN(Date.parse(labels['org.opencontainers.image.created']))) throw new Error('new image created label is invalid');
+          NODE
+          config_digest="$(docker image inspect --format '{{.Id}}' "$IMAGE_REF")"
+          if [[ ! "$config_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "New local image config digest is invalid." >&2
+            exit 1
+          fi
+          echo "config_digest=$config_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Pull existing immutable image for runtime validation
+        if: ${{ steps.existence.outputs.exists == 'true' }}
+        run: docker pull "${{ steps.existing.outputs.immutable_ref }}"
+
+      - name: Validate existing production runtime
+        if: ${{ steps.existence.outputs.exists == 'true' }}
+        env:
+          PRODUCTION_IMAGE_UNDER_TEST: ${{ steps.existing.outputs.immutable_ref }}
+        run: node --test test/production/production-image.test.cjs
+
+      - name: Validate new production runtime
+        if: ${{ steps.existence.outputs.exists == 'false' }}
+        env:
+          PRODUCTION_IMAGE_UNDER_TEST: ${{ env.IMAGE_REF }}
+        run: node --test test/production/production-image.test.cjs
+
+      - name: Rescan existing immutable image
+        if: ${{ steps.existence.outputs.exists == 'true' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.existing.outputs.immutable_ref }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: false
+          scanners: vuln
+          severity: CRITICAL
+          version: v0.70.0
+          cache: false
+
+      - name: Scan new local image
+        if: ${{ steps.existence.outputs.exists == 'false' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_REF }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: false
+          scanners: vuln
+          severity: CRITICAL
+          version: v0.70.0
+          cache: false
+
+      - name: Push scanned image
+        id: push
+        if: ${{ steps.existence.outputs.exists == 'false' }}
+        shell: bash
+        env:
+          EXPECTED_LOCAL_CONFIG_DIGEST: ${{ steps.local.outputs.config_digest }}
+        run: |
+          set -euo pipefail
+          current_config_digest="$(docker image inspect --format '{{.Id}}' "$IMAGE_REF")"
+          if [ "$current_config_digest" != "$EXPECTED_LOCAL_CONFIG_DIGEST" ]; then
+            echo "Local image identity changed after runtime validation and Trivy." >&2
+            exit 1
+          fi
+          docker push "$IMAGE_REF" 2>&1 | tee "${{ runner.temp }}/push-output.txt"
+          mapfile -t pushed_digests < <(sed -nE 's/^.*digest: (sha256:[a-f0-9]{64})( size: [0-9]+)?$/\1/p' "${{ runner.temp }}/push-output.txt")
+          if [ "${#pushed_digests[@]}" -ne 1 ]; then
+            echo "Docker push did not report exactly one canonical manifest digest." >&2
+            exit 1
+          fi
+          pushed_digest="${pushed_digests[0]}"
+          immutable_ref="$IMAGE_REPOSITORY@$pushed_digest"
+          echo "digest=$pushed_digest" >> "$GITHUB_OUTPUT"
+          echo "immutable_ref=$immutable_ref" >> "$GITHUB_OUTPUT"
+          echo "config_digest=$current_config_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Select scanned immutable image
+        id: selected
+        shell: bash
+        env:
+          TAG_EXISTS: ${{ steps.existence.outputs.exists }}
+          EXISTING_IMMUTABLE_REF: ${{ steps.existing.outputs.immutable_ref }}
+          EXISTING_CONFIG_DIGEST: ${{ steps.existing.outputs.config_digest }}
+          PUSHED_IMMUTABLE_REF: ${{ steps.push.outputs.immutable_ref }}
+          PUSHED_CONFIG_DIGEST: ${{ steps.push.outputs.config_digest }}
+        run: |
+          set -euo pipefail
+          if [ "$TAG_EXISTS" = 'true' ]; then
+            immutable_ref="$EXISTING_IMMUTABLE_REF"
+            config_digest="$EXISTING_CONFIG_DIGEST"
+          elif [ "$TAG_EXISTS" = 'false' ]; then
+            immutable_ref="$PUSHED_IMMUTABLE_REF"
+            config_digest="$PUSHED_CONFIG_DIGEST"
+          else
+            echo "Immutable tag state is invalid." >&2
+            exit 1
+          fi
+          if [[ ! "$immutable_ref" =~ ^${IMAGE_REPOSITORY}@sha256:[a-f0-9]{64}$ ]]; then
+            echo "Selected immutable reference is invalid." >&2
+            exit 1
+          fi
+          if [[ ! "$config_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Selected image config digest is invalid." >&2
+            exit 1
+          fi
+          digest="${immutable_ref##*@}"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "immutable_ref=$immutable_ref" >> "$GITHUB_OUTPUT"
+          echo "config_digest=$config_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Verify scanned immutable image identity
+        id: verify
+        shell: bash
+        env:
+          EXPECTED_CONFIG_DIGEST: ${{ steps.selected.outputs.config_digest }}
+          EXPECTED_DIGEST: ${{ steps.selected.outputs.digest }}
+          IMMUTABLE_REF: ${{ steps.selected.outputs.immutable_ref }}
+        run: |
+          docker buildx imagetools inspect "$IMMUTABLE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/remote-manifest.json"
+          docker buildx imagetools inspect "$IMMUTABLE_REF" --format '{{json .Image}}' > "${{ runner.temp }}/remote-image.json"
+          REMOTE_MANIFEST_JSON="${{ runner.temp }}/remote-manifest.json" REMOTE_IMAGE_JSON="${{ runner.temp }}/remote-image.json" node <<'NODE' > "${{ runner.temp }}/immutable-ref.txt"
+          const { readFileSync, writeFileSync } = require('node:fs');
+          const manifest = JSON.parse(readFileSync(process.env.REMOTE_MANIFEST_JSON, 'utf8'));
+          const image = JSON.parse(readFileSync(process.env.REMOTE_IMAGE_JSON, 'utf8'));
+          const labels = image?.config?.Labels ?? {};
+          const packageJson = require('./package.json');
+          const expected = {
+            'org.opencontainers.image.source': `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}`,
+            'org.opencontainers.image.revision': process.env.GITHUB_SHA,
+            'org.opencontainers.image.version': `sha-${process.env.GITHUB_SHA}`,
+            'org.opencontainers.image.title': packageJson.name,
+            'org.opencontainers.image.description': packageJson.description,
+          };
+          const digest = manifest?.digest ?? '';
+          if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error('remote image digest identity is invalid');
+          if (digest !== process.env.EXPECTED_DIGEST) throw new Error('remote digest does not match the scanned immutable image');
+          if (manifest?.config?.digest !== process.env.EXPECTED_CONFIG_DIGEST) throw new Error('remote config does not match the scanned local image');
+          const immutableReference = process.env.IMMUTABLE_REF;
+          if (immutableReference !== `${process.env.IMAGE_REPOSITORY}@${digest}`) throw new Error('immutable reference does not match the verified digest');
+          if (image?.os !== 'linux' || image?.architecture !== 'amd64') throw new Error('remote image platform mismatch');
+          for (const [key, value] of Object.entries(expected)) if (labels[key] !== value) throw new Error(`remote image label mismatch: ${key}`);
+          if (Number.isNaN(Date.parse(labels['org.opencontainers.image.created']))) throw new Error('remote image created label is invalid');
+          const identity = {
+            repository: process.env.IMAGE_REPOSITORY,
+            tag: process.env.IMAGE_TAG,
+            digest,
+            commit: process.env.GITHUB_SHA,
+            workflowRunId: process.env.GITHUB_RUN_ID,
+            workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            immutableReference,
+            labels: Object.fromEntries(Object.keys(expected).concat('org.opencontainers.image.created').map((key) => [key, labels[key]])),
+          };
+          writeFileSync('image-identity.json', `${JSON.stringify(identity, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+          process.stdout.write(immutableReference);
+          NODE
+          immutable_ref="$(tr -d '\r\n' < "${{ runner.temp }}/immutable-ref.txt")"
+          echo "immutable_ref=$immutable_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable image identity
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image-identity-${{ github.sha }}
+          path: image-identity.json
+          if-no-files-found: error
+          retention-days: 14

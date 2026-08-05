@@ -91,7 +91,22 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - `.env` é ignorado; `.env.example` contém apenas placeholders e valores descartáveis.
 - JWT secret e refresh pepper são independentes, obrigatórios e validados contra placeholders conhecidos.
 - `INITIAL_OWNER_PASSWORD` é opcional no runtime e usada somente pelo seed quando falta credencial; não deve permanecer no ambiente, ser logada ou versionada.
-- O CI tem apenas `contents: read`, usa PostgreSQL `_test` descartável e credenciais `test-only`; não executa seed, deploy ou publicação de imagem.
+- `validate` e `build-and-scan` têm somente `contents: read`, usam PostgreSQL
+  `_test` descartável e valores sintéticos e nunca autenticam ou publicam.
+- Somente `publish-image`, condicionado a `push` da `main`, recebe
+  `packages: write` e usa `GITHUB_TOKEN` para o GHCR. Não existe PAT ou secret
+  adicional, e nenhuma credencial é passada como build arg.
+- A imagem `linux/amd64` usa somente tag `sha-<SHA completo>`, seis labels OCI e
+  referência remota por digest. Trivy v0.70.0, fixado por Action em SHA completo, bloqueia
+  vulnerabilidade Critical inclusive sem correção antes de qualquer push;
+  falha da base do scanner também bloqueia.
+- Tag existente é validada e reescaneada por digest sem rebuild ou overwrite.
+  Tag nova registra o config digest local antes do scan, exige que ele permaneça
+  igual no push e aceita o manifesto remoto somente pelo digest reportado pelo
+  próprio push. A identidade final compara os digests esperado e observado de
+  manifesto e configuração; nenhuma releitura da tag mutável alimenta o artefato.
+  Provenance, SBOM, assinatura, multiarch, SARIF e cache remoto de build estão
+  desabilitados ou fora do escopo. A CI não executa seed ou deploy.
 - Testes de integração recusam banco cujo nome não termine em `_test`.
 
 ## Integridade do repositório
@@ -189,6 +204,9 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   rollback são requisitos para dados reais.
 - Vulnerabilidade Critical aplicável bloqueia a abertura até correção ou
   decisão humana explícita.
+- A imagem final de produção não contém npm, npx, Yarn, Corepack ou seus módulos
+  globais. O Node é copiado isoladamente para Alpine 3.24, e o contrato de CI
+  inspeciona o filesystem real antes do scan e de qualquer publicação.
 
 A VPS Hostinger KVM 2 já foi contratada e é o destino previsto para uma réplica
 da API. Seu inventário, configuração e adequação à topologia do MVP ainda
