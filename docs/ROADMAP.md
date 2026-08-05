@@ -50,7 +50,11 @@ experimento é promovido automaticamente para o MVP.
 ### Tarefa atual
 
 - 🚧 `0.8-MVP-03` — Container e Compose de produção.
-  - tarefa atual, ainda não implementada nem aprovada para execução.
+  - candidata local implementada e validada com imagem não-root, PostgreSQL 17
+    privado, migration one-shot, roles separadas, health, persistência,
+    hardening, limites e logs rotacionados;
+  - aguarda verifier independente e decisão de Gate 2; nenhuma imagem foi
+    publicada e nenhuma infraestrutura foi implantada.
 
 ### Próximos deltas planejados
 

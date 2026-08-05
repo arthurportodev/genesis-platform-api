@@ -13,8 +13,9 @@ documental da CI`, junto com `0.8-MVP-01` e `0.8-MVP-02`, pelo PR #29 no
   Operacional de Desenvolvimento, incorporada no backend pelo PR #26, squash
   `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
   squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
-- **Tarefa atual:** 0.8-MVP-03 — Container e Compose de produção, ainda não
-  iniciada nem aprovada para implementação
+- **Tarefa atual:** 0.8-MVP-03 — Container e Compose de produção, com candidata
+  local implementada e validada; aguarda verifier independente e decisão de
+  Gate 2 antes de qualquer entrega remota
 - **Produção:** infraestrutura ainda não publicada; nenhum dado real autorizado
 - **CI pós-merge da `main`:** execução `30892867828` aprovada integralmente no
   squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`
@@ -34,6 +35,10 @@ documental da CI`, junto com `0.8-MVP-01` e `0.8-MVP-02`, pelo PR #29 no
 - Autenticação por email e senha, sessões persistidas, refresh rotativo e auditoria.
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
 - Testes unitários, E2E e de integração; CI com build Docker.
+- Target Docker `production` mínimo e não-root e Compose de produção isolado
+  com PostgreSQL 17 privado, migration one-shot, roles separadas, health,
+  persistência, hardening, limites e rotação de logs; somente validação local,
+  sem publicação ou deploy.
 - Fundação 0.3.1 incorporada com `Lead`, `LeadEntry`, timeline, intake manual e `genesis_form` fail-closed, deduplicação E.164, idempotência durável, inbox tenant-scoped, edição básica e assignment.
 - Pipeline 0.3.2 incorporado com ciclos comerciais imutáveis, fechamento ganho/perdido/arquivado, reativação, revisão agregada de retornos e comandos idempotentes.
 - Atividades e Follow-up 0.3.3 incorporados com Activity e Note append-only, Next Action única, timezone IANA da Organization e timeline operacional paginada.
@@ -235,6 +240,8 @@ Consulte os [ADRs](decisions/README.md).
 - A configuração de produção do proxy same-origin e o estado de Vercel,
   domínio, DNS, banco, restore, observabilidade e deploy ainda precisam ser
   inventariados, configurados ou validados para esta baseline.
+- Os limites de CPU, memória, PIDs e heap da stack local são provisórios e
+  dependem do inventário real da VPS na `0.8-MVP-05`.
 - Preview permanece sem API e nunca aponta para produção; staging não será
   criado inicialmente.
 

@@ -25,8 +25,11 @@ Vercel, Traefik, GHCR, PostgreSQL da aplicação, secrets, backup, restore,
 monitoramento e deploy ainda não foi comprovado, configurado ou validado para
 esta baseline. Nenhum dado real está autorizado.
 
-O Dockerfile e os arquivos Compose atuais continuam sendo superfícies de
-desenvolvimento e validação; não são a stack de produção aprovada.
+O target `production` do Dockerfile e `compose.production.yml` definem a
+candidata local da stack base da `0.8-MVP-03`. A imagem e a stack foram
+validadas somente em Docker Desktop com dados sintéticos; não foram publicadas,
+implantadas na VPS nem autorizadas para dados reais. `compose.yml` e
+`compose.test.yml` permanecem superfícies separadas de desenvolvimento e teste.
 
 ## Arquitetura
 
@@ -67,6 +70,29 @@ validação operacional.
 Redis, n8n, Evolution API, Portainer e outros serviços só entram quando uma
 funcionalidade do MVP demonstrar dependência real. A primeira topologia usa
 uma réplica da API enquanto rate limits e semáforos forem process-local.
+
+### Container e Compose de produção
+
+A stack base possui somente `postgres`, `migrate` e `api`. Ela consome uma
+imagem identificável obrigatória por `GENESIS_API_IMAGE`, sem `build:` no
+Compose, e usa a mesma identidade para API e migration. A API e o PostgreSQL
+não publicam portas; a API declara apenas exposição interna na porta 3000.
+
+O PostgreSQL usa volume nomeado, rede interna de banco e role runtime distinta
+da owner de migrations. O job de migration é one-shot, chama diretamente o
+TypeORM compilado e bloqueia a API quando falha. A API usa filesystem read-only,
+UID/GID fixos não-root, init, capabilities removidas, `no-new-privileges`,
+readiness explícita e shutdown com tolerância externa de 20 segundos.
+
+A rede `edge` conecta somente a API e reserva a interface futura para o
+Traefik; nenhuma porta, label ou configuração de Traefik pertence a esta
+tarefa. O `invitation-worker` permanece implementado no produto, mas não faz
+parte da stack base de produção.
+
+Os defaults provisórios limitam API e migration a 0,75 CPU/1 GB e PostgreSQL a
+1 CPU/2 GB, com `pids_limit`, heap Node conservador e rotação de logs `10m`/`5`.
+Esses valores precisam ser confirmados contra o inventário real da VPS na
+`0.8-MVP-05`.
 
 ## Segurança mínima
 
@@ -133,6 +159,10 @@ Migrations versionadas são a única fonte do schema; `synchronize` e
 credencial não fica disponível ao runtime. O job de migration é único e
 bloqueante. Rollback da aplicação não reverte schema automaticamente; uma
 migration incompatível exige plano específico antes do deploy.
+
+Na imagem de produção, o job executa diretamente
+`node node_modules/typeorm/cli.js -d dist/database/data-source.js migration:run`.
+Ele não recompila a aplicação, não depende do Nest CLI e não executa seed.
 
 ## Backup e restore
 

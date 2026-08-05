@@ -21,8 +21,9 @@ baseline com `0.8-MVP-01`, `0.8-MVP-02` e `0.8-MVP-02.1` foi incorporada à
 `main` pelo PR #29 no squash
 `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`; a CI pós-merge `30892867828` foi
 aprovada integralmente. A tarefa atual é `0.8-MVP-03 — Container e Compose de
-produção`, cuja implementação ainda não começou nem foi aprovada. Nenhuma
-infraestrutura foi publicada e dados reais não estão autorizados.
+produção`, com candidata local implementada e aguardando verificação
+independente e Gate 2. Nenhuma imagem ou infraestrutura foi publicada e dados
+reais não estão autorizados.
 
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge
@@ -146,6 +147,23 @@ npm run docker:down
 
 Para apagar também os dados locais do PostgreSQL, execute conscientemente `docker compose down -v`.
 
+O Compose de produção é separado e não constrói imagens. Copie
+`.env.production.example` para um arquivo local ignorado, preencha todos os
+campos obrigatórios por canal seguro e use uma tag identificável construída do
+target `production`:
+
+```bash
+docker build --target production -t genesis-platform-api:<candidate> .
+docker compose --env-file .env.production.local -f compose.production.yml config
+docker compose --env-file .env.production.local -f compose.production.yml up -d --wait
+```
+
+Essa stack contém somente PostgreSQL, migration e API. Ela não publica portas
+da API ou do banco; o acesso futuro será pela rede de edge e pelo Traefik da
+`0.8-MVP-06`. Não reutilize volumes de desenvolvimento ou validações anteriores.
+Os limites de recursos são provisórios até o inventário da VPS na
+`0.8-MVP-05`.
+
 `TRUST_PROXY_HOPS=0` ignora `X-Forwarded-For` e é o padrão seguro quando a API é acessada diretamente. Em uma implantação com um único Traefik confiável na frente da API, use `TRUST_PROXY_HOPS=1` e bloqueie o acesso externo direto à porta da API; nunca configure confiança irrestrita em proxies.
 
 ## Health check
@@ -233,7 +251,10 @@ Antes de `migration:run`, um administrador deve criar a role indicada por
 de migration usa uma role owner distinta; o rollback exige a mesma configuração
 para remover os grants antes de excluir a tabela.
 
-Os scripts recompilam automaticamente quando as ferramentas de desenvolvimento estão instaladas e reutilizam o artefato já compilado dentro da imagem. Portanto, os mesmos comandos funcionam no container:
+Os scripts de desenvolvimento recompilam quando as ferramentas necessárias
+estão instaladas. A imagem de produção não contém o Nest CLI nem recompila no
+startup; `compose.production.yml` chama diretamente o TypeORM compilado. No
+Compose de desenvolvimento, os comandos continuam disponíveis:
 
 ```bash
 docker compose run --rm migrate npm run migration:run
@@ -550,6 +571,7 @@ Os módulos de users e organizations não expõem CRUD. Invitations, memberships
 ## Próxima tarefa
 
 A baseline documental foi incorporada à `main`; a tarefa atual é
-`0.8-MVP-03 — Container e Compose de produção`. Esse registro não inicia nem
-aprova sua implementação. Comunicação, automações e integrações genéricas
-continuam futuras e sem escopo automaticamente aprovado.
+`0.8-MVP-03 — Container e Compose de produção`. A candidata local aguarda
+verificação independente e Gate 2; isso não autoriza stage, entrega remota,
+publicação ou deploy. Comunicação, automações e integrações genéricas continuam
+futuras e sem escopo automaticamente aprovado.

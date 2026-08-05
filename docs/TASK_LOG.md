@@ -428,3 +428,21 @@ fechado sem merge e preservado apenas como histórico, sem promoção para o MVP
 Nenhum deploy, infraestrutura, imagem ou dado real foi publicado ou autorizado
 por esse merge. A tarefa atual passa a ser `0.8-MVP-03 — Container e Compose de
 produção`; esse registro não inicia nem aprova sua implementação.
+
+## 0.8-MVP-03 — Container e Compose de produção
+
+**Candidata local pronta para verificação independente.** Consolidou o target
+Docker `production` com Node.js 24, UID/GID fixos não-root e conteúdo mínimo;
+criou `compose.production.yml` com `postgres`, `migrate` e `api`; separou roles e
+credenciais; manteve banco e API sem portas publicadas; e aplicou health,
+filesystem read-only, hardening, limites provisórios e rotação de logs.
+
+A validação local usou imagem identificável, project name e volume exclusivos,
+valores sintéticos e nenhuma infraestrutura real. Comprovou migrations
+one-shot e idempotentes, privilégio mínimo da role runtime, persistência após
+restart, transição e recuperação da readiness, liveness independente, ausência
+de secrets nos logs e shutdown por SIGTERM dentro da tolerância. O volume de
+evidência local foi preservado; containers e redes transitórios foram removidos.
+
+Gate 2 permanece pendente de verifier independente. Não houve stage, commit,
+push, PR, publicação de imagem, deploy, acesso à VPS ou uso de dados reais.
