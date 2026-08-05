@@ -46,19 +46,28 @@ experimento é promovido automaticamente para o MVP.
   - concluída no commit `f94eab1a4f02b520f176ed99b5898b25d2be8d97` e
     incorporada pelo mesmo squash;
   - CI pós-merge `30892867828` aprovada integralmente.
+- ✅ `0.8-MVP-03` — Container e Compose de produção.
+  - incorporada pelo PR #31 no squash
+    `a568745025091bd3d309052ebd780374da405e3c`;
+  - CI pós-merge `31000957615` aprovada;
+  - target `production` não-root e stack privada com migration one-shot,
+    hardening, health, persistência, limites e logs rotacionados.
 
 ### Tarefa atual
 
-- 🚧 `0.8-MVP-03` — Container e Compose de produção.
-  - candidata local implementada e validada com imagem não-root, PostgreSQL 17
-    privado, migration one-shot, roles separadas, health, persistência,
-    hardening, limites e logs rotacionados;
-  - aguarda verifier independente e decisão de Gate 2; nenhuma imagem foi
-    publicada e nenhuma infraestrutura foi implantada.
+- 🚧 `0.8-MVP-04` — CI essencial, GHCR e imagem identificável.
+  - candidata local com três jobs, contracts estruturais, build
+    `production/linux/amd64`, scan Critical antes do push, tag por SHA completo,
+    digest e labels OCI;
+  - runtime final Alpine 3.24 sem npm, npx, Yarn, Corepack, módulos globais ou o
+    pacote npm `tar`; Trivy v0.70.0 com base atualizada retornou zero Critical;
+  - a primeira verificação independente de 11/11 paths bloqueou a Gate 2 por
+    vínculo insuficiente entre scan e digest remoto e por evidência final não
+    hash-bound; a correção local e sua nova prova estão em andamento. Nenhuma
+    imagem ou package foi publicado.
 
 ### Próximos deltas planejados
 
-- ⬜ `0.8-MVP-04` — CI essencial, GHCR e imagem identificável.
 - ⬜ `0.8-MVP-05` — VPS, PostgreSQL, secrets e migrations.
 - ⬜ `0.8-MVP-06` — Traefik, HTTPS e exposição controlada da API.
 - ⬜ `0.8-MVP-07` — Backup, restore, logs, monitoramento e rollback.

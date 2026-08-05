@@ -1,24 +1,25 @@
 # Estado atual
 
-- **Última atualização:** 2026-08-04
+- **Última atualização:** 2026-08-05
 - **Fase concluída:** 0.7 — Frontend operacional
 - **Fase atual:** 0.8-MVP — Primeira produção mínima viável
 - **Última tarefa funcional concluída:** 0.7.6 — Criação Manual de Leads
   (repositório `arthurportodev/genesis-platform-web`, PR #7, squash
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`)
-- **Último delta incorporado:** `0.8-MVP-02.1 — Reconciliação do contrato
-documental da CI`, junto com `0.8-MVP-01` e `0.8-MVP-02`, pelo PR #29 no
-  squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`
+- **Último delta incorporado:** `0.8-MVP-03 — Container e Compose de
+produção`, pelo PR #31 no squash
+  `a568745025091bd3d309052ebd780374da405e3c`
 - **Última tarefa de governança concluída:** 0.8.1.1 — Evolução do Sistema
   Operacional de Desenvolvimento, incorporada no backend pelo PR #26, squash
   `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
   squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
-- **Tarefa atual:** 0.8-MVP-03 — Container e Compose de produção, com candidata
-  local implementada e validada; aguarda verifier independente e decisão de
-  Gate 2 antes de qualquer entrega remota
+- **Tarefa atual:** 0.8-MVP-04 — CI essencial, GHCR e imagem identificável, com
+  candidata local em correção após a primeira revisão independente bloquear o
+  vínculo do digest remoto e a suficiência das evidências; a Gate 2 permanece
+  pendente de nova verificação dos 11 paths
 - **Produção:** infraestrutura ainda não publicada; nenhum dado real autorizado
-- **CI pós-merge da `main`:** execução `30892867828` aprovada integralmente no
-  squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`
+- **CI pós-merge da `main`:** execução `31000957615` aprovada no squash
+  `a568745025091bd3d309052ebd780374da405e3c`
 - **Experimento legado:** PR #28 superseded pelo PR #29 e fechado sem merge;
   branch histórica preservada, sem promoção para o MVP
 - **Proteção da `main`:** Pull Request e check `Validate backend` obrigatórios; branch atualizada exigida; force push e exclusão bloqueados
@@ -34,11 +35,13 @@ documental da CI`, junto com `0.8-MVP-01` e `0.8-MVP-02`, pelo PR #29 no
 - Usuários globais, organizações e memberships com papéis `owner`, `admin` e `member`.
 - Autenticação por email e senha, sessões persistidas, refresh rotativo e auditoria.
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
-- Testes unitários, E2E e de integração; CI com build Docker.
+- Testes unitários, E2E e de integração; candidata da CI com contratos
+  estruturais, validação do Compose, build local de PR/manual, scan Critical e
+  publicação GHCR restrita a `push` da `main`.
 - Target Docker `production` mínimo e não-root e Compose de produção isolado
   com PostgreSQL 17 privado, migration one-shot, roles separadas, health,
-  persistência, hardening, limites e rotação de logs; somente validação local,
-  sem publicação ou deploy.
+  persistência, hardening, limites e rotação de logs, incorporados pelo PR
+  #31; sem publicação ou deploy.
 - Fundação 0.3.1 incorporada com `Lead`, `LeadEntry`, timeline, intake manual e `genesis_form` fail-closed, deduplicação E.164, idempotência durável, inbox tenant-scoped, edição básica e assignment.
 - Pipeline 0.3.2 incorporado com ciclos comerciais imutáveis, fechamento ganho/perdido/arquivado, reativação, revisão agregada de retornos e comandos idempotentes.
 - Atividades e Follow-up 0.3.3 incorporados com Activity e Note append-only, Next Action única, timezone IANA da Organization e timeline operacional paginada.
