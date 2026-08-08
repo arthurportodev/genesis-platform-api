@@ -53,13 +53,20 @@ jobs:
       DATABASE_RUNTIME_ROLE: genesis_runtime_test
       DATABASE_MIGRATION_USER: genesis_test
       DATABASE_MIGRATION_PASSWORD: test-only
-      PRODUCTION_CI_ROOT: ${{ runner.temp }}/genesis-production-ci
-      PRODUCTION_CI_ENV_FILE: ${{ runner.temp }}/genesis-production-ci/production.env
-      PRODUCTION_CI_SECRET_DIR: ${{ runner.temp }}/genesis-production-ci/secrets
-      PRODUCTION_CI_OVERRIDE_FILE: ${{ runner.temp }}/genesis-production-ci/secret-files.override.yml
-      PRODUCTION_CI_RENDER_FILE: ${{ runner.temp }}/genesis-production-ci/rendered.json
 
     steps:
+      - name: Initialize synthetic production paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'PRODUCTION_CI_ROOT=%s\n' "$RUNNER_TEMP/genesis-production-ci"
+            printf 'PRODUCTION_CI_ENV_FILE=%s\n' "$RUNNER_TEMP/genesis-production-ci/production.env"
+            printf 'PRODUCTION_CI_SECRET_DIR=%s\n' "$RUNNER_TEMP/genesis-production-ci/secrets"
+            printf 'PRODUCTION_CI_OVERRIDE_FILE=%s\n' "$RUNNER_TEMP/genesis-production-ci/secret-files.override.yml"
+            printf 'PRODUCTION_CI_RENDER_FILE=%s\n' "$RUNNER_TEMP/genesis-production-ci/rendered.json"
+          } >> "$GITHUB_ENV"
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

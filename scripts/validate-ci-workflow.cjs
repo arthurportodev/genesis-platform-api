@@ -101,15 +101,21 @@ const SYNTHETIC_SECRET_FILES = Object.freeze({
   lead_idempotency_keys: 'lead-idempotency-keys',
 });
 const SYNTHETIC_PATH_ENV = Object.freeze({
-  PRODUCTION_CI_ROOT: '${{ runner.temp }}/genesis-production-ci',
-  PRODUCTION_CI_ENV_FILE:
-    '${{ runner.temp }}/genesis-production-ci/production.env',
-  PRODUCTION_CI_SECRET_DIR: '${{ runner.temp }}/genesis-production-ci/secrets',
+  PRODUCTION_CI_ROOT: '$RUNNER_TEMP/genesis-production-ci',
+  PRODUCTION_CI_ENV_FILE: '$RUNNER_TEMP/genesis-production-ci/production.env',
+  PRODUCTION_CI_SECRET_DIR: '$RUNNER_TEMP/genesis-production-ci/secrets',
   PRODUCTION_CI_OVERRIDE_FILE:
-    '${{ runner.temp }}/genesis-production-ci/secret-files.override.yml',
-  PRODUCTION_CI_RENDER_FILE:
-    '${{ runner.temp }}/genesis-production-ci/rendered.json',
+    '$RUNNER_TEMP/genesis-production-ci/secret-files.override.yml',
+  PRODUCTION_CI_RENDER_FILE: '$RUNNER_TEMP/genesis-production-ci/rendered.json',
 });
+const SYNTHETIC_PATH_INITIALIZATION = [
+  'set -euo pipefail',
+  '{',
+  ...Object.entries(SYNTHETIC_PATH_ENV).map(
+    ([name, path]) => `  printf '${name}=%s\\n' "${path}"`,
+  ),
+  '} >> "$GITHUB_ENV"',
+].join('\n');
 const SYNTHETIC_API_IMAGE =
   'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';
 const SYNTHETIC_POSTGRES_IMAGE =
@@ -395,6 +401,20 @@ function permissionFailures(value, expected, location) {
   return failures;
 }
 
+function jobEnvironmentContextFailures(jobs) {
+  const failures = [];
+  for (const [jobName, job] of Object.entries(jobs)) {
+    for (const [name, value] of Object.entries(job?.env ?? {})) {
+      if (/\$\{\{\s*runner\./u.test(String(value))) {
+        failures.push(
+          `jobs.${jobName}.env.${name} must not reference the unavailable runner context.`,
+        );
+      }
+    }
+  }
+  return failures;
+}
+
 function parseSyntheticEnvironment(run, failures) {
   const block =
     /cat > "\$PRODUCTION_CI_ENV_FILE" <<'ENV'\n([\s\S]*?)\nENV/gu.exec(
@@ -421,12 +441,10 @@ function parseSyntheticEnvironment(run, failures) {
 
 function syntheticProductionFailures(validate) {
   const failures = [];
-  for (const [name, expected] of Object.entries(SYNTHETIC_PATH_ENV)) {
-    if (validate.env?.[name] !== expected) {
-      failures.push(`${name} must remain under the exact runner.temp root.`);
-    }
-  }
   const steps = stepsFor(validate);
+  const initialize = steps.find(
+    (step) => step.name === 'Initialize synthetic production paths',
+  );
   const create = steps.find(
     (step) => step.name === 'Create synthetic production Compose inputs',
   );
@@ -450,15 +468,27 @@ function syntheticProductionFailures(validate) {
       'validate must not upload synthetic production inputs or rendered metadata.',
     );
   }
-  if (!create || !render || !compose || !cleanup) {
+  if (!initialize || !create || !render || !compose || !cleanup) {
     failures.push(
-      'synthetic production create, render, canonical validation and cleanup steps are required.',
+      'synthetic production path initialization, create, render, canonical validation and cleanup steps are required.',
     );
     return failures;
   }
+  const initializeRun = String(initialize.run ?? '').trim();
   const createRun = String(create.run ?? '');
   const renderRun = String(render.run ?? '');
   const cleanupRun = String(cleanup.run ?? '');
+  if (
+    initialize.shell !== 'bash' ||
+    initializeRun !== SYNTHETIC_PATH_INITIALIZATION ||
+    Object.keys(SYNTHETIC_PATH_ENV).some((name) =>
+      Object.hasOwn(validate.env ?? {}, name),
+    )
+  ) {
+    failures.push(
+      'synthetic production paths must be initialized exactly from RUNNER_TEMP through GITHUB_ENV during the first step.',
+    );
+  }
   if (
     create.shell !== 'bash' ||
     !createRun.includes('set -euo pipefail') ||
@@ -531,7 +561,7 @@ function syntheticProductionFailures(validate) {
     !createRun.includes('cat > "$PRODUCTION_CI_OVERRIDE_FILE" <<OVERRIDE')
   ) {
     failures.push(
-      'synthetic secret files require mode 0600 and a runner.temp override.',
+      'synthetic secret files require mode 0600 and a RUNNER_TEMP override.',
     );
   }
   for (const fragment of [
@@ -572,7 +602,7 @@ function syntheticProductionFailures(validate) {
     '${{ env.PRODUCTION_CI_ENV_FILE }}'
   ) {
     failures.push(
-      'Compose validation must use the synthetic runner.temp environment file.',
+      'Compose validation must use the synthetic RUNNER_TEMP environment file.',
     );
   }
   if (
@@ -594,11 +624,14 @@ function syntheticProductionFailures(validate) {
       'synthetic production cleanup must be exact, unconditional and silent.',
     );
   }
+  const initializeIndex = steps.indexOf(initialize);
   const createIndex = steps.indexOf(create);
   const renderIndex = steps.indexOf(render);
   const composeIndex = steps.indexOf(compose);
   const cleanupIndex = steps.indexOf(cleanup);
   if (!(
+    initializeIndex === 0 &&
+    initializeIndex < createIndex &&
     createIndex < renderIndex &&
     renderIndex < composeIndex &&
     composeIndex < cleanupIndex &&
@@ -610,7 +643,7 @@ function syntheticProductionFailures(validate) {
   }
   if (
     /github\.(?:event|sha|ref|actor)|secrets\./u.test(
-      `${createRun}\n${renderRun}\n${cleanupRun}`,
+      `${initializeRun}\n${createRun}\n${renderRun}\n${cleanupRun}`,
     )
   ) {
     failures.push(
@@ -811,6 +844,7 @@ function validateWorkflowDocument(workflow) {
   const imageImpact = jobs['image-impact'] ?? {};
   const build = jobs['build-and-scan'] ?? {};
   const publish = jobs['publish-image'] ?? {};
+  failures.push(...jobEnvironmentContextFailures(jobs));
   for (const [name, job] of Object.entries({
     validate,
     'image-impact': imageImpact,

@@ -4,6 +4,7 @@ const { join } = require('node:path');
 const test = require('node:test');
 const {
   SYNTHETIC_ENV_MATRIX,
+  SYNTHETIC_PATH_ENV,
   SYNTHETIC_SECRET_FILES,
   WORKFLOW_PATH,
   parseYamlSubset,
@@ -46,7 +47,11 @@ test('parser ignores comments and preserves job/step hierarchy', () => {
     'name: CI\n# pull_request_target packages: write docker push latest PAT',
   );
   const workflow = validateWorkflowSource(withAdversarialComments);
-  assert.equal(workflow.jobs.validate.steps[0].name, 'Checkout repository');
+  assert.equal(
+    workflow.jobs.validate.steps[0].name,
+    'Initialize synthetic production paths',
+  );
+  assert.equal(workflow.jobs.validate.steps[1].name, 'Checkout repository');
   assert.equal(workflow.jobs['publish-image'].permissions.packages, 'write');
 });
 
@@ -278,7 +283,72 @@ test('Compose validation uses only a synthetic runner temp env file', () => {
       'GENESIS_PRODUCTION_ENV_FILE: ${{ env.PRODUCTION_CI_ENV_FILE }}',
       'GENESIS_PRODUCTION_ENV_FILE: .env.production',
     ),
-    /synthetic runner\.temp/u,
+    /synthetic RUNNER_TEMP/u,
+  );
+});
+
+test('rejects the unavailable runner context structurally in jobs.*.env', () => {
+  const historicalInvalidEnvironment = [
+    '      PRODUCTION_CI_ROOT: ${{ runner.temp }}/genesis-production-ci',
+    '      PRODUCTION_CI_ENV_FILE: ${{ runner.temp }}/genesis-production-ci/production.env',
+    '      PRODUCTION_CI_SECRET_DIR: ${{ runner.temp }}/genesis-production-ci/secrets',
+    '      PRODUCTION_CI_OVERRIDE_FILE: ${{ runner.temp }}/genesis-production-ci/secret-files.override.yml',
+    '      PRODUCTION_CI_RENDER_FILE: ${{ runner.temp }}/genesis-production-ci/rendered.json',
+  ].join('\n');
+  rejects(
+    mutated(
+      '      DATABASE_MIGRATION_PASSWORD: test-only\n',
+      `      DATABASE_MIGRATION_PASSWORD: test-only\n${historicalInvalidEnvironment}\n`,
+    ),
+    /jobs\.validate\.env\.PRODUCTION_CI_ROOT.*unavailable runner context/u,
+  );
+  rejects(
+    mutated(
+      'IMAGE_REF: ghcr.io/arthurportodev/genesis-platform-api:sha-${{ github.sha }}',
+      'IMAGE_REF: ${{ runner.temp }}/invalid',
+    ),
+    /jobs\.build-and-scan\.env\.IMAGE_REF.*unavailable runner context/u,
+  );
+});
+
+test('initializes exactly five fixed paths through GITHUB_ENV before consumers', () => {
+  const workflow = validateWorkflowSource(source);
+  const initialize = workflow.jobs.validate.steps[0];
+  assert.equal(initialize.name, 'Initialize synthetic production paths');
+  assert.equal(initialize.shell, 'bash');
+  assert.match(initialize.run, /set -euo pipefail/u);
+  assert.match(initialize.run, /RUNNER_TEMP/u);
+  assert.match(initialize.run, /GITHUB_ENV/u);
+  assert.equal(
+    (initialize.run.match(/printf 'PRODUCTION_CI_[A-Z_]+=%s\\n'/gu) ?? [])
+      .length,
+    5,
+  );
+  for (const [name, path] of Object.entries(SYNTHETIC_PATH_ENV)) {
+    const exportLine = `            printf '${name}=%s\\n' "${path}"\n`;
+    assert.ok(source.includes(exportLine));
+    rejects(
+      mutated(exportLine, ''),
+      /initialized exactly from RUNNER_TEMP through GITHUB_ENV/u,
+    );
+  }
+  rejects(
+    mutated(
+      '    steps:\n      - name: Initialize synthetic production paths',
+      '    steps:\n      - name: Premature synthetic path consumer\n        run: test -n "$PRODUCTION_CI_ROOT"\n\n      - name: Initialize synthetic production paths',
+    ),
+    /created, rendered, validated and immediately cleaned in order/u,
+  );
+  rejects(
+    mutated('} >> "$GITHUB_ENV"', '} >> "$GITHUB_OUTPUT"'),
+    /initialized exactly from RUNNER_TEMP through GITHUB_ENV/u,
+  );
+  rejects(
+    mutated(
+      '"$RUNNER_TEMP/genesis-production-ci"',
+      '"$RUNNER_TEMP/${{ github.run_id }}"',
+    ),
+    /initialized exactly from RUNNER_TEMP through GITHUB_ENV/u,
   );
 });
 
@@ -305,13 +375,13 @@ test('requires the complete exact synthetic non-secret production matrix', () =>
   );
 });
 
-test('binds synthetic secret files to runner.temp, mode 0600 and exact cleanup', () => {
+test('binds synthetic secret files to RUNNER_TEMP, mode 0600 and exact cleanup', () => {
   rejects(
     mutated(
-      'PRODUCTION_CI_ROOT: ${{ runner.temp }}/genesis-production-ci',
-      'PRODUCTION_CI_ROOT: /tmp/genesis-production-ci',
+      '"$RUNNER_TEMP/genesis-production-ci"',
+      '"/tmp/genesis-production-ci"',
     ),
-    /exact runner\.temp root/u,
+    /initialized exactly from RUNNER_TEMP/u,
   );
   rejects(mutated('chmod 0600', 'chmod 0644'), /mode 0600/u);
   for (const filename of Object.values(SYNTHETIC_SECRET_FILES)) {
@@ -332,6 +402,20 @@ test('binds synthetic secret files to runner.temp, mode 0600 and exact cleanup',
   );
   rejects(
     mutated('        if: ${{ always() }}', '        if: ${{ success() }}'),
+    /cleanup must be exact, unconditional/u,
+  );
+  rejects(
+    mutated(
+      'rmdir -- "$PRODUCTION_CI_ROOT"',
+      'rm -f -- "$PRODUCTION_CI_ROOT"/*',
+    ),
+    /cleanup must be exact, unconditional/u,
+  );
+  rejects(
+    mutated(
+      'rmdir -- "$PRODUCTION_CI_ROOT"',
+      'rm -rf -- "$PRODUCTION_CI_ROOT"',
+    ),
     /cleanup must be exact, unconditional/u,
   );
   rejects(
