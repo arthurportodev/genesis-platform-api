@@ -103,8 +103,19 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Tag existente é validada e reescaneada por digest sem rebuild ou overwrite.
   Tag nova registra o config digest local antes do scan, exige que ele permaneça
   igual no push e aceita o manifesto remoto somente pelo digest reportado pelo
-  próprio push. A identidade final compara os digests esperado e observado de
-  manifesto e configuração; nenhuma releitura da tag mutável alimenta o artefato.
+  próprio push. `.Manifest` é tratado exclusivamente como descriptor do manifest
+  digest, o manifesto OCI bruto obtido por `--raw` fornece `config.digest` e
+  `.Image` fornece plataforma e labels. A imagem remota por digest é reescaneada
+  depois da verificação de identidade e do package e antes do artifact.
+- O package GHCR público foi aprovado explicitamente. A CI falha fechado se ele
+  estiver ausente, não estiver vinculado a `arthurportodev/genesis-platform-api`,
+  não for `public`, se a versão selecionada não possuir somente a tag SHA esperada
+  ou se existir tag mutável `latest`/`main`. A consulta usa a API oficial com o
+  `GITHUB_TOKEN` do job; PAT, scope adicional e mudança de visibilidade são
+  proibidos.
+- A imagem pública contém somente runtime e artefatos de produção; inspeção e
+  scans não encontraram secrets. Publicidade não reduz os controles de
+  integridade por SHA completo, digests, labels, scan e permissões mínimas.
   Provenance, SBOM, assinatura, multiarch, SARIF e cache remoto de build estão
   desabilitados ou fora do escopo. A CI não executa seed ou deploy.
 - Testes de integração recusam banco cujo nome não termine em `_test`.
@@ -112,7 +123,8 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 ## Integridade do repositório
 
 - A `main` é protegida por ruleset ativo e alterações entram obrigatoriamente por Pull Request.
-- O check `Validate backend` deve passar com a branch atualizada, e conversas de revisão devem estar resolvidas.
+- O check `Validate backend and production contracts` deve passar com a branch
+  atualizada, e conversas de revisão devem estar resolvidas.
 - O histórico deve permanecer linear; force push e exclusão da `main` são bloqueados.
 - Não há bypass permanente configurado para usuário, administrador, aplicação ou time.
 

@@ -301,10 +301,12 @@ jobs:
         if: ${{ steps.existence.outputs.exists == 'true' }}
         shell: bash
         run: |
-          docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/remote-manifest.json"
+          docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/remote-descriptor.json"
+          docker buildx imagetools inspect "$IMAGE_REF" --raw > "${{ runner.temp }}/remote-manifest.json"
           docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Image}}' > "${{ runner.temp }}/remote-image.json"
-          REMOTE_MANIFEST_JSON="${{ runner.temp }}/remote-manifest.json" REMOTE_IMAGE_JSON="${{ runner.temp }}/remote-image.json" node <<'NODE' > "${{ runner.temp }}/immutable-ref.txt"
+          REMOTE_DESCRIPTOR_JSON="${{ runner.temp }}/remote-descriptor.json" REMOTE_MANIFEST_JSON="${{ runner.temp }}/remote-manifest.json" REMOTE_IMAGE_JSON="${{ runner.temp }}/remote-image.json" node <<'NODE' > "${{ runner.temp }}/immutable-ref.txt"
           const { readFileSync } = require('node:fs');
+          const descriptor = JSON.parse(readFileSync(process.env.REMOTE_DESCRIPTOR_JSON, 'utf8'));
           const manifest = JSON.parse(readFileSync(process.env.REMOTE_MANIFEST_JSON, 'utf8'));
           const image = JSON.parse(readFileSync(process.env.REMOTE_IMAGE_JSON, 'utf8'));
           const labels = image?.config?.Labels ?? {};
@@ -316,12 +318,12 @@ jobs:
             'org.opencontainers.image.title': packageJson.name,
             'org.opencontainers.image.description': packageJson.description,
           };
-          if (!/^sha256:[a-f0-9]{64}$/.test(manifest?.digest ?? '')) throw new Error('existing image digest identity is invalid');
+          if (!/^sha256:[a-f0-9]{64}$/.test(descriptor?.digest ?? '')) throw new Error('existing image manifest digest identity is invalid');
           if (!/^sha256:[a-f0-9]{64}$/.test(manifest?.config?.digest ?? '')) throw new Error('existing image config identity is invalid');
           if (image?.os !== 'linux' || image?.architecture !== 'amd64') throw new Error('existing image platform mismatch');
           for (const [key, value] of Object.entries(expected)) if (labels[key] !== value) throw new Error(`existing image label mismatch: ${key}`);
           if (Number.isNaN(Date.parse(labels['org.opencontainers.image.created']))) throw new Error('existing image created label is invalid');
-          process.stdout.write(`${process.env.IMAGE_REPOSITORY}@${manifest.digest}\n${manifest.config.digest}`);
+          process.stdout.write(`${process.env.IMAGE_REPOSITORY}@${descriptor.digest}\n${manifest.config.digest}`);
           NODE
           mapfile -t existing_identity < "${{ runner.temp }}/immutable-ref.txt"
           if [ "${#existing_identity[@]}" -ne 2 ]; then
@@ -408,20 +410,6 @@ jobs:
           PRODUCTION_IMAGE_UNDER_TEST: ${{ env.IMAGE_REF }}
         run: node --test test/production/production-image.test.cjs
 
-      - name: Rescan existing immutable image
-        if: ${{ steps.existence.outputs.exists == 'true' }}
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: image
-          image-ref: ${{ steps.existing.outputs.immutable_ref }}
-          format: table
-          exit-code: '1'
-          ignore-unfixed: false
-          scanners: vuln
-          severity: CRITICAL
-          version: v0.70.0
-          cache: false
-
       - name: Scan new local image
         if: ${{ steps.existence.outputs.exists == 'false' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -503,10 +491,12 @@ jobs:
           EXPECTED_DIGEST: ${{ steps.selected.outputs.digest }}
           IMMUTABLE_REF: ${{ steps.selected.outputs.immutable_ref }}
         run: |
-          docker buildx imagetools inspect "$IMMUTABLE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/remote-manifest.json"
+          docker buildx imagetools inspect "$IMMUTABLE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/remote-descriptor.json"
+          docker buildx imagetools inspect "$IMMUTABLE_REF" --raw > "${{ runner.temp }}/remote-manifest.json"
           docker buildx imagetools inspect "$IMMUTABLE_REF" --format '{{json .Image}}' > "${{ runner.temp }}/remote-image.json"
-          REMOTE_MANIFEST_JSON="${{ runner.temp }}/remote-manifest.json" REMOTE_IMAGE_JSON="${{ runner.temp }}/remote-image.json" node <<'NODE' > "${{ runner.temp }}/immutable-ref.txt"
-          const { readFileSync, writeFileSync } = require('node:fs');
+          REMOTE_DESCRIPTOR_JSON="${{ runner.temp }}/remote-descriptor.json" REMOTE_MANIFEST_JSON="${{ runner.temp }}/remote-manifest.json" REMOTE_IMAGE_JSON="${{ runner.temp }}/remote-image.json" node <<'NODE' > "${{ runner.temp }}/immutable-ref.txt"
+          const { readFileSync } = require('node:fs');
+          const descriptor = JSON.parse(readFileSync(process.env.REMOTE_DESCRIPTOR_JSON, 'utf8'));
           const manifest = JSON.parse(readFileSync(process.env.REMOTE_MANIFEST_JSON, 'utf8'));
           const image = JSON.parse(readFileSync(process.env.REMOTE_IMAGE_JSON, 'utf8'));
           const labels = image?.config?.Labels ?? {};
@@ -518,30 +508,160 @@ jobs:
             'org.opencontainers.image.title': packageJson.name,
             'org.opencontainers.image.description': packageJson.description,
           };
-          const digest = manifest?.digest ?? '';
-          if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error('remote image digest identity is invalid');
-          if (digest !== process.env.EXPECTED_DIGEST) throw new Error('remote digest does not match the scanned immutable image');
-          if (manifest?.config?.digest !== process.env.EXPECTED_CONFIG_DIGEST) throw new Error('remote config does not match the scanned local image');
+          const manifestDigest = descriptor?.digest ?? '';
+          const configDigest = manifest?.config?.digest ?? '';
+          if (!/^sha256:[a-f0-9]{64}$/.test(manifestDigest)) throw new Error('remote manifest digest identity is invalid');
+          if (!/^sha256:[a-f0-9]{64}$/.test(configDigest)) throw new Error('remote config digest identity is invalid');
+          if (manifestDigest !== process.env.EXPECTED_DIGEST) throw new Error('remote manifest digest does not match the scanned immutable image');
+          if (configDigest !== process.env.EXPECTED_CONFIG_DIGEST) throw new Error('remote config does not match the scanned local image');
           const immutableReference = process.env.IMMUTABLE_REF;
-          if (immutableReference !== `${process.env.IMAGE_REPOSITORY}@${digest}`) throw new Error('immutable reference does not match the verified digest');
+          if (immutableReference !== `${process.env.IMAGE_REPOSITORY}@${manifestDigest}`) throw new Error('immutable reference does not match the verified digest');
           if (image?.os !== 'linux' || image?.architecture !== 'amd64') throw new Error('remote image platform mismatch');
           for (const [key, value] of Object.entries(expected)) if (labels[key] !== value) throw new Error(`remote image label mismatch: ${key}`);
           if (Number.isNaN(Date.parse(labels['org.opencontainers.image.created']))) throw new Error('remote image created label is invalid');
-          const identity = {
-            repository: process.env.IMAGE_REPOSITORY,
-            tag: process.env.IMAGE_TAG,
-            digest,
-            commit: process.env.GITHUB_SHA,
-            workflowRunId: process.env.GITHUB_RUN_ID,
-            workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-            immutableReference,
-            labels: Object.fromEntries(Object.keys(expected).concat('org.opencontainers.image.created').map((key) => [key, labels[key]])),
-          };
-          writeFileSync('image-identity.json', `${JSON.stringify(identity, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
           process.stdout.write(immutableReference);
           NODE
           immutable_ref="$(tr -d '\r\n' < "${{ runner.temp }}/immutable-ref.txt")"
           echo "immutable_ref=$immutable_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Verify public package linkage and immutable tag
+        id: package
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_DIGEST: ${{ steps.selected.outputs.digest }}
+        run: |
+          PACKAGE_JSON="${{ runner.temp }}/package.json" VERSIONS_JSON="${{ runner.temp }}/package-versions.json" node <<'NODE'
+          const { writeFileSync } = require('node:fs');
+          const apiRoot = process.env.GITHUB_API_URL;
+          const owner = process.env.GITHUB_REPOSITORY_OWNER;
+          const packageName = 'genesis-platform-api';
+          const headers = {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${process.env.GH_TOKEN}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+          };
+          async function request(path) {
+            const response = await fetch(`${apiRoot}${path}`, { headers });
+            if (!response.ok) {
+              const error = new Error(`GitHub Packages API failed closed: ${response.status}`);
+              error.status = response.status;
+              throw error;
+            }
+            return response.json();
+          }
+          const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+          async function loadVersions(encoded) {
+            const versions = [];
+            for (let page = 1; ; page += 1) {
+              const batch = await request(`/users/${owner}/packages/container/${encoded}/versions?per_page=100&page=${page}`);
+              if (!Array.isArray(batch)) throw new Error('package versions response is invalid');
+              versions.push(...batch);
+              if (batch.length < 100) break;
+            }
+            return versions;
+          }
+          async function main() {
+            const encoded = encodeURIComponent(packageName);
+            let pkg;
+            let versions;
+            let matching;
+            for (let attempt = 1; attempt <= 6; attempt += 1) {
+              try {
+                pkg = await request(`/users/${owner}/packages/container/${encoded}`);
+                versions = await loadVersions(encoded);
+                const expectedName = process.env.EXPECTED_DIGEST;
+                matching = versions.filter((version) => {
+                  const name = String(version?.name ?? '');
+                  return name === expectedName || `sha256:${name}` === expectedName;
+                });
+                if (matching.length === 1) break;
+              } catch (error) {
+                if (error.status !== 404 || attempt === 6) throw error;
+              }
+              if (attempt === 6) throw new Error('published manifest is not represented by exactly one package version');
+              await delay(5000);
+            }
+            const linkage = pkg?.repository?.full_name ?? '';
+            if (pkg?.package_type !== 'container') throw new Error('package type is not container');
+            if (pkg?.visibility !== 'public') throw new Error('package visibility is not public');
+            if (linkage !== process.env.GITHUB_REPOSITORY) throw new Error('package repository linkage mismatch');
+            const expectedTag = process.env.IMAGE_TAG;
+            if (matching.length !== 1) throw new Error('published manifest is not represented by exactly one package version');
+            const tags = matching[0]?.metadata?.container?.tags;
+            if (!Array.isArray(tags) || tags.length !== 1 || tags[0] !== expectedTag) throw new Error('published version must contain only the expected immutable tag');
+            const allTags = versions.flatMap((version) => version?.metadata?.container?.tags ?? []);
+            if (allTags.some((tag) => tag === 'latest' || tag === 'main')) throw new Error('mutable latest or main tag is forbidden');
+            writeFileSync(process.env.PACKAGE_JSON, `${JSON.stringify(pkg, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+            writeFileSync(process.env.VERSIONS_JSON, `${JSON.stringify({ expectedVersionId: matching[0].id, expectedTags: tags, allTags }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+          }
+          main().catch((error) => { console.error(error.message); process.exit(1); });
+          NODE
+
+      - name: Rescan verified remote immutable image
+        id: remote-scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.selected.outputs.immutable_ref }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: false
+          scanners: vuln
+          severity: CRITICAL
+          version: v0.70.0
+          cache: false
+
+      - name: Generate verified image identity evidence
+        id: evidence
+        shell: bash
+        env:
+          MANIFEST_DIGEST: ${{ steps.selected.outputs.digest }}
+          CONFIG_DIGEST: ${{ steps.selected.outputs.config_digest }}
+          IMMUTABLE_REF: ${{ steps.selected.outputs.immutable_ref }}
+        run: |
+          REMOTE_IMAGE_JSON="${{ runner.temp }}/remote-image.json" PACKAGE_JSON="${{ runner.temp }}/package.json" VERSIONS_JSON="${{ runner.temp }}/package-versions.json" node <<'NODE'
+          const { chmodSync, readFileSync, writeFileSync } = require('node:fs');
+          const image = JSON.parse(readFileSync(process.env.REMOTE_IMAGE_JSON, 'utf8'));
+          const pkg = JSON.parse(readFileSync(process.env.PACKAGE_JSON, 'utf8'));
+          const versions = JSON.parse(readFileSync(process.env.VERSIONS_JSON, 'utf8'));
+          const labels = image?.config?.Labels ?? {};
+          const identity = {
+            repository: process.env.IMAGE_REPOSITORY,
+            visibility: pkg.visibility,
+            tag: process.env.IMAGE_TAG,
+            manifestDigest: process.env.MANIFEST_DIGEST,
+            configDigest: process.env.CONFIG_DIGEST,
+            immutableReference: process.env.IMMUTABLE_REF,
+            commit: process.env.GITHUB_SHA,
+            workflowRunId: process.env.GITHUB_RUN_ID,
+            workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            platform: `${image.os}/${image.architecture}`,
+            labels,
+            scanner: {
+              name: 'Trivy',
+              version: '0.70.0',
+              scanners: ['vuln'],
+              severity: ['CRITICAL'],
+              ignoreUnfixed: false,
+              exitCode: 1,
+            },
+            remoteRescan: {
+              result: 'passed',
+              immutableReference: process.env.IMMUTABLE_REF,
+            },
+            package: {
+              name: pkg.name,
+              type: pkg.package_type,
+              visibility: pkg.visibility,
+              repository: pkg.repository.full_name,
+              versionId: versions.expectedVersionId,
+              tags: versions.expectedTags,
+            },
+          };
+          writeFileSync('image-identity.json', `${JSON.stringify(identity, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+          chmodSync('image-identity.json', 0o600);
+          NODE
 
       - name: Upload immutable image identity
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

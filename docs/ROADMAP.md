@@ -56,15 +56,17 @@ experimento é promovido automaticamente para o MVP.
 ### Tarefa atual
 
 - 🚧 `0.8-MVP-04` — CI essencial, GHCR e imagem identificável.
-  - candidata local com três jobs, contracts estruturais, build
-    `production/linux/amd64`, scan Critical antes do push, tag por SHA completo,
-    digest e labels OCI;
-  - runtime final Alpine 3.24 sem npm, npx, Yarn, Corepack, módulos globais ou o
-    pacote npm `tar`; Trivy v0.70.0 com base atualizada retornou zero Critical;
-  - a primeira verificação independente de 11/11 paths bloqueou a Gate 2 por
-    vínculo insuficiente entre scan e digest remoto e por evidência final não
-    hash-bound; a correção local e sua nova prova estão em andamento. Nenhuma
-    imagem ou package foi publicado.
+  - incorporada pelo PR #32 no squash
+    `c02af719c72277f49348de33762ff12dc589434d`;
+  - a execução pós-merge `31023264462` publicou a imagem após runtime e scan
+    Critical aprovados, mas falhou na evidência final por tentar obter o config
+    digest de um descriptor;
+  - Arthur aprovou manter público o package já exposto. Ele permanece vinculado
+    ao repositório, sob tag SHA completa e sem tags `latest` ou `main`; nenhum
+    deploy foi realizado;
+  - `0.8-MVP-04-CORR-01` corrige a leitura por manifesto OCI bruto, adiciona
+    verificação fail-closed do package e rescan remoto antes do artifact. Gate 3
+    permanece pendente até a correção ser entregue e executada canonicamente.
 
 ### Próximos deltas planejados
 
