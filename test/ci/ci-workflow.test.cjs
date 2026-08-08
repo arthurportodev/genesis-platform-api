@@ -26,6 +26,7 @@ test('accepts the authoritative workflow contract', () => {
   const workflow = validateWorkflowSource(source);
   assert.deepEqual(Object.keys(workflow.jobs).sort(), [
     'build-and-scan',
+    'image-impact',
     'publish-image',
     'validate',
   ]);
@@ -76,12 +77,82 @@ test('restricts global and job permissions', () => {
   );
 });
 
-test('requires exactly three jobs and their dependencies', () => {
+test('requires exactly four jobs and their dependencies', () => {
   rejects(
     mutated('    needs: validate', '    needs: publish-image'),
     /must need validate/u,
   );
   rejects(mutated('  publish-image:', '  release-image:'), /exactly validate/u);
+});
+
+test('image-impact runs only for main pushes with read-only permissions', () => {
+  rejects(
+    mutated(
+      '  image-impact:\n    name: Detect production image impact\n    permissions:\n      contents: read',
+      '  image-impact:\n    name: Detect production image impact\n    permissions:\n      contents: read\n      packages: write',
+    ),
+    /image-impact permissions/u,
+  );
+  rejects(
+    mutated(
+      "    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}\n    outputs:",
+      "    if: ${{ github.event_name == 'workflow_dispatch' }}\n    outputs:",
+    ),
+    /image-impact must run only/u,
+  );
+});
+
+test('image-impact uses full history and exact fail-closed endpoints', () => {
+  rejects(mutated('fetch-depth: 0', 'fetch-depth: 1'), /complete history/u);
+  rejects(
+    mutated('persist-credentials: false', 'persist-credentials: true'),
+    /no persisted credential/u,
+  );
+  rejects(
+    mutated(
+      'IMAGE_IMPACT_BASE_SHA: ${{ github.event.before }}',
+      'IMAGE_IMPACT_BASE_SHA: ${{ github.sha }}',
+    ),
+    /exact push endpoints/u,
+  );
+  rejects(
+    mutated(
+      'node scripts/detect-image-impact.cjs --base "$IMAGE_IMPACT_BASE_SHA" --head "$IMAGE_IMPACT_HEAD_SHA"',
+      'node scripts/detect-image-impact.cjs --base "$IMAGE_IMPACT_HEAD_SHA" --head "$IMAGE_IMPACT_HEAD_SHA"',
+    ),
+    /fail-closed detector/u,
+  );
+  rejects(
+    mutated(
+      '        id: detect\n        env:',
+      '        id: detect\n        continue-on-error: true\n        env:',
+    ),
+    /fail-closed detector|continue on error/u,
+  );
+  rejects(
+    mutated(
+      '      - name: Detect image-affecting paths',
+      '      - name: Extra command\n        run: node --version\n\n      - name: Detect image-affecting paths',
+    ),
+    /fail-closed detector/u,
+  );
+});
+
+test('image-impact exposes only its canonical boolean and has no registry capability', () => {
+  rejects(
+    mutated(
+      'should_publish: ${{ steps.detect.outputs.should_publish }}',
+      "should_publish: 'yes'",
+    ),
+    /canonical detector boolean/u,
+  );
+  rejects(
+    mutated(
+      '      - name: Detect image-affecting paths',
+      '      - name: Registry detour\n        run: docker login ghcr.io\n\n      - name: Detect image-affecting paths',
+    ),
+    /registry credentials|build, login/u,
+  );
 });
 
 test('requires explicit ubuntu-24.04 runners', () => {
@@ -94,10 +165,64 @@ test('requires explicit ubuntu-24.04 runners', () => {
 test('publish job is impossible outside push to main', () => {
   rejects(
     mutated(
-      "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+      "github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.validate.result == 'success' && needs.image-impact.result == 'success' && needs.image-impact.outputs.should_publish == 'true'",
       "github.event_name == 'workflow_dispatch'",
     ),
-    /only for push/u,
+    /successful validation and detection/u,
+  );
+});
+
+test('publisher requires successful detector and canonical true output', () => {
+  rejects(
+    mutated('      - image-impact\n    if:', '      - validate\n    if:'),
+    /must need validate and image-impact/u,
+  );
+  rejects(
+    mutated(
+      "needs.image-impact.result == 'success'",
+      "needs.image-impact.result != 'cancelled'",
+    ),
+    /successful validation and detection/u,
+  );
+  rejects(
+    mutated(
+      "needs.image-impact.outputs.should_publish == 'true'",
+      "needs.image-impact.outputs.should_publish != 'false'",
+    ),
+    /canonical true image impact/u,
+  );
+});
+
+test('simulates docs skip, src authorization, and detector failure without publication', () => {
+  const publishAuthorized = ({
+    eventName = 'push',
+    impactResult = 'success',
+    ref = 'refs/heads/main',
+    shouldPublish,
+    validateResult = 'success',
+  }) =>
+    eventName === 'push' &&
+    ref === 'refs/heads/main' &&
+    validateResult === 'success' &&
+    impactResult === 'success' &&
+    shouldPublish === 'true';
+
+  assert.equal(publishAuthorized({ shouldPublish: 'false' }), false);
+  assert.equal(publishAuthorized({ shouldPublish: 'true' }), true);
+  assert.equal(
+    publishAuthorized({ impactResult: 'failure', shouldPublish: 'true' }),
+    false,
+  );
+  assert.equal(
+    publishAuthorized({ eventName: 'pull_request', shouldPublish: 'true' }),
+    false,
+  );
+  assert.equal(
+    publishAuthorized({
+      eventName: 'workflow_dispatch',
+      shouldPublish: 'true',
+    }),
+    false,
   );
 });
 
@@ -118,6 +243,13 @@ test('validate cannot build, login, push, or receive package write', () => {
       '      - name: Run lint\n        run: docker build .',
     ),
     /validate must not build/u,
+  );
+  rejects(
+    mutated(
+      '    timeout-minutes: 25\n\n    services:',
+      "    timeout-minutes: 25\n    if: ${{ github.event_name == 'pull_request' }}\n\n    services:",
+    ),
+    /validate must run for every/u,
   );
 });
 

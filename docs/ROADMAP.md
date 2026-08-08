@@ -55,7 +55,7 @@ experimento é promovido automaticamente para o MVP.
 
 ### Tarefa atual
 
-- 🚧 `0.8-MVP-04` — CI essencial, GHCR e imagem identificável.
+- ✅ `0.8-MVP-04` — CI essencial, GHCR e imagem identificável.
   - incorporada pelo PR #32 no squash
     `c02af719c72277f49348de33762ff12dc589434d`;
   - a execução pós-merge `31023264462` publicou a imagem após runtime e scan
@@ -64,13 +64,22 @@ experimento é promovido automaticamente para o MVP.
   - Arthur aprovou manter público o package já exposto. Ele permanece vinculado
     ao repositório, sob tag SHA completa e sem tags `latest` ou `main`; nenhum
     deploy foi realizado;
-  - `0.8-MVP-04-CORR-01` corrige a leitura por manifesto OCI bruto, adiciona
-    verificação fail-closed do package e rescan remoto antes do artifact. Gate 3
-    permanece pendente até a correção ser entregue e executada canonicamente.
+  - `0.8-MVP-04-CORR-01` foi incorporada pelo PR #33 no squash
+    `c6fbc0b865540abd9d13f93c7cc7542eb0936355`; a CI pós-merge `31249557339`
+    aprovou identidade, package, rescan e artifact e concluiu integralmente a
+    tarefa.
+- 🚧 `0.8-MVP-04-CORR-02` — publicação GHCR condicionada ao impacto real.
+  - mantém validação completa em todo push da `main`;
+  - usa detector read-only e fail-closed para autorizar o publicador somente
+    quando Dockerfile, entradas do build ou `src/**` podem mudar a imagem;
+  - deltas apenas documentais, operacionais, de Compose, CI, scripts ou testes
+    não autenticam, constroem ou publicam imagem;
+  - candidata local em Gate 2, sem alteração no package histórico.
 
 ### Próximos deltas planejados
 
-- ⬜ `0.8-MVP-05` — VPS, PostgreSQL, secrets e migrations.
+- ⬜ `0.8-MVP-05` — VPS, PostgreSQL, secrets e migrations; início condicionado
+  ao inventário read-only da VPS e às decisões humanas registradas.
 - ⬜ `0.8-MVP-06` — Traefik, HTTPS e exposição controlada da API.
 - ⬜ `0.8-MVP-07` — Backup, restore, logs, monitoramento e rollback.
 - ⬜ `0.8-MVP-08` — Vercel, proxy, domínio e integração frontend/backend.

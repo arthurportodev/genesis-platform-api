@@ -91,11 +91,23 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - `.env` é ignorado; `.env.example` contém apenas placeholders e valores descartáveis.
 - JWT secret e refresh pepper são independentes, obrigatórios e validados contra placeholders conhecidos.
 - `INITIAL_OWNER_PASSWORD` é opcional no runtime e usada somente pelo seed quando falta credencial; não deve permanecer no ambiente, ser logada ou versionada.
-- `validate` e `build-and-scan` têm somente `contents: read`, usam PostgreSQL
-  `_test` descartável e valores sintéticos e nunca autenticam ou publicam.
-- Somente `publish-image`, condicionado a `push` da `main`, recebe
-  `packages: write` e usa `GITHUB_TOKEN` para o GHCR. Não existe PAT ou secret
-  adicional, e nenhuma credencial é passada como build arg.
+- `validate`, `image-impact` e `build-and-scan` têm somente `contents: read`.
+  `validate` usa PostgreSQL `_test` descartável e valores sintéticos;
+  `image-impact` usa apenas Git e Node.js; nenhum deles autentica ou publica.
+- Todo `push` da `main` mantém a validação completa. `image-impact` compara
+  `github.event.before` e `github.sha` como commits completos e emite somente o
+  booleano canônico `should_publish`; SHA inválido, range irresolúvel, path
+  inseguro ou saída Git ambígua falha fechado.
+- Somente `publish-image`, condicionado a `push` impactante da `main`, sucesso
+  de `validate` e `image-impact` e saída exata `true`, recebe `packages: write`
+  e usa `GITHUB_TOKEN` para o GHCR. Não existe PAT ou secret adicional, e
+  nenhuma credencial é passada como build arg. Mudanças somente documentais,
+  operacionais, de Compose, CI, scripts ou testes param antes de login e build.
+- A allowlist image-affecting contém apenas `Dockerfile`, `.dockerignore`,
+  `.npmrc` quando rastreado, manifests npm, `nest-cli.json`, `tsconfig.json`,
+  demais `tsconfig*.json` legítimos na raiz e `src/**`. Ela deve mudar no mesmo
+  delta que introduzir uma nova entrada do build ou do filesystem final, com
+  atualização do detector, testes, validator e documentação.
 - A imagem `linux/amd64` usa somente tag `sha-<SHA completo>`, seis labels OCI e
   referência remota por digest. Trivy v0.70.0, fixado por Action em SHA completo, bloqueia
   vulnerabilidade Critical inclusive sem correção antes de qualquer push;
@@ -118,6 +130,10 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   integridade por SHA completo, digests, labels, scan e permissões mínimas.
   Provenance, SBOM, assinatura, multiarch, SARIF e cache remoto de build estão
   desabilitados ou fora do escopo. A CI não executa seed ou deploy.
+- A `0.8-MVP-04-CORR-01` foi concluída integralmente no PR #33 e sua execução
+  pós-merge preservou o package público e publicou apenas a tag imutável do
+  squash aprovado. A correção de filtro não altera package, tags históricas,
+  visibilidade, digests ou permissões do GHCR.
 - Testes de integração recusam banco cujo nome não termine em `_test`.
 
 ## Integridade do repositório

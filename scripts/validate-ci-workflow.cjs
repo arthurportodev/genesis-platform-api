@@ -526,17 +526,24 @@ function validateWorkflowDocument(workflow) {
   }
   if (
     JSON.stringify(Object.keys(jobs).sort()) !==
-    JSON.stringify(['build-and-scan', 'publish-image', 'validate'])
+    JSON.stringify([
+      'build-and-scan',
+      'image-impact',
+      'publish-image',
+      'validate',
+    ])
   ) {
     failures.push(
-      'workflow must contain exactly validate, build-and-scan, and publish-image jobs.',
+      'workflow must contain exactly validate, image-impact, build-and-scan, and publish-image jobs.',
     );
   }
   const validate = jobs.validate ?? {};
+  const imageImpact = jobs['image-impact'] ?? {};
   const build = jobs['build-and-scan'] ?? {};
   const publish = jobs['publish-image'] ?? {};
   for (const [name, job] of Object.entries({
     validate,
+    'image-impact': imageImpact,
     'build-and-scan': build,
     'publish-image': publish,
   })) {
@@ -548,6 +555,13 @@ function validateWorkflowDocument(workflow) {
       validate.permissions,
       { contents: 'read' },
       'validate',
+    ),
+  );
+  failures.push(
+    ...permissionFailures(
+      imageImpact.permissions,
+      { contents: 'read' },
+      'image-impact',
     ),
   );
   failures.push(
@@ -566,8 +580,23 @@ function validateWorkflowDocument(workflow) {
   );
   if (build.needs !== 'validate')
     failures.push('build-and-scan must need validate.');
-  if (publish.needs !== 'validate')
-    failures.push('publish-image must need validate.');
+  if (normalizeExpression(validate.if) !== '') {
+    failures.push('validate must run for every configured workflow event.');
+  }
+  if (
+    !Array.isArray(publish.needs) ||
+    JSON.stringify([...publish.needs].sort()) !==
+      JSON.stringify(['image-impact', 'validate'])
+  ) {
+    failures.push('publish-image must need validate and image-impact.');
+  }
+  const imageImpactCondition = normalizeExpression(imageImpact.if);
+  if (
+    imageImpactCondition !==
+    "github.event_name == 'push' && github.ref == 'refs/heads/main'"
+  ) {
+    failures.push('image-impact must run only for push of refs/heads/main.');
+  }
   const buildCondition = normalizeExpression(build.if);
   if (
     buildCondition !==
@@ -580,9 +609,77 @@ function validateWorkflowDocument(workflow) {
   const publishCondition = normalizeExpression(publish.if);
   if (
     publishCondition !==
-    "github.event_name == 'push' && github.ref == 'refs/heads/main'"
+    "github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.validate.result == 'success' && needs.image-impact.result == 'success' && needs.image-impact.outputs.should_publish == 'true'"
   ) {
-    failures.push('publish-image must run only for push of refs/heads/main.');
+    failures.push(
+      'publish-image must require push of main, successful validation and detection, and canonical true image impact.',
+    );
+  }
+
+  const imageImpactSteps = stepsFor(imageImpact);
+  const imageImpactCheckouts = imageImpactSteps.filter(
+    (step) => actionReference(step)?.action === 'actions/checkout',
+  );
+  if (
+    imageImpactCheckouts.length !== 1 ||
+    Number(imageImpactCheckouts[0]?.with?.['fetch-depth']) !== 0 ||
+    imageImpactCheckouts[0]?.with?.['persist-credentials'] !== false
+  ) {
+    failures.push(
+      'image-impact must use one pinned checkout with complete history and no persisted credential.',
+    );
+  }
+  const imageImpactSetups = imageImpactSteps.filter(
+    (step) => actionReference(step)?.action === 'actions/setup-node',
+  );
+  if (
+    imageImpactSetups.length !== 1 ||
+    imageImpactSetups[0]?.with?.['node-version-file'] !== '.nvmrc'
+  ) {
+    failures.push('image-impact must use the pinned project Node.js runtime.');
+  }
+  const detector = imageImpactSteps.find((step) => step.id === 'detect');
+  if (
+    imageImpactSteps.length !== 3 ||
+    imageImpactSteps[0] !== imageImpactCheckouts[0] ||
+    imageImpactSteps[1] !== imageImpactSetups[0] ||
+    imageImpactSteps[2] !== detector ||
+    !detector ||
+    String(detector.run ?? '').trim() !==
+      'node scripts/detect-image-impact.cjs --base "$IMAGE_IMPACT_BASE_SHA" --head "$IMAGE_IMPACT_HEAD_SHA"' ||
+    detector.env?.IMAGE_IMPACT_BASE_SHA !== '${{ github.event.before }}' ||
+    detector.env?.IMAGE_IMPACT_HEAD_SHA !== '${{ github.sha }}' ||
+    Object.hasOwn(detector, 'continue-on-error')
+  ) {
+    failures.push(
+      'image-impact must invoke the fail-closed detector with the exact push endpoints.',
+    );
+  }
+  if (
+    !imageImpact.outputs ||
+    typeof imageImpact.outputs !== 'object' ||
+    Array.isArray(imageImpact.outputs) ||
+    JSON.stringify(imageImpact.outputs) !==
+      JSON.stringify({
+        should_publish: '${{ steps.detect.outputs.should_publish }}',
+      })
+  ) {
+    failures.push(
+      'image-impact must expose only the canonical detector boolean.',
+    );
+  }
+  if (
+    Object.hasOwn(imageImpact, 'continue-on-error') ||
+    imageImpactSteps.some(
+      (step) =>
+        actionReference(step)?.action.startsWith('docker/') ||
+        /\bdocker\s+(?:build|login|push)\b/u.test(String(step.run ?? '')) ||
+        /secrets\.|GITHUB_TOKEN|ghcr\.io/iu.test(JSON.stringify(step)),
+    )
+  ) {
+    failures.push(
+      'image-impact must not continue on error, use registry credentials, build, login, or publish.',
+    );
   }
 
   const validateSteps = stepsFor(validate);

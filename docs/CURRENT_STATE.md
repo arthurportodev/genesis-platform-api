@@ -1,27 +1,25 @@
 # Estado atual
 
-- **Última atualização:** 2026-08-05
+- **Última atualização:** 2026-08-08
 - **Fase concluída:** 0.7 — Frontend operacional
 - **Fase atual:** 0.8-MVP — Primeira produção mínima viável
 - **Última tarefa funcional concluída:** 0.7.6 — Criação Manual de Leads
   (repositório `arthurportodev/genesis-platform-web`, PR #7, squash
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`)
-- **Último delta incorporado:** `0.8-MVP-04 — CI essencial, GHCR e imagem
-identificável`, pelo PR #32 no squash
-  `c02af719c72277f49348de33762ff12dc589434d`
+- **Último delta incorporado:** `0.8-MVP-04-CORR-01 — identidade remota e
+evidências do GHCR`, pelo PR #33 no squash
+  `c6fbc0b865540abd9d13f93c7cc7542eb0936355`
 - **Última tarefa de governança concluída:** 0.8.1.1 — Evolução do Sistema
   Operacional de Desenvolvimento, incorporada no backend pelo PR #26, squash
   `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
   squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
-- **Tarefa atual:** `0.8-MVP-04-CORR-01 — identidade remota e evidências do
-GHCR`; corrige o falso negativo do config digest, exige rescan remoto e gera
-  evidência completa somente após identidade e package aprovados; Gate 2
-  pendente nos oito paths autorizados
+- **Tarefa atual:** `0.8-MVP-04-CORR-02 — publicação GHCR condicionada ao
+impacto real na imagem`; candidata local adiciona detecção fail-closed e
+  preserva validação completa em todo push; Gate 2 pendente
 - **Produção:** infraestrutura ainda não publicada; nenhum dado real autorizado
-- **CI pós-merge da `main`:** execução `31023264462` parcialmente bem-sucedida
-  no squash `c02af719c72277f49348de33762ff12dc589434d`; validate, build, runtime,
-  scan e push passaram, mas a identidade final falhou por interpretar o
-  descriptor como manifesto OCI bruto
+- **CI pós-merge da `main`:** execução `31249557339` aprovada integralmente no
+  squash `c6fbc0b865540abd9d13f93c7cc7542eb0936355`, incluindo validate, runtime,
+  scan local, push, identidade remota, package público, rescan e artifact
 - **Experimento legado:** PR #28 superseded pelo PR #29 e fechado sem merge;
   branch histórica preservada, sem promoção para o MVP
 - **Proteção da `main`:** Pull Request e check
@@ -41,17 +39,24 @@ GHCR`; corrige o falso negativo do config digest, exige rescan remoto e gera
 - Rate limit de login em memória e confiança em proxy configurável por saltos.
 - Testes unitários, E2E e de integração; CI incorporada com contratos
   estruturais, validação do Compose, build local de PR/manual, scan Critical e
-  publicação GHCR restrita a `push` da `main`.
+  publicação GHCR restrita a `push` impactante da `main`. A validação completa
+  continua em todo push; detector read-only bloqueia publicação para deltas
+  apenas documentais, operacionais, de Compose, CI, scripts ou testes.
 - Target Docker `production` mínimo e não-root e Compose de produção isolado
   com PostgreSQL 17 privado, migration one-shot, roles separadas, health,
   persistência, hardening, limites e rotação de logs, incorporados pelo PR
   #31; sem deploy.
 - Package público `ghcr.io/arthurportodev/genesis-platform-api` vinculado ao
-  repositório, com versão histórica sob tag SHA completa, manifest digest
+  repositório, com versões sob tags SHA completas. A versão histórica possui
+  manifest digest
   `sha256:c839d9d89aa12648e147eebfc2d5b5a09c62080ff50881318e2984ea51ccdc69`
   e config digest
   `sha256:c4bccf7a8e37aa73d46d6717876841a3fe6e343797753786150f8f350c649d9f`;
-  nenhuma tag `latest` ou `main` e nenhum deploy.
+  a versão de fechamento usa manifest
+  `sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
+  e config
+  `sha256:696d37b59113ad6bc45247c1b9381b2238a322eb365f82ad6c2c9135456765d9`.
+  Nenhuma tag `latest` ou `main` e nenhum deploy.
 - Fundação 0.3.1 incorporada com `Lead`, `LeadEntry`, timeline, intake manual e `genesis_form` fail-closed, deduplicação E.164, idempotência durável, inbox tenant-scoped, edição básica e assignment.
 - Pipeline 0.3.2 incorporado com ciclos comerciais imutáveis, fechamento ganho/perdido/arquivado, reativação, revisão agregada de retornos e comandos idempotentes.
 - Atividades e Follow-up 0.3.3 incorporados com Activity e Note append-only, Next Action única, timezone IANA da Organization e timeline operacional paginada.

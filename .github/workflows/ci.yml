@@ -152,6 +152,35 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
 
+  image-impact:
+    name: Detect production image impact
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    outputs:
+      should_publish: ${{ steps.detect.outputs.should_publish }}
+
+    steps:
+      - name: Checkout complete push history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Detect image-affecting paths
+        id: detect
+        env:
+          IMAGE_IMPACT_BASE_SHA: ${{ github.event.before }}
+          IMAGE_IMPACT_HEAD_SHA: ${{ github.sha }}
+        run: node scripts/detect-image-impact.cjs --base "$IMAGE_IMPACT_BASE_SHA" --head "$IMAGE_IMPACT_HEAD_SHA"
+
   build-and-scan:
     name: Build and scan production image
     permissions:
@@ -251,8 +280,10 @@ jobs:
       packages: write
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: validate
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs:
+      - validate
+      - image-impact
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.validate.result == 'success' && needs.image-impact.result == 'success' && needs.image-impact.outputs.should_publish == 'true' }}
     env:
       DOCKER_BUILD_RECORD_UPLOAD: 'false'
       IMAGE_REPOSITORY: ghcr.io/arthurportodev/genesis-platform-api

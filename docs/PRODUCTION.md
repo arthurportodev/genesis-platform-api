@@ -17,12 +17,13 @@ documento; requisitos avançados permanecem no backlog pós-MVP.
 O runtime health, a rebaseline documental e o container/Compose de produção
 foram incorporados pelos PRs #29 e #31. A CI essencial e a publicação GHCR
 foram incorporadas pelo PR #32 no squash
-`c02af719c72277f49348de33762ff12dc589434d`. A execução pós-merge
-`31023264462` validou, escaneou e publicou a imagem, mas terminou com um falso
-negativo ao tentar ler `config.digest` de um descriptor que contém apenas
-`mediaType`, `digest` e `size`. Isso comprova uma imagem pública, não uma
-produção operacional: nenhuma infraestrutura da aplicação foi implantada e
-nenhum deploy foi realizado. A VPS Hostinger KVM 2 já
+`c02af719c72277f49348de33762ff12dc589434d`. A correção de identidade remota e
+evidências foi incorporada pelo PR #33 no squash
+`c6fbc0b865540abd9d13f93c7cc7542eb0936355`; a execução pós-merge
+`31249557339` aprovou validação, runtime, scan local, push, identidade remota,
+package público, rescan por digest e artifact. Isso comprova imagens públicas,
+não uma produção operacional: nenhuma infraestrutura da aplicação foi
+implantada e nenhum deploy foi realizado. A VPS Hostinger KVM 2 já
 foi contratada e é o destino previsto; seu inventário, configuração e adequação
 à topologia do MVP ainda precisam ser comprovados. O estado de DNS, origem,
 Vercel, Traefik, PostgreSQL da aplicação, secrets, backup, restore,
@@ -132,15 +133,32 @@ topologia, credencial ou causa interna.
 
 ## CI e imagem
 
-A `0.8-MVP-04` divide a CI em `validate`, `build-and-scan` e
+A `0.8-MVP-04` divide a CI em `validate`, `image-impact`, `build-and-scan` e
 `publish-image`, todos em `ubuntu-24.04`. `validate` preserva o perfil completo e
 acrescenta contratos da CI, os 34 testes focados de produção e validação real
 do Compose com valores sintéticos. Em Pull Requests e execuções manuais,
 `build-and-scan` produz uma única imagem local do target `production` para
 `linux/amd64` e a submete ao Trivy antes de terminar, sem login ou publicação.
 
-Somente `push` da `main` habilita `publish-image`, com `contents: read` e
-`packages: write` limitados ao job. A identidade canônica é
+Todo `push` da `main` continua executando `validate`. O job não privilegiado
+`image-impact`, também limitado a esse evento e com somente `contents: read`,
+compara os commits completos `before` e `head`. `publish-image` depende dos
+dois jobs e somente é autorizado quando ambos terminam com sucesso e o detector
+emite exatamente `should_publish=true`. Falha de Git, SHA inválido, range não
+resolvido ou saída ambígua deixa o workflow vermelho e impede login, build e
+push. Mudança apenas documental, operacional, de Compose, CI, scripts ou testes
+emite `false`, portanto a própria correção do filtro não publica imagem.
+
+Os paths canônicos que podem alterar a imagem são `Dockerfile`, `.dockerignore`,
+`.npmrc` quando rastreado, `package.json`, `package-lock.json`, `nest-cli.json`,
+`tsconfig.json`, os demais `tsconfig*.json` legítimos na raiz e `src/**`,
+incluindo as migrations versionadas atuais. A lista deve ser revista junto com
+o Dockerfile sempre que mudarem entradas de dependências, build Nest, geração
+de `dist`, migrations embarcadas ou arquivos copiados para o runtime final; o
+mesmo delta deve atualizar detector, testes, validator da CI e este documento.
+
+Somente um `push` impactante da `main` habilita `publish-image`, com
+`contents: read` e `packages: write` limitados ao job. A identidade canônica é
 `ghcr.io/arthurportodev/genesis-platform-api:sha-<SHA completo>`. O fluxo de tag
 nova constrói uma vez, carrega, registra o config digest local, verifica as seis
 labels OCI, bloqueia toda vulnerabilidade Critical e revalida esse config digest
@@ -164,11 +182,17 @@ Arthur aprovou manter público o package
 `ghcr.io/arthurportodev/genesis-platform-api`. A integridade não depende de
 sigilo do artefato: ela é garantida por tag com SHA completo, referência por
 digest, labels OCI, scans Critical e permissões mínimas. A versão histórica
-publicada possui somente a tag
+original possui somente a tag
 `sha-c02af719c72277f49348de33762ff12dc589434d`, manifest digest
 `sha256:c839d9d89aa12648e147eebfc2d5b5a09c62080ff50881318e2984ea51ccdc69`
 e config digest
 `sha256:c4bccf7a8e37aa73d46d6717876841a3fe6e343797753786150f8f350c649d9f`.
+O fechamento da correção publicou somente a tag
+`sha-c6fbc0b865540abd9d13f93c7cc7542eb0936355`, manifest digest
+`sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
+e config digest
+`sha256:696d37b59113ad6bc45247c1b9381b2238a322eb365f82ad6c2c9135456765d9`.
+Esta correção de filtro não altera nem republica nenhuma dessas versões.
 O marcador visual “Latest” do GitHub não é uma tag `latest`. O package não será
 excluído, recriado ou tornado privado por esta correção.
 

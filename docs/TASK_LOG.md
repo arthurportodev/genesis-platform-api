@@ -451,7 +451,7 @@ dados reais.
 
 ## 0.8-MVP-04 — CI essencial, GHCR e imagem identificável
 
-**Incorporada com correção posterior necessária.** O PR #32 entrou na `main` no
+**Concluída integralmente após correção.** O PR #32 entrou na `main` no
 squash `c02af719c72277f49348de33762ff12dc589434d`. A execução pós-merge
 `31023264462` aprovou validação, build único `production/linux/amd64`, runtime,
 Trivy v0.70.0 com zero Critical e push. O package foi publicado com sucesso,
@@ -476,8 +476,9 @@ tag `latest`, e também não existe tag `main`.
 
 ## 0.8-MVP-04-CORR-01 — Identidade remota e evidências do GHCR
 
-**Candidata corretiva validada localmente, Gate 2 pendente.** O descriptor passa a
-fornecer somente o manifest digest, o manifesto OCI bruto obtido por `--raw`
+**Concluída e incorporada.** O PR #33 entrou na `main` no squash
+`c6fbc0b865540abd9d13f93c7cc7542eb0936355`. O descriptor passa a fornecer
+somente o manifest digest, o manifesto OCI bruto obtido por `--raw`
 fornece `config.digest` e `.Image` fornece `linux/amd64` e as seis labels OCI.
 Os caminhos de tag nova e existente permanecem fail-closed e idempotentes; tag
 existente nunca é reconstruída ou sobrescrita.
@@ -490,8 +491,35 @@ artifact. Só então `image-identity.json` é criado em modo `0600`, com os dois
 digests, referência imutável, commit, run, plataforma, labels, scanner,
 resultado e vínculo do package, para retenção de 14 dias.
 
-A execução local e a Gate 2 são read-only em relação ao GHCR. A correção não
-publica nova imagem, não altera package, visibilidade, permissões, ruleset,
-infraestrutura ou deploy. Uma nova execução canônica exige autorização humana
-posterior para commit, PR, merge e CI pós-merge; a Gate 3 da `0.8-MVP-04`
-permanece pendente até essa execução ser aprovada.
+A execução pós-merge `31249557339` aprovou validação, runtime, Trivy v0.70.0
+local, único push, identidade remota, package público, rescan por digest e
+artifact. A tag `sha-c6fbc0b865540abd9d13f93c7cc7542eb0936355` aponta para o
+manifest digest
+`sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
+e config digest
+`sha256:696d37b59113ad6bc45247c1b9381b2238a322eb365f82ad6c2c9135456765d9`.
+Não houve alteração de visibilidade, ruleset, infraestrutura ou deploy. A
+correção concluiu a Gate 3 e a `0.8-MVP-04`.
+
+## 0.8-MVP-04-CORR-02 — Publicação GHCR condicionada ao impacto real
+
+**Candidata local em Gate 2.** Todo Pull Request, push da `main` e execução
+manual continua recebendo a validação completa aplicável. Em push da `main`, o
+job read-only `image-impact` compara os commits completos `before` e `head` por
+Git sem shell e emite somente `should_publish=true|false`. O publicador depende
+do sucesso de `validate` e `image-impact` e da saída canônica `true`; falha de
+SHA, range, path ou parsing bloqueia o workflow e não permite publicação.
+
+A allowlist mínima contém `Dockerfile`, `.dockerignore`, `.npmrc` quando
+rastreado, `package.json`, `package-lock.json`, `nest-cli.json`, os
+`tsconfig*.json` legítimos na raiz e `src/**`, incluindo as migrations atuais.
+Documentação, runbooks, Compose, CI, scripts, testes, schemas, `.agents`,
+`.codex` e `docker/postgres/**` não alteram a imagem sob o Dockerfile vigente.
+A lista precisa ser atualizada junto com qualquer nova entrada do build ou do
+runtime final.
+
+A própria candidata modifica somente workflow, detector, validator, testes e
+documentação, portanto retorna `false` e deixa `publish-image` skipped antes de
+login ou build. Nenhuma imagem, tag, package, credencial, infraestrutura, VPS
+ou deploy foi alterado durante a implementação local. A `0.8-MVP-05` permanece
+condicionada ao inventário read-only da VPS e às decisões humanas pendentes.
