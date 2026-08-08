@@ -135,6 +135,19 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   squash aprovado. A correção de filtro não altera package, tags históricas,
   visibilidade, digests ou permissões do GHCR.
 - Testes de integração recusam banco cujo nome não termine em `_test`.
+- O contrato candidato da `0.8-MVP-05A` remove secrets do `environment` do
+  Compose. Arquivos individuais de host são montados seletivamente por
+  Compose secrets; os containers não-root da API e migration recebem apenas o
+  GID suplementar 70 modelado. O host, grupo e arquivos só serão criados em
+  tarefa operacional posterior.
+- Wrappers POSIX read-only usam paths constantes, falham diante de arquivo
+  ausente ou vazio, removem somente um newline terminal, preservam caracteres
+  especiais e terminam em `exec`. Eles não imprimem valores. O PostgreSQL usa
+  `POSTGRES_PASSWORD_FILE`; `docker inspect Config.Env` contém somente paths e
+  configuração não secreta.
+- Bootstrap, migration e runtime recebem subconjuntos distintos. A API nunca
+  recebe bootstrap/migration; migration nunca recebe bootstrap/runtime/JWT;
+  PostgreSQL não recebe JWT, pepper ou keyring de Leads.
 
 ## Integridade do repositório
 
@@ -226,8 +239,20 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   hops públicos.
 - Somente o Traefik publica a origem. API e PostgreSQL permanecem em rede
   privada, sem bind público.
-- PostgreSQL usa persistência, role runtime restrita, role de migrations
-  separada e migrations controladas.
+- PostgreSQL usa persistência externa, bootstrap superuser separado, migration
+  owner sem atributos administrativos, runtime restrito e migrations
+  controladas. Os três nomes são distintos, não possuem memberships entre si,
+  e privilégios de `PUBLIC` são revogados no database/schema.
+- API e PostgreSQL são fixados por digest para `linux/amd64`; tags e fallback
+  mutável são rejeitados pelo validator e pelo bundle.
+- Bundle `candidate` é explicitamente não operacional e preso à identidade da
+  candidata local. Somente `committed-release`, reconstruído e verificado
+  contra paths, blobs e modes de um commit real, pode seguir para uma VPS.
+- Os scripts do bundle permanecem `0644`: API/migration são interpretados por
+  `/bin/sh`, e o init não executável é lido com `source` pelo entrypoint oficial
+  PostgreSQL. Mudança para `0755` ou outro mode falha na proveniência.
+- `genesis-postgres-data` é externo: Compose não o cria nem o remove por
+  `down -v`. A criação pertence à `0.8-MVP-05B`.
 - Backup e restore testado, logs sanitizados, health, monitoramento básico e
   rollback são requisitos para dados reais.
 - Vulnerabilidade Critical aplicável bloqueia a abertura até correção ou

@@ -6,16 +6,16 @@
 - **Última tarefa funcional concluída:** 0.7.6 — Criação Manual de Leads
   (repositório `arthurportodev/genesis-platform-web`, PR #7, squash
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`)
-- **Último delta incorporado:** `0.8-MVP-04-CORR-01 — identidade remota e
-evidências do GHCR`, pelo PR #33 no squash
-  `c6fbc0b865540abd9d13f93c7cc7542eb0936355`
+- **Último delta incorporado:** `0.8-MVP-04-CORR-02 — publicação GHCR
+condicionada ao impacto real`, pelo PR #34, com `main` em
+  `876aa4ae5a7f88bfbfd65ff4e40e3dab33c4079b`
 - **Última tarefa de governança concluída:** 0.8.1.1 — Evolução do Sistema
   Operacional de Desenvolvimento, incorporada no backend pelo PR #26, squash
   `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
   squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
-- **Tarefa atual:** `0.8-MVP-04-CORR-02 — publicação GHCR condicionada ao
-impacto real na imagem`; candidata local adiciona detecção fail-closed e
-  preserva validação completa em todo push; Gate 2 pendente
+- **Tarefa atual:** `0.8-MVP-05A — contrato versionado de PostgreSQL, secrets e
+bundle de produção`; candidata local em implementação, sem deploy e com Gate
+  2 pendente
 - **Produção:** infraestrutura ainda não publicada; nenhum dado real autorizado
 - **CI pós-merge da `main`:** execução `31249557339` aprovada integralmente no
   squash `c6fbc0b865540abd9d13f93c7cc7542eb0936355`, incluindo validate, runtime,
@@ -46,6 +46,10 @@ impacto real na imagem`; candidata local adiciona detecção fail-closed e
   com PostgreSQL 17 privado, migration one-shot, roles separadas, health,
   persistência, hardening, limites e rotação de logs, incorporados pelo PR
   #31; sem deploy.
+- Candidata local da `0.8-MVP-05A` separa bootstrap/migration/runtime, remove
+  secrets do environment, fixa API/PostgreSQL por digest, protege o volume
+  externo, adiciona shutdown de 90 segundos ao banco e gera bundle mínimo
+  determinístico. Esse item ainda não está incorporado nem implantado.
 - Package público `ghcr.io/arthurportodev/genesis-platform-api` vinculado ao
   repositório, com versões sob tags SHA completas. A versão histórica possui
   manifest digest
@@ -258,8 +262,9 @@ Consulte os [ADRs](decisions/README.md).
 - A configuração de produção do proxy same-origin e o estado de Vercel,
   domínio, DNS, banco, restore, observabilidade e deploy ainda precisam ser
   inventariados, configurados ou validados para esta baseline.
-- Os limites de CPU, memória, PIDs e heap da stack local são provisórios e
-  dependem do inventário real da VPS na `0.8-MVP-05`.
+- Os limites de CPU, memória, PIDs e heap foram considerados compatíveis com o
+  inventário read-only da VPS, mas ainda exigem validação operacional na
+  `0.8-MVP-05B`.
 - Preview permanece sem API e nunca aponta para produção; staging não será
   criado inicialmente.
 

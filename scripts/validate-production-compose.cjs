@@ -1,6 +1,11 @@
-const { resolve } = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { resolve } = require('node:path');
 
+const API_IMAGE =
+  'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';
+const POSTGRES_IMAGE =
+  'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
+const PLATFORM = 'linux/amd64';
 const EXPECTED_SERVICES = ['api', 'migrate', 'postgres'];
 const MIGRATION_COMMAND = [
   'node',
@@ -9,53 +14,52 @@ const MIGRATION_COMMAND = [
   'dist/database/data-source.js',
   'migration:run',
 ];
-const POSTGRES_DATA_MOUNT = {
-  type: 'volume',
-  source: 'postgres_data',
-  target: '/var/lib/postgresql/data',
+const API_COMMAND = ['node', 'dist/main.js'];
+const SECRET_FILES = {
+  postgres_bootstrap_password:
+    '/opt/genesis/secrets/postgres-bootstrap-password',
+  database_migration_password:
+    '/opt/genesis/secrets/database-migration-password',
+  database_runtime_password: '/opt/genesis/secrets/database-runtime-password',
+  jwt_access_secret: '/opt/genesis/secrets/jwt-access-secret',
+  refresh_token_pepper: '/opt/genesis/secrets/refresh-token-pepper',
+  lead_idempotency_keys: '/opt/genesis/secrets/lead-idempotency-keys',
 };
+const SERVICE_SECRETS = {
+  postgres: [
+    'postgres_bootstrap_password',
+    'database_migration_password',
+    'database_runtime_password',
+  ],
+  migrate: ['database_migration_password'],
+  api: [
+    'database_runtime_password',
+    'jwt_access_secret',
+    'refresh_token_pepper',
+    'lead_idempotency_keys',
+  ],
+};
+const FORBIDDEN_SECRET_ENV = new Set([
+  'POSTGRES_PASSWORD',
+  'DATABASE_MIGRATION_PASSWORD',
+  'DATABASE_RUNTIME_PASSWORD',
+  'DATABASE_PASSWORD',
+  'JWT_ACCESS_SECRET',
+  'REFRESH_TOKEN_PEPPER',
+  'LEAD_IDEMPOTENCY_KEYS',
+]);
 const REQUIRED_BINDINGS = [
-  ['postgres', 'environment', 'POSTGRES_DB', 'DATABASE_NAME'],
-  ['postgres', 'environment', 'POSTGRES_USER', 'DATABASE_MIGRATION_USER'],
-  [
-    'postgres',
-    'environment',
-    'POSTGRES_PASSWORD',
-    'DATABASE_MIGRATION_PASSWORD',
-  ],
-  ['postgres', 'environment', 'DATABASE_RUNTIME_ROLE', 'DATABASE_RUNTIME_ROLE'],
-  [
-    'postgres',
-    'environment',
-    'DATABASE_RUNTIME_PASSWORD',
-    'DATABASE_RUNTIME_PASSWORD',
-  ],
-  ['migrate', 'image', null, 'GENESIS_API_IMAGE'],
-  ['migrate', 'environment', 'DATABASE_NAME', 'DATABASE_NAME'],
-  [
-    'migrate',
-    'environment',
-    'DATABASE_MIGRATION_USER',
-    'DATABASE_MIGRATION_USER',
-  ],
-  [
-    'migrate',
-    'environment',
-    'DATABASE_MIGRATION_PASSWORD',
-    'DATABASE_MIGRATION_PASSWORD',
-  ],
-  ['migrate', 'environment', 'DATABASE_RUNTIME_ROLE', 'DATABASE_RUNTIME_ROLE'],
-  ['api', 'image', null, 'GENESIS_API_IMAGE'],
-  ['api', 'environment', 'DATABASE_NAME', 'DATABASE_NAME'],
-  ['api', 'environment', 'DATABASE_USER', 'DATABASE_RUNTIME_ROLE'],
-  ['api', 'environment', 'DATABASE_PASSWORD', 'DATABASE_RUNTIME_PASSWORD'],
-  ['api', 'environment', 'DATABASE_RUNTIME_ROLE', 'DATABASE_RUNTIME_ROLE'],
-  ['api', 'environment', 'FRONTEND_URL', 'FRONTEND_URL'],
-  ['api', 'environment', 'JWT_ACCESS_SECRET', 'JWT_ACCESS_SECRET'],
-  ['api', 'environment', 'REFRESH_TOKEN_PEPPER', 'REFRESH_TOKEN_PEPPER'],
+  ['postgres', 'POSTGRES_DB', 'DATABASE_NAME'],
+  ['postgres', 'POSTGRES_USER', 'DATABASE_BOOTSTRAP_USER'],
+  ['postgres', 'DATABASE_MIGRATION_USER', 'DATABASE_MIGRATION_USER'],
+  ['postgres', 'DATABASE_RUNTIME_ROLE', 'DATABASE_RUNTIME_ROLE'],
+  ['migrate', 'DATABASE_NAME', 'DATABASE_NAME'],
+  ['migrate', 'DATABASE_MIGRATION_USER', 'DATABASE_MIGRATION_USER'],
+  ['migrate', 'DATABASE_RUNTIME_ROLE', 'DATABASE_RUNTIME_ROLE'],
+  ['api', 'DATABASE_NAME', 'DATABASE_NAME'],
+  ['api', 'DATABASE_USER', 'DATABASE_RUNTIME_ROLE'],
+  ['api', 'DATABASE_RUNTIME_ROLE', 'DATABASE_RUNTIME_ROLE'],
 ];
-const SENSITIVE_NAME =
-  /(?:PASSWORD|SECRET|PEPPER|(?:^|_)TOKEN(?:_|$).*KEY|API_?KEY|PRIVATE_?KEY|ACCESS_?KEY)/iu;
 const API_HEALTHCHECK = {
   test: [
     'CMD',
@@ -82,25 +86,29 @@ function validateProductionCompose(config, rawConfig) {
   const rawServices = isPlainObject(rawConfig?.services)
     ? rawConfig.services
     : {};
+  const names = Object.keys(services).sort();
+
+  check(config?.name === 'genesis', 'project name must be genesis', failures);
   check(
-    isPlainObject(config?.services),
-    'rendered services must be an object',
+    rawConfig?.name === 'genesis',
+    'raw project name must be genesis',
     failures,
   );
   check(
-    isPlainObject(rawConfig?.services),
-    'non-interpolated services must be an object',
-    failures,
-  );
-  const serviceNames = Object.keys(services).sort();
-  check(
-    JSON.stringify(serviceNames) === JSON.stringify(EXPECTED_SERVICES),
+    JSON.stringify(names) === JSON.stringify(EXPECTED_SERVICES),
     `expected only ${EXPECTED_SERVICES.join(', ')} services`,
+    failures,
+  );
+  check(
+    Object.keys(rawServices).sort().join(',') === EXPECTED_SERVICES.join(','),
+    'raw services differ from the production contract',
     failures,
   );
 
   checkRequiredBindings(rawServices, failures);
-  checkSensitiveEnvironments(rawServices, failures);
+  checkNoSecretEnvironment(rawServices, failures);
+  checkNoSecretEnvironment(services, failures);
+  checkTopLevelSecrets(config, rawConfig, failures);
 
   const postgres = services.postgres ?? {};
   const migrate = services.migrate ?? {};
@@ -110,21 +118,40 @@ function validateProductionCompose(config, rawConfig) {
   const rawApi = rawServices.api ?? {};
 
   for (const [name, service] of Object.entries(services)) {
-    checkNoPublishedPorts(service, name, failures);
+    check(
+      service.ports === undefined,
+      `${name} must not publish ports`,
+      failures,
+    );
+    check(!('build' in service), `${name} must not define build`, failures);
+    check(
+      service.platform === PLATFORM,
+      `${name} platform must be ${PLATFORM}`,
+      failures,
+    );
   }
-  check(!('build' in postgres), 'postgres must not define build', failures);
-  check(!('build' in migrate), 'migrate must not define build', failures);
-  check(!('build' in api), 'api must not define build', failures);
   check(
-    api.image && api.image === migrate.image,
-    'api and migrate must use the same image identity',
+    api.image === API_IMAGE,
+    'api image must use the approved digest',
     failures,
   );
   check(
-    postgres.image === 'postgres:17-alpine',
-    'postgres image must be exactly postgres:17-alpine',
+    migrate.image === API_IMAGE,
+    'migrate image must use the approved digest',
     failures,
   );
+  check(
+    postgres.image === POSTGRES_IMAGE,
+    'postgres image must use the approved digest',
+    failures,
+  );
+  for (const [name, image] of Object.entries({
+    api: rawApi.image,
+    migrate: rawMigrate.image,
+    postgres: rawPostgres.image,
+  })) {
+    checkImmutableImage(image, name, failures);
+  }
 
   checkNetworks(postgres, ['database'], 'postgres', failures);
   checkNetworks(migrate, ['database'], 'migrate', failures);
@@ -136,7 +163,7 @@ function validateProductionCompose(config, rawConfig) {
   );
   check(
     config.networks?.edge?.internal !== true,
-    'edge network must remain attachable from the future ingress',
+    'edge network must not be internal',
     failures,
   );
 
@@ -151,7 +178,13 @@ function validateProductionCompose(config, rawConfig) {
   check(migrate.init === true, 'migrate must enable init', failures);
   check(
     api.stop_grace_period === '20s',
-    'api stop_grace_period must be exactly 20s',
+    'api grace period must be 20s',
+    failures,
+  );
+  check(
+    postgres.stop_grace_period === '1m30s' &&
+      rawPostgres.stop_grace_period === '90s',
+    'postgres grace period must be exactly 90s',
     failures,
   );
   check(api.read_only === true, 'api filesystem must be read-only', failures);
@@ -164,6 +197,69 @@ function validateProductionCompose(config, rawConfig) {
   checkHardening(migrate, 'migrate', failures);
 
   check(
+    sameStringArray(api.entrypoint, [
+      '/bin/sh',
+      '/opt/genesis/bin/api-entrypoint.sh',
+    ]),
+    'api wrapper must be invoked by /bin/sh',
+    failures,
+  );
+  check(
+    sameStringArray(migrate.entrypoint, [
+      '/bin/sh',
+      '/opt/genesis/bin/migrate-entrypoint.sh',
+    ]),
+    'migrate wrapper must be invoked by /bin/sh',
+    failures,
+  );
+  check(
+    sameStringArray(api.command, API_COMMAND),
+    'api command is invalid',
+    failures,
+  );
+  check(
+    sameStringArray(migrate.command, MIGRATION_COMMAND),
+    'migration command is invalid',
+    failures,
+  );
+  checkReadOnlyBind(
+    api,
+    'docker/production/api-entrypoint.sh',
+    '/opt/genesis/bin/api-entrypoint.sh',
+    'api',
+    failures,
+  );
+  checkReadOnlyBind(
+    migrate,
+    'docker/production/migrate-entrypoint.sh',
+    '/opt/genesis/bin/migrate-entrypoint.sh',
+    'migrate',
+    failures,
+  );
+  checkReadOnlyBind(
+    postgres,
+    'docker/postgres/init-runtime-role.sh',
+    '/docker-entrypoint-initdb.d/10-production-roles.sh',
+    'postgres',
+    failures,
+  );
+
+  check(
+    postgres.environment?.POSTGRES_PASSWORD_FILE ===
+      '/run/secrets/postgres_bootstrap_password',
+    'postgres must use POSTGRES_PASSWORD_FILE',
+    failures,
+  );
+  checkServiceSecrets(services, failures);
+  checkGroup(api, 'api', failures);
+  checkGroup(migrate, 'migrate', failures);
+  check(
+    !Array.isArray(postgres.group_add) || !postgres.group_add.includes('70'),
+    'postgres must not receive an extra host group',
+    failures,
+  );
+
+  check(
     migrate.depends_on?.postgres?.condition === 'service_healthy',
     'migrate must wait for healthy postgres',
     failures,
@@ -174,31 +270,26 @@ function validateProductionCompose(config, rawConfig) {
     failures,
   );
   check(
-    sameStringArray(migrate.command, MIGRATION_COMMAND),
-    'migrate command must exactly invoke compiled TypeORM migration:run',
+    api.environment?.FRONTEND_URL === 'https://genesis.invalid',
+    'frontend origin must remain fail-closed',
     failures,
   );
-
-  checkEnvironmentObject(api, 'api rendered', failures);
-  checkEnvironmentObject(migrate, 'migrate rendered', failures);
-  checkEnvironmentObject(postgres, 'postgres rendered', failures);
-  checkEnvironmentObject(rawApi, 'api non-interpolated', failures);
-  checkEnvironmentObject(rawMigrate, 'migrate non-interpolated', failures);
-  checkEnvironmentObject(rawPostgres, 'postgres non-interpolated', failures);
-  const apiEnvironment = environmentOf(api);
-  const migrateEnvironment = environmentOf(migrate);
+  for (const key of [
+    'INVITATION_ISSUANCE_READINESS',
+    'INVITATION_ACCEPTANCE_READINESS',
+    'INVITATION_ACTIVATION_READINESS',
+    'INVITATION_WORKER_ENABLED',
+    'LEAD_FORM_READINESS',
+  ]) {
+    check(
+      String(api.environment?.[key]) === 'false',
+      `${key} must remain false`,
+      failures,
+    );
+  }
   check(
-    !apiEnvironment.has('DATABASE_MIGRATION_USER') &&
-      !apiEnvironment.has('DATABASE_MIGRATION_PASSWORD'),
-    'api must not receive migration credentials',
-    failures,
-  );
-  check(
-    !migrateEnvironment.has('DATABASE_PASSWORD') &&
-      !migrateEnvironment.has('DATABASE_RUNTIME_PASSWORD') &&
-      !migrateEnvironment.has('JWT_ACCESS_SECRET') &&
-      !migrateEnvironment.has('REFRESH_TOKEN_PEPPER'),
-    'migrate must not receive runtime or application secrets',
+    String(api.environment?.LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) === '1',
+    'Lead idempotency key version must be 1',
     failures,
   );
 
@@ -206,11 +297,10 @@ function validateProductionCompose(config, rawConfig) {
   checkHealthcheck(postgres, POSTGRES_HEALTHCHECK, 'postgres', failures);
   checkPostgresDataVolume(config, postgres, failures);
   check(
-    exposeValues(api).some((value) => value.startsWith('3000')),
-    'api must expose port 3000 internally',
+    Array.isArray(api.expose) && api.expose.map(String).includes('3000'),
+    'api must expose 3000 internally',
     failures,
   );
-
   checkResources(api, 0.75, 1024 ** 3, 128, 'api', failures);
   checkResources(migrate, 0.75, 1024 ** 3, 128, 'migrate', failures);
   checkResources(postgres, 1, 2 * 1024 ** 3, 256, 'postgres', failures);
@@ -220,46 +310,37 @@ function validateProductionCompose(config, rawConfig) {
 
   return {
     status: failures.length === 0 ? 'passed' : 'failed',
-    serviceNames,
+    serviceNames: names,
     failures,
   };
 }
 
 function checkRequiredBindings(services, failures) {
-  for (const [serviceName, field, key, variable] of REQUIRED_BINDINGS) {
-    const service = services[serviceName];
-    let actual;
-    if (field === 'image') actual = service?.image;
-    else if (isPlainObject(service?.environment)) {
-      actual = service.environment[key];
-    }
+  for (const [serviceName, key, variable] of REQUIRED_BINDINGS) {
     check(
-      actual === requiredExpression(variable),
-      `${serviceName}.${key ?? field} must use required interpolation for ${variable}`,
+      services[serviceName]?.environment?.[key] ===
+        requiredExpression(variable),
+      `${serviceName}.${key} must require ${variable}`,
       failures,
     );
   }
 }
 
-function checkSensitiveEnvironments(services, failures) {
+function checkNoSecretEnvironment(services, failures) {
   for (const [serviceName, service] of Object.entries(services)) {
     if (!isPlainObject(service?.environment)) continue;
     for (const [key, value] of Object.entries(service.environment)) {
-      const stringValue = typeof value === 'string' ? value : '';
-      const expressions = [...stringValue.matchAll(interpolationPattern())];
-      const sensitiveExpression = expressions.some((match) =>
-        SENSITIVE_NAME.test(match[1]),
-      );
-      if (!SENSITIVE_NAME.test(key) && !sensitiveExpression) continue;
       check(
-        expressions.length === 1 && expressions[0][0] === stringValue,
-        `${serviceName}.${key} sensitive value must be a single variable interpolation`,
+        !FORBIDDEN_SECRET_ENV.has(key),
+        `${serviceName}.${key} must be file-backed, not environment metadata`,
         failures,
       );
-      for (const match of expressions) {
+      const text = String(value ?? '');
+      for (const forbidden of FORBIDDEN_SECRET_ENV) {
         check(
-          match[2] !== ':-' && match[2] !== '-',
-          `${serviceName}.${key} sensitive interpolation must not use a fallback`,
+          !text.includes(`\${${forbidden}}`) &&
+            !text.includes(`\${${forbidden}:`),
+          `${serviceName}.${key} must not interpolate ${forbidden}`,
           failures,
         );
       }
@@ -267,126 +348,189 @@ function checkSensitiveEnvironments(services, failures) {
   }
 }
 
-function checkHealthcheck(service, expected, name, failures) {
-  const healthcheck = service?.healthcheck;
+function checkTopLevelSecrets(config, rawConfig, failures) {
+  const actual = Object.keys(config?.secrets ?? {}).sort();
+  const expected = Object.keys(SECRET_FILES).sort();
   check(
-    isPlainObject(healthcheck),
-    `${name} healthcheck must be an object`,
+    JSON.stringify(actual) === JSON.stringify(expected),
+    'top-level secret allowlist is invalid',
     failures,
   );
-  if (!isPlainObject(healthcheck)) return;
-  check(
-    healthcheck.disable !== true,
-    `${name} healthcheck must not be disabled`,
-    failures,
-  );
-  check(
-    Array.isArray(healthcheck.test) &&
-      JSON.stringify(healthcheck.test) === JSON.stringify(expected.test),
-    `${name} healthcheck command is invalid`,
-    failures,
-  );
-  for (const field of ['interval', 'timeout', 'retries', 'start_period']) {
+  for (const [name, path] of Object.entries(SECRET_FILES)) {
     check(
-      healthcheck[field] === expected[field],
-      `${name} healthcheck ${field} must be ${expected[field]}`,
+      config?.secrets?.[name]?.file === path,
+      `${name} must use fixed host path ${path}`,
+      failures,
+    );
+    check(
+      rawConfig?.secrets?.[name]?.file === path,
+      `${name} raw host path is invalid`,
       failures,
     );
   }
 }
 
-function checkNoPublishedPorts(service, name, failures) {
+function checkServiceSecrets(services, failures) {
+  for (const [serviceName, expected] of Object.entries(SERVICE_SECRETS)) {
+    const actual = (services[serviceName]?.secrets ?? [])
+      .map((entry) => entry.source)
+      .sort();
+    check(
+      JSON.stringify(actual) === JSON.stringify([...expected].sort()),
+      `${serviceName} secret subset is invalid`,
+      failures,
+    );
+    for (const entry of services[serviceName]?.secrets ?? []) {
+      check(
+        entry.target === `/run/secrets/${entry.source}`,
+        `${serviceName}.${entry.source} target is invalid`,
+        failures,
+      );
+    }
+  }
+}
+
+function checkReadOnlyBind(service, sourceSuffix, target, name, failures) {
+  const normalizedSuffix = sourceSuffix.replaceAll('/', '\\').toLowerCase();
+  const matches = (service.volumes ?? []).filter(
+    (mount) =>
+      mount.type === 'bind' &&
+      mount.target === target &&
+      mount.read_only === true &&
+      String(mount.source)
+        .replaceAll('/', '\\')
+        .toLowerCase()
+        .endsWith(normalizedSuffix),
+  );
   check(
-    service.ports === undefined,
-    `${name} must not publish ports`,
+    matches.length === 1,
+    `${name} wrapper/init bind must be exact and read-only`,
+    failures,
+  );
+}
+
+function checkImmutableImage(image, name, failures) {
+  check(
+    typeof image === 'string' && /@sha256:[a-f0-9]{64}$/u.test(image),
+    `${name} image must be immutable by sha256 digest`,
+    failures,
+  );
+  check(
+    !String(image).includes('${'),
+    `${name} image must not be interpolated`,
     failures,
   );
 }
 
 function checkPostgresDataVolume(config, postgres, failures) {
-  const volumes = Array.isArray(postgres.volumes) ? postgres.volumes : [];
-  const targetMounts = volumes.filter(
-    (volume) =>
-      isPlainObject(volume) && volume.target === POSTGRES_DATA_MOUNT.target,
+  const mounts = (postgres.volumes ?? []).filter(
+    (entry) =>
+      entry.type === 'volume' && entry.target === '/var/lib/postgresql/data',
   );
-  const sourceMounts = volumes.filter(
-    (volume) =>
-      isPlainObject(volume) && volume.source === POSTGRES_DATA_MOUNT.source,
-  );
-  const exactMounts = volumes.filter(
-    (volume) =>
-      isPlainObject(volume) &&
-      volume.type === POSTGRES_DATA_MOUNT.type &&
-      volume.source === POSTGRES_DATA_MOUNT.source &&
-      volume.target === POSTGRES_DATA_MOUNT.target,
-  );
-
   check(
-    targetMounts.length === 1 &&
-      sourceMounts.length === 1 &&
-      exactMounts.length === 1,
-    'postgres data mount must be exactly the named volume postgres_data at /var/lib/postgresql/data',
+    mounts.length === 1 && mounts[0].source === 'postgres_data',
+    'postgres data mount must use postgres_data',
     failures,
   );
   check(
-    isPlainObject(config.volumes) &&
-      Object.prototype.hasOwnProperty.call(config.volumes, 'postgres_data') &&
-      isPlainObject(config.volumes.postgres_data),
-    'top-level postgres_data volume must be declared',
+    config.volumes?.postgres_data?.external === true,
+    'postgres_data must be external',
+    failures,
+  );
+  check(
+    config.volumes?.postgres_data?.name === 'genesis-postgres-data',
+    'physical volume name must be genesis-postgres-data',
     failures,
   );
 }
 
+function checkHealthcheck(service, expected, name, failures) {
+  const health = service.healthcheck;
+  check(isPlainObject(health), `${name} healthcheck must exist`, failures);
+  if (!isPlainObject(health)) return;
+  check(
+    JSON.stringify(health.test) === JSON.stringify(expected.test),
+    `${name} healthcheck command is invalid`,
+    failures,
+  );
+  for (const field of ['interval', 'timeout', 'retries', 'start_period']) {
+    check(
+      health[field] === expected[field],
+      `${name} healthcheck ${field} is invalid`,
+      failures,
+    );
+  }
+}
+
 function checkNetworks(service, expected, name, failures) {
-  const actual = networkNames(service).sort();
+  const actual = (
+    Array.isArray(service.networks)
+      ? service.networks
+      : Object.keys(service.networks ?? {})
+  ).sort();
   check(
     JSON.stringify(actual) === JSON.stringify([...expected].sort()),
-    `${name} networks must be ${expected.join(', ')}`,
+    `${name} networks are invalid`,
     failures,
   );
 }
 
 function checkHardening(service, name, failures) {
   check(
-    Array.isArray(service.security_opt) &&
-      service.security_opt.includes('no-new-privileges:true'),
-    `${name} must enable no-new-privileges`,
+    service.security_opt?.includes('no-new-privileges:true'),
+    `${name} must use no-new-privileges`,
     failures,
   );
   check(
-    Array.isArray(service.cap_drop) && service.cap_drop.includes('ALL'),
+    service.cap_drop?.includes('ALL'),
     `${name} must drop all capabilities`,
     failures,
   );
 }
 
-function checkResources(service, maxCpu, maxMemory, maxPids, name, failures) {
-  const cpu = Number(service.cpus);
-  const memory = memoryBytes(service.mem_limit);
-  const pids = Number(service.pids_limit);
-  check(cpu > 0 && cpu <= maxCpu, `${name} CPU limit is invalid`, failures);
+function checkGroup(service, name, failures) {
   check(
-    memory > 0 && memory <= maxMemory,
+    Array.isArray(service.group_add) &&
+      service.group_add.length === 1 &&
+      service.group_add[0] === '70',
+    `${name} must receive only GID 70`,
+    failures,
+  );
+}
+
+function checkResources(service, maxCpu, maxMemory, maxPids, name, failures) {
+  check(
+    Number(service.cpus) > 0 && Number(service.cpus) <= maxCpu,
+    `${name} CPU limit is invalid`,
+    failures,
+  );
+  check(
+    memoryBytes(service.mem_limit) > 0 &&
+      memoryBytes(service.mem_limit) <= maxMemory,
     `${name} memory limit is invalid`,
     failures,
   );
-  check(pids > 0 && pids <= maxPids, `${name} pids limit is invalid`, failures);
+  check(
+    Number(service.pids_limit) > 0 && Number(service.pids_limit) <= maxPids,
+    `${name} pids limit is invalid`,
+    failures,
+  );
 }
 
 function checkLogging(service, name, failures) {
   check(
     service.logging?.driver === 'json-file',
-    `${name} logging driver`,
+    `${name} logging driver is invalid`,
     failures,
   );
   check(
     service.logging?.options?.['max-size'] === '10m',
-    `${name} log max-size`,
+    `${name} log max-size is invalid`,
     failures,
   );
   check(
     String(service.logging?.options?.['max-file']) === '5',
-    `${name} log max-file`,
+    `${name} log max-file is invalid`,
     failures,
   );
 }
@@ -395,47 +539,16 @@ function check(condition, message, failures) {
   if (!condition) failures.push(message);
 }
 
-function networkNames(service) {
-  if (Array.isArray(service.networks)) return service.networks;
-  return isPlainObject(service.networks) ? Object.keys(service.networks) : [];
-}
-
-function environmentOf(service) {
-  return new Map(
-    isPlainObject(service.environment)
-      ? Object.entries(service.environment)
-      : [],
-  );
-}
-
-function checkEnvironmentObject(service, name, failures) {
-  check(
-    isPlainObject(service?.environment),
-    `${name} environment must be an object`,
-    failures,
-  );
-}
-
-function exposeValues(service) {
-  return Array.isArray(service.expose) ? service.expose.map(String) : [];
-}
-
 function sameStringArray(actual, expected) {
   return (
     Array.isArray(actual) &&
     actual.length === expected.length &&
-    actual.every(
-      (value, index) => typeof value === 'string' && value === expected[index],
-    )
+    actual.every((value, index) => value === expected[index])
   );
 }
 
 function requiredExpression(variable) {
   return `\${${variable}:?${variable} is required}`;
-}
-
-function interpolationPattern() {
-  return /\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:\?|\?|:-|-)([^}]*))?\}/gu;
 }
 
 function isPlainObject(value) {
@@ -448,41 +561,10 @@ function memoryBytes(value) {
     .trim()
     .match(/^(\d+(?:\.\d+)?)\s*([kmgt])?b?$/iu);
   if (!match) return Number.NaN;
-  const powers = { k: 1, m: 2, g: 3, t: 4 };
-  const exponent = match[2] ? powers[match[2].toLowerCase()] : 0;
+  const exponent = match[2]
+    ? { k: 1, m: 2, g: 3, t: 4 }[match[2].toLowerCase()]
+    : 0;
   return Number(match[1]) * 1024 ** exponent;
-}
-
-function main() {
-  const cwd = process.cwd();
-  const composePath = resolve(cwd, 'compose.production.yml');
-  const envFile = process.env.GENESIS_PRODUCTION_ENV_FILE;
-  if (!envFile) {
-    console.error('FAIL: GENESIS_PRODUCTION_ENV_FILE is required.');
-    process.exitCode = 1;
-    return;
-  }
-
-  const loaded = loadProductionCompose({
-    cwd,
-    composePath,
-    envFile: resolve(cwd, envFile),
-  });
-  if (loaded.status !== 'passed') {
-    for (const failure of loaded.failures) console.error(`FAIL: ${failure}`);
-    process.exitCode = 1;
-    return;
-  }
-
-  const validation = validateProductionCompose(loaded.config, loaded.rawConfig);
-  for (const failure of validation.failures) console.error(`FAIL: ${failure}`);
-  console.log(
-    JSON.stringify({
-      command: 'npm run production:compose:validate',
-      ...validation,
-    }),
-  );
-  if (validation.status !== 'passed') process.exitCode = 1;
 }
 
 function loadProductionCompose({ cwd, composePath, envFile }) {
@@ -494,16 +576,14 @@ function loadProductionCompose({ cwd, composePath, envFile }) {
     envFile,
     noInterpolate: true,
   });
-  if (rendered.status !== 0) {
+  if (rendered.status !== 0)
     failures.push(
-      `interpolated docker compose config exited with ${rendered.status ?? 1}`,
+      `interpolated docker compose config exited with ${rendered.status ?? 1}: ${rendered.stderr.trim()}`,
     );
-  }
-  if (raw.status !== 0) {
+  if (raw.status !== 0)
     failures.push(
-      `non-interpolated docker compose config exited with ${raw.status ?? 1}`,
+      `non-interpolated docker compose config exited with ${raw.status ?? 1}: ${raw.stderr.trim()}`,
     );
-  }
   let config;
   let rawConfig;
   if (failures.length === 0) {
@@ -531,13 +611,46 @@ function runComposeConfig({
   const args = ['compose', '--env-file', envFile, '-f', composePath, 'config'];
   if (noInterpolate) args.push('--no-interpolate');
   args.push('--format', 'json');
-  return spawnSync('docker', args, {
+  return spawnSync('docker', args, { cwd, encoding: 'utf8', env: process.env });
+}
+
+function main() {
+  const cwd = process.cwd();
+  const envFile = process.env.GENESIS_PRODUCTION_ENV_FILE;
+  if (!envFile) {
+    console.error('FAIL: GENESIS_PRODUCTION_ENV_FILE is required.');
+    process.exitCode = 1;
+    return;
+  }
+  const loaded = loadProductionCompose({
     cwd,
-    encoding: 'utf8',
-    env: process.env,
+    composePath: resolve(cwd, 'compose.production.yml'),
+    envFile: resolve(cwd, envFile),
   });
+  if (loaded.status !== 'passed') {
+    for (const failure of loaded.failures) console.error(`FAIL: ${failure}`);
+    process.exitCode = 1;
+    return;
+  }
+  const validation = validateProductionCompose(loaded.config, loaded.rawConfig);
+  for (const failure of validation.failures) console.error(`FAIL: ${failure}`);
+  console.log(
+    JSON.stringify({
+      command: 'npm run production:compose:validate',
+      ...validation,
+    }),
+  );
+  if (validation.status !== 'passed') process.exitCode = 1;
 }
 
 if (require.main === module) main();
 
-module.exports = { loadProductionCompose, validateProductionCompose };
+module.exports = {
+  API_IMAGE,
+  PLATFORM,
+  POSTGRES_IMAGE,
+  SECRET_FILES,
+  SERVICE_SECRETS,
+  loadProductionCompose,
+  validateProductionCompose,
+};

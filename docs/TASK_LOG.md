@@ -523,3 +523,18 @@ documentação, portanto retorna `false` e deixa `publish-image` skipped antes d
 login ou build. Nenhuma imagem, tag, package, credencial, infraestrutura, VPS
 ou deploy foi alterado durante a implementação local. A `0.8-MVP-05` permanece
 condicionada ao inventário read-only da VPS e às decisões humanas pendentes.
+
+## 0.8-MVP-05A — Contrato versionado de PostgreSQL, secrets e bundle
+
+**Candidata local em 8 de agosto de 2026; Gate 2 pendente.** Separa
+bootstrap/admin, migration owner e runtime; remove valores secretos do
+environment do Compose; usa mounts seletivos e wrappers POSIX; fixa API e
+PostgreSQL por digest `linux/amd64`; estabiliza projeto e volume externo;
+adiciona grace period de 90 segundos ao banco e injeta o keyring de
+idempotência de Leads somente na API.
+
+A candidata também adiciona bundle mínimo determinístico com manifesto,
+hashes, digests e timestamp reproduzível, além de validators, testes
+adversariais e ADR-014. Ela preserva a imagem atual da API: nenhum path
+image-affecting foi alterado. Não houve stage, commit, push, publicação, acesso
+à VPS, secret real, volume persistente, migration remota ou deploy.

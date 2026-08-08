@@ -53,7 +53,7 @@ experimento é promovido automaticamente para o MVP.
   - target `production` não-root e stack privada com migration one-shot,
     hardening, health, persistência, limites e logs rotacionados.
 
-### Tarefa atual
+### Concluído e incorporado — continuidade
 
 - ✅ `0.8-MVP-04` — CI essencial, GHCR e imagem identificável.
   - incorporada pelo PR #32 no squash
@@ -68,18 +68,29 @@ experimento é promovido automaticamente para o MVP.
     `c6fbc0b865540abd9d13f93c7cc7542eb0936355`; a CI pós-merge `31249557339`
     aprovou identidade, package, rescan e artifact e concluiu integralmente a
     tarefa.
-- 🚧 `0.8-MVP-04-CORR-02` — publicação GHCR condicionada ao impacto real.
+- ✅ `0.8-MVP-04-CORR-02` — publicação GHCR condicionada ao impacto real.
   - mantém validação completa em todo push da `main`;
   - usa detector read-only e fail-closed para autorizar o publicador somente
     quando Dockerfile, entradas do build ou `src/**` podem mudar a imagem;
   - deltas apenas documentais, operacionais, de Compose, CI, scripts ou testes
     não autenticam, constroem ou publicam imagem;
-  - candidata local em Gate 2, sem alteração no package histórico.
+  - incorporada pelo PR #34; push da `main` não impactante preservou a
+    validação e pulou intencionalmente a publicação;
+  - nenhuma alteração no package histórico.
+
+### Tarefa atual
+
+- 🚧 `0.8-MVP-05A` — contrato versionado de PostgreSQL, secrets e bundle de
+  produção.
+  - candidata local separa bootstrap, migration owner e runtime;
+  - usa secrets file-backed, digests imutáveis, volume externo e bundle mínimo;
+  - não instala, transfere ou implanta qualquer artefato; Gate 2 pendente.
 
 ### Próximos deltas planejados
 
-- ⬜ `0.8-MVP-05` — VPS, PostgreSQL, secrets e migrations; início condicionado
-  ao inventário read-only da VPS e às decisões humanas registradas.
+- ⬜ `0.8-MVP-05B` — instalação controlada de Docker, layout, secrets, volume,
+  PostgreSQL, migrations e API na VPS; condicionada à incorporação da 05A e a
+  autorização operacional própria.
 - ⬜ `0.8-MVP-06` — Traefik, HTTPS e exposição controlada da API.
 - ⬜ `0.8-MVP-07` — Backup, restore, logs, monitoramento e rollback.
 - ⬜ `0.8-MVP-08` — Vercel, proxy, domínio e integração frontend/backend.

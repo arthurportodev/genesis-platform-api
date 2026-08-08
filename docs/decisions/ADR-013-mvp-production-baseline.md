@@ -119,11 +119,13 @@ ser revista quando usuários, dados e receita crescerem.
 - O [ADR-011](ADR-011-production-architecture.md) foi superseded por esta decisão.
 - O [ADR-012](ADR-012-development-operating-system-v2.md) continua vigente para
   o processo de desenvolvimento.
+- O [ADR-014](ADR-014-versioned-production-contract.md) especializa esta
+  baseline para PostgreSQL, secrets, imagens e bundle da `0.8-MVP-05A`.
 - [PRODUCTION.md](../PRODUCTION.md) é a baseline operacional atual.
 
 ## Implementação
 
-O runtime health e a documentação estão presentes na `main` pelo PR #29 e pelo
-squash identificado acima. Os próximos componentes começam em `0.8-MVP-03` e
-seguem até `0.8-MVP-09`; cada delta exige seu próprio escopo e validação. Esta
-incorporação não publica infraestrutura e não autoriza dados reais.
+O runtime health, container/Compose e CI/GHCR estão incorporados. A
+`0.8-MVP-05A` produz uma candidata local do contrato detalhado no ADR-014; ela
+não publica infraestrutura e não autoriza dados reais. Os demais componentes
+seguem até `0.8-MVP-09`, cada um com escopo e validação próprios.
