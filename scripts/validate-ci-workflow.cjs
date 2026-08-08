@@ -714,7 +714,7 @@ function validateWorkflowDocument(workflow) {
   );
   if (publishScans.length !== 2)
     failures.push(
-      'publish-image needs separate existing-tag and new-image Trivy paths.',
+      'publish-image needs one pre-push local scan and one post-identity remote rescan.',
     );
   for (const [index, step] of publishScans.entries())
     failures.push(...trivyFailures(step, `publish-image scan ${index + 1}`));
@@ -728,11 +728,6 @@ function validateWorkflowDocument(workflow) {
       'publish-image must contain exactly one docker push command.',
     );
   const firstPush = pushIndexes[0] ?? -1;
-  const lastScan = Math.max(
-    ...publishScans.map((step) => publishSteps.indexOf(step)),
-  );
-  if (firstPush <= lastScan)
-    failures.push('all possible Trivy scan paths must precede docker push.');
   const buildStep = findStep(
     publish,
     (step) => actionReference(step)?.action === 'docker/build-push-action',
@@ -778,25 +773,11 @@ function validateWorkflowDocument(workflow) {
       'publish-image must push only an absent tag and capture exactly one reported digest.',
     );
   }
-  const existingScan = publishScans.find(
-    (step) =>
-      normalizeExpression(step.if) ===
-      "steps.existence.outputs.exists == 'true'",
-  );
   const newScan = publishScans.find(
     (step) =>
       normalizeExpression(step.if) ===
       "steps.existence.outputs.exists == 'false'",
   );
-  if (
-    !existingScan ||
-    String(existingScan.with?.['image-ref']) !==
-      '${{ steps.existing.outputs.immutable_ref }}'
-  ) {
-    failures.push(
-      'existing tags must be rescanned by immutable digest reference.',
-    );
-  }
   if (
     !newScan ||
     String(newScan.with?.['image-ref']) !== '${{ env.IMAGE_REF }}'
@@ -838,17 +819,16 @@ function validateWorkflowDocument(workflow) {
   } else {
     const existingRuntimeIndex = publishSteps.indexOf(existingRuntime);
     const newRuntimeIndex = publishSteps.indexOf(newRuntime);
-    const existingScanIndex = publishSteps.indexOf(existingScan);
     const newScanIndex = publishSteps.indexOf(newScan);
     const pullExistingIndex = publishSteps.indexOf(pullExisting);
     if (
       !(pullExistingIndex < existingRuntimeIndex) ||
-      !(existingRuntimeIndex < existingScanIndex) ||
       !(newRuntimeIndex < newScanIndex) ||
+      !(newScanIndex < firstPush) ||
       !(newRuntimeIndex < firstPush)
     ) {
       failures.push(
-        'runtime validation must precede every Trivy path and image push.',
+        'runtime validation and the local Trivy scan must precede image push.',
       );
     }
   }
@@ -857,6 +837,9 @@ function validateWorkflowDocument(workflow) {
   const local = publishSteps.find((step) => step.id === 'local');
   const selected = publishSteps.find((step) => step.id === 'selected');
   const verify = publishSteps.find((step) => step.id === 'verify');
+  const packageStep = publishSteps.find((step) => step.id === 'package');
+  const remoteScan = publishSteps.find((step) => step.id === 'remote-scan');
+  const evidence = publishSteps.find((step) => step.id === 'evidence');
   if (
     !existence ||
     !/imagetools inspect/u.test(String(existence.run ?? '')) ||
@@ -868,20 +851,30 @@ function validateWorkflowDocument(workflow) {
       'publish-image must distinguish an absent tag from ambiguous registry failure.',
     );
   }
+  const existingRun = String(existing?.run ?? '');
   if (
     !existing ||
     normalizeExpression(existing.if) !==
       "steps.existence.outputs.exists == 'true'" ||
-    !/immutable_ref/u.test(String(existing.run ?? '')) ||
-    !/manifest\?\.config\?\.digest/u.test(String(existing.run ?? '')) ||
-    !/echo "config_digest=\$config_digest" >> "\$GITHUB_OUTPUT"/u.test(
-      String(existing.run ?? ''),
+    !/immutable_ref/u.test(existingRun) ||
+    !/--format '\{\{json \.Manifest\}\}'/u.test(existingRun) ||
+    !/imagetools inspect "\$IMAGE_REF" --raw/u.test(existingRun) ||
+    !/--format '\{\{json \.Image\}\}'/u.test(existingRun) ||
+    !/descriptor\?\.digest/u.test(existingRun) ||
+    !/manifest\?\.config\?\.digest/u.test(existingRun) ||
+    /descriptor\?\.config|descriptor\.config/u.test(existingRun) ||
+    /manifest\?\.digest|manifest\.digest/u.test(existingRun) ||
+    !/image\?\.os !== 'linux' \|\| image\?\.architecture !== 'amd64'/u.test(
+      existingRun,
     ) ||
-    !/\.Manifest/u.test(String(existing.run ?? '')) ||
-    /\{\{\.Name\}\}/u.test(String(existing.run ?? ''))
+    !/labels\[key\] !== value/u.test(existingRun) ||
+    !/echo "config_digest=\$config_digest" >> "\$GITHUB_OUTPUT"/u.test(
+      existingRun,
+    ) ||
+    /\{\{\.Name\}\}/u.test(existingRun)
   ) {
     failures.push(
-      'existing-tag path must validate identity and expose an immutable reference.',
+      'existing-tag path must separate descriptor, raw manifest, and image inspection without rebuilding.',
     );
   }
   if (
@@ -938,37 +931,105 @@ function validateWorkflowDocument(workflow) {
     verify?.env?.EXPECTED_DIGEST !== '${{ steps.selected.outputs.digest }}' ||
     verify?.env?.IMMUTABLE_REF !==
       '${{ steps.selected.outputs.immutable_ref }}' ||
-    !/image-identity\.json/u.test(verifyRun) ||
     (verifyRun.match(/imagetools inspect "\$IMMUTABLE_REF"/gu) ?? []).length !==
-      2 ||
+      3 ||
     /imagetools inspect "\$IMAGE_REF"/u.test(verifyRun) ||
-    !/\.Manifest/u.test(verifyRun) ||
-    !/digest !== process\.env\.EXPECTED_DIGEST/u.test(verifyRun) ||
-    !/manifest\?\.config\?\.digest !== process\.env\.EXPECTED_CONFIG_DIGEST/u.test(
+    !/--format '\{\{json \.Manifest\}\}'/u.test(verifyRun) ||
+    !/imagetools inspect "\$IMMUTABLE_REF" --raw/u.test(verifyRun) ||
+    !/--format '\{\{json \.Image\}\}'/u.test(verifyRun) ||
+    !/descriptor\?\.digest/u.test(verifyRun) ||
+    !/manifest\?\.config\?\.digest/u.test(verifyRun) ||
+    /descriptor\?\.config|descriptor\.config/u.test(verifyRun) ||
+    /manifest\?\.digest|manifest\.digest/u.test(verifyRun) ||
+    !/manifestDigest !== process\.env\.EXPECTED_DIGEST/u.test(verifyRun) ||
+    !/configDigest !== process\.env\.EXPECTED_CONFIG_DIGEST/u.test(verifyRun) ||
+    !/immutableReference = process\.env\.IMMUTABLE_REF/u.test(verifyRun) ||
+    !/immutableReference !== `\$\{process\.env\.IMAGE_REPOSITORY\}@\$\{manifestDigest\}`/u.test(
       verifyRun,
     ) ||
-    !/immutableReference = process\.env\.IMMUTABLE_REF/u.test(verifyRun) ||
-    !/immutableReference !== `\$\{process\.env\.IMAGE_REPOSITORY\}@\$\{digest\}`/u.test(
+    !/image\?\.os !== 'linux' \|\| image\?\.architecture !== 'amd64'/u.test(
+      verifyRun,
+    ) ||
+    !/labels\[key\] !== value/u.test(verifyRun) ||
+    !/Date\.parse\(labels\['org\.opencontainers\.image\.created'\]\)/u.test(
       verifyRun,
     ) ||
     /sha256:[a-f0-9]{64}/u.test(verifyRun) ||
     /\{\{\.Name\}\}/u.test(verifyRun)
   ) {
     failures.push(
-      'publish-image must verify the scanned immutable digest and generate image-identity.json.',
+      'publish-image must verify descriptor digest, raw config digest, platform, and labels for the selected immutable image.',
+    );
+  }
+  const packageRun = String(packageStep?.run ?? '');
+  if (
+    !packageStep ||
+    packageStep?.env?.GH_TOKEN !== '${{ secrets.GITHUB_TOKEN }}' ||
+    packageStep?.env?.EXPECTED_DIGEST !==
+      '${{ steps.selected.outputs.digest }}' ||
+    !/GITHUB_API_URL/u.test(packageRun) ||
+    !/pkg = await request\(`\/users\/\$\{owner\}\/packages\/container\/\$\{encoded\}`\)/u.test(
+      packageRun,
+    ) ||
+    !/pkg\?\.visibility !== 'public'/u.test(packageRun) ||
+    !/linkage !== process\.env\.GITHUB_REPOSITORY/u.test(packageRun) ||
+    !/tags\.length !== 1 \|\| tags\[0\] !== expectedTag/u.test(packageRun) ||
+    !/tag === 'latest' \|\| tag === 'main'/u.test(packageRun) ||
+    !/matching\.length !== 1/u.test(packageRun) ||
+    /secrets\.(?!GITHUB_TOKEN)/u.test(packageRun)
+  ) {
+    failures.push(
+      'publish-image must fail closed through the official API on package existence, public visibility, repository linkage, selected tag, and mutable tags.',
+    );
+  }
+  if (
+    !remoteScan ||
+    normalizeExpression(remoteScan.if) !== '' ||
+    String(remoteScan.with?.['image-ref']) !==
+      '${{ steps.selected.outputs.immutable_ref }}'
+  ) {
+    failures.push(
+      'publish-image must rescan the verified remote immutable digest for both publication paths.',
+    );
+  }
+  const evidenceRun = String(evidence?.run ?? '');
+  if (
+    !evidence ||
+    evidence?.env?.MANIFEST_DIGEST !== '${{ steps.selected.outputs.digest }}' ||
+    evidence?.env?.CONFIG_DIGEST !==
+      '${{ steps.selected.outputs.config_digest }}' ||
+    evidence?.env?.IMMUTABLE_REF !==
+      '${{ steps.selected.outputs.immutable_ref }}' ||
+    !/writeFileSync\('image-identity\.json'/u.test(evidenceRun) ||
+    !/chmodSync\('image-identity\.json', 0o600\)/u.test(evidenceRun) ||
+    !/name: 'Trivy'/u.test(evidenceRun) ||
+    !/version: '0\.70\.0'/u.test(evidenceRun) ||
+    !/scanners: \['vuln'\]/u.test(evidenceRun) ||
+    !/severity: \['CRITICAL'\]/u.test(evidenceRun) ||
+    !/ignoreUnfixed: false/u.test(evidenceRun) ||
+    !/result: 'passed'/u.test(evidenceRun)
+  ) {
+    failures.push(
+      'image-identity.json must be generated in mode 0600 from verified immutable outputs.',
     );
   } else {
     for (const field of [
       'repository:',
+      'visibility:',
       'tag:',
-      'digest,',
+      'manifestDigest:',
+      'configDigest:',
+      'immutableReference:',
       'commit:',
       'workflowRunId:',
       'workflowRunUrl:',
-      'immutableReference,',
-      'labels:',
+      'platform:',
+      'labels,',
+      'scanner:',
+      'remoteRescan:',
+      'package:',
     ]) {
-      if (!verifyRun.includes(field)) {
+      if (!evidenceRun.includes(field)) {
         failures.push(
           `image-identity.json must include ${field.replace(/[:,]$/u, '')}.`,
         );
@@ -982,9 +1043,28 @@ function validateWorkflowDocument(workflow) {
   if (
     !artifact ||
     artifact.with?.path !== 'image-identity.json' ||
+    artifact.with?.['if-no-files-found'] !== 'error' ||
     Number(artifact.with?.['retention-days']) !== 14
   ) {
-    failures.push('publish-image must retain image-identity.json for 14 days.');
+    failures.push(
+      'publish-image must retain image-identity.json for 14 days and fail if it is absent.',
+    );
+  }
+  const verifyIndex = publishSteps.indexOf(verify);
+  const packageIndex = publishSteps.indexOf(packageStep);
+  const remoteScanIndex = publishSteps.indexOf(remoteScan);
+  const evidenceIndex = publishSteps.indexOf(evidence);
+  const artifactIndex = publishSteps.indexOf(artifact);
+  if (!(
+    firstPush < verifyIndex &&
+    verifyIndex < packageIndex &&
+    packageIndex < remoteScanIndex &&
+    remoteScanIndex < evidenceIndex &&
+    evidenceIndex < artifactIndex
+  )) {
+    failures.push(
+      'remote identity and package verification must precede remote rescan, evidence generation, and artifact upload.',
+    );
   }
 
   const allSteps = Object.values(jobs).flatMap(stepsFor);

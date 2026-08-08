@@ -14,23 +14,25 @@ documento; requisitos avançados permanecem no backlog pós-MVP.
 
 ## Estado atual
 
-O runtime health e a rebaseline documental foram incorporados à `main` pelo PR
-#29 no squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`. O container e o Compose
-de produção foram incorporados pelo PR #31 no squash
-`a568745025091bd3d309052ebd780374da405e3c`; a CI pós-merge `31000957615` foi
-aprovada. Isso comprova o conteúdo incorporado, mas não uma produção
-operacional: a infraestrutura da aplicação ainda não foi publicada e nenhuma
-imagem foi publicada por esses merges. A VPS Hostinger KVM 2 já
+O runtime health, a rebaseline documental e o container/Compose de produção
+foram incorporados pelos PRs #29 e #31. A CI essencial e a publicação GHCR
+foram incorporadas pelo PR #32 no squash
+`c02af719c72277f49348de33762ff12dc589434d`. A execução pós-merge
+`31023264462` validou, escaneou e publicou a imagem, mas terminou com um falso
+negativo ao tentar ler `config.digest` de um descriptor que contém apenas
+`mediaType`, `digest` e `size`. Isso comprova uma imagem pública, não uma
+produção operacional: nenhuma infraestrutura da aplicação foi implantada e
+nenhum deploy foi realizado. A VPS Hostinger KVM 2 já
 foi contratada e é o destino previsto; seu inventário, configuração e adequação
 à topologia do MVP ainda precisam ser comprovados. O estado de DNS, origem,
-Vercel, Traefik, GHCR, PostgreSQL da aplicação, secrets, backup, restore,
+Vercel, Traefik, PostgreSQL da aplicação, secrets, backup, restore,
 monitoramento e deploy ainda não foi comprovado, configurado ou validado para
 esta baseline. Nenhum dado real está autorizado.
 
 O target `production` do Dockerfile e `compose.production.yml` definem a stack
-base incorporada pela `0.8-MVP-03`. A imagem e a stack foram validadas somente
-em Docker Desktop com dados sintéticos; não foram publicadas, implantadas na VPS
-nem autorizadas para dados reais. `compose.yml` e
+base incorporada pela `0.8-MVP-03`. A imagem foi publicada somente no GHCR e a
+stack foi validada em Docker Desktop com dados sintéticos; nada foi implantado
+na VPS ou autorizado para dados reais. `compose.yml` e
 `compose.test.yml` permanecem superfícies separadas de desenvolvimento e teste.
 
 ## Arquitetura
@@ -130,7 +132,7 @@ topologia, credencial ou causa interna.
 
 ## CI e imagem
 
-A candidata da `0.8-MVP-04` divide a CI em `validate`, `build-and-scan` e
+A `0.8-MVP-04` divide a CI em `validate`, `build-and-scan` e
 `publish-image`, todos em `ubuntu-24.04`. `validate` preserva o perfil completo e
 acrescenta contratos da CI, os 34 testes focados de produção e validação real
 do Compose com valores sintéticos. Em Pull Requests e execuções manuais,
@@ -143,19 +145,32 @@ Somente `push` da `main` habilita `publish-image`, com `contents: read` e
 nova constrói uma vez, carrega, registra o config digest local, verifica as seis
 labels OCI, bloqueia toda vulnerabilidade Critical e revalida esse config digest
 imediatamente antes do único push. O digest reportado pelo push forma a
-referência imutável; a verificação final consulta somente essa referência e
-exige igualdade tanto do digest do manifesto quanto do config digest escaneado.
-O fluxo de tag existente não reconstrói nem sobrescreve: valida identidade,
-reescaneia a referência por digest e preserva os mesmos digests de manifesto e
-configuração até o artefato final, falhando fechado diante de divergência.
+referência imutável. A correção `0.8-MVP-04-CORR-01` separa as fontes de
+identidade: `.Manifest` fornece somente o digest do descriptor,
+`imagetools inspect --raw` fornece `config.digest` e `.Image` fornece plataforma
+e labels OCI. O fluxo de tag existente não reconstrói nem sobrescreve; ambos os
+caminhos verificam identidade, package e tag, fazem novo scan da referência
+remota por digest e só então geram a evidência.
 
-`image-identity.json`, retido por 14 dias, registra repositório, tag, digest,
-commit, run e labels. A referência autoritativa para deploy e rollback é
+`image-identity.json`, retido por 14 dias e criado em modo `0600`, registra
+repositório, visibilidade, tag, manifest e config digests, referência imutável,
+commit, run, plataforma, labels OCI completas, scanner, resultado do rescan e
+vínculo package/repositório. A referência autoritativa para deploy e rollback é
 `ghcr.io/arthurportodev/genesis-platform-api@sha256:<digest>`. Não existem tags
 `latest` ou `main`; provenance, SBOM, assinatura, multiarch e cache remoto de
-build permanecem fora desta entrega. O package nasce privado quando a primeira
-publicação for autorizada e executada. A candidata local e sua verificação
-independente não publicam package ou imagem.
+build permanecem fora desta entrega.
+
+Arthur aprovou manter público o package
+`ghcr.io/arthurportodev/genesis-platform-api`. A integridade não depende de
+sigilo do artefato: ela é garantida por tag com SHA completo, referência por
+digest, labels OCI, scans Critical e permissões mínimas. A versão histórica
+publicada possui somente a tag
+`sha-c02af719c72277f49348de33762ff12dc589434d`, manifest digest
+`sha256:c839d9d89aa12648e147eebfc2d5b5a09c62080ff50881318e2984ea51ccdc69`
+e config digest
+`sha256:c4bccf7a8e37aa73d46d6717876841a3fe6e343797753786150f8f350c649d9f`.
+O marcador visual “Latest” do GitHub não é uma tag `latest`. O package não será
+excluído, recriado ou tornado privado por esta correção.
 
 O runtime final usa `alpine:3.24`; `node:24-alpine3.24` fica restrito aos
 estágios que executam npm e build. A imagem final recebe somente o executável

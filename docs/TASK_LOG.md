@@ -451,46 +451,47 @@ dados reais.
 
 ## 0.8-MVP-04 — CI essencial, GHCR e imagem identificável
 
-**Candidata local corrigida, pendente da Gate 2.** Divide a CI em `validate`,
-`build-and-scan` para PR/manual e `publish-image` somente para push da `main`.
-O build usa o target `production` para `linux/amd64`, aplica seis labels OCI e
-uma única tag `sha-<SHA completo>`. Trivy v0.70.0 bloqueia Critical, inclusive
-sem correção, antes de qualquer push.
+**Incorporada com correção posterior necessária.** O PR #32 entrou na `main` no
+squash `c02af719c72277f49348de33762ff12dc589434d`. A execução pós-merge
+`31023264462` aprovou validação, build único `production/linux/amd64`, runtime,
+Trivy v0.70.0 com zero Critical e push. O package foi publicado com sucesso,
+mas o job falhou depois do push e não enviou `image-identity.json`.
 
-O publicador usa somente `GITHUB_TOKEN`, com `packages: write` restrito ao job.
-Tag ausente segue build único, registra o config digest local, executa runtime e
-scan, revalida a mesma configuração no único push e seleciona o digest reportado
-por ele. A confirmação final consulta somente essa referência imutável e compara
-os digests de manifesto e configuração esperados. Tag existente é validada e
-reescaneada por digest sem rebuild ou overwrite, preservando os dois digests.
-`image-identity.json` registra digest, commit, run e labels por 14 dias. Actions
-são fixadas por SHA completo e contratos Node-stdlib cobrem eventos, permissões,
-ordem, identidade, idempotência e limites de supply chain.
+O incidente foi um falso negativo determinístico: `docker buildx imagetools
+inspect --format '{{json .Manifest}}'` retornou apenas o descriptor com
+`mediaType`, `digest` e `size`; o workflow tentou ler `config.digest` desse
+objeto. A imagem publicada estava íntegra. A tag histórica é
+`sha-c02af719c72277f49348de33762ff12dc589434d`, o manifest digest é
+`sha256:c839d9d89aa12648e147eebfc2d5b5a09c62080ff50881318e2984ea51ccdc69`
+e o config digest é
+`sha256:c4bccf7a8e37aa73d46d6717876841a3fe6e343797753786150f8f350c649d9f`.
 
-Formatação, lint, build, unitários, E2E, integração, task-tools, contratos da
-CI, 34 testes de produção e validação real do Compose foram aprovados. O scan
-local inicial encontrou `CVE-2026-59873`, Critical, em `tar` 7.5.16 da
-superfície npm herdada pelo runtime. Arthur ampliou a Gate 1 de 9 para 11 paths,
-adicionando somente `Dockerfile` e o teste estrutural da imagem.
+Arthur aprovou manter público o package
+`ghcr.io/arthurportodev/genesis-platform-api`. O repositório também é público,
+a imagem sanitizada contém somente runtime e artefatos de produção, e não foram
+encontrados secrets ou vulnerabilidades. Não haverá exclusão, recriação ou
+mudança de visibilidade. A integridade continua baseada em tag SHA completa,
+digests, labels OCI, scans e permissões mínimas; “Latest” na interface não é uma
+tag `latest`, e também não existe tag `main`.
 
-Os estágios de dependências/build usam `node:24-alpine3.24`; o estágio final usa
-Alpine 3.24 e copia apenas o binário Node, `libstdc++`, dependências podadas,
-`dist` e `package.json`. Inspeção real confirmou Node e TypeORM CLI funcionais,
-UID/GID 10001, CMD direto, seis labels e ausência de npm, npx, Yarn, Corepack,
-módulos globais, conteúdo de desenvolvimento e pacote npm `tar`. Migration
-exit 0, readiness 200/healthy e SIGTERM concluído em 2,26 s com exit 0. Trivy
-v0.70.0 com base atualizada retornou zero vulnerabilidades Critical, sem ignore
-ou allowlist.
+## 0.8-MVP-04-CORR-01 — Identidade remota e evidências do GHCR
 
-A primeira verificação independente cobriu 11/11 paths e bloqueou a Gate 2 com
-dois findings High: o artefato ainda podia reinspecionar a tag mutável depois do
-scan, e os resultados finais estavam resumidos sem logs brutos vinculados por
-hash. A correção substituiu a releitura da tag pelo encadeamento de outputs
-imutáveis descrito acima e ampliou os contratos da CI para 29 casos, incluindo
-mutações adversariais de digest hard-coded, referência alheia, perda da igualdade
-de digests e troca da configuração local. A matriz e as provas operacionais e de
-Trivy serão regeneradas como evidência raw/hash-bound antes da reverificação.
+**Candidata corretiva validada localmente, Gate 2 pendente.** O descriptor passa a
+fornecer somente o manifest digest, o manifesto OCI bruto obtido por `--raw`
+fornece `config.digest` e `.Image` fornece `linux/amd64` e as seis labels OCI.
+Os caminhos de tag nova e existente permanecem fail-closed e idempotentes; tag
+existente nunca é reconstruída ou sobrescrita.
 
-Nesta etapa local não houve login ou publicação no GHCR, stage, commit, push,
-PR, merge, mudança remota, infraestrutura ou deploy. A primeira criação do
-package privado permanece vinculada à autorização humana explícita da Gate 3.
+Depois da identidade, a API oficial do GitHub verifica existência do package,
+visibilidade `public`, vínculo exato com o repositório, versão correspondente ao
+digest, única tag SHA na versão selecionada e ausência de `latest`/`main`. O
+Trivy v0.70.0 reescaneia a referência remota por digest antes da geração do
+artifact. Só então `image-identity.json` é criado em modo `0600`, com os dois
+digests, referência imutável, commit, run, plataforma, labels, scanner,
+resultado e vínculo do package, para retenção de 14 dias.
+
+A execução local e a Gate 2 são read-only em relação ao GHCR. A correção não
+publica nova imagem, não altera package, visibilidade, permissões, ruleset,
+infraestrutura ou deploy. Uma nova execução canônica exige autorização humana
+posterior para commit, PR, merge e CI pós-merge; a Gate 3 da `0.8-MVP-04`
+permanece pendente até essa execução ser aprovada.

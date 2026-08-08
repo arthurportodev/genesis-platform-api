@@ -214,7 +214,7 @@ test('requires real runtime validation after build and before every scan', () =>
     scanStart,
   );
   const reordered = `${source.slice(0, runtimeStart)}${source.slice(scanStart, pushStart)}${source.slice(runtimeStart, scanStart)}${source.slice(pushStart)}`;
-  rejects(reordered, /runtime validation must precede/u);
+  rejects(reordered, /runtime validation and the local Trivy scan/u);
 });
 
 test('requires immutable full-SHA tag and all six OCI labels', () => {
@@ -241,7 +241,7 @@ test('requires build then blocking scan then push', () => {
     pushStart,
   );
   const reordered = `${source.slice(0, scanStart)}${source.slice(pushStart, pushEnd)}${source.slice(scanStart, pushStart)}${source.slice(pushEnd)}`;
-  rejects(reordered, /scan paths must precede docker push/u);
+  rejects(reordered, /runtime validation and the local Trivy scan/u);
 });
 
 test('PR and manual build never authenticate or publish', () => {
@@ -264,31 +264,38 @@ test('existing immutable tag is validated and rescanned by digest without rebuil
   );
   rejects(
     mutated(
-      'image-ref: ${{ steps.existing.outputs.immutable_ref }}',
+      'image-ref: ${{ steps.selected.outputs.immutable_ref }}',
       'image-ref: ${{ env.IMAGE_REF }}',
     ),
-    /immutable digest/u,
+    /verified remote immutable digest/u,
   );
   rejects(
     source.replaceAll("--format '{{json .Manifest}}'", "--format '{{.Name}}'"),
-    /existing-tag path|generate image-identity/u,
+    /existing-tag path|descriptor digest/u,
+  );
+  rejects(
+    mutated(
+      "      - name: Build one local production image\n        if: ${{ steps.existence.outputs.exists == 'false' }}",
+      '      - name: Build one local production image',
+    ),
+    /may build only/u,
   );
 });
 
-test('binds final identity to the exact existing or pushed digest that was scanned', () => {
+test('binds final identity to descriptor digest and raw config digest', () => {
   rejects(
     mutated(
       'imagetools inspect "$IMMUTABLE_REF"',
       'imagetools inspect "$IMAGE_REF"',
     ),
-    /scanned immutable digest/u,
+    /descriptor digest/u,
   );
   rejects(
     mutated(
       'EXPECTED_DIGEST: ${{ steps.selected.outputs.digest }}',
       `EXPECTED_DIGEST: sha256:${'a'.repeat(64)}`,
     ),
-    /scanned immutable digest/u,
+    /descriptor digest|official API/u,
   );
   rejects(
     mutated(
@@ -299,17 +306,17 @@ test('binds final identity to the exact existing or pushed digest that was scann
   );
   rejects(
     mutated(
-      "if (digest !== process.env.EXPECTED_DIGEST) throw new Error('remote digest does not match the scanned immutable image');",
-      "if (false) throw new Error('remote digest does not match the scanned immutable image');",
+      "if (manifestDigest !== process.env.EXPECTED_DIGEST) throw new Error('remote manifest digest does not match the scanned immutable image');",
+      "if (false) throw new Error('remote manifest digest does not match the scanned immutable image');",
     ),
-    /scanned immutable digest/u,
+    /descriptor digest/u,
   );
   rejects(
     mutated(
-      "if (manifest?.config?.digest !== process.env.EXPECTED_CONFIG_DIGEST) throw new Error('remote config does not match the scanned local image');",
+      "if (configDigest !== process.env.EXPECTED_CONFIG_DIGEST) throw new Error('remote config does not match the scanned local image');",
       "if (false) throw new Error('remote config does not match the scanned local image');",
     ),
-    /scanned immutable digest/u,
+    /raw config digest/u,
   );
   rejects(
     mutated(
@@ -337,7 +344,131 @@ test('binds final identity to the exact existing or pushed digest that was scann
       'const immutableReference = process.env.IMMUTABLE_REF;',
       `const immutableReference = '${'sha256:'}${'b'.repeat(64)}';`,
     ),
-    /scanned immutable digest/u,
+    /descriptor digest/u,
+  );
+});
+
+test('treats Manifest output as a descriptor and requires raw manifest config', () => {
+  rejects(
+    mutated(
+      "const configDigest = manifest?.config?.digest ?? '';",
+      "const configDigest = descriptor?.config?.digest ?? '';",
+    ),
+    /descriptor digest|raw config digest/u,
+  );
+  rejects(
+    mutated(
+      'imagetools inspect "$IMMUTABLE_REF" --raw',
+      'imagetools inspect "$IMMUTABLE_REF" --format \'{{json .Manifest}}\'',
+    ),
+    /raw config digest/u,
+  );
+  rejects(
+    mutated(
+      "const configDigest = manifest?.config?.digest ?? '';",
+      "const configDigest = '';",
+    ),
+    /raw config digest/u,
+  );
+});
+
+test('rejects incorrect remote platform and OCI labels', () => {
+  rejects(
+    mutated(
+      "image?.os !== 'linux' || image?.architecture !== 'amd64'",
+      "image?.os !== 'linux' || image?.architecture !== 'arm64'",
+    ),
+    /existing-tag path|platform/u,
+  );
+  rejects(
+    mutated(
+      'if (labels[key] !== value) throw new Error(`existing image label mismatch: ${key}`);',
+      'if (false) throw new Error(`existing image label mismatch: ${key}`);',
+    ),
+    /existing-tag path|labels/u,
+  );
+});
+
+test('fails closed on package existence, public visibility, linkage, and tags', () => {
+  rejects(
+    mutated(
+      'pkg = await request(`/users/${owner}/packages/container/${encoded}`);',
+      'pkg = {};',
+    ),
+    /official API/u,
+  );
+  rejects(
+    mutated("pkg?.visibility !== 'public'", "pkg?.visibility !== 'private'"),
+    /public visibility/u,
+  );
+  rejects(
+    mutated(
+      'linkage !== process.env.GITHUB_REPOSITORY',
+      'linkage === process.env.GITHUB_REPOSITORY',
+    ),
+    /repository linkage/u,
+  );
+  rejects(
+    mutated(
+      'tags.length !== 1 || tags[0] !== expectedTag',
+      'tags.length === 0',
+    ),
+    /selected tag/u,
+  );
+  rejects(
+    mutated("tag === 'latest' || tag === 'main'", "tag === 'release'"),
+    /mutable tags/u,
+  );
+});
+
+test('requires remote rescan after identity and package verification and before evidence', () => {
+  rejects(
+    mutated(
+      'image-ref: ${{ steps.selected.outputs.immutable_ref }}',
+      'image-ref: ${{ env.IMAGE_REF }}',
+    ),
+    /verified remote immutable digest/u,
+  );
+  const verifyMarker = '      - name: Verify scanned immutable image identity';
+  const scanMarker = '      - name: Rescan verified remote immutable image';
+  const evidenceMarker =
+    '      - name: Generate verified image identity evidence';
+  const verifyStart = source.indexOf(verifyMarker);
+  const scanStart = source.indexOf(scanMarker);
+  const evidenceStart = source.indexOf(evidenceMarker);
+  const movedBeforeIdentity = `${source.slice(0, verifyStart)}${source.slice(scanStart, evidenceStart)}${source.slice(verifyStart, scanStart)}${source.slice(evidenceStart)}`;
+  rejects(movedBeforeIdentity, /verification must precede remote rescan/u);
+
+  const artifactStart = source.indexOf(
+    '      - name: Upload immutable image identity',
+    evidenceStart,
+  );
+  const artifactMovedBeforeScan = `${source.slice(0, scanStart)}${source.slice(artifactStart)}\n${source.slice(scanStart, artifactStart)}`;
+  rejects(artifactMovedBeforeScan, /verification must precede remote rescan/u);
+});
+
+test('requires complete identity evidence only after a passing rescan', () => {
+  rejects(
+    mutated(
+      'manifestDigest: process.env.MANIFEST_DIGEST,',
+      'digest: process.env.MANIFEST_DIGEST,',
+    ),
+    /must include manifestDigest/u,
+  );
+  rejects(
+    mutated(
+      'configDigest: process.env.CONFIG_DIGEST,',
+      'config: process.env.CONFIG_DIGEST,',
+    ),
+    /must include configDigest/u,
+  );
+  rejects(
+    mutated("result: 'passed'", "result: 'unknown'"),
+    /mode 0600|image-identity/u,
+  );
+  rejects(
+    mutated('if-no-files-found: error', 'if-no-files-found: warn'),
+    /fail if it is absent/u,
   );
 });
 
