@@ -94,6 +94,12 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - `validate`, `image-impact` e `build-and-scan` têm somente `contents: read`.
   `validate` usa PostgreSQL `_test` descartável e valores sintéticos;
   `image-impact` usa apenas Git e Node.js; nenhum deles autentica ou publica.
+- A matriz sintética de produção do job `validate` contém somente configuração
+  não secreta. Seus seis secrets sintéticos ficam em arquivos `0600` sob
+  `runner.temp`, são ligados por override Compose transitório, nunca são
+  impressos ou enviados como artifact e têm cleanup explícito com `always()`.
+  O render falha fechado diante de role repetida, referência mutável, frontend
+  divergente, versão de keyring divergente, path ou permissão de secret incorretos.
 - Todo `push` da `main` mantém a validação completa. `image-impact` compara
   `github.event.before` e `github.sha` como commits completos e emite somente o
   booleano canônico `should_publish`; SHA inválido, range irresolúvel, path

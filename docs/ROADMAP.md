@@ -85,6 +85,8 @@ experimento é promovido automaticamente para o MVP.
   - candidata local separa bootstrap, migration owner e runtime;
   - usa secrets file-backed, digests imutáveis, volume externo e bundle mínimo;
   - não instala, transfere ou implanta qualquer artefato; Gate 2 pendente.
+  - `0.8-MVP-05A-CORR-01` corrige localmente a matriz sintética da CI no PR #35;
+    a Gate 2 renovada permanece pendente e nenhuma mutação remota foi autorizada.
 
 ### Próximos deltas planejados
 

@@ -176,6 +176,14 @@ do Compose com valores sintéticos. Em Pull Requests e execuções manuais,
 `build-and-scan` produz uma única imagem local do target `production` para
 `linux/amd64` e a submete ao Trivy antes de terminar, sem login ou publicação.
 
+A correção `0.8-MVP-05A-CORR-01` mantém esse desenho e alinha a validação
+sintética ao contrato versionado: matriz não secreta completa, três roles
+PostgreSQL distintas, referências imutáveis, frontend canônico e versão do
+keyring de Leads. Os seis valores sintéticos ficam somente em arquivos `0600`
+sob `runner.temp`; um override transitório é usado apenas para renderizar o
+Compose, não é enviado como artifact e é removido imediatamente após a
+validação canônica, inclusive quando um passo anterior falha.
+
 Todo `push` da `main` continua executando `validate`. O job não privilegiado
 `image-impact`, também limitado a esse evento e com somente `contents: read`,
 compara os commits completos `before` e `head`. `publish-image` depende dos

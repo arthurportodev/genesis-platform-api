@@ -53,6 +53,11 @@ jobs:
       DATABASE_RUNTIME_ROLE: genesis_runtime_test
       DATABASE_MIGRATION_USER: genesis_test
       DATABASE_MIGRATION_PASSWORD: test-only
+      PRODUCTION_CI_ROOT: ${{ runner.temp }}/genesis-production-ci
+      PRODUCTION_CI_ENV_FILE: ${{ runner.temp }}/genesis-production-ci/production.env
+      PRODUCTION_CI_SECRET_DIR: ${{ runner.temp }}/genesis-production-ci/secrets
+      PRODUCTION_CI_OVERRIDE_FILE: ${{ runner.temp }}/genesis-production-ci/secret-files.override.yml
+      PRODUCTION_CI_RENDER_FILE: ${{ runner.temp }}/genesis-production-ci/rendered.json
 
     steps:
       - name: Checkout repository
@@ -95,24 +100,23 @@ jobs:
       - name: Check production surface formatting
         run: npm run format:check:production
 
-      - name: Create synthetic production Compose environment
+      - name: Create synthetic production Compose inputs
         shell: bash
         run: |
-          cat > "${{ runner.temp }}/genesis-production-ci.env" <<'ENV'
-          GENESIS_API_IMAGE=ghcr.io/arthurportodev/genesis-platform-api:sha-${{ github.sha }}
+          set -euo pipefail
+          umask 077
+          install -d -m 0700 "$PRODUCTION_CI_ROOT" "$PRODUCTION_CI_SECRET_DIR"
+          cat > "$PRODUCTION_CI_ENV_FILE" <<'ENV'
           DATABASE_NAME=genesis_platform
-          DATABASE_MIGRATION_USER=genesis_owner
-          DATABASE_MIGRATION_PASSWORD=ci-migration-only
+          DATABASE_BOOTSTRAP_USER=genesis_bootstrap
+          DATABASE_MIGRATION_USER=genesis_migration
           DATABASE_RUNTIME_ROLE=genesis_runtime
-          DATABASE_RUNTIME_PASSWORD=ci-runtime-only
           APP_NAME=Genesis Platform API
           APP_VERSION=0.1.0
-          FRONTEND_URL=https://app.example.invalid
           TRUST_PROXY_HOPS=0
-          JWT_ACCESS_SECRET=ci-only-access-secret-with-at-least-thirty-two-characters
           JWT_ACCESS_EXPIRES_IN=15m
           REFRESH_TOKEN_EXPIRES_IN_DAYS=30
-          REFRESH_TOKEN_PEPPER=ci-only-refresh-pepper-with-at-least-thirty-two-characters
+          LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION=1
           API_CPUS=0.75
           API_MEMORY_LIMIT=1g
           API_PIDS_LIMIT=128
@@ -125,11 +129,102 @@ jobs:
           POSTGRES_MEMORY_LIMIT=2g
           POSTGRES_PIDS_LIMIT=256
           ENV
+          printf '%s\n' 'synthetic-ci-bootstrap-password-only' > "$PRODUCTION_CI_SECRET_DIR/postgres-bootstrap-password"
+          printf '%s\n' 'synthetic-ci-migration-password-only' > "$PRODUCTION_CI_SECRET_DIR/database-migration-password"
+          printf '%s\n' 'synthetic-ci-runtime-password-only' > "$PRODUCTION_CI_SECRET_DIR/database-runtime-password"
+          printf '%s\n' 'synthetic-ci-jwt-access-secret-at-least-32-characters' > "$PRODUCTION_CI_SECRET_DIR/jwt-access-secret"
+          printf '%s\n' 'synthetic-ci-refresh-pepper-at-least-32-characters' > "$PRODUCTION_CI_SECRET_DIR/refresh-token-pepper"
+          printf '%s\n' 'synthetic-ci-lead-idempotency-keyring-only' > "$PRODUCTION_CI_SECRET_DIR/lead-idempotency-keys"
+          chmod 0600 \
+            "$PRODUCTION_CI_SECRET_DIR/postgres-bootstrap-password" \
+            "$PRODUCTION_CI_SECRET_DIR/database-migration-password" \
+            "$PRODUCTION_CI_SECRET_DIR/database-runtime-password" \
+            "$PRODUCTION_CI_SECRET_DIR/jwt-access-secret" \
+            "$PRODUCTION_CI_SECRET_DIR/refresh-token-pepper" \
+            "$PRODUCTION_CI_SECRET_DIR/lead-idempotency-keys"
+          cat > "$PRODUCTION_CI_OVERRIDE_FILE" <<OVERRIDE
+          secrets:
+            postgres_bootstrap_password:
+              file: $PRODUCTION_CI_SECRET_DIR/postgres-bootstrap-password
+            database_migration_password:
+              file: $PRODUCTION_CI_SECRET_DIR/database-migration-password
+            database_runtime_password:
+              file: $PRODUCTION_CI_SECRET_DIR/database-runtime-password
+            jwt_access_secret:
+              file: $PRODUCTION_CI_SECRET_DIR/jwt-access-secret
+            refresh_token_pepper:
+              file: $PRODUCTION_CI_SECRET_DIR/refresh-token-pepper
+            lead_idempotency_keys:
+              file: $PRODUCTION_CI_SECRET_DIR/lead-idempotency-keys
+          OVERRIDE
+
+      - name: Validate synthetic secret-backed production render
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose \
+            --env-file "$PRODUCTION_CI_ENV_FILE" \
+            -f compose.production.yml \
+            -f "$PRODUCTION_CI_OVERRIDE_FILE" \
+            config --format json > "$PRODUCTION_CI_RENDER_FILE"
+          node <<'NODE'
+          const { readFileSync, statSync } = require('node:fs');
+          const { join } = require('node:path');
+          const config = JSON.parse(readFileSync(process.env.PRODUCTION_CI_RENDER_FILE, 'utf8'));
+          const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';
+          const postgresImage = 'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
+          if (config.services.api.image !== apiImage || config.services.migrate.image !== apiImage) throw new Error('synthetic API image mismatch');
+          if (config.services.postgres.image !== postgresImage) throw new Error('synthetic PostgreSQL image mismatch');
+          if (config.services.api.environment.FRONTEND_URL !== 'https://genesis.invalid') throw new Error('synthetic frontend mismatch');
+          if (String(config.services.api.environment.LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) !== '1') throw new Error('synthetic Lead key version mismatch');
+          const roles = [
+            config.services.postgres.environment.POSTGRES_USER,
+            config.services.postgres.environment.DATABASE_MIGRATION_USER,
+            config.services.postgres.environment.DATABASE_RUNTIME_ROLE,
+          ];
+          if (roles.some((role) => !/^[a-z_][a-z0-9_]*$/.test(role)) || new Set(roles).size !== 3) throw new Error('synthetic database roles are invalid');
+          const secretFiles = {
+            postgres_bootstrap_password: 'postgres-bootstrap-password',
+            database_migration_password: 'database-migration-password',
+            database_runtime_password: 'database-runtime-password',
+            jwt_access_secret: 'jwt-access-secret',
+            refresh_token_pepper: 'refresh-token-pepper',
+            lead_idempotency_keys: 'lead-idempotency-keys',
+          };
+          for (const [name, filename] of Object.entries(secretFiles)) {
+            const expected = join(process.env.PRODUCTION_CI_SECRET_DIR, filename);
+            if (config.secrets?.[name]?.file !== expected) throw new Error(`synthetic secret path mismatch: ${name}`);
+            if ((statSync(expected).mode & 0o777) !== 0o600) throw new Error(`synthetic secret mode mismatch: ${name}`);
+            const value = readFileSync(expected, 'utf8').trim();
+            if (!value.startsWith('synthetic-ci-')) throw new Error(`synthetic secret marker mismatch: ${name}`);
+          }
+          NODE
 
       - name: Validate production Compose with Docker
         run: npm run production:compose:validate
         env:
-          GENESIS_PRODUCTION_ENV_FILE: ${{ runner.temp }}/genesis-production-ci.env
+          GENESIS_PRODUCTION_ENV_FILE: ${{ env.PRODUCTION_CI_ENV_FILE }}
+
+      - name: Remove synthetic production Compose inputs
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          rm -f -- \
+            "$PRODUCTION_CI_RENDER_FILE" \
+            "$PRODUCTION_CI_OVERRIDE_FILE" \
+            "$PRODUCTION_CI_ENV_FILE" \
+            "$PRODUCTION_CI_SECRET_DIR/postgres-bootstrap-password" \
+            "$PRODUCTION_CI_SECRET_DIR/database-migration-password" \
+            "$PRODUCTION_CI_SECRET_DIR/database-runtime-password" \
+            "$PRODUCTION_CI_SECRET_DIR/jwt-access-secret" \
+            "$PRODUCTION_CI_SECRET_DIR/refresh-token-pepper" \
+            "$PRODUCTION_CI_SECRET_DIR/lead-idempotency-keys"
+          if [ -d "$PRODUCTION_CI_SECRET_DIR" ]; then
+            rmdir -- "$PRODUCTION_CI_SECRET_DIR"
+          fi
+          if [ -d "$PRODUCTION_CI_ROOT" ]; then
+            rmdir -- "$PRODUCTION_CI_ROOT"
+          fi
 
       - name: Run focused production tests
         run: npm run test:production

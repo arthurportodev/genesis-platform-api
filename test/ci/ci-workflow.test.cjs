@@ -3,6 +3,8 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const test = require('node:test');
 const {
+  SYNTHETIC_ENV_MATRIX,
+  SYNTHETIC_SECRET_FILES,
   WORKFLOW_PATH,
   parseYamlSubset,
   validateWorkflowSource,
@@ -16,6 +18,12 @@ const source = readFileSync(
 function mutated(search, replacement) {
   assert.ok(source.includes(search), `fixture does not contain ${search}`);
   return source.replace(search, replacement);
+}
+
+function mutatedLast(search, replacement) {
+  const index = source.lastIndexOf(search);
+  assert.notEqual(index, -1, `fixture does not contain ${search}`);
+  return `${source.slice(0, index)}${replacement}${source.slice(index + search.length)}`;
 }
 
 function rejects(candidate, pattern) {
@@ -267,10 +275,115 @@ test('validate preserves the complete Critical command surface', () => {
 test('Compose validation uses only a synthetic runner temp env file', () => {
   rejects(
     mutated(
-      'GENESIS_PRODUCTION_ENV_FILE: ${{ runner.temp }}/genesis-production-ci.env',
+      'GENESIS_PRODUCTION_ENV_FILE: ${{ env.PRODUCTION_CI_ENV_FILE }}',
       'GENESIS_PRODUCTION_ENV_FILE: .env.production',
     ),
     /synthetic runner\.temp/u,
+  );
+});
+
+test('requires the complete exact synthetic non-secret production matrix', () => {
+  for (const [name, value] of Object.entries(SYNTHETIC_ENV_MATRIX)) {
+    rejects(
+      mutated(`          ${name}=${value}\n`, ''),
+      /complete approved matrix/u,
+    );
+  }
+  rejects(
+    mutated(
+      '          DATABASE_RUNTIME_ROLE=genesis_runtime',
+      '          DATABASE_RUNTIME_ROLE=genesis_migration',
+    ),
+    /complete approved matrix|valid and distinct/u,
+  );
+  rejects(
+    mutated(
+      '          JWT_ACCESS_EXPIRES_IN=15m',
+      '          JWT_ACCESS_SECRET=synthetic-ci-not-environment-backed\n          JWT_ACCESS_EXPIRES_IN=15m',
+    ),
+    /complete approved matrix|must not contain JWT_ACCESS_SECRET/u,
+  );
+});
+
+test('binds synthetic secret files to runner.temp, mode 0600 and exact cleanup', () => {
+  rejects(
+    mutated(
+      'PRODUCTION_CI_ROOT: ${{ runner.temp }}/genesis-production-ci',
+      'PRODUCTION_CI_ROOT: /tmp/genesis-production-ci',
+    ),
+    /exact runner\.temp root/u,
+  );
+  rejects(mutated('chmod 0600', 'chmod 0644'), /mode 0600/u);
+  for (const filename of Object.values(SYNTHETIC_SECRET_FILES)) {
+    rejects(
+      mutatedLast(
+        `"$PRODUCTION_CI_SECRET_DIR/${filename}"`,
+        `"$PRODUCTION_CI_SECRET_DIR/${filename}-missing"`,
+      ),
+      /cleanup is incomplete|cleanup must be exact/u,
+    );
+  }
+  rejects(
+    mutated(
+      "          node <<'NODE'",
+      '          cat "$PRODUCTION_CI_SECRET_DIR/jwt-access-secret"\n          node <<\'NODE\'',
+    ),
+    /never be printed/u,
+  );
+  rejects(
+    mutated('        if: ${{ always() }}', '        if: ${{ success() }}'),
+    /cleanup must be exact, unconditional/u,
+  );
+  rejects(
+    mutated(
+      'rmdir -- "$PRODUCTION_CI_ROOT"',
+      'rmdir -- "$PRODUCTION_CI_ROOT" || true',
+    ),
+    /cleanup must be exact, unconditional/u,
+  );
+  rejects(
+    mutated(
+      '      - name: Remove synthetic production Compose inputs',
+      `      - name: Upload synthetic production inputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: synthetic-production-inputs
+          path: \${{ env.PRODUCTION_CI_ROOT }}
+
+      - name: Remove synthetic production Compose inputs`,
+    ),
+    /must not upload synthetic production inputs/u,
+  );
+});
+
+test('requires immutable synthetic refs, fail-closed frontend and Lead version', () => {
+  rejects(
+    mutated(
+      "const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';",
+      "const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api:latest';",
+    ),
+    /render validation is incomplete or mutable/u,
+  );
+  rejects(
+    mutated(
+      "const postgresImage = 'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';",
+      "const postgresImage = 'postgres:17-alpine';",
+    ),
+    /render validation is incomplete or mutable/u,
+  );
+  rejects(
+    mutated(
+      "FRONTEND_URL !== 'https://genesis.invalid'",
+      "FRONTEND_URL !== 'https://app.example.invalid'",
+    ),
+    /render validation is incomplete or mutable/u,
+  );
+  rejects(
+    mutated(
+      "LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) !== '1'",
+      "LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) !== '2'",
+    ),
+    /render validation is incomplete or mutable/u,
   );
 });
 

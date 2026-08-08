@@ -538,3 +538,15 @@ hashes, digests e timestamp reproduzível, além de validators, testes
 adversariais e ADR-014. Ela preserva a imagem atual da API: nenhum path
 image-affecting foi alterado. Não houve stage, commit, push, publicação, acesso
 à VPS, secret real, volume persistente, migration remota ou deploy.
+
+## 0.8-MVP-05A-CORR-01 — Alinhamento da matriz sintética da CI
+
+**Candidata corretiva local em 8 de agosto de 2026; Gate 2 renovada pendente.**
+A execução `31275744544`, job `93148867305`, no head
+`d04d1600584bf7764b5ea204c459f5d529388c32`, revelou drift determinístico: o
+workflow sintético anterior não fornecia `DATABASE_BOOTSTRAP_USER` ao contrato
+da 05A. A correção audita a matriz completa, usa três roles válidas e distintas,
+preserva os digests, o frontend e a versão do keyring de Leads e mantém secrets
+sintéticos somente em arquivos privados sob `runner.temp`, sem log ou artifact
+e com cleanup explícito. Não houve stage, commit, push, rerun, publicação,
+acesso à VPS ou deploy nesta fase.

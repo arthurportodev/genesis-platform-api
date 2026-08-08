@@ -13,9 +13,9 @@ condicionada ao impacto real`, pelo PR #34, com `main` em
   Operacional de Desenvolvimento, incorporada no backend pelo PR #26, squash
   `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
   squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
-- **Tarefa atual:** `0.8-MVP-05A — contrato versionado de PostgreSQL, secrets e
-bundle de produção`; candidata local em implementação, sem deploy e com Gate
-  2 pendente
+- **Tarefa atual:** `0.8-MVP-05A-CORR-01 — alinhamento da matriz sintética da
+CI`; correção local sobre o head `d04d1600584bf7764b5ea204c459f5d529388c32`
+  do PR #35, sem deploy e com Gate 2 renovada pendente
 - **Produção:** infraestrutura ainda não publicada; nenhum dado real autorizado
 - **CI pós-merge da `main`:** execução `31249557339` aprovada integralmente no
   squash `c6fbc0b865540abd9d13f93c7cc7542eb0936355`, incluindo validate, runtime,
@@ -50,6 +50,10 @@ bundle de produção`; candidata local em implementação, sem deploy e com Gate
   secrets do environment, fixa API/PostgreSQL por digest, protege o volume
   externo, adiciona shutdown de 90 segundos ao banco e gera bundle mínimo
   determinístico. Esse item ainda não está incorporado nem implantado.
+- A correção `0.8-MVP-05A-CORR-01` fecha o drift determinístico da CI que omitia
+  `DATABASE_BOOTSTRAP_USER`: a matriz sintética agora cobre todos os inputs não
+  secretos, usa roles distintas e arquivos de secrets temporários, privados e
+  descartáveis. O resultado ainda é somente candidato local, sem mutação remota.
 - Package público `ghcr.io/arthurportodev/genesis-platform-api` vinculado ao
   repositório, com versões sob tags SHA completas. A versão histórica possui
   manifest digest
