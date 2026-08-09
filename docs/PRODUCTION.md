@@ -82,20 +82,27 @@ Os hostnames finais são **PENDING HUMAN DECISION**.
 
 ## Serviços
 
-A VPS Hostinger KVM 2 dedicada já foi contratada como destino da infraestrutura
-inicial, com plano de 2 vCPU, 8 GB de RAM e 100 GB NVMe. Capacidade disponível,
-serviços, redes, portas, volumes e configurações ainda dependem de inventário e
-validação operacional.
+A VPS Hostinger KVM 2 dedicada, com 2 vCPU, 8 GB de RAM e 100 GB NVMe, foi
+inventariada e validada para o escopo privado da `0.8-MVP-05B`. Docker está
+instalado e persistente; PostgreSQL 17 e API NestJS estão running e healthy
+somente nas redes internas, sem portas publicadas. O volume
+`genesis-postgres-data`, as dez migrations e a readiness persistiram, e os dois
+serviços recuperaram-se automaticamente após o reboot controlado.
 
-| Serviço       | Responsabilidade                                     | Estado                                                 |
-| ------------- | ---------------------------------------------------- | ------------------------------------------------------ |
-| VPS Hostinger | hospedar a stack mínima do MVP                       | contratada; inventário e configuração pendentes        |
-| Vercel        | frontend e proxy same-origin de `/api/v1`            | estado de produção ainda não comprovado                |
-| Traefik       | HTTPS e único ingresso público da origem             | configuração para o MVP ainda não comprovada           |
-| API NestJS    | contratos de sessão, tenant, CRM e runtime health    | contrato versionado; serviço ainda não implantado      |
-| PostgreSQL 17 | persistência privada, roles e migrations             | estado para a aplicação ainda não comprovado           |
-| Backup        | cópia recuperável separada da persistência principal | provedor pendente; configuração ainda não comprovada   |
-| Monitoramento | uptime, recursos, logs, health e backup              | ferramenta pendente; configuração ainda não comprovada |
+Isso comprova somente a baseline privada: externamente permanece acessível
+apenas TCP/22, com TCP/80 e TCP/443 bloqueadas. Proxy reverso, TLS, exposição
+controlada, domínio/DNS e os respectivos gates de abertura continuam pendentes;
+a VPS não está pronta para produção.
+
+| Serviço       | Responsabilidade                                     | Estado                                                                                                  |
+| ------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| VPS Hostinger | hospedar a stack mínima do MVP                       | inventariada e endurecida; Docker e baseline privada validados; não pronta para produção                |
+| Vercel        | frontend e proxy same-origin de `/api/v1`            | frontend/proxy de produção ainda não configurados nem comprovados                                       |
+| Traefik       | HTTPS e único ingresso público da origem             | ainda não implantado; proxy reverso, TLS e exposição pública permanecem pendentes                       |
+| API NestJS    | contratos de sessão, tenant, CRM e runtime health    | implantada internamente; running/healthy, readiness `4/4`, sem porta publicada e recuperada após reboot |
+| PostgreSQL 17 | persistência privada, roles e migrations             | implantado internamente; running/healthy, volume e dez migrations persistentes, sem porta publicada     |
+| Backup        | cópia recuperável separada da persistência principal | provedor pendente; configuração ainda não comprovada                                                    |
+| Monitoramento | uptime, recursos, logs, health e backup              | ferramenta pendente; configuração ainda não comprovada                                                  |
 
 Redis, n8n, Evolution API, Portainer e outros serviços só entram quando uma
 funcionalidade do MVP demonstrar dependência real. A primeira topologia usa
