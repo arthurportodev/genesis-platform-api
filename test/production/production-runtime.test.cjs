@@ -316,6 +316,97 @@ function testWrapperRuntime(root, values, suffix) {
   }
 }
 
+function testSourcedPostgresInit(root, directory, values, suffix) {
+  const initPath = resolve('docker/postgres/init-runtime-role.sh');
+  const mount = (source, target, readonly = true) =>
+    `type=bind,src=${source.replaceAll('\\', '/')},dst=${target}${readonly ? ',readonly' : ''}`;
+
+  for (const scenario of ['success', 'password-psql-failure']) {
+    const workspace = join(root, `sourced-init-${scenario}-${suffix}`);
+    mkdirSync(workspace);
+    const marker = join(workspace, 'cleanup-marker');
+    const shouldFail = scenario === 'password-psql-failure';
+    const shell = [
+      'set -eu',
+      'counter=/workspace/psql-counter',
+      'marker=/workspace/cleanup-marker',
+      'printf \'0\\n\' > "$counter"',
+      'unset() {',
+      '  case " $* " in',
+      '    *" GENESIS_MIGRATION_PASSWORD GENESIS_RUNTIME_PASSWORD "*)',
+      '      printf \'cleanup\\n\' >> "$marker"',
+      '      ;;',
+      '  esac',
+      '  command unset "$@"',
+      '}',
+      'psql() {',
+      '  call=$(cat "$counter")',
+      '  call=$((call + 1))',
+      '  printf \'%s\\n\' "$call" > "$counter"',
+      '  case "$call" in',
+      "    1) printf '0\\n' ;;",
+      `    2) ${shouldFail ? 'return 23' : ':'} ;;`,
+      "    3) printf '2\\n' ;;",
+      "    4) printf '0\\n' ;;",
+      "    5) printf 't\\n' ;;",
+      '    *) return 99 ;;',
+      '  esac',
+      '}',
+      'POSTGRES_USER=genesis_bootstrap',
+      'DATABASE_MIGRATION_USER=genesis_migration',
+      'DATABASE_RUNTIME_ROLE=genesis_runtime',
+      'POSTGRES_DB=genesis_platform',
+      'POSTGRES_PASSWORD=$(cat /run/secrets/postgres_bootstrap_password)',
+      '. /init-runtime-role.sh',
+      'test "${GENESIS_MIGRATION_PASSWORD+x}" != x',
+      'test "${GENESIS_RUNTIME_PASSWORD+x}" != x',
+      'case "$(trap)" in *GENESIS_MIGRATION_PASSWORD*|*GENESIS_RUNTIME_PASSWORD*) exit 97 ;; esac',
+    ].join('\n');
+    const args = [
+      'run',
+      '--rm',
+      '--name',
+      `genesis-mvp05a-sourced-${scenario}-${suffix}`,
+      '--entrypoint',
+      '/bin/sh',
+      '--mount',
+      mount(initPath, '/init-runtime-role.sh'),
+      '--mount',
+      mount(directory, '/run/secrets'),
+      '--mount',
+      mount(workspace, '/workspace', false),
+      POSTGRES_IMAGE,
+      '-c',
+      shell,
+    ];
+    assertNoSecretValues(args.join('\n'), values);
+    const result = run('docker', args);
+    assertNoSecretValues(`${result.stdout}\n${result.stderr}`, values);
+    assert.equal(result.status, shouldFail ? 23 : 0, result.stderr);
+    assert.equal(
+      readFileSync(marker, 'utf8'),
+      'cleanup\n',
+      `${scenario} must execute credential cleanup exactly once`,
+    );
+  }
+}
+
+function processEnvironmentNames(project, override, service) {
+  return succeed(
+    'docker',
+    composeArgs(
+      project,
+      override,
+      'exec',
+      '-T',
+      service,
+      '/bin/sh',
+      '-c',
+      "tr '\\000' '\\n' < /proc/1/environ | cut -d= -f1",
+    ),
+  ).split(/\r?\n/u);
+}
+
 function assertInitGuardMutation({
   root,
   directory,
@@ -415,6 +506,7 @@ test(
 
     try {
       testWrapperRuntime(root, values, suffix);
+      testSourcedPostgresInit(root, directory, values, suffix);
 
       assertInitGuardMutation({
         root,
@@ -586,6 +678,19 @@ test(
           `${service} runtime secret mounts differ from the allowlist`,
         );
       }
+      const postgresEnvironmentNames = processEnvironmentNames(
+        project,
+        override,
+        'postgres',
+      );
+      assert.equal(
+        postgresEnvironmentNames.includes('GENESIS_MIGRATION_PASSWORD'),
+        false,
+      );
+      assert.equal(
+        postgresEnvironmentNames.includes('GENESIS_RUNTIME_PASSWORD'),
+        false,
+      );
       const logs = succeed(
         'docker',
         composeArgs(project, override, 'logs', '--no-color'),
