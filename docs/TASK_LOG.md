@@ -503,8 +503,11 @@ correção concluiu a Gate 3 e a `0.8-MVP-04`.
 
 ## 0.8-MVP-04-CORR-02 — Publicação GHCR condicionada ao impacto real
 
-**Candidata local em Gate 2.** Todo Pull Request, push da `main` e execução
-manual continua recebendo a validação completa aplicável. Em push da `main`, o
+**Concluída e incorporada pelo PR #34 no squash
+`876aa4ae5a7f88bfbfd65ff4e40e3dab33c4079b`.**
+
+Todo Pull Request, push da `main` e execução manual continua recebendo a
+validação completa aplicável. Em push da `main`, o
 job read-only `image-impact` compara os commits completos `before` e `head` por
 Git sem shell e emite somente `should_publish=true|false`. O publicador depende
 do sucesso de `validate` e `image-impact` e da saída canônica `true`; falha de
@@ -518,35 +521,80 @@ Documentação, runbooks, Compose, CI, scripts, testes, schemas, `.agents`,
 A lista precisa ser atualizada junto com qualquer nova entrada do build ou do
 runtime final.
 
-A própria candidata modifica somente workflow, detector, validator, testes e
-documentação, portanto retorna `false` e deixa `publish-image` skipped antes de
-login ou build. Nenhuma imagem, tag, package, credencial, infraestrutura, VPS
-ou deploy foi alterado durante a implementação local. A `0.8-MVP-05` permanece
-condicionada ao inventário read-only da VPS e às decisões humanas pendentes.
+O delta modificou somente workflow, detector, validator, testes e documentação.
+O push não impactante da `main` retornou `false` e deixou `publish-image`
+intencionalmente skipped antes de login ou build. Nenhuma imagem, tag, package,
+credencial, infraestrutura, VPS ou deploy foi alterado.
 
 ## 0.8-MVP-05A — Contrato versionado de PostgreSQL, secrets e bundle
 
-**Candidata local em 8 de agosto de 2026; Gate 2 pendente.** Separa
+**Concluída e incorporada em 9 de agosto de 2026.** O PR #35 entrou na `main`
+no squash `5268706d22cb69df7d065928c16b4425a03b41cf`. Separa
 bootstrap/admin, migration owner e runtime; remove valores secretos do
 environment do Compose; usa mounts seletivos e wrappers POSIX; fixa API e
 PostgreSQL por digest `linux/amd64`; estabiliza projeto e volume externo;
 adiciona grace period de 90 segundos ao banco e injeta o keyring de
 idempotência de Leads somente na API.
 
-A candidata também adiciona bundle mínimo determinístico com manifesto,
+A entrega também adiciona bundle mínimo determinístico com manifesto,
 hashes, digests e timestamp reproduzível, além de validators, testes
 adversariais e ADR-014. Ela preserva a imagem atual da API: nenhum path
-image-affecting foi alterado. Não houve stage, commit, push, publicação, acesso
-à VPS, secret real, volume persistente, migration remota ou deploy.
+image-affecting foi alterado. Durante a Gate 2, os bundles em modo `candidate`
+foram somente evidência local não operacional. A incorporação não acessou a
+VPS, não criou secret real ou volume persistente e não executou migration
+remota ou deploy.
 
 ## 0.8-MVP-05A-CORR-01 — Alinhamento da matriz sintética da CI
 
-**Candidata corretiva local em 8 de agosto de 2026; Gate 2 renovada pendente.**
+**Concluída como parte do PR #35.**
 A execução `31275744544`, job `93148867305`, no head
 `d04d1600584bf7764b5ea204c459f5d529388c32`, revelou drift determinístico: o
 workflow sintético anterior não fornecia `DATABASE_BOOTSTRAP_USER` ao contrato
 da 05A. A correção audita a matriz completa, usa três roles válidas e distintas,
 preserva os digests, o frontend e a versão do keyring de Leads e mantém secrets
 sintéticos somente em arquivos privados sob `runner.temp`, sem log ou artifact
-e com cleanup explícito. Não houve stage, commit, push, rerun, publicação,
-acesso à VPS ou deploy nesta fase.
+e com cleanup exato e fail-closed. A fase corretiva local não publicou imagem,
+não acessou a VPS e não executou deploy.
+
+## 0.8-MVP-05A-CORR-02 — Inicialização runtime dos paths da CI
+
+**Concluída como parte do PR #35.** A CI rejeitou a expressão
+`${{ runner.temp }}` no `jobs.validate.env`, pois esse contexto não está
+disponível nessa posição estrutural. A correção removeu as cinco expressões do
+nível do job e adicionou um step inicial que deriva os paths somente de
+`RUNNER_TEMP`, em namespace fixo, exportando-os por `GITHUB_ENV` antes de todos
+os consumidores. A matriz, os seis secrets, o cleanup `always()` exato e
+fail-closed, permissões, pins, política de publicação e detector foram
+preservados.
+
+## 0.8-MVP-05A-CORR-03 — Fixtures Git herméticas do bundle
+
+**Concluída como parte do PR #35.** Os testes candidate-mode dependiam do
+manifesto ignorado do checkout do desenvolvedor e falhavam com `ENOENT` em um
+checkout limpo da CI. A correção, restrita ao teste do bundle, criou uma fixture
+Git temporária e independente por caso, com identidade local, base determinística,
+manifesto/Task Packet próprios e ignorados, alteração candidata controlada,
+fingerprint real e cleanup garantido. Nenhum mock de Git, fingerprint ou
+validator foi introduzido; os contratos candidate e committed-release foram
+preservados.
+
+## 0.8-MVP-05A — Encerramento pós-merge
+
+**Concluído em 2026-08-09.** O PR #35 foi incorporado em
+`2026-08-09T00:39:02Z` (`2026-08-08T21:39:02-03:00`) pelo squash
+`5268706d22cb69df7d065928c16b4425a03b41cf`. A CI de push da `main`
+`31286630732` passou. O contrato V2 está na `main`; o detector retornou
+`shouldPublish=false`, o job `publish-image` permaneceu `skipped`, nenhuma tag
+nova foi criada e o manifest digest da API
+`sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
+permaneceu inalterado.
+
+O bundle pós-merge em modo `committed-release` foi construído e validado com
+`sourceCommit` igual ao squash, exatamente seis arquivos, todos em mode `0644`,
+e resultado PASS. Bundles pré-merge `candidate` permaneceram apenas evidência
+não operacional, e nenhum bundle foi transferido à VPS.
+
+Nenhuma instalação de Docker, layout ou grupo do host, secret real, volume,
+PostgreSQL, role, migration, API, serviço, porta, dado, persistência ou prova de
+prontidão foi executada. A `0.8-MVP-05B` permanece futura e exige autorização
+operacional própria e comprovação explícita de todas as suas precondições.

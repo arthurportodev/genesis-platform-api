@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Data:** 2026-08-03
+- **Última reconciliação documental:** 2026-08-09
 
 ## Contexto
 
@@ -126,6 +127,23 @@ ser revista quando usuários, dados e receita crescerem.
 ## Implementação
 
 O runtime health, container/Compose e CI/GHCR estão incorporados. A
-`0.8-MVP-05A` produz uma candidata local do contrato detalhado no ADR-014; ela
-não publica infraestrutura e não autoriza dados reais. Os demais componentes
-seguem até `0.8-MVP-09`, cada um com escopo e validação próprios.
+`0.8-MVP-05A`, incluindo `CORR-01`, `CORR-02` e `CORR-03`, foi incorporada pelo
+PR #35 no squash `5268706d22cb69df7d065928c16b4425a03b41cf`; a CI pós-merge
+`31286630732` foi aprovada. O contrato detalhado no ADR-014 está na `main`. O
+delta retornou `shouldPublish=false`, não executou o publicador, não criou tag
+nova e preservou o digest da API
+`sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`.
+
+Um bundle pós-merge `committed-release` foi validado como operacional contra o
+snapshot do squash, com `sourceCommit` correspondente, seis arquivos e modes
+`0644`; não foi transferido à VPS. O histórico pré-merge em modo `candidate`
+continua evidência local não operacional. Esta incorporação não instalou a
+stack, não criou secrets reais, volume ou banco, não executou migrations,
+serviços, portas ou deploy e não autoriza dados reais.
+
+A `0.8-MVP-05B` continua futura e só pode começar sob tarefa e autorização
+operacional próprias, após revalidar o host e aprovar bundle, layout, secrets,
+volume, roles, migrations, persistência, readiness, backup/restore e portas
+privadas. Nenhuma dessas precondições é declarada satisfeita por esta decisão.
+Os demais componentes seguem até `0.8-MVP-09`, cada um com escopo e validação
+próprios.
