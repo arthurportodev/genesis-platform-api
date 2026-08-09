@@ -95,15 +95,27 @@ experimento é promovido automaticamente para o MVP.
   - bundle pós-merge `committed-release` operacional, ligado ao squash, com seis
     arquivos `0644` e validação PASS; nenhum bundle foi transferido à VPS.
 
+### Baseline privada instalada e verificada
+
+- ✅ `0.8-MVP-05B` — instalação controlada de Docker, layout, secrets, volume,
+  PostgreSQL, migrations e API na VPS.
+  - executada contra a `main`
+    `38baf1e8898194b618cfee787a3bea753677eb93` e um release
+    `committed-release` imutável com os seis artefatos aprovados;
+  - host, supply chain, secrets, volume original, três roles PostgreSQL, dez
+    migrations, API, readiness, rede privada e persistência pós-reboot
+    aprovados;
+  - F-002 corrigido pelo PR #37 e comprovado no processo PostgreSQL corrente;
+  - verificação final independente com cobertura integral, `findings=[]`,
+    `limitations=[]` e recomendação `approve`;
+  - snapshot pré-05B não restaurado nem excluído manualmente, preservado por
+    decisão humana desde sua criação em 2026-08-09 às 09:10 BRT até a expiração
+    automática indicada pela Hostinger em 2026-08-10;
+  - nenhuma porta da aplicação foi exposta, não há proxy reverso ou TLS e
+    nenhum dado real foi autorizado.
+
 ### Próximos deltas planejados
 
-- ⬜ `0.8-MVP-05B` — instalação controlada de Docker, layout, secrets, volume,
-  PostgreSQL, migrations e API na VPS. Permanece futura e exige tarefa e
-  autorização operacional próprias, revalidação do inventário, bundle
-  `committed-release` aprovado, preparação segura do host/secrets/volume,
-  migrations controladas, validação de persistência/readiness e preservação de
-  portas privadas. Nenhuma dessas precondições é declarada satisfeita por este
-  roadmap.
 - ⬜ `0.8-MVP-06` — Traefik, HTTPS e exposição controlada da API.
 - ⬜ `0.8-MVP-07` — Backup, restore, logs, monitoramento e rollback.
 - ⬜ `0.8-MVP-08` — Vercel, proxy, domínio e integração frontend/backend.

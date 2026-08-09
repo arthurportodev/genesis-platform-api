@@ -10,7 +10,10 @@ O contrato versionado de PostgreSQL, secrets e bundle está no
 [ADR-014](decisions/ADR-014-versioned-production-contract.md). A
 `0.8-MVP-05A` foi incorporada pelo PR #35 no squash
 `5268706d22cb69df7d065928c16b4425a03b41cf`. O contrato está versionado na
-`main`, mas ainda não foi implantado.
+`main`. A `0.8-MVP-05B` instalou e verificou a baseline privada desse contrato
+na VPS a partir do commit
+`38baf1e8898194b618cfee787a3bea753677eb93`, sem exposição pública nem dados
+reais.
 
 ## Objetivo
 
@@ -28,18 +31,23 @@ evidências foi incorporada pelo PR #33 no squash
 `c6fbc0b865540abd9d13f93c7cc7542eb0936355`; a execução pós-merge
 `31249557339` aprovou validação, runtime, scan local, push, identidade remota,
 package público, rescan por digest e artifact. Isso comprova imagens públicas,
-não uma produção operacional: nenhuma infraestrutura da aplicação foi
-implantada e nenhum deploy foi realizado. A VPS Hostinger KVM 2 já
-foi contratada e é o destino previsto; seu inventário, configuração e adequação
-à topologia do MVP ainda precisam ser comprovados. O estado de DNS, origem,
-Vercel, Traefik, PostgreSQL da aplicação, secrets, backup, restore,
-monitoramento e deploy ainda não foi comprovado, configurado ou validado para
-esta baseline. Nenhum dado real está autorizado.
+a proveniência da imagem, não a abertura de produção. A VPS Hostinger KVM 2
+agora hospeda a baseline privada instalada pela `0.8-MVP-05B`: Docker,
+PostgreSQL, volume persistente, migrations, secrets e API foram comprovados sob
+os controles aprovados. DNS, origem pública, Vercel, Traefik, HTTPS, backup,
+restore, monitoramento e smoke de abertura permanecem não executados ou não
+comprovados. Nenhum dado real está autorizado.
+
+O host aprovado é `srv1870064` (`147.79.82.44`), Ubuntu 24.04.4 LTS. O boot ID
+vigente após o Checkpoint B é
+`1203958f-2ae3-448c-83c1-349b0bb952d8`. Docker, SSH, UFW, fail2ban, AppArmor e
+swap persistiram, com zero unidade crítica falhada e Web Terminal funcional.
 
 O target `production` do Dockerfile e `compose.production.yml` definem a stack
 base incorporada pela `0.8-MVP-03`. A imagem foi publicada somente no GHCR e a
-stack foi validada em Docker Desktop com dados sintéticos; nada foi implantado
-na VPS ou autorizado para dados reais. `compose.yml` e
+stack foi validada em Docker Desktop com dados sintéticos antes da operação. A
+05B implantou apenas a baseline privada aprovada na VPS; isso não autoriza dados
+reais. `compose.yml` e
 `compose.test.yml` permanecem superfícies separadas de desenvolvimento e teste.
 
 A `0.8-MVP-05A` preservou a imagem já publicada da API e alterou apenas
@@ -325,9 +333,10 @@ faz `source` de todo `.sh` não executável encontrado em
 `/docker-entrypoint-initdb.d`. Mode `0755` ou qualquer outro mode diverge do
 contrato e bloqueia `committed-release`.
 
-Nenhum bundle pré-merge foi transferido à VPS. A prova pós-merge deve gerar o
-modo `committed-release` automaticamente a partir do commit aprovado; qualquer
-transferência futura exige nova tarefa e autorização operacional.
+Nenhum bundle pré-merge foi transferido à VPS. A operação 05B usou somente um
+`committed-release` reconstruído a partir do commit aprovado
+`38baf1e8898194b618cfee787a3bea753677eb93`; qualquer nova transferência exige
+tarefa e autorização operacional próprias.
 
 Depois do merge, essa prova foi executada contra o squash
 `5268706d22cb69df7d065928c16b4425a03b41cf`: o bundle
@@ -337,36 +346,64 @@ operacional. O bundle pós-merge foi somente validado como artefato local e não
 foi transferido. Os bundles pré-merge em modo `candidate` continuam evidência
 não operacional e nunca foram promovidos ou enviados à VPS.
 
-## Precondições da 0.8-MVP-05B
+## Execução e fechamento da 0.8-MVP-05B
 
-A `0.8-MVP-05B` permanece futura. A incorporação da 05A não inicia essa tarefa
-nem satisfaz suas precondições operacionais. Antes de qualquer escrita na VPS,
-ela exige, em tarefa própria e com autorização humana explícita:
+A `0.8-MVP-05B` concluiu a baseline privada em 9 de agosto de 2026, sob tarefas
+operacionais autorizadas e checkpoints independentes. Foram comprovados:
 
-1. revalidar identidade, inventário, capacidade, baseline de segurança e
-   mecanismos anti-lockout da VPS;
-2. aprovar o commit e o bundle `committed-release` exatos e validar novamente
-   os seis arquivos, hashes, modes, digests e `linux/amd64`;
-3. planejar e autorizar instalação/configuração do Docker e Compose sem alterar
-   portas ou serviços fora do escopo;
-4. criar de forma controlada o layout root-only, o grupo de secrets com GID 70
-   e os arquivos reais `root:genesis-container-secrets` `0440`, sem imprimir,
-   transferir por logs ou versionar valores;
-5. criar explicitamente o volume externo `genesis-postgres-data` e comprovar
-   que ele não é removido por `down -v`;
-6. inicializar PostgreSQL com nomes distintos e atributos aprovados para
-   bootstrap, migration owner e runtime, revogando `PUBLIC` e memberships;
-7. executar migrations controladas e idempotentes com a credencial própria,
-   provar ACL negativa da role runtime e bloquear a API diante de falha;
-8. iniciar a API sem portas públicas, validar filesystem/hardening, ausência de
-   secrets em metadata/logs, health, readiness, shutdown e persistência após
-   restart;
-9. comprovar backup/restore, observabilidade e rollback exigidos antes de dados
-   reais, além de obter aprovação humana específica para qualquer abertura.
+1. identidade, inventário, capacidade, hardening, anti-lockout e persistência
+   do host;
+2. commit, release `committed-release`, seis arquivos, hashes, modes, digests e
+   plataforma `linux/amd64` exatos; o manifesto
+   `0c2e6d0ad2943e802c955eb21cf7fa1283adca4267666cfb4902a20d0111f8e0`
+   declara `0.8-MVP-05A.v2` e `operational=true`, `current` aponta atomicamente
+   ao release aprovado e o release anterior permanece preservado;
+3. Docker/Compose, layout root-only, grupo GID 70 e seis secrets file-backed
+   com metadata restrita, sem exposição de valores; cinco são valores simples e
+   um é um keyring versionado, todos regulares
+   `root:genesis-container-secrets` `0440`;
+4. volume externo original `genesis-postgres-data`, PostgreSQL 17 e três roles
+   distintas com ownership e ACLs mínimos, usando a imagem
+   `postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193`,
+   sem porta host;
+5. bootstrap executado exatamente uma vez, dez migrations controladas na ordem
+   esperada e uma segunda execução com exit `0` e zero migrations aplicadas;
+6. API hardened e healthy, readiness `4/4`, mounts seletivos, metadata bloqueada
+   e zero porta Docker publicada, usando
+   `ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
+   em `linux/amd64`;
+7. leak scan zero, listeners externos limitados a TCP/22 e firewall externo
+   TCP/22-only;
+8. recuperação automática e persistência do estado após um único reboot
+   autorizado, sem start manual, sob o novo boot ID
+   `1203958f-2ae3-448c-83c1-349b0bb952d8`;
+9. verificação final read-only com cobertura `11/11`, `findings=[]`,
+   `limitations=[]` e recomendação `approve`.
 
-Docker, layout, grupo, secrets reais, volume, PostgreSQL, roles, migrations,
-API, serviços, portas, dados, persistência e prontidão não foram executados nem
-comprovados pela 05A.
+O F-001 da captura foi limitado à validação fictícia, sem secret real
+processado; a correção do driver PTY, a suíte fictícia `17/17`, a captura humana
+sem eco e a reverificação resolveram o finding. O F-002 foi causado pelo init
+sourced manter temporariamente as credenciais lógicas de migration/runtime no
+processo PostgreSQL. O banco foi contido graciosamente sem perda; nenhum valor
+ou hash foi impresso, os demais scans ficaram em zero, a correção foi incorporada
+pelo PR #37 e o processo final não contém as duas variáveis.
+
+A custódia dos seis secrets usa Bitwarden Free. O export JSON protegido por
+senha fica fora da VPS em armazenamento offline cifrado, com a senha guardada
+separadamente e recovery code fora da Bitwarden; nenhum CSV ou JSON aberto foi
+produzido.
+
+O snapshot pré-05B foi criado em 2026-08-09 às 09:10 BRT, permaneceu preservado
+até o PASS técnico final e não foi restaurado nem excluído manualmente. Por
+decisão do Product Owner, ele continua preservado até a expiração automática
+indicada pela Hostinger em 2026-08-10. Esta documentação não afirma que a
+expiração já ocorreu nem autoriza qualquer ação sobre o snapshot ou a VPS.
+
+A conclusão da 05B não satisfaz os gates de abertura. Backup/restore,
+observabilidade, rollback de abertura, Traefik/HTTPS, proxy same-origin, smoke
+cross-tenant e autorização específica para dados reais continuam pendentes.
+A VPS não está declarada pronta para produção, e este closeout não autoriza
+nenhuma etapa futura de exposição ou deploy público.
 
 ## Backup e restore
 

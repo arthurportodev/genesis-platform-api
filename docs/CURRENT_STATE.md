@@ -6,18 +6,22 @@
 - **Última tarefa funcional concluída:** 0.7.6 — Criação Manual de Leads
   (repositório `arthurportodev/genesis-platform-web`, PR #7, squash
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`)
-- **Último delta incorporado:** `0.8-MVP-05A` — contrato versionado de
-  PostgreSQL, secrets e bundle de produção, incluindo `CORR-01`, `CORR-02` e
-  `CORR-03`, pelo PR #35, squash
-  `5268706d22cb69df7d065928c16b4425a03b41cf`
+- **Último delta incorporado:** correção `0.8-MVP-05B-F002` do cleanup de
+  credenciais no init PostgreSQL, pelo PR #37, squash
+  `38baf1e8898194b618cfee787a3bea753677eb93`
+- **Última etapa operacional concluída:** `0.8-MVP-05B` — baseline privada da
+  API e do PostgreSQL instalada e verificada na VPS, sem exposição pública nem
+  autorização para dados reais
 - **Última tarefa de governança concluída:** 0.8.1.1 — Evolução do Sistema
   Operacional de Desenvolvimento, incorporada no backend pelo PR #26, squash
   `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
   squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
-- **Próxima tarefa planejada:** `0.8-MVP-05B` — instalação controlada da stack
-  na VPS; não iniciada e sem autorização operacional nesta documentação
-- **Produção:** infraestrutura ainda não publicada; nenhum dado real autorizado
-- **CI pós-merge da `main`:** execução `31286630732` aprovada integralmente no
+- **Próxima tarefa planejada:** `0.8-MVP-06` — Traefik, HTTPS e exposição
+  controlada da origem; não iniciada e sem autorização operacional nesta
+  documentação
+- **Produção:** PostgreSQL e API operam privadamente na VPS; TCP/80 e TCP/443
+  permanecem fechadas, não há proxy/TLS e nenhum dado real está autorizado
+- **CI pós-merge da `0.8-MVP-05A`:** execução `31286630732` aprovada integralmente no
   squash `5268706d22cb69df7d065928c16b4425a03b41cf`; o detector retornou
   `shouldPublish=false`, o job `publish-image` permaneceu `skipped` e nenhuma
   imagem foi criada ou publicada
@@ -60,6 +64,25 @@
   ao squash por `sourceCommit`, com seis arquivos em mode `0644`, e terminou
   em PASS. Bundles `candidate` anteriores continuam apenas evidência
   pré-merge, não operacional, e nada foi transferido à VPS.
+- A `0.8-MVP-05B` instalou a baseline privada na VPS a partir do commit
+  `38baf1e8898194b618cfee787a3bea753677eb93` e do release imutável
+  `38baf1e8898194b618cfee787a3bea753677eb93-0c2e6d0ad2943e802c955eb21cf7fa1283adca4267666cfb4902a20d0111f8e0`.
+  O manifesto `0c2e6d0ad2943e802c955eb21cf7fa1283adca4267666cfb4902a20d0111f8e0`
+  usa o contrato `0.8-MVP-05A.v2`, `operational=true`; `current` aponta
+  atomicamente ao release e o anterior está preservado. Docker e o host foram
+  endurecidos; secrets file-backed, volume PostgreSQL, três roles separadas,
+  dez migrations e a API foram validados sem portas publicadas.
+- A VPS `srv1870064` (`147.79.82.44`), Ubuntu 24.04.4 LTS, passou o reboot
+  controlado com boot ID final `1203958f-2ae3-448c-83c1-349b0bb952d8`.
+  Docker, PostgreSQL e API recuperaram-se automaticamente; SSH, UFW, fail2ban,
+  AppArmor, swap, dados, migrations e readiness persistiram.
+- A verificação independente final da 05B cobriu governança, Git/bundle, host,
+  supply chain, PostgreSQL, F-002, API, secrets, rede, persistência e snapshot:
+  cobertura `11/11`, `findings=[]`, `limitations=[]`, recomendação `approve`,
+  `implementedCandidate=false`, `readOnly=true`, `writeOperations=0` e schema e
+  validação semântica PASS. O snapshot pré-05B foi criado em 2026-08-09 às
+  09:10 BRT; a decisão humana foi não restaurá-lo nem excluí-lo manualmente e
+  preservá-lo até a expiração automática indicada pela Hostinger em 2026-08-10.
 - Package público `ghcr.io/arthurportodev/genesis-platform-api` vinculado ao
   repositório, com versões sob tags SHA completas. A versão histórica possui
   manifest digest
@@ -269,21 +292,20 @@ Consulte os [ADRs](decisions/README.md).
 - Rate limiter é local, não distribuído e perde estado ao reiniciar.
 - Não há política de retenção para sessões e auditoria.
 - Sessão, cliente HTTP, Organization ativa, guards e CRM estão implementados no
-  frontend. A VPS Hostinger KVM 2 já foi contratada e é o destino previsto; seu
-  inventário, configuração operacional e adequação à topologia do MVP ainda
-  precisam ser comprovados.
+  frontend. A VPS Hostinger KVM 2 hospeda a baseline privada da API e do
+  PostgreSQL, com inventário, hardening, persistência e adequação ao escopo da
+  `0.8-MVP-05B` comprovados.
 - A configuração de produção do proxy same-origin e o estado de Vercel,
-  domínio, DNS, banco, restore, observabilidade e deploy ainda precisam ser
+  domínio, DNS, backup/restore, observabilidade e deploy ainda precisam ser
   inventariados, configurados ou validados para esta baseline.
-- Os limites de CPU, memória, PIDs e heap foram considerados compatíveis com o
-  inventário read-only da VPS, mas ainda exigem validação operacional na
-  `0.8-MVP-05B`.
+- Os limites de CPU, memória, PIDs e heap foram validados operacionalmente na
+  VPS durante a `0.8-MVP-05B`.
 - Preview permanece sem API e nunca aponta para produção; staging não será
   criado inicialmente.
-- A 05A versiona o contrato, mas não instala Docker na VPS, não cria
-  grupo/layout/secrets reais, volume, banco, roles ou serviços, não executa
-  migrations e não abre portas. Persistência, readiness, backup/restore e
-  adequação operacional permanecem sem comprovação.
+- A 05B instalou Docker, layout, grupo/secrets reais, volume, PostgreSQL, roles,
+  migrations e API e comprovou persistência e readiness sem abrir portas da
+  aplicação. Traefik/HTTPS, backup/restore, observabilidade, proxy same-origin,
+  smoke de abertura e dados reais permanecem não executados ou não autorizados.
 
 ## Decisões abertas e riscos
 
@@ -292,8 +314,6 @@ Consulte os [ADRs](decisions/README.md).
 - Rotação operacional de segredos.
 - Armazenamento distribuído do rate limiter quando houver múltiplas réplicas.
 - Momento e desenho de uma defesa adicional no banco, como PostgreSQL RLS.
-- Inventário e confirmação operacional da Hostinger KVM 2 para a topologia
-  aprovada.
 - Provedor de object storage para backups e ferramenta de monitoramento.
 
 ## Fora do escopo atual
