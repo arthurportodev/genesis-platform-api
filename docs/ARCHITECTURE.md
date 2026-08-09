@@ -20,8 +20,9 @@ flowchart LR
 
 O runtime health e a baseline arquitetural do MVP estão incorporados à `main`
 pelo PR #29, squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`. Esse
-Compose e o Dockerfile atuais servem ao desenvolvimento e à validação; não
-constituem manifests de produção aprovados.
+`compose.yml` e `compose.test.yml` servem ao desenvolvimento e à validação. O
+Dockerfile `production` e `compose.production.yml` são contratos separados de
+produção; ainda não foram implantados.
 
 ## Arquitetura de produção do MVP
 
@@ -50,6 +51,15 @@ há migração silenciosa para chamadas cross-origin diretas. Os domínios finai
 são **PENDING HUMAN DECISION**. Detalhes operacionais estão em
 [PRODUCTION.md](PRODUCTION.md) e no
 [ADR-013](decisions/ADR-013-mvp-production-baseline.md).
+
+A candidata `0.8-MVP-05A`, detalhada no
+[ADR-014](decisions/ADR-014-versioned-production-contract.md), formaliza três
+identidades PostgreSQL: bootstrap/admin, migration owner do database/schema e
+runtime sem ownership. API/migration usam wrappers POSIX para secrets
+file-backed seletivos; imagens são fixadas por digest em `linux/amd64`; o
+projeto é `genesis` e a persistência é o volume externo
+`genesis-postgres-data`. A origem `https://genesis.invalid` permanece
+fail-closed até a `0.8-MVP-08`.
 
 ## Runtime health
 
@@ -239,10 +249,13 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
 - **Implementado e incorporado em `0.8-MVP-01`:** runtime health e shutdown
   coordenado no commit `c2e39cee2ea05f6e0a23edd150268024b2ebe94c`, presente
   na `main` pelo squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`.
-- **Atual na Fase 0.8-MVP, ainda não iniciado:** container e Compose de produção
-  em `0.8-MVP-03`; depois, CI/GHCR,
-  Hostinger KVM 2, PostgreSQL privado, Traefik/HTTPS, backup/restore,
-  observabilidade básica, Vercel/proxy e abertura controlada.
+- **Incorporado:** container/Compose de produção (`0.8-MVP-03`) e CI/GHCR
+  condicionada ao impacto da imagem (`0.8-MVP-04` e correções).
+- **Candidata local atual:** contrato versionado PostgreSQL/secrets/bundle da
+  `0.8-MVP-05A`; o bundle local é `candidate` não operacional e nenhuma
+  instalação ou implantação foi realizada.
+- **Planejado:** `0.8-MVP-05B`, Traefik/HTTPS, backup/restore, observabilidade,
+  Vercel/proxy e abertura controlada.
 - **Fora do estado atual:** integrações externas, deploy e microservices.
   NestJS permanece o único backend oficial, com backend e frontend em
   repositórios separados. Vercel e Hostinger KVM 2 são os destinos previstos

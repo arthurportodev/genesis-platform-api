@@ -69,6 +69,57 @@ const OCI_LABELS = [
   'org.opencontainers.image.title',
   'org.opencontainers.image.description',
 ];
+const SYNTHETIC_ENV_MATRIX = Object.freeze({
+  DATABASE_NAME: 'genesis_platform',
+  DATABASE_BOOTSTRAP_USER: 'genesis_bootstrap',
+  DATABASE_MIGRATION_USER: 'genesis_migration',
+  DATABASE_RUNTIME_ROLE: 'genesis_runtime',
+  APP_NAME: 'Genesis Platform API',
+  APP_VERSION: '0.1.0',
+  TRUST_PROXY_HOPS: '0',
+  JWT_ACCESS_EXPIRES_IN: '15m',
+  REFRESH_TOKEN_EXPIRES_IN_DAYS: '30',
+  LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION: '1',
+  API_CPUS: '0.75',
+  API_MEMORY_LIMIT: '1g',
+  API_PIDS_LIMIT: '128',
+  API_NODE_MAX_OLD_SPACE_MB: '640',
+  MIGRATE_CPUS: '0.75',
+  MIGRATE_MEMORY_LIMIT: '1g',
+  MIGRATE_PIDS_LIMIT: '128',
+  MIGRATE_NODE_MAX_OLD_SPACE_MB: '640',
+  POSTGRES_CPUS: '1.0',
+  POSTGRES_MEMORY_LIMIT: '2g',
+  POSTGRES_PIDS_LIMIT: '256',
+});
+const SYNTHETIC_SECRET_FILES = Object.freeze({
+  postgres_bootstrap_password: 'postgres-bootstrap-password',
+  database_migration_password: 'database-migration-password',
+  database_runtime_password: 'database-runtime-password',
+  jwt_access_secret: 'jwt-access-secret',
+  refresh_token_pepper: 'refresh-token-pepper',
+  lead_idempotency_keys: 'lead-idempotency-keys',
+});
+const SYNTHETIC_PATH_ENV = Object.freeze({
+  PRODUCTION_CI_ROOT: '$RUNNER_TEMP/genesis-production-ci',
+  PRODUCTION_CI_ENV_FILE: '$RUNNER_TEMP/genesis-production-ci/production.env',
+  PRODUCTION_CI_SECRET_DIR: '$RUNNER_TEMP/genesis-production-ci/secrets',
+  PRODUCTION_CI_OVERRIDE_FILE:
+    '$RUNNER_TEMP/genesis-production-ci/secret-files.override.yml',
+  PRODUCTION_CI_RENDER_FILE: '$RUNNER_TEMP/genesis-production-ci/rendered.json',
+});
+const SYNTHETIC_PATH_INITIALIZATION = [
+  'set -euo pipefail',
+  '{',
+  ...Object.entries(SYNTHETIC_PATH_ENV).map(
+    ([name, path]) => `  printf '${name}=%s\\n' "${path}"`,
+  ),
+  '} >> "$GITHUB_ENV"',
+].join('\n');
+const SYNTHETIC_API_IMAGE =
+  'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';
+const SYNTHETIC_POSTGRES_IMAGE =
+  'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 
 class WorkflowContractError extends Error {
   constructor(failures) {
@@ -350,6 +401,258 @@ function permissionFailures(value, expected, location) {
   return failures;
 }
 
+function jobEnvironmentContextFailures(jobs) {
+  const failures = [];
+  for (const [jobName, job] of Object.entries(jobs)) {
+    for (const [name, value] of Object.entries(job?.env ?? {})) {
+      if (/\$\{\{\s*runner\./u.test(String(value))) {
+        failures.push(
+          `jobs.${jobName}.env.${name} must not reference the unavailable runner context.`,
+        );
+      }
+    }
+  }
+  return failures;
+}
+
+function parseSyntheticEnvironment(run, failures) {
+  const block =
+    /cat > "\$PRODUCTION_CI_ENV_FILE" <<'ENV'\n([\s\S]*?)\nENV/gu.exec(
+      run,
+    )?.[1];
+  if (block === undefined) {
+    failures.push('synthetic production environment heredoc is missing.');
+    return {};
+  }
+  const parsed = {};
+  for (const line of block.split('\n')) {
+    const match = /^([A-Z][A-Z0-9_]*)=(.*)$/u.exec(line);
+    if (!match) {
+      failures.push('synthetic production environment has an invalid line.');
+      continue;
+    }
+    if (Object.hasOwn(parsed, match[1])) {
+      failures.push(`synthetic production environment duplicates ${match[1]}.`);
+    }
+    parsed[match[1]] = match[2];
+  }
+  return parsed;
+}
+
+function syntheticProductionFailures(validate) {
+  const failures = [];
+  const steps = stepsFor(validate);
+  const initialize = steps.find(
+    (step) => step.name === 'Initialize synthetic production paths',
+  );
+  const create = steps.find(
+    (step) => step.name === 'Create synthetic production Compose inputs',
+  );
+  const render = steps.find(
+    (step) =>
+      step.name === 'Validate synthetic secret-backed production render',
+  );
+  const compose = steps.find(
+    (step) =>
+      String(step.run ?? '').trim() === 'npm run production:compose:validate',
+  );
+  const cleanup = steps.find(
+    (step) => step.name === 'Remove synthetic production Compose inputs',
+  );
+  if (
+    steps.some(
+      (step) => actionReference(step)?.action === 'actions/upload-artifact',
+    )
+  ) {
+    failures.push(
+      'validate must not upload synthetic production inputs or rendered metadata.',
+    );
+  }
+  if (!initialize || !create || !render || !compose || !cleanup) {
+    failures.push(
+      'synthetic production path initialization, create, render, canonical validation and cleanup steps are required.',
+    );
+    return failures;
+  }
+  const initializeRun = String(initialize.run ?? '').trim();
+  const createRun = String(create.run ?? '');
+  const renderRun = String(render.run ?? '');
+  const cleanupRun = String(cleanup.run ?? '');
+  if (
+    initialize.shell !== 'bash' ||
+    initializeRun !== SYNTHETIC_PATH_INITIALIZATION ||
+    Object.keys(SYNTHETIC_PATH_ENV).some((name) =>
+      Object.hasOwn(validate.env ?? {}, name),
+    )
+  ) {
+    failures.push(
+      'synthetic production paths must be initialized exactly from RUNNER_TEMP through GITHUB_ENV during the first step.',
+    );
+  }
+  if (
+    create.shell !== 'bash' ||
+    !createRun.includes('set -euo pipefail') ||
+    !createRun.includes('umask 077') ||
+    !createRun.includes(
+      'install -d -m 0700 "$PRODUCTION_CI_ROOT" "$PRODUCTION_CI_SECRET_DIR"',
+    )
+  ) {
+    failures.push(
+      'synthetic production inputs must use fail-closed bash and private directories.',
+    );
+  }
+  const environment = parseSyntheticEnvironment(createRun, failures);
+  if (JSON.stringify(environment) !== JSON.stringify(SYNTHETIC_ENV_MATRIX)) {
+    failures.push(
+      'synthetic production environment must match the complete approved matrix.',
+    );
+  }
+  const roles = [
+    environment.DATABASE_BOOTSTRAP_USER,
+    environment.DATABASE_MIGRATION_USER,
+    environment.DATABASE_RUNTIME_ROLE,
+  ];
+  if (
+    roles.some((role) => !/^[a-z_][a-z0-9_]*$/u.test(role ?? '')) ||
+    new Set(roles).size !== 3
+  ) {
+    failures.push('synthetic database roles must be valid and distinct.');
+  }
+  for (const forbidden of [
+    'GENESIS_API_IMAGE',
+    'FRONTEND_URL',
+    'POSTGRES_PASSWORD',
+    'DATABASE_MIGRATION_PASSWORD',
+    'DATABASE_RUNTIME_PASSWORD',
+    'DATABASE_PASSWORD',
+    'JWT_ACCESS_SECRET',
+    'REFRESH_TOKEN_PEPPER',
+    'LEAD_IDEMPOTENCY_KEYS',
+  ]) {
+    if (Object.hasOwn(environment, forbidden)) {
+      failures.push(
+        `synthetic production environment must not contain ${forbidden}.`,
+      );
+    }
+  }
+  for (const [name, filename] of Object.entries(SYNTHETIC_SECRET_FILES)) {
+    const escaped = filename.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    const writePattern = new RegExp(
+      `printf '%s\\\\n' 'synthetic-ci-[^'\\n]+' > "\\$PRODUCTION_CI_SECRET_DIR/${escaped}"`,
+      'u',
+    );
+    if (!writePattern.test(createRun)) {
+      failures.push(`synthetic secret file is not safely created: ${name}.`);
+    }
+    if (
+      !createRun.includes(`"$PRODUCTION_CI_SECRET_DIR/${filename}"`) ||
+      !createRun.includes(
+        `${name}:\n    file: $PRODUCTION_CI_SECRET_DIR/${filename}`,
+      )
+    ) {
+      failures.push(`synthetic secret override is incomplete: ${name}.`);
+    }
+    if (!cleanupRun.includes(`"$PRODUCTION_CI_SECRET_DIR/${filename}"`)) {
+      failures.push(`synthetic secret cleanup is incomplete: ${name}.`);
+    }
+  }
+  if (
+    !createRun.includes('chmod 0600') ||
+    !createRun.includes('cat > "$PRODUCTION_CI_OVERRIDE_FILE" <<OVERRIDE')
+  ) {
+    failures.push(
+      'synthetic secret files require mode 0600 and a RUNNER_TEMP override.',
+    );
+  }
+  for (const fragment of [
+    'docker compose',
+    '--env-file "$PRODUCTION_CI_ENV_FILE"',
+    '-f compose.production.yml',
+    '-f "$PRODUCTION_CI_OVERRIDE_FILE"',
+    'config --format json > "$PRODUCTION_CI_RENDER_FILE"',
+    SYNTHETIC_API_IMAGE,
+    SYNTHETIC_POSTGRES_IMAGE,
+    "FRONTEND_URL !== 'https://genesis.invalid'",
+    "LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) !== '1'",
+    'new Set(roles).size !== 3',
+    '(statSync(expected).mode & 0o777) !== 0o600',
+    "value.startsWith('synthetic-ci-')",
+  ]) {
+    if (!renderRun.includes(fragment)) {
+      failures.push(
+        'synthetic secret-backed render validation is incomplete or mutable.',
+      );
+      break;
+    }
+  }
+  if (
+    render.shell !== 'bash' ||
+    !renderRun.includes('set -euo pipefail') ||
+    /\b(?:console\.log|process\.stdout|set -x)\b/u.test(renderRun) ||
+    /\b(?:cat|head|tail|sed|awk|grep|tee)\b[^\n]*PRODUCTION_CI_SECRET_DIR/u.test(
+      renderRun,
+    )
+  ) {
+    failures.push(
+      'synthetic secret values must never be printed or copied to logs.',
+    );
+  }
+  if (
+    compose.env?.GENESIS_PRODUCTION_ENV_FILE !==
+    '${{ env.PRODUCTION_CI_ENV_FILE }}'
+  ) {
+    failures.push(
+      'Compose validation must use the synthetic RUNNER_TEMP environment file.',
+    );
+  }
+  if (
+    normalizeExpression(cleanup.if) !== 'always()' ||
+    cleanup.shell !== 'bash' ||
+    !cleanupRun.includes('rm -f --') ||
+    !cleanupRun.includes('"$PRODUCTION_CI_RENDER_FILE"') ||
+    !cleanupRun.includes('"$PRODUCTION_CI_OVERRIDE_FILE"') ||
+    !cleanupRun.includes('"$PRODUCTION_CI_ENV_FILE"') ||
+    !cleanupRun.includes('if [ -d "$PRODUCTION_CI_SECRET_DIR" ]; then') ||
+    !cleanupRun.includes('rmdir -- "$PRODUCTION_CI_SECRET_DIR"') ||
+    !cleanupRun.includes('if [ -d "$PRODUCTION_CI_ROOT" ]; then') ||
+    !cleanupRun.includes('rmdir -- "$PRODUCTION_CI_ROOT"') ||
+    /\*|rm\s+-(?:[^\s]*r|[^\s]*R)|\|\|\s*true|print|echo|cat\s+[^>]/iu.test(
+      cleanupRun,
+    )
+  ) {
+    failures.push(
+      'synthetic production cleanup must be exact, unconditional and silent.',
+    );
+  }
+  const initializeIndex = steps.indexOf(initialize);
+  const createIndex = steps.indexOf(create);
+  const renderIndex = steps.indexOf(render);
+  const composeIndex = steps.indexOf(compose);
+  const cleanupIndex = steps.indexOf(cleanup);
+  if (!(
+    initializeIndex === 0 &&
+    initializeIndex < createIndex &&
+    createIndex < renderIndex &&
+    renderIndex < composeIndex &&
+    composeIndex < cleanupIndex &&
+    cleanupIndex === composeIndex + 1
+  )) {
+    failures.push(
+      'synthetic production inputs must be created, rendered, validated and immediately cleaned in order.',
+    );
+  }
+  if (
+    /github\.(?:event|sha|ref|actor)|secrets\./u.test(
+      `${initializeRun}\n${createRun}\n${renderRun}\n${cleanupRun}`,
+    )
+  ) {
+    failures.push(
+      'synthetic production inputs must not depend on untrusted event data or credentials.',
+    );
+  }
+  return failures;
+}
+
 function buildFailures(job, location) {
   const failures = [];
   const buildSteps = stepsFor(job).filter(
@@ -541,6 +844,7 @@ function validateWorkflowDocument(workflow) {
   const imageImpact = jobs['image-impact'] ?? {};
   const build = jobs['build-and-scan'] ?? {};
   const publish = jobs['publish-image'] ?? {};
+  failures.push(...jobEnvironmentContextFailures(jobs));
   for (const [name, job] of Object.entries({
     validate,
     'image-impact': imageImpact,
@@ -683,6 +987,7 @@ function validateWorkflowDocument(workflow) {
   }
 
   const validateSteps = stepsFor(validate);
+  failures.push(...syntheticProductionFailures(validate));
   if (
     validateSteps.some((step) =>
       actionReference(step)?.action.startsWith('docker/'),
@@ -727,13 +1032,8 @@ function validateWorkflowDocument(workflow) {
     (step) =>
       String(step.run ?? '').trim() === 'npm run production:compose:validate',
   );
-  if (
-    composeStep?.env?.GENESIS_PRODUCTION_ENV_FILE !==
-    '${{ runner.temp }}/genesis-production-ci.env'
-  ) {
-    failures.push(
-      'Compose validation must use the synthetic runner.temp environment file.',
-    );
+  if (!composeStep) {
+    failures.push('Compose validation step is missing.');
   }
 
   failures.push(...buildFailures(build, 'build-and-scan'));
@@ -1241,6 +1541,9 @@ if (require.main === module) main();
 module.exports = {
   ACTIONS,
   OCI_LABELS,
+  SYNTHETIC_ENV_MATRIX,
+  SYNTHETIC_PATH_ENV,
+  SYNTHETIC_SECRET_FILES,
   WORKFLOW_PATH,
   WorkflowContractError,
   parseYamlSubset,

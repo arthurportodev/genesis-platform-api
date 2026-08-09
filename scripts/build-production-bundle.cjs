@@ -1,0 +1,399 @@
+const { execFileSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
+const {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} = require('node:fs');
+const { dirname, isAbsolute, join, relative, resolve } = require('node:path');
+const { calculateFingerprint } = require('./task-fingerprint.cjs');
+const {
+  API_IMAGE,
+  PLATFORM,
+  POSTGRES_IMAGE,
+} = require('./validate-production-compose.cjs');
+
+const CONTRACT_VERSION = '0.8-MVP-05A.v2';
+const BUNDLE_MODES = new Set(['candidate', 'committed-release']);
+const POSTGRES_LINUX_AMD64_MANIFEST =
+  'sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a';
+const POSTGRES_VERSION = '17.10-alpine3.24';
+const POSTGRES_SOURCE_REVISION = '4f9ced003ba58a854656ba150d146243d27ae3ac';
+const ARTIFACTS = [
+  {
+    source: 'compose.production.yml',
+    path: 'compose.production.yml',
+    mode: '0644',
+  },
+  {
+    source: '.env.production.example',
+    path: 'config/production.env.example',
+    mode: '0644',
+  },
+  {
+    source: 'docker/postgres/init-runtime-role.sh',
+    path: 'docker/postgres/init-runtime-role.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/production/api-entrypoint.sh',
+    path: 'docker/production/api-entrypoint.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/production/migrate-entrypoint.sh',
+    path: 'docker/production/migrate-entrypoint.sh',
+    mode: '0644',
+  },
+].sort((left, right) =>
+  left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+);
+
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function obviousSecretFailure(path, source) {
+  const normalized = path.replaceAll('\\', '/');
+  const basename = normalized.split('/').at(-1).toLowerCase();
+  if (basename === '.env' || basename.startsWith('.env.')) {
+    return `${normalized} uses a forbidden environment filename`;
+  }
+  const highConfidence = [
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,
+    /\bgh[pousr]_[A-Za-z0-9]{20,}\b/u,
+    /\bAKIA[A-Z0-9]{16}\b/u,
+    /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/u,
+  ];
+  if (highConfidence.some((pattern) => pattern.test(source))) {
+    return `${normalized} contains a high-confidence credential pattern`;
+  }
+  for (const line of source.split(/\r?\n/u)) {
+    const assignment = line.match(
+      /^\s*(?:export\s+)?([A-Z][A-Z0-9_]*(?:PASSWORD(?:_FILE)?|SECRET|PEPPER|KEYS|API_?KEY))\s*[:=]\s*(.*)$/u,
+    );
+    if (!assignment) continue;
+    const value = assignment[2].trim();
+    if (
+      value === '' ||
+      value === '$secret_value' ||
+      value.startsWith('/run/secrets/') ||
+      (normalized.endsWith('.sh') && /^\$[a-z_][a-z0-9_]*$/u.test(value))
+    ) {
+      continue;
+    }
+    return `${normalized} contains a sensitive assignment with a value`;
+  }
+  return null;
+}
+
+function gitOutput(args, cwd, encoding = 'utf8') {
+  return execFileSync('git', args, {
+    cwd,
+    encoding,
+    stdio: ['ignore', 'pipe', 'ignore'],
+    windowsHide: true,
+  });
+}
+
+function gitText(args, cwd) {
+  return gitOutput(args, cwd, 'utf8').trim();
+}
+
+function validateCommit(value, cwd) {
+  if (!/^[a-f0-9]{40}$/u.test(value ?? '')) {
+    throw new Error('source commit must be a full lowercase SHA.');
+  }
+  gitText(['cat-file', '-e', `${value}^{commit}`], cwd);
+  return value;
+}
+
+function readCommittedArtifact(commit, artifact, cwd) {
+  let treeEntry;
+  let content;
+  try {
+    treeEntry = gitOutput(
+      ['ls-tree', '-z', commit, '--', artifact.source],
+      cwd,
+      'utf8',
+    );
+    content = gitOutput(
+      ['cat-file', 'blob', `${commit}:${artifact.source}`],
+      cwd,
+      null,
+    );
+  } catch {
+    throw new Error(
+      `source commit does not contain required artifact: ${artifact.source}`,
+    );
+  }
+  const match = /^(100644|100755) blob [a-f0-9]{40}\t([^\0]+)\0$/u.exec(
+    treeEntry,
+  );
+  if (!match || match[2] !== artifact.source) {
+    throw new Error(
+      `source commit has an invalid tree entry for: ${artifact.source}`,
+    );
+  }
+  const mode = match[1] === '100755' ? '0755' : '0644';
+  if (mode !== artifact.mode) {
+    throw new Error(
+      `source commit mode mismatch for ${artifact.source}: expected ${artifact.mode}, got ${mode}`,
+    );
+  }
+  const worktreePath = join(cwd, ...artifact.source.split('/'));
+  let worktree;
+  try {
+    if (!lstatSync(worktreePath).isFile()) throw new Error('not regular');
+    worktree = readFileSync(worktreePath);
+  } catch {
+    throw new Error(
+      `release worktree artifact is missing or irregular: ${artifact.source}`,
+    );
+  }
+  if (!worktree.equals(content)) {
+    throw new Error(
+      `release worktree differs from source commit: ${artifact.source}`,
+    );
+  }
+  return { content, mode };
+}
+
+function resolveGenerationTime(referenceCommit, mode, cwd, env) {
+  if (env.SOURCE_DATE_EPOCH !== undefined) {
+    if (!/^\d+$/u.test(env.SOURCE_DATE_EPOCH)) {
+      throw new Error('SOURCE_DATE_EPOCH must be a non-negative integer.');
+    }
+    const seconds = Number(env.SOURCE_DATE_EPOCH);
+    const generatedAt = new Date(seconds * 1000);
+    if (Number.isNaN(generatedAt.valueOf())) {
+      throw new Error('SOURCE_DATE_EPOCH is outside the supported date range.');
+    }
+    return {
+      generatedAt: generatedAt.toISOString(),
+      generatedAtSemantics: 'source-date-epoch',
+    };
+  }
+  const seconds = gitText(
+    ['show', '-s', '--format=%ct', referenceCommit, '--'],
+    cwd,
+  );
+  if (!/^\d+$/u.test(seconds)) {
+    throw new Error('reference commit timestamp is unavailable.');
+  }
+  return {
+    generatedAt: new Date(Number(seconds) * 1000).toISOString(),
+    generatedAtSemantics:
+      mode === 'candidate'
+        ? 'base-commit-timestamp'
+        : 'source-commit-timestamp',
+  };
+}
+
+function assertOutputBoundary(output, cwd) {
+  const absolute = resolve(output);
+  if (absolute === resolve(cwd)) {
+    throw new Error('bundle output cannot be the repository root.');
+  }
+  if (existsSync(absolute)) {
+    throw new Error('bundle output must not already exist.');
+  }
+  const relativePath = relative(resolve(cwd), absolute).replaceAll('\\', '/');
+  if (
+    !isAbsolute(relativePath) &&
+    !relativePath.startsWith('../') &&
+    !relativePath.startsWith('.codex/evidence/0.8-MVP-05A/')
+  ) {
+    throw new Error(
+      'bundle output inside the repository is allowed only under the ignored task evidence directory.',
+    );
+  }
+  return absolute;
+}
+
+function candidateProvenance(cwd) {
+  const fingerprint = calculateFingerprint({ cwd });
+  return {
+    baseSha: fingerprint.baseSha,
+    candidateId: fingerprint.candidateId,
+    contentFingerprint: fingerprint.contentFingerprint,
+  };
+}
+
+function buildProductionBundle({
+  cwd = process.cwd(),
+  output,
+  mode = 'candidate',
+  sourceCommit = null,
+  env = process.env,
+} = {}) {
+  if (!output) throw new Error('bundle output is required.');
+  if (!BUNDLE_MODES.has(mode)) throw new Error('bundle mode is invalid.');
+  if (mode === 'candidate' && sourceCommit !== null) {
+    throw new Error('candidate bundles cannot declare a source commit.');
+  }
+  const absoluteOutput = assertOutputBoundary(output, cwd);
+  const identity =
+    mode === 'candidate'
+      ? candidateProvenance(cwd)
+      : {
+          sourceCommit: validateCommit(
+            sourceCommit ?? gitText(['rev-parse', 'HEAD'], cwd),
+            cwd,
+          ),
+        };
+  const referenceCommit =
+    mode === 'candidate' ? identity.baseSha : identity.sourceCommit;
+  const generation = resolveGenerationTime(referenceCommit, mode, cwd, env);
+  const entries = [];
+  let created = false;
+  try {
+    mkdirSync(absoluteOutput, { recursive: false });
+    created = true;
+    for (const artifact of ARTIFACTS) {
+      let content;
+      if (mode === 'committed-release') {
+        ({ content } = readCommittedArtifact(
+          identity.sourceCommit,
+          artifact,
+          cwd,
+        ));
+      } else {
+        const sourcePath = join(cwd, ...artifact.source.split('/'));
+        if (!existsSync(sourcePath) || !lstatSync(sourcePath).isFile()) {
+          throw new Error(
+            `required candidate artifact is missing or irregular: ${artifact.source}`,
+          );
+        }
+        content = readFileSync(sourcePath);
+      }
+      if (content.includes(0)) {
+        throw new Error(`bundle source must be text: ${artifact.source}`);
+      }
+      const secretFailure = obviousSecretFailure(
+        artifact.path,
+        content.toString('utf8'),
+      );
+      if (secretFailure) throw new Error(secretFailure);
+      const target = join(absoluteOutput, ...artifact.path.split('/'));
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, content);
+      chmodSync(target, artifact.mode === '0755' ? 0o755 : 0o644);
+      entries.push({
+        path: artifact.path,
+        sourcePath: artifact.source,
+        mode: artifact.mode,
+        sha256: sha256(content),
+      });
+    }
+
+    const manifest = {
+      contractVersion: CONTRACT_VERSION,
+      bundleMode: mode,
+      operational: mode === 'committed-release',
+      ...identity,
+      ...generation,
+      platform: PLATFORM,
+      images: {
+        api: {
+          reference: API_IMAGE,
+          digest: API_IMAGE.split('@')[1],
+        },
+        postgres: {
+          reference: POSTGRES_IMAGE,
+          indexDigest: POSTGRES_IMAGE.split('@')[1],
+          platformManifestDigest: POSTGRES_LINUX_AMD64_MANIFEST,
+          version: POSTGRES_VERSION,
+          sourceRevision: POSTGRES_SOURCE_REVISION,
+        },
+      },
+      artifacts: entries,
+    };
+    writeFileSync(
+      join(absoluteOutput, 'release-manifest.json'),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      { encoding: 'utf8', mode: 0o644 },
+    );
+
+    const {
+      validateProductionBundle,
+    } = require('./validate-production-bundle.cjs');
+    const validation = validateProductionBundle(absoluteOutput, {
+      cwd,
+      requiredMode: mode,
+    });
+    if (validation.status !== 'passed') {
+      throw new Error(
+        `built bundle is invalid: ${validation.failures.join('; ')}`,
+      );
+    }
+    return {
+      status: 'passed',
+      output: absoluteOutput,
+      manifest,
+      files: validation.files,
+    };
+  } catch (error) {
+    if (created) rmSync(absoluteOutput, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function parseArguments(argv) {
+  const result = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === '--output') result.output = argv[++index];
+    else if (argument === '--mode') result.mode = argv[++index];
+    else if (argument === '--source-commit')
+      result.sourceCommit = argv[++index];
+    else throw new Error(`unknown argument: ${argument}`);
+  }
+  return result;
+}
+
+function main() {
+  try {
+    const result = buildProductionBundle(parseArguments(process.argv.slice(2)));
+    console.log(
+      JSON.stringify({
+        command: 'build-production-bundle',
+        status: result.status,
+        output: result.output,
+        bundleMode: result.manifest.bundleMode,
+        operational: result.manifest.operational,
+        sourceCommit: result.manifest.sourceCommit ?? null,
+        baseSha: result.manifest.baseSha ?? null,
+        candidateId: result.manifest.candidateId ?? null,
+        contentFingerprint: result.manifest.contentFingerprint ?? null,
+        generatedAt: result.manifest.generatedAt,
+        generatedAtSemantics: result.manifest.generatedAtSemantics,
+        files: result.files,
+      }),
+    );
+  } catch (error) {
+    console.error(`FAIL: ${error.message}`);
+    process.exitCode = 1;
+  }
+}
+
+if (require.main === module) main();
+
+module.exports = {
+  ARTIFACTS,
+  BUNDLE_MODES,
+  CONTRACT_VERSION,
+  POSTGRES_LINUX_AMD64_MANIFEST,
+  POSTGRES_SOURCE_REVISION,
+  POSTGRES_VERSION,
+  buildProductionBundle,
+  candidateProvenance,
+  obviousSecretFailure,
+  readCommittedArtifact,
+  resolveGenerationTime,
+  sha256,
+};

@@ -1,16 +1,24 @@
+name: genesis
+
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+    platform: linux/amd64
     restart: unless-stopped
+    stop_grace_period: 90s
     environment:
       POSTGRES_DB: ${DATABASE_NAME:?DATABASE_NAME is required}
-      POSTGRES_USER: ${DATABASE_MIGRATION_USER:?DATABASE_MIGRATION_USER is required}
-      POSTGRES_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:?DATABASE_MIGRATION_PASSWORD is required}
+      POSTGRES_USER: ${DATABASE_BOOTSTRAP_USER:?DATABASE_BOOTSTRAP_USER is required}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_bootstrap_password
+      DATABASE_MIGRATION_USER: ${DATABASE_MIGRATION_USER:?DATABASE_MIGRATION_USER is required}
       DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
-      DATABASE_RUNTIME_PASSWORD: ${DATABASE_RUNTIME_PASSWORD:?DATABASE_RUNTIME_PASSWORD is required}
+    secrets:
+      - postgres_bootstrap_password
+      - database_migration_password
+      - database_runtime_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init-runtime-role.sh:/docker-entrypoint-initdb.d/10-runtime-role.sh:ro
+      - ./docker/postgres/init-runtime-role.sh:/docker-entrypoint-initdb.d/10-production-roles.sh:ro
     healthcheck:
       test:
         ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
@@ -30,9 +38,11 @@ services:
       - database
 
   migrate:
-    image: ${GENESIS_API_IMAGE:?GENESIS_API_IMAGE is required}
+    image: ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659
+    platform: linux/amd64
     restart: 'no'
     init: true
+    entrypoint: ['/bin/sh', '/opt/genesis/bin/migrate-entrypoint.sh']
     command:
       [
         'node',
@@ -48,8 +58,12 @@ services:
       DATABASE_PORT: 5432
       DATABASE_NAME: ${DATABASE_NAME:?DATABASE_NAME is required}
       DATABASE_MIGRATION_USER: ${DATABASE_MIGRATION_USER:?DATABASE_MIGRATION_USER is required}
-      DATABASE_MIGRATION_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:?DATABASE_MIGRATION_PASSWORD is required}
       DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
+    group_add: ['70']
+    secrets:
+      - database_migration_password
+    volumes:
+      - ./docker/production/migrate-entrypoint.sh:/opt/genesis/bin/migrate-entrypoint.sh:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,10 +80,13 @@ services:
       - database
 
   api:
-    image: ${GENESIS_API_IMAGE:?GENESIS_API_IMAGE is required}
+    image: ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659
+    platform: linux/amd64
     restart: unless-stopped
     init: true
     stop_grace_period: 20s
+    entrypoint: ['/bin/sh', '/opt/genesis/bin/api-entrypoint.sh']
+    command: ['node', 'dist/main.js']
     environment:
       NODE_ENV: production
       NODE_OPTIONS: --max-old-space-size=${API_NODE_MAX_OLD_SPACE_MB:-640}
@@ -80,20 +97,26 @@ services:
       DATABASE_PORT: 5432
       DATABASE_NAME: ${DATABASE_NAME:?DATABASE_NAME is required}
       DATABASE_USER: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
-      DATABASE_PASSWORD: ${DATABASE_RUNTIME_PASSWORD:?DATABASE_RUNTIME_PASSWORD is required}
       DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
-      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+      FRONTEND_URL: https://genesis.invalid
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
       JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-30}
-      REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER:?REFRESH_TOKEN_PEPPER is required}
       API_PUBLIC_REPLICA_COUNT: 1
       INVITATION_ISSUANCE_READINESS: 'false'
       INVITATION_ACCEPTANCE_READINESS: 'false'
       INVITATION_ACTIVATION_READINESS: 'false'
       INVITATION_WORKER_ENABLED: 'false'
       LEAD_FORM_READINESS: 'false'
+      LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION: '1'
+    group_add: ['70']
+    secrets:
+      - database_runtime_password
+      - jwt_access_secret
+      - refresh_token_pepper
+      - lead_idempotency_keys
+    volumes:
+      - ./docker/production/api-entrypoint.sh:/opt/genesis/bin/api-entrypoint.sh:ro
     expose:
       - '3000'
     depends_on:
@@ -124,8 +147,24 @@ services:
       - database
       - edge
 
+secrets:
+  postgres_bootstrap_password:
+    file: /opt/genesis/secrets/postgres-bootstrap-password
+  database_migration_password:
+    file: /opt/genesis/secrets/database-migration-password
+  database_runtime_password:
+    file: /opt/genesis/secrets/database-runtime-password
+  jwt_access_secret:
+    file: /opt/genesis/secrets/jwt-access-secret
+  refresh_token_pepper:
+    file: /opt/genesis/secrets/refresh-token-pepper
+  lead_idempotency_keys:
+    file: /opt/genesis/secrets/lead-idempotency-keys
+
 volumes:
   postgres_data:
+    external: true
+    name: genesis-postgres-data
 
 networks:
   database:

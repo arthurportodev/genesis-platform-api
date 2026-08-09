@@ -6,6 +6,10 @@ Platform. A decisão arquitetural está no
 produto existente para testes reais com segurança proporcional ao MVP, sem
 antecipar uma infraestrutura definitiva.
 
+O contrato versionado de PostgreSQL, secrets e bundle está no
+[ADR-014](decisions/ADR-014-versioned-production-contract.md). Ele é uma
+candidata local da `0.8-MVP-05A`; ainda não foi entregue nem implantado.
+
 ## Objetivo
 
 Operar uma instância pequena, compreensível e recuperável do frontend, da API e
@@ -35,6 +39,12 @@ base incorporada pela `0.8-MVP-03`. A imagem foi publicada somente no GHCR e a
 stack foi validada em Docker Desktop com dados sintéticos; nada foi implantado
 na VPS ou autorizado para dados reais. `compose.yml` e
 `compose.test.yml` permanecem superfícies separadas de desenvolvimento e teste.
+
+A candidata `0.8-MVP-05A` preserva a imagem já publicada da API e altera apenas
+artefatos não image-affecting. Ela versiona o contrato necessário antes da
+instalação: três roles PostgreSQL, secrets file-backed, imagens por digest,
+identidade estável do projeto/volume e bundle mínimo. Nada foi transferido à
+VPS e nenhum volume, secret ou serviço persistente foi criado.
 
 ## Arquitetura
 
@@ -78,16 +88,42 @@ uma réplica da API enquanto rate limits e semáforos forem process-local.
 
 ### Container e Compose de produção
 
-A stack base possui somente `postgres`, `migrate` e `api`. Ela consome uma
-imagem identificável obrigatória por `GENESIS_API_IMAGE`, sem `build:` no
-Compose, e usa a mesma identidade para API e migration. A API e o PostgreSQL
-não publicam portas; a API declara apenas exposição interna na porta 3000.
+A stack base possui somente `postgres`, `migrate` e `api`, sob o projeto fixo
+`genesis`. API e migration usam exatamente a imagem
+`ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`;
+PostgreSQL usa o índice oficial
+`postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193`,
+cuja variante `linux/amd64` é
+`sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a`.
+Tags e `build:` são proibidos. A API e o PostgreSQL não publicam portas; a API
+declara apenas exposição interna na porta 3000.
 
-O PostgreSQL usa volume nomeado, rede interna de banco e role runtime distinta
-da owner de migrations. O job de migration é one-shot, chama diretamente o
-TypeORM compilado e bloqueia a API quando falha. A API usa filesystem read-only,
+O PostgreSQL usa o volume externo `genesis-postgres-data`, que deve existir
+antes do `up` e não é removido por `docker compose down -v`. Bootstrap/admin,
+migration owner e runtime são roles distintas. A migration é owner do database
+e schema `public`, sem privilégios administrativos; runtime não tem ownership,
+membership ou DDL. Privilégios de `PUBLIC` são revogados, e as migrations
+continuam responsáveis pelos grants funcionais do runtime. Init scripts rodam
+somente no primeiro volume vazio; rotação posterior usa operação explícita.
+
+O job de migration é one-shot, chama diretamente o TypeORM compilado e bloqueia
+a API quando falha. `migration:revert` não é rollback operacional. A API usa filesystem read-only,
 UID/GID fixos não-root, init, capabilities removidas, `no-new-privileges`,
 readiness explícita e shutdown com tolerância externa de 20 segundos.
+PostgreSQL recebe 90 segundos para shutdown.
+
+Secrets são arquivos individuais sob `/opt/genesis/secrets`, futuros
+`root:genesis-container-secrets` (`0440`, GID 70). Compose monta somente o
+subconjunto de cada serviço. API e migration recebem GID suplementar 70 e
+wrappers POSIX read-only carregam os nomes de ambiente já validados antes de
+um `exec`; valores não entram em Compose `environment`, `.env`, metadata,
+argumentos, logs, manifestos ou Git. O bootstrap usa
+`POSTGRES_PASSWORD_FILE`. `LEAD_IDEMPOTENCY_KEYS` é montado somente na API e a
+versão corrente não secreta permanece `1`. Invitations e Lead Form continuam
+fail-closed.
+
+Até a `0.8-MVP-08`, `FRONTEND_URL=https://genesis.invalid` é uma origem
+deliberadamente não resolvível e não representa o domínio final.
 
 A rede `edge` conecta somente a API e reserva a interface futura para o
 Traefik; nenhuma porta, label ou configuração de Traefik pertence a esta
@@ -139,6 +175,14 @@ acrescenta contratos da CI, os 34 testes focados de produção e validação rea
 do Compose com valores sintéticos. Em Pull Requests e execuções manuais,
 `build-and-scan` produz uma única imagem local do target `production` para
 `linux/amd64` e a submete ao Trivy antes de terminar, sem login ou publicação.
+
+A correção `0.8-MVP-05A-CORR-01` mantém esse desenho e alinha a validação
+sintética ao contrato versionado: matriz não secreta completa, três roles
+PostgreSQL distintas, referências imutáveis, frontend canônico e versão do
+keyring de Leads. Os seis valores sintéticos ficam somente em arquivos `0600`
+sob `runner.temp`; um override transitório é usado apenas para renderizar o
+Compose, não é enviado como artifact e é removido imediatamente após a
+validação canônica, inclusive quando um passo anterior falha.
 
 Todo `push` da `main` continua executando `validate`. O job não privilegiado
 `image-impact`, também limitado a esse evento e com somente `contents: read`,
@@ -213,7 +257,8 @@ O fluxo inicial é:
 1. selecionar commit aprovado e CI essencial verde;
 2. publicar ou selecionar a imagem no GHCR por tag do commit e digest;
 3. obter aprovação humana para a execução;
-4. confirmar secrets, persistência, backup recuperável e capacidade da VPS;
+4. validar o bundle, criar o volume externo separadamente e confirmar secrets,
+   persistência, backup recuperável e capacidade da VPS;
 5. executar uma migration controlada com credencial própria;
 6. iniciar ou atualizar uma réplica da API atrás do Traefik;
 7. validar health, logs e smoke sintético;
@@ -230,9 +275,49 @@ credencial não fica disponível ao runtime. O job de migration é único e
 bloqueante. Rollback da aplicação não reverte schema automaticamente; uma
 migration incompatível exige plano específico antes do deploy.
 
+Bootstrap/admin é superuser somente durante inicialização e recuperação
+excepcional. A migration owner possui o database/schema, mas é explicitamente
+`NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`. Runtime possui os
+mesmos atributos negativos, não é owner e recebe somente ACLs funcionais das
+migrations. Os três nomes são seguros, distintos e sem memberships entre si.
+
 Na imagem de produção, o job executa diretamente
 `node node_modules/typeorm/cli.js -d dist/database/data-source.js migration:run`.
 Ele não recompila a aplicação, não depende do Nest CLI e não executa seed.
+
+## Bundle de produção
+
+`scripts/build-production-bundle.cjs` gera um diretório novo com allowlist
+fechada: Compose, configuração não secreta renomeada, init PostgreSQL, dois
+wrappers e `release-manifest.json`. Existem exatamente dois modos:
+
+- `candidate` é não operacional, copia a worktree somente para validação local
+  e registra `baseSha`, `candidateId` e `contentFingerprint`. Ele não declara
+  `sourceCommit` e nunca pode ser usado em VPS;
+- `committed-release` é operacional, exige um commit real, lê cada artefato do
+  snapshot Git declarado e falha se path, blob, mode ou bytes correspondentes
+  da worktree divergirem. Somente esse modo pode ser transferido em uma tarefa
+  futura.
+
+O manifesto também registra hashes, modes, digests, `linux/amd64`, versão do
+contrato e timestamp reproduzível derivado do commit de referência ou de
+`SOURCE_DATE_EPOCH`; ele não representa o relógio real do deploy.
+`scripts/validate-production-bundle.cjs` rejeita arquivo extra, artefato
+irregular, binding divergente, candidate usado como release, proveniência Git
+incompleta, tag, path `.env` e conteúdo secret-like. A validação operacional
+deve usar `--require-mode committed-release`.
+
+Os cinco artefatos do bundle usam mode Git/manifest `0644`. Os wrappers de API
+e migration não dependem de execute bit porque o Compose os chama
+explicitamente por `/bin/sh`. O init PostgreSQL também não depende de execute
+bit: o
+[`docker-entrypoint.sh` oficial congelado](https://github.com/docker-library/postgres/blob/4f9ced003ba58a854656ba150d146243d27ae3ac/docker-entrypoint.sh#L158-L188)
+faz `source` de todo `.sh` não executável encontrado em
+`/docker-entrypoint-initdb.d`. Mode `0755` ou qualquer outro mode diverge do
+contrato e bloqueia `committed-release`.
+
+Nenhum bundle desta tarefa é transferido à VPS. Uma entrega futura deve gerar
+o modo `committed-release` automaticamente depois do commit aprovado.
 
 ## Backup e restore
 

@@ -265,20 +265,21 @@ test('excludes local, secret and development-only content from the context', () 
   assert.doesNotMatch(dockerignore, /^!/mu);
 });
 
-test('keeps every versioned production secret field empty', () => {
+test('keeps versioned production configuration free of secret fields', () => {
   const example = readFileSync('.env.production.example', 'utf8');
   for (const variable of [
+    'POSTGRES_PASSWORD',
     'DATABASE_MIGRATION_PASSWORD',
     'DATABASE_RUNTIME_PASSWORD',
+    'DATABASE_PASSWORD',
     'JWT_ACCESS_SECRET',
     'REFRESH_TOKEN_PEPPER',
+    'LEAD_IDEMPOTENCY_KEYS',
   ]) {
-    assert.match(example, new RegExp(`^${variable}=$`, 'mu'));
+    assert.doesNotMatch(example, new RegExp(`^${variable}=`, 'mu'));
   }
-  assert.doesNotMatch(
-    example,
-    /change-password|replace-with-a-long-random-secret/iu,
-  );
+  assert.doesNotMatch(example, /^GENESIS_API_IMAGE=/mu);
+  assert.match(example, /^DATABASE_BOOTSTRAP_USER=genesis_bootstrap$/mu);
 });
 
 module.exports = { parseDockerfile, validateProductionDockerfile };

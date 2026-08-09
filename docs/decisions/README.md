@@ -46,3 +46,4 @@ Crie ADR quando a decisão afetar múltiplas tarefas, segurança, dados, isolame
 - [ADR-011 — Arquitetura da primeira produção](ADR-011-production-architecture.md) — Superseded pelo ADR-013; preservado como histórico
 - [ADR-012 — Development Operating System v2](ADR-012-development-operating-system-v2.md) — Accepted em 30 de julho de 2026; processo de desenvolvimento vigente
 - [ADR-013 — Baseline mínima de produção do MVP](ADR-013-mvp-production-baseline.md) — Accepted em 3 de agosto de 2026; supersede o ADR-011 e define a baseline operacional atual
+- [ADR-014 — Contrato versionado de PostgreSQL, secrets e bundle](ADR-014-versioned-production-contract.md) — Accepted em 8 de agosto de 2026; especializa a baseline da 0.8-MVP-05A sem executar produção
