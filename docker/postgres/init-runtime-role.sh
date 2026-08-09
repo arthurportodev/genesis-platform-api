@@ -103,6 +103,9 @@ SELECT format('GRANT CONNECT, CREATE, TEMPORARY ON DATABASE %I TO %I', :'databas
 SELECT format('GRANT USAGE, CREATE ON SCHEMA public TO %I', :'migration_role') \gexec
 SQL
 
+unset GENESIS_MIGRATION_PASSWORD GENESIS_RUNTIME_PASSWORD
+trap - EXIT
+
 role_contract=$(psql --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --tuples-only --no-align \
   --command "SELECT count(*) FROM pg_roles WHERE (rolname = '$DATABASE_MIGRATION_USER' AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolinherit AND NOT rolbypassrls) OR (rolname = '$DATABASE_RUNTIME_ROLE' AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolinherit AND NOT rolbypassrls)")
 if [ "$role_contract" != '2' ]; then

@@ -72,5 +72,29 @@ test('PostgreSQL init fails closed around role identity and unexpected state', (
   );
   assert.match(init, /REVOKE CONNECT, TEMPORARY ON DATABASE/u);
   assert.match(init, /REVOKE ALL ON SCHEMA public FROM PUBLIC/u);
+  assert.match(
+    init,
+    /trap 'unset GENESIS_MIGRATION_PASSWORD GENESIS_RUNTIME_PASSWORD' EXIT/u,
+  );
+  const passwordPsqlEnd = init.indexOf('\nSQL\n');
+  const explicitCleanup = init.indexOf(
+    'unset GENESIS_MIGRATION_PASSWORD GENESIS_RUNTIME_PASSWORD',
+    passwordPsqlEnd,
+  );
+  const trapDisarm = init.indexOf('trap - EXIT', explicitCleanup);
+  const contractChecks = init.indexOf('role_contract=', trapDisarm);
+  assert.ok(passwordPsqlEnd > 0, 'password-consuming psql must be present');
+  assert.ok(
+    explicitCleanup > passwordPsqlEnd,
+    'credentials must be removed after the password-consuming psql',
+  );
+  assert.ok(
+    trapDisarm > explicitCleanup,
+    'the EXIT trap must be disarmed only after explicit cleanup',
+  );
+  assert.ok(
+    contractChecks > trapDisarm,
+    'cleanup and trap disarm must precede later contract queries',
+  );
   assert.doesNotMatch(init, /set -x|printenv/u);
 });
