@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const {
+  appendFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -20,6 +22,12 @@ const {
   EXPECTED_FILES,
   validateProductionBundle,
 } = require('../../scripts/validate-production-bundle.cjs');
+const { calculateFingerprint } = require('../../scripts/task-fingerprint.cjs');
+
+const VERSIONED_FIXTURE_INPUTS = [
+  ...ARTIFACTS.map((artifact) => artifact.source),
+  'package.json',
+].sort();
 
 function tempRoot() {
   return mkdtempSync(join(tmpdir(), 'genesis-mvp05a-bundle-'));
@@ -68,17 +76,144 @@ function committedFixture(root) {
   };
 }
 
+function versionedInputHashes() {
+  return Object.fromEntries(
+    VERSIONED_FIXTURE_INPUTS.map((path) => [
+      path,
+      sha256(readFileSync(join(process.cwd(), ...path.split('/')))),
+    ]),
+  );
+}
+
+function candidateFixture(t) {
+  const root = tempRoot();
+  const sourceHashes = versionedInputHashes();
+  t.after(() => {
+    try {
+      assert.deepEqual(versionedInputHashes(), sourceHashes);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      assert.equal(existsSync(root), false);
+    }
+  });
+
+  const repository = join(root, 'repository');
+  mkdirSync(repository);
+  for (const path of VERSIONED_FIXTURE_INPUTS) {
+    const target = join(repository, ...path.split('/'));
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(
+      target,
+      readFileSync(join(process.cwd(), ...path.split('/'))),
+    );
+  }
+
+  runGit(repository, ['init', '--quiet']);
+  runGit(repository, ['checkout', '--quiet', '-b', 'fixture/candidate']);
+  runGit(repository, ['config', 'user.name', 'Genesis Candidate Fixture']);
+  runGit(repository, [
+    'config',
+    'user.email',
+    'genesis-candidate-fixture@example.invalid',
+  ]);
+  runGit(repository, ['config', 'core.autocrlf', 'false']);
+  runGit(repository, ['add', '--all']);
+  const commitEnvironment = {
+    ...process.env,
+    GIT_AUTHOR_DATE: '2024-01-02T03:04:05Z',
+    GIT_COMMITTER_DATE: '2024-01-02T03:04:05Z',
+  };
+  runGit(repository, ['commit', '--quiet', '-m', 'candidate fixture base'], {
+    env: commitEnvironment,
+  });
+  const baseSha = runGit(repository, ['rev-parse', 'HEAD']);
+  const branch = runGit(repository, ['branch', '--show-current']);
+
+  const taskPacket = '.codex/task-packets/candidate-fixture.md';
+  const manifestPath = join(repository, '.codex', 'task-manifest.json');
+  const taskPacketPath = join(repository, ...taskPacket.split('/'));
+  mkdirSync(dirname(taskPacketPath), { recursive: true });
+  appendFileSync(
+    join(repository, '.git', 'info', 'exclude'),
+    `\n.codex/task-manifest.json\n${taskPacket}\n`,
+  );
+  writeFileSync(taskPacketPath, '# Candidate fixture Task Packet\n');
+  const manifest = {
+    version: 2,
+    contractVersion: '2.0.0',
+    task: {
+      id: 'test-production-bundle-candidate-fixture',
+      title: 'Production bundle candidate fixture',
+      class: 'critical',
+    },
+    git: {
+      branch,
+      baseSha,
+      requireCleanStage: true,
+      expectedTransitions: [],
+    },
+    scope: {
+      allowedPaths: ['compose.production.yml'],
+      protectedPaths: ['package.json'],
+    },
+    artifacts: { taskPacket },
+    validation: {
+      profile: 'critical',
+      focusedScripts: [],
+      levels: ['immediate', 'focused', 'integration', 'complete'],
+    },
+    rehydration: {
+      directSources: ['compose.production.yml'],
+      expansionTriggers: ['fixture drift'],
+    },
+    autonomy: {
+      allowHighCorrections: false,
+      requireIndependentReverification: true,
+    },
+    contracts: {
+      authorityRepository: 'arthurportodev/genesis-platform-api',
+      contractSet: 'schemas/development-operations/contract-set.json',
+    },
+  };
+  const manifestSource = `${JSON.stringify(manifest, null, 2)}\n`;
+  writeFileSync(manifestPath, manifestSource);
+  assert.equal(
+    runGit(repository, ['check-ignore', '--', '.codex/task-manifest.json']),
+    '.codex/task-manifest.json',
+  );
+  assert.equal(
+    runGit(repository, ['check-ignore', '--', taskPacket]),
+    taskPacket,
+  );
+
+  appendFileSync(
+    join(repository, 'compose.production.yml'),
+    '\n# candidate fixture change\n',
+  );
+  const fingerprint = calculateFingerprint({ cwd: repository });
+  assert.deepEqual(fingerprint.candidatePaths, ['compose.production.yml']);
+  return {
+    root,
+    repository,
+    branch,
+    baseSha,
+    manifestPath,
+    manifestSource,
+    fingerprint,
+    commitEnvironment,
+  };
+}
+
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
 test('builds a deterministic non-operational candidate with current bindings', (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const first = join(root, 'first');
-  const second = join(root, 'second');
+  const fixture = candidateFixture(t);
+  const first = join(fixture.root, 'first');
+  const second = join(fixture.root, 'second');
   const options = {
-    cwd: process.cwd(),
+    cwd: fixture.repository,
     mode: 'candidate',
     env: { ...process.env, SOURCE_DATE_EPOCH: '1700000000' },
   };
@@ -89,9 +224,15 @@ test('builds a deterministic non-operational candidate with current bindings', (
   assert.equal(builtFirst.manifest.bundleMode, 'candidate');
   assert.equal(builtFirst.manifest.operational, false);
   assert.equal(builtFirst.manifest.sourceCommit, undefined);
-  assert.match(builtFirst.manifest.baseSha, /^[a-f0-9]{40}$/u);
-  assert.match(builtFirst.manifest.candidateId, /^[a-f0-9]{64}$/u);
-  assert.match(builtFirst.manifest.contentFingerprint, /^[a-f0-9]{64}$/u);
+  assert.equal(builtFirst.manifest.baseSha, fixture.baseSha);
+  assert.equal(
+    builtFirst.manifest.candidateId,
+    fixture.fingerprint.candidateId,
+  );
+  assert.equal(
+    builtFirst.manifest.contentFingerprint,
+    fixture.fingerprint.contentFingerprint,
+  );
   assert.deepEqual(
     readFileSync(join(first, 'release-manifest.json')),
     readFileSync(join(second, 'release-manifest.json')),
@@ -107,31 +248,82 @@ test('builds a deterministic non-operational candidate with current bindings', (
 });
 
 test('derives candidate time from the base commit without claiming artifact provenance', (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const fixture = candidateFixture(t);
   const built = buildProductionBundle({
-    cwd: process.cwd(),
-    output: join(root, 'bundle'),
+    cwd: fixture.repository,
+    output: join(fixture.root, 'bundle'),
     mode: 'candidate',
     env: {},
   });
   assert.equal(built.manifest.generatedAtSemantics, 'base-commit-timestamp');
+  assert.equal(built.manifest.generatedAt, '2024-01-02T03:04:05.000Z');
   assert.equal(built.manifest.sourceCommit, undefined);
 });
 
 test('rejects the current uncommitted candidate as a committed release', (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const fixture = candidateFixture(t);
   assert.throws(
     () =>
       buildProductionBundle({
-        cwd: process.cwd(),
-        output: join(root, 'release'),
+        cwd: fixture.repository,
+        output: join(fixture.root, 'release'),
         mode: 'committed-release',
-        sourceCommit: '876aa4ae5a7f88bfbfd65ff4e40e3dab33c4079b',
+        sourceCommit: fixture.baseSha,
       }),
-    /does not contain required artifact|worktree differs/u,
+    /worktree differs/u,
   );
+});
+
+test('requires a fixture-owned valid manifest for candidate provenance', (t) => {
+  const fixture = candidateFixture(t);
+  rmSync(fixture.manifestPath);
+  assert.throws(
+    () =>
+      buildProductionBundle({
+        cwd: fixture.repository,
+        output: join(fixture.root, 'missing-manifest'),
+      }),
+    /task-manifest\.json could not be read.*ENOENT/u,
+  );
+
+  const invalid = JSON.parse(fixture.manifestSource);
+  invalid.git.baseSha = 'not-a-sha';
+  writeFileSync(fixture.manifestPath, `${JSON.stringify(invalid, null, 2)}\n`);
+  assert.throws(
+    () =>
+      buildProductionBundle({
+        cwd: fixture.repository,
+        output: join(fixture.root, 'invalid-manifest'),
+      }),
+    /baseSha must be a full lowercase 40-character SHA/u,
+  );
+
+  writeFileSync(fixture.manifestPath, fixture.manifestSource);
+  assert.equal(
+    buildProductionBundle({
+      cwd: fixture.repository,
+      output: join(fixture.root, 'restored-manifest'),
+    }).status,
+    'passed',
+  );
+});
+
+test('changes candidate identity after a controlled fixture change', (t) => {
+  const fixture = candidateFixture(t);
+  const before = fixture.fingerprint;
+  appendFileSync(
+    join(fixture.repository, 'compose.production.yml'),
+    '# second controlled candidate change\n',
+  );
+  const after = calculateFingerprint({ cwd: fixture.repository });
+  assert.notEqual(after.contentFingerprint, before.contentFingerprint);
+  assert.notEqual(after.candidateId, before.candidateId);
+  const built = buildProductionBundle({
+    cwd: fixture.repository,
+    output: join(fixture.root, 'changed-candidate'),
+  });
+  assert.equal(built.manifest.contentFingerprint, after.contentFingerprint);
+  assert.equal(built.manifest.candidateId, after.candidateId);
 });
 
 test('builds and validates a committed release only from a matching Git snapshot', (t) => {
@@ -310,25 +502,26 @@ test('rejects executable Git mode for scripts whose contract is 0644', (t) => {
 });
 
 test('rejects divergent candidate bindings and candidate-as-release use', (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const fixture = candidateFixture(t);
 
-  const drift = join(root, 'binding-drift');
-  buildProductionBundle({ cwd: process.cwd(), output: drift });
+  const drift = join(fixture.root, 'binding-drift');
+  buildProductionBundle({ cwd: fixture.repository, output: drift });
   const manifestPath = join(drift, 'release-manifest.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   manifest.candidateId = '0'.repeat(64);
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   assert.match(
-    validateProductionBundle(drift, { cwd: process.cwd() }).failures.join('\n'),
+    validateProductionBundle(drift, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
     /candidate ID binding mismatch/u,
   );
 
-  const candidate = join(root, 'candidate-as-release');
-  buildProductionBundle({ cwd: process.cwd(), output: candidate });
+  const candidate = join(fixture.root, 'candidate-as-release');
+  buildProductionBundle({ cwd: fixture.repository, output: candidate });
   assert.match(
     validateProductionBundle(candidate, {
-      cwd: process.cwd(),
+      cwd: fixture.repository,
       requiredMode: 'committed-release',
     }).failures.join('\n'),
     /required mode: committed-release/u,
@@ -336,30 +529,36 @@ test('rejects divergent candidate bindings and candidate-as-release use', (t) =>
 });
 
 test('rejects unexpected files, hash drift and mutable image references', (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const fixture = candidateFixture(t);
 
-  const extra = join(root, 'extra');
-  buildProductionBundle({ cwd: process.cwd(), output: extra });
+  const extra = join(fixture.root, 'extra');
+  buildProductionBundle({ cwd: fixture.repository, output: extra });
   writeFileSync(join(extra, 'unexpected.txt'), 'unexpected\n');
-  assert.equal(validateProductionBundle(extra).status, 'failed');
+  assert.equal(
+    validateProductionBundle(extra, { cwd: fixture.repository }).status,
+    'failed',
+  );
 
-  const drift = join(root, 'drift');
-  buildProductionBundle({ cwd: process.cwd(), output: drift });
+  const drift = join(fixture.root, 'drift');
+  buildProductionBundle({ cwd: fixture.repository, output: drift });
   writeFileSync(join(drift, 'compose.production.yml'), 'changed\n');
   assert.match(
-    validateProductionBundle(drift).failures.join('\n'),
+    validateProductionBundle(drift, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
     /hash mismatch/u,
   );
 
-  const tag = join(root, 'tag');
-  buildProductionBundle({ cwd: process.cwd(), output: tag });
+  const tag = join(fixture.root, 'tag');
+  buildProductionBundle({ cwd: fixture.repository, output: tag });
   const manifestPath = join(tag, 'release-manifest.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   manifest.images.api.reference = 'ghcr.io/example/api:latest';
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   assert.match(
-    validateProductionBundle(tag).failures.join('\n'),
+    validateProductionBundle(tag, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
     /API reference mismatch|API image is not immutable/u,
   );
 });
@@ -386,13 +585,12 @@ test('rejects secret-like values without rejecting approved names and paths', ()
 });
 
 test('rejects invalid mode, output boundaries and nondeterministic epoch input', (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const fixture = candidateFixture(t);
   assert.throws(
     () =>
       buildProductionBundle({
-        cwd: process.cwd(),
-        output: join(root, 'bad-epoch'),
+        cwd: fixture.repository,
+        output: join(fixture.root, 'bad-epoch'),
         env: { SOURCE_DATE_EPOCH: 'not-a-number' },
       }),
     /SOURCE_DATE_EPOCH/u,
@@ -400,8 +598,8 @@ test('rejects invalid mode, output boundaries and nondeterministic epoch input',
   assert.throws(
     () =>
       buildProductionBundle({
-        cwd: process.cwd(),
-        output: join(root, 'bad-mode'),
+        cwd: fixture.repository,
+        output: join(fixture.root, 'bad-mode'),
         mode: 'release',
       }),
     /bundle mode is invalid/u,
@@ -409,16 +607,16 @@ test('rejects invalid mode, output boundaries and nondeterministic epoch input',
   assert.throws(
     () =>
       buildProductionBundle({
-        cwd: process.cwd(),
-        output: join(root, 'candidate-commit'),
-        sourceCommit: '876aa4ae5a7f88bfbfd65ff4e40e3dab33c4079b',
+        cwd: fixture.repository,
+        output: join(fixture.root, 'candidate-commit'),
+        sourceCommit: fixture.baseSha,
       }),
     /candidate bundles cannot declare/u,
   );
-  const existing = join(root, 'existing');
+  const existing = join(fixture.root, 'existing');
   mkdirSync(existing);
   assert.throws(
-    () => buildProductionBundle({ cwd: process.cwd(), output: existing }),
+    () => buildProductionBundle({ cwd: fixture.repository, output: existing }),
     /must not already exist/u,
   );
 });
