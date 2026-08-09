@@ -22,12 +22,13 @@ O runtime health e a baseline arquitetural do MVP estão incorporados à `main`
 pelo PR #29, squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`. Esse
 `compose.yml` e `compose.test.yml` servem ao desenvolvimento e à validação. O
 Dockerfile `production` e `compose.production.yml` são contratos separados de
-produção; ainda não foram implantados.
+produção; a `0.8-MVP-05B` os implantou somente como baseline privada, sem
+exposição pública.
 
 ## Arquitetura de produção do MVP
 
-A baseline aceita em 3 de agosto de 2026 e incorporada à `main` em 4 de agosto
-de 2026 continua planejada, mas ainda não foi publicada operacionalmente:
+A topologia pública aceita em 3 de agosto de 2026 e incorporada à `main` em 4
+de agosto de 2026 continua planejada e ainda não foi publicada:
 
 ```text
 Navegador
@@ -270,19 +271,26 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
   com `sourceCommit` igual ao squash, seis arquivos e modes `0644`, resultado
   PASS. Bundles `candidate` pré-merge permaneceram somente evidência local não
   operacional. Nenhum bundle foi transferido à VPS.
-- **Planejado:** `0.8-MVP-05B`, Traefik/HTTPS, backup/restore, observabilidade,
-  Vercel/proxy e abertura controlada.
+- **Executado e verificado em `0.8-MVP-05B`:** baseline privada na VPS com
+  Docker, secrets file-backed, volume PostgreSQL, roles separadas, dez
+  migrations e API, ligada ao commit
+  `38baf1e8898194b618cfee787a3bea753677eb93` e a imagens por digest. API e banco
+  permanecem sem bind público; persistência pós-reboot e controles do host
+  passaram pela verificação final independente.
+- **Planejado:** Traefik/HTTPS, backup/restore, observabilidade, Vercel/proxy e
+  abertura controlada.
 - **Fora do estado atual:** integrações externas, deploy e microservices.
   NestJS permanece o único backend oficial, com backend e frontend em
-  repositórios separados. Vercel e Hostinger KVM 2 são os destinos previstos
-  do frontend e backend; a decisão ainda não foi publicada. Lovable permanece
-  apenas ferramenta opcional de exploração e referência visual.
+  repositórios separados. A Hostinger KVM 2 hospeda a baseline privada do
+  backend; a Vercel permanece o destino previsto do frontend e a origem pública
+  ainda não foi publicada. Lovable permanece apenas ferramenta opcional de
+  exploração e referência visual.
 
-A incorporação do contrato não executou a stack: instalação na VPS, secrets
-reais, grupo/layout do host, volume externo, PostgreSQL, roles, migrations,
-API, serviços, portas, persistência, backup, restore, health e prontidão
-operacional continuam não executados e dependem da tarefa `0.8-MVP-05B` e de
-autorização própria.
+A 05B executou somente a camada privada da stack: host, secrets, volume,
+PostgreSQL, roles, migrations e API. Ela não alterou a topologia aprovada nem
+abriu a origem. Traefik/HTTPS, backup/restore, observabilidade, Vercel/proxy,
+smoke cross-tenant e autorização para dados reais continuam não executados e
+dependem de tarefas e Gates próprios.
 
 ## Entrega e aceitação de convites
 

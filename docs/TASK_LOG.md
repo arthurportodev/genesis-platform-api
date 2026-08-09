@@ -594,7 +594,90 @@ O bundle pós-merge em modo `committed-release` foi construído e validado com
 e resultado PASS. Bundles pré-merge `candidate` permaneceram apenas evidência
 não operacional, e nenhum bundle foi transferido à VPS.
 
-Nenhuma instalação de Docker, layout ou grupo do host, secret real, volume,
+Naquele encerramento, nenhuma instalação de Docker, layout ou grupo do host,
+secret real, volume,
 PostgreSQL, role, migration, API, serviço, porta, dado, persistência ou prova de
-prontidão foi executada. A `0.8-MVP-05B` permanece futura e exige autorização
-operacional própria e comprovação explícita de todas as suas precondições.
+prontidão foi executada. Naquele momento, a `0.8-MVP-05B` permanecia futura e
+exigia autorização operacional própria e comprovação explícita de todas as suas
+precondições.
+
+## 0.8-MVP-05B — Instalação controlada da baseline privada na VPS
+
+**Concluída tecnicamente em 9 de agosto de 2026.** A operação usou a `main`
+`38baf1e8898194b618cfee787a3bea753677eb93` e o release imutável
+`38baf1e8898194b618cfee787a3bea753677eb93-0c2e6d0ad2943e802c955eb21cf7fa1283adca4267666cfb4902a20d0111f8e0`.
+O manifesto `0c2e6d0ad2943e802c955eb21cf7fa1283adca4267666cfb4902a20d0111f8e0`
+declara o contrato `0.8-MVP-05A.v2`, `operational=true`; `current` foi trocado
+atomicamente para esse release e o release anterior permaneceu preservado.
+O host recebeu a baseline aprovada de Docker, layout root-only e secrets
+file-backed; o volume externo original `genesis-postgres-data`, PostgreSQL 17,
+três roles separadas, dez migrations e a API foram instalados e validados. API
+e PostgreSQL permaneceram privados, healthy e fixados por digest, sem portas
+Docker publicadas.
+
+A VPS comprovada é `srv1870064`, IP `147.79.82.44`, Ubuntu 24.04.4 LTS. Docker,
+SSH, UFW, fail2ban, AppArmor e swap ficaram ativos e persistentes, sem unidade
+crítica falhada; somente TCP/22 permaneceu acessível externamente e TCP/80 e
+TCP/443 ficaram fechadas. O PostgreSQL usa o índice por digest aprovado e a API
+usa `ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`,
+ambos em `linux/amd64`.
+
+A cadeia operacional foi executada por checkpoints com stop conditions e
+verificação independente. No F-001, o mecanismo fictício de validação fechava o
+PTY cedo demais e falhava ao comprovar a restauração do echo; nenhum secret real
+foi processado nessas falhas. O driver corrigido manteve o PTY válido, a suíte
+fictícia final passou `17/17`, a captura humana sem eco foi concluída pelo Web
+Terminal e o finding foi reverificado como resolvido.
+
+No F-002, as credenciais lógicas de migration e runtime permaneceram
+inicialmente no environment do processo PostgreSQL porque o init `0644` é
+sourced e seu trap de `EXIT` não roda antes do `exec` final. Nenhum valor ou
+hash foi impresso, e logs, inspect, journal, argumentos e evidências tiveram
+zero correspondências. O PostgreSQL foi contido graciosamente, com volume e
+banco preservados; a correção remove as variáveis após o `psql`, mantém o trap
+para erros e o desarma antes das consultas pós-init. Ela foi testada, verificada
+e incorporada pelo PR #37. O release corrigido foi aplicado na VPS e o processo
+final comprovou ausência das duas variáveis.
+
+Os seis secrets foram capturados por fluxo humano sem eco, sem passagem pelo
+chat ou pelas ferramentas. Cinco são valores simples e um é um keyring
+versionado; na VPS, são exatamente seis arquivos regulares
+`root:genesis-container-secrets` `0440`, fora de Git e evidências. A custódia usa
+Bitwarden Free; o export JSON protegido por senha fica fora da VPS em
+armazenamento offline cifrado, com senha separada e recovery code fora da
+Bitwarden. Nenhum CSV ou JSON aberto foi produzido.
+
+Migrations e API passaram por checkpoints próprios. A segunda execução das
+migrations foi no-op; schema, owners, ACLs e privilégios runtime permaneceram
+conformes, sem membership inesperado nem privilégio proibido de `PUBLIC`. A API
+passou readiness `4/4`, hardening, mounts seletivos, bloqueio
+de metadata e leak scan. Um único reboot autorizado comprovou recuperação
+automática e persistência de host, containers, volume, dados, migrations,
+secrets, firewall e readiness. A rede externa permaneceu restrita a TCP/22;
+TCP/80, TCP/443 e TCP/3000 continuaram fechadas. O novo boot ID aprovado é
+`1203958f-2ae3-448c-83c1-349b0bb952d8`; nenhum start manual mascarou a
+recuperação, e bootstrap e migrations não foram repetidos.
+
+## 0.8-MVP-05B — Verificação final e disposição do snapshot
+
+**PASS técnico em 9 de agosto de 2026.** Um verifier distinto dos builders e
+dos verificadores de checkpoint revisou os onze grupos finais em modo read-only,
+com cobertura `11/11`, `implementedCandidate=false`, `writeOperations=0`,
+`findings=[]`, `limitations=[]` e recomendação `approve`. A verificação ligou o
+estado ao commit, release, manifesto, boot e fingerprints aprovados sem alterar
+Git remoto, VPS, containers, banco, secrets ou firewall. O schema
+`verifier-evidence.v1` e a validação semântica passaram.
+
+Após o PASS, o Product Owner decidiu não restaurar e não excluir manualmente o
+snapshot pré-05B, criado em 2026-08-09 às 09:10 BRT e preservado durante toda a
+operação. O snapshot deve permanecer preservado até a expiração automática
+indicada pela Hostinger em 2026-08-10; a expiração ainda não é declarada como
+ocorrida. Essa disposição não autoriza ação adicional sobre o snapshot. A 05B
+termina sem Traefik, HTTPS, proxy, exposição pública, backup/restore,
+observabilidade ou dados reais; essas fronteiras dependem das tarefas e
+autorizações posteriores.
+
+Este registro encerra documentalmente a 05B quando incorporado, mas não declara
+a VPS pronta para produção. PostgreSQL e API continuam operacionais somente nas
+redes internas Docker; nenhuma etapa futura de exposição ou deploy público é
+autorizada por este closeout.

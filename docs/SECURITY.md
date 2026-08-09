@@ -148,8 +148,9 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   `5268706d22cb69df7d065928c16b4425a03b41cf`, remove secrets do `environment`
   do Compose. Arquivos individuais de host são montados seletivamente por
   Compose secrets; os containers não-root da API e migration recebem apenas o
-  GID suplementar 70 modelado. O host, grupo e arquivos reais não foram criados
-  e pertencem a uma tarefa operacional posterior.
+  GID suplementar 70 modelado. A `0.8-MVP-05B` criou o host layout, grupo e seis
+  arquivos reais sob metadata restrita e validou mounts seletivos sem expor
+  valores.
 - Wrappers POSIX read-only usam paths constantes, falham diante de arquivo
   ausente ou vazio, removem somente um newline terminal, preservam caracteres
   especiais e terminam em `exec`. Eles não imprimem valores. O PostgreSQL usa
@@ -163,6 +164,24 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   inicializa paths somente de `RUNNER_TEMP`; `CORR-03` usa fixtures Git
   herméticas, com manifesto próprio, para que testes de bundle não herdem
   estado ignorado do checkout do desenvolvedor.
+- Na captura operacional da 05B, o F-001 ocorreu somente no mecanismo fictício
+  de validação: o driver encerrava o PTY cedo demais e não conseguia provar a
+  restauração do echo. Nenhum secret real foi processado durante as falhas. O
+  driver corrigido passou a suíte fictícia final `17/17`; a captura humana sem
+  eco pelo Web Terminal foi validada e o finding foi resolvido.
+- Os seis secrets reais foram capturados sem passar por chat, argumentos ou
+  ferramentas. Na VPS existem somente como arquivos regulares
+  `root:genesis-container-secrets` `0440`: cinco valores simples e um keyring
+  versionado. A custódia usa Bitwarden Free, export JSON protegido por senha em
+  armazenamento offline cifrado fora da VPS, senha do export separada e
+  recovery code externo à Bitwarden. Nenhum CSV ou JSON aberto foi produzido.
+- O F-002 demonstrou que as credenciais lógicas de migration e runtime podiam
+  permanecer no environment do processo PostgreSQL após o init sourced. Nenhum
+  valor ou hash foi impresso e os demais scans retornaram zero. O PostgreSQL foi
+  contido graciosamente, preservando banco e volume; a correção do PR #37 faz o
+  cleanup explícito antes das consultas pós-init, preserva o trap de erro e foi
+  aplicada no release corrigido. As duas variáveis estão ausentes no processo
+  final, e o finding foi resolvido.
 - A CI pós-merge `31286630732` passou com `shouldPublish=false`; o publicador
   ficou ignorado, nenhuma tag nova foi criada e o digest canônico da API
   `sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
@@ -271,7 +290,7 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   `/bin/sh`, e o init não executável é lido com `source` pelo entrypoint oficial
   PostgreSQL. Mudança para `0755` ou outro mode falha na proveniência.
 - `genesis-postgres-data` é externo: Compose não o cria nem o remove por
-  `down -v`. A criação pertence à `0.8-MVP-05B`.
+  `down -v`. A criação controlada foi executada pela `0.8-MVP-05B`.
 - Backup e restore testado, logs sanitizados, health, monitoramento básico e
   rollback são requisitos para dados reais.
 - Vulnerabilidade Critical aplicável bloqueia a abertura até correção ou
@@ -280,17 +299,19 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   globais. O Node é copiado isoladamente para Alpine 3.24, e o contrato de CI
   inspeciona o filesystem real antes do scan e de qualquer publicação.
 
-Após o merge, o builder e o validator do bundle aprovaram um
-`committed-release` operacional com `sourceCommit` igual ao squash
-`5268706d22cb69df7d065928c16b4425a03b41cf`, exatamente seis arquivos e modes
-`0644`. Essa validação não transferiu o bundle nem criou secrets, volume,
-PostgreSQL, migrations ou serviços na VPS. A instalação e a comprovação dos
-controles do host continuam condicionadas à `0.8-MVP-05B` e a autorização
-operacional própria.
+Após o merge da 05A, o builder e o validator do bundle aprovaram um
+`committed-release` operacional. A `0.8-MVP-05B` reconstruiu e verificou o
+release contra o commit
+`38baf1e8898194b618cfee787a3bea753677eb93`, com exatamente seis arquivos em
+mode `0644`, e instalou a baseline privada na VPS sob autorização operacional
+própria. Host, supply chain, secrets, PostgreSQL, API, rede e persistência
+pós-reboot passaram por verificação final independente com zero findings e
+zero limitations.
 
-A VPS Hostinger KVM 2 já foi contratada e é o destino previsto para uma réplica
-da API. Seu inventário, configuração e adequação à topologia do MVP ainda
-precisam ser comprovados. O frontend na Vercel preserva o proxy same-origin
+A VPS Hostinger KVM 2 hospeda uma réplica privada da API e o PostgreSQL. Seu
+inventário, hardening, configuração e adequação ao escopo da 05B foram
+comprovados; somente TCP/22 permanece acessível externamente. O frontend na
+Vercel preserva o proxy same-origin
 `/api/v1`; Preview não recebe a origem de produção. Domínios finais, provedor
 de backup e ferramenta de monitoramento são **PENDING HUMAN DECISION**.
 
@@ -310,11 +331,11 @@ maturidade e podem ser promovidos conforme adoção, dados, compliance e risco.
 ## Limitações e decisões abertas
 
 - O frontend oficial concluiu sessão, access em memória, HTTP, Organization
-  ativa, guards, coordenação entre abas e CRM; a produção ainda não foi
-  publicada.
-- A existência da VPS não comprova os controles de produção: isolamento,
-  firewall, redes, portas, PostgreSQL da aplicação, secrets, backup, restore e
-  monitoramento ainda precisam ser verificados ou configurados nela.
+  ativa, guards, coordenação entre abas e CRM; a origem de produção ainda não
+  foi publicada.
+- A 05B comprovou isolamento, firewall, redes, portas privadas, PostgreSQL,
+  secrets e persistência na VPS. Backup, restore, monitoramento e smoke de
+  abertura ainda precisam ser configurados e verificados.
 - A configuração do proxy same-origin de produção e o estado de Vercel,
   domínio, DNS e deploy ainda precisam ser inventariados ou validados para esta
   baseline.
