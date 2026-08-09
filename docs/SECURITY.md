@@ -96,10 +96,13 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   `image-impact` usa apenas Git e Node.js; nenhum deles autentica ou publica.
 - A matriz sintética de produção do job `validate` contém somente configuração
   não secreta. Seus seis secrets sintéticos ficam em arquivos `0600` sob
-  `runner.temp`, são ligados por override Compose transitório, nunca são
+  `RUNNER_TEMP`, são ligados por override Compose transitório, nunca são
   impressos ou enviados como artifact e têm cleanup explícito com `always()`.
+  Os cinco paths são derivados em runtime por um step inicial e exportados via
+  `GITHUB_ENV`; expressões `${{ runner.* }}` em `jobs.*.env` são rejeitadas.
   O render falha fechado diante de role repetida, referência mutável, frontend
-  divergente, versão de keyring divergente, path ou permissão de secret incorretos.
+  divergente, versão de keyring divergente, path ou permissão de secret
+  incorretos. Remoção de arquivo ou diretório residual também falha fechado.
 - Todo `push` da `main` mantém a validação completa. `image-impact` compara
   `github.event.before` e `github.sha` como commits completos e emite somente o
   booleano canônico `should_publish`; SHA inválido, range irresolúvel, path
@@ -141,11 +144,12 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   squash aprovado. A correção de filtro não altera package, tags históricas,
   visibilidade, digests ou permissões do GHCR.
 - Testes de integração recusam banco cujo nome não termine em `_test`.
-- O contrato candidato da `0.8-MVP-05A` remove secrets do `environment` do
-  Compose. Arquivos individuais de host são montados seletivamente por
+- O contrato da `0.8-MVP-05A`, incorporado pelo PR #35 no squash
+  `5268706d22cb69df7d065928c16b4425a03b41cf`, remove secrets do `environment`
+  do Compose. Arquivos individuais de host são montados seletivamente por
   Compose secrets; os containers não-root da API e migration recebem apenas o
-  GID suplementar 70 modelado. O host, grupo e arquivos só serão criados em
-  tarefa operacional posterior.
+  GID suplementar 70 modelado. O host, grupo e arquivos reais não foram criados
+  e pertencem a uma tarefa operacional posterior.
 - Wrappers POSIX read-only usam paths constantes, falham diante de arquivo
   ausente ou vazio, removem somente um newline terminal, preservam caracteres
   especiais e terminam em `exec`. Eles não imprimem valores. O PostgreSQL usa
@@ -154,6 +158,15 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Bootstrap, migration e runtime recebem subconjuntos distintos. A API nunca
   recebe bootstrap/migration; migration nunca recebe bootstrap/runtime/JWT;
   PostgreSQL não recebe JWT, pepper ou keyring de Leads.
+- As correções integrantes preservam essa fronteira: `CORR-01` cobre a matriz
+  completa, arquivos sintéticos privados e cleanup fail-closed; `CORR-02`
+  inicializa paths somente de `RUNNER_TEMP`; `CORR-03` usa fixtures Git
+  herméticas, com manifesto próprio, para que testes de bundle não herdem
+  estado ignorado do checkout do desenvolvedor.
+- A CI pós-merge `31286630732` passou com `shouldPublish=false`; o publicador
+  ficou ignorado, nenhuma tag nova foi criada e o digest canônico da API
+  `sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
+  permaneceu inalterado.
 
 ## Integridade do repositório
 
@@ -252,7 +265,7 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - API e PostgreSQL são fixados por digest para `linux/amd64`; tags e fallback
   mutável são rejeitados pelo validator e pelo bundle.
 - Bundle `candidate` é explicitamente não operacional e preso à identidade da
-  candidata local. Somente `committed-release`, reconstruído e verificado
+  candidata pré-merge. Somente `committed-release`, reconstruído e verificado
   contra paths, blobs e modes de um commit real, pode seguir para uma VPS.
 - Os scripts do bundle permanecem `0644`: API/migration são interpretados por
   `/bin/sh`, e o init não executável é lido com `source` pelo entrypoint oficial
@@ -266,6 +279,14 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - A imagem final de produção não contém npm, npx, Yarn, Corepack ou seus módulos
   globais. O Node é copiado isoladamente para Alpine 3.24, e o contrato de CI
   inspeciona o filesystem real antes do scan e de qualquer publicação.
+
+Após o merge, o builder e o validator do bundle aprovaram um
+`committed-release` operacional com `sourceCommit` igual ao squash
+`5268706d22cb69df7d065928c16b4425a03b41cf`, exatamente seis arquivos e modes
+`0644`. Essa validação não transferiu o bundle nem criou secrets, volume,
+PostgreSQL, migrations ou serviços na VPS. A instalação e a comprovação dos
+controles do host continuam condicionadas à `0.8-MVP-05B` e a autorização
+operacional própria.
 
 A VPS Hostinger KVM 2 já foi contratada e é o destino previsto para uma réplica
 da API. Seu inventário, configuração e adequação à topologia do MVP ainda

@@ -52,14 +52,26 @@ são **PENDING HUMAN DECISION**. Detalhes operacionais estão em
 [PRODUCTION.md](PRODUCTION.md) e no
 [ADR-013](decisions/ADR-013-mvp-production-baseline.md).
 
-A candidata `0.8-MVP-05A`, detalhada no
-[ADR-014](decisions/ADR-014-versioned-production-contract.md), formaliza três
+O contrato `0.8-MVP-05A`, detalhado no
+[ADR-014](decisions/ADR-014-versioned-production-contract.md), está incorporado
+à `main` pelo PR #35, squash
+`5268706d22cb69df7d065928c16b4425a03b41cf`, e formaliza três
 identidades PostgreSQL: bootstrap/admin, migration owner do database/schema e
 runtime sem ownership. API/migration usam wrappers POSIX para secrets
 file-backed seletivos; imagens são fixadas por digest em `linux/amd64`; o
 projeto é `genesis` e a persistência é o volume externo
 `genesis-postgres-data`. A origem `https://genesis.invalid` permanece
 fail-closed até a `0.8-MVP-08`.
+
+As correções integrantes da entrega fecharam três fronteiras do contrato: a
+`CORR-01` completou a matriz sintética da CI com secrets temporários e cleanup
+fail-closed; a `CORR-02` derivou os paths somente em runtime a partir de
+`RUNNER_TEMP`; e a `CORR-03` tornou os testes de bundle herméticos em fixtures
+Git independentes. A CI pós-merge `31286630732` foi aprovada. O delta não
+impacta a imagem: `shouldPublish=false`, o publicador foi ignorado, nenhuma tag
+nova foi criada e o digest da API
+`sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
+foi preservado.
 
 ## Runtime health
 
@@ -251,9 +263,13 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
   na `main` pelo squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`.
 - **Incorporado:** container/Compose de produção (`0.8-MVP-03`) e CI/GHCR
   condicionada ao impacto da imagem (`0.8-MVP-04` e correções).
-- **Candidata local atual:** contrato versionado PostgreSQL/secrets/bundle da
-  `0.8-MVP-05A`; o bundle local é `candidate` não operacional e nenhuma
-  instalação ou implantação foi realizada.
+- **Incorporado em `0.8-MVP-05A`:** contrato versionado de
+  PostgreSQL/secrets/bundle pelo PR #35, squash
+  `5268706d22cb69df7d065928c16b4425a03b41cf`. Um bundle pós-merge em modo
+  `committed-release` foi gerado e validado contra esse snapshot: operacional,
+  com `sourceCommit` igual ao squash, seis arquivos e modes `0644`, resultado
+  PASS. Bundles `candidate` pré-merge permaneceram somente evidência local não
+  operacional. Nenhum bundle foi transferido à VPS.
 - **Planejado:** `0.8-MVP-05B`, Traefik/HTTPS, backup/restore, observabilidade,
   Vercel/proxy e abertura controlada.
 - **Fora do estado atual:** integrações externas, deploy e microservices.
@@ -261,6 +277,12 @@ O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, n�
   repositórios separados. Vercel e Hostinger KVM 2 são os destinos previstos
   do frontend e backend; a decisão ainda não foi publicada. Lovable permanece
   apenas ferramenta opcional de exploração e referência visual.
+
+A incorporação do contrato não executou a stack: instalação na VPS, secrets
+reais, grupo/layout do host, volume externo, PostgreSQL, roles, migrations,
+API, serviços, portas, persistência, backup, restore, health e prontidão
+operacional continuam não executados e dependem da tarefa `0.8-MVP-05B` e de
+autorização própria.
 
 ## Entrega e aceitação de convites
 

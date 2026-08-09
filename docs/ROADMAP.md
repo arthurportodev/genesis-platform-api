@@ -78,21 +78,32 @@ experimento é promovido automaticamente para o MVP.
     validação e pulou intencionalmente a publicação;
   - nenhuma alteração no package histórico.
 
-### Tarefa atual
+### Contrato de produção concluído e incorporado
 
-- 🚧 `0.8-MVP-05A` — contrato versionado de PostgreSQL, secrets e bundle de
+- ✅ `0.8-MVP-05A` — contrato versionado de PostgreSQL, secrets e bundle de
   produção.
-  - candidata local separa bootstrap, migration owner e runtime;
-  - usa secrets file-backed, digests imutáveis, volume externo e bundle mínimo;
-  - não instala, transfere ou implanta qualquer artefato; Gate 2 pendente.
-  - `0.8-MVP-05A-CORR-01` corrige localmente a matriz sintética da CI no PR #35;
-    a Gate 2 renovada permanece pendente e nenhuma mutação remota foi autorizada.
+  - incorporada pelo PR #35 no squash
+    `5268706d22cb69df7d065928c16b4425a03b41cf`;
+  - CI pós-merge `31286630732` aprovada;
+  - separa bootstrap, migration owner e runtime, usa secrets file-backed,
+    digests imutáveis, volume externo e bundle mínimo;
+  - `CORR-01`, `CORR-02` e `CORR-03` concluíram respectivamente a matriz e o
+    cleanup sintéticos, a inicialização de paths via `RUNNER_TEMP` e as fixtures
+    Git herméticas dos testes candidate-mode;
+  - o delta não impactou a imagem: `shouldPublish=false`, publicador ignorado,
+    nenhuma tag nova e digest canônico da API preservado;
+  - bundle pós-merge `committed-release` operacional, ligado ao squash, com seis
+    arquivos `0644` e validação PASS; nenhum bundle foi transferido à VPS.
 
 ### Próximos deltas planejados
 
 - ⬜ `0.8-MVP-05B` — instalação controlada de Docker, layout, secrets, volume,
-  PostgreSQL, migrations e API na VPS; condicionada à incorporação da 05A e a
-  autorização operacional própria.
+  PostgreSQL, migrations e API na VPS. Permanece futura e exige tarefa e
+  autorização operacional próprias, revalidação do inventário, bundle
+  `committed-release` aprovado, preparação segura do host/secrets/volume,
+  migrations controladas, validação de persistência/readiness e preservação de
+  portas privadas. Nenhuma dessas precondições é declarada satisfeita por este
+  roadmap.
 - ⬜ `0.8-MVP-06` — Traefik, HTTPS e exposição controlada da API.
 - ⬜ `0.8-MVP-07` — Backup, restore, logs, monitoramento e rollback.
 - ⬜ `0.8-MVP-08` — Vercel, proxy, domínio e integração frontend/backend.

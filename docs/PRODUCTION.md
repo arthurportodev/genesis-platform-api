@@ -7,8 +7,10 @@ produto existente para testes reais com segurança proporcional ao MVP, sem
 antecipar uma infraestrutura definitiva.
 
 O contrato versionado de PostgreSQL, secrets e bundle está no
-[ADR-014](decisions/ADR-014-versioned-production-contract.md). Ele é uma
-candidata local da `0.8-MVP-05A`; ainda não foi entregue nem implantado.
+[ADR-014](decisions/ADR-014-versioned-production-contract.md). A
+`0.8-MVP-05A` foi incorporada pelo PR #35 no squash
+`5268706d22cb69df7d065928c16b4425a03b41cf`. O contrato está versionado na
+`main`, mas ainda não foi implantado.
 
 ## Objetivo
 
@@ -40,11 +42,16 @@ stack foi validada em Docker Desktop com dados sintéticos; nada foi implantado
 na VPS ou autorizado para dados reais. `compose.yml` e
 `compose.test.yml` permanecem superfícies separadas de desenvolvimento e teste.
 
-A candidata `0.8-MVP-05A` preserva a imagem já publicada da API e altera apenas
+A `0.8-MVP-05A` preservou a imagem já publicada da API e alterou apenas
 artefatos não image-affecting. Ela versiona o contrato necessário antes da
 instalação: três roles PostgreSQL, secrets file-backed, imagens por digest,
-identidade estável do projeto/volume e bundle mínimo. Nada foi transferido à
-VPS e nenhum volume, secret ou serviço persistente foi criado.
+identidade estável do projeto/volume e bundle mínimo. O PR #35 foi incorporado
+em `2026-08-09T00:39:02Z` (`2026-08-08T21:39:02-03:00`), e a CI pós-merge
+`31286630732` foi aprovada. O detector retornou `shouldPublish=false`, o job
+`publish-image` permaneceu `skipped`, nenhuma tag nova foi criada e o digest da API
+`sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
+foi preservado. Nada foi transferido à VPS e nenhum volume, secret ou serviço
+persistente foi criado.
 
 ## Arquitetura
 
@@ -77,7 +84,7 @@ validação operacional.
 | VPS Hostinger | hospedar a stack mínima do MVP                       | contratada; inventário e configuração pendentes        |
 | Vercel        | frontend e proxy same-origin de `/api/v1`            | estado de produção ainda não comprovado                |
 | Traefik       | HTTPS e único ingresso público da origem             | configuração para o MVP ainda não comprovada           |
-| API NestJS    | contratos de sessão, tenant, CRM e runtime health    | código local; stack de produção ainda não validada     |
+| API NestJS    | contratos de sessão, tenant, CRM e runtime health    | contrato versionado; serviço ainda não implantado      |
 | PostgreSQL 17 | persistência privada, roles e migrations             | estado para a aplicação ainda não comprovado           |
 | Backup        | cópia recuperável separada da persistência principal | provedor pendente; configuração ainda não comprovada   |
 | Monitoramento | uptime, recursos, logs, health e backup              | ferramenta pendente; configuração ainda não comprovada |
@@ -176,13 +183,15 @@ do Compose com valores sintéticos. Em Pull Requests e execuções manuais,
 `build-and-scan` produz uma única imagem local do target `production` para
 `linux/amd64` e a submete ao Trivy antes de terminar, sem login ou publicação.
 
-A correção `0.8-MVP-05A-CORR-01` mantém esse desenho e alinha a validação
-sintética ao contrato versionado: matriz não secreta completa, três roles
-PostgreSQL distintas, referências imutáveis, frontend canônico e versão do
-keyring de Leads. Os seis valores sintéticos ficam somente em arquivos `0600`
-sob `runner.temp`; um override transitório é usado apenas para renderizar o
-Compose, não é enviado como artifact e é removido imediatamente após a
-validação canônica, inclusive quando um passo anterior falha.
+As três correções da `0.8-MVP-05A` integram o contrato incorporado. A
+`CORR-01` alinhou a validação sintética à matriz não secreta completa, com três
+roles PostgreSQL distintas, referências imutáveis, frontend canônico, versão
+do keyring de Leads, seis arquivos temporários `0600` e cleanup exato e
+fail-closed. A `CORR-02` removeu o contexto indisponível `runner.temp` do nível
+do job e passou a derivar os cinco paths em um step inicial, somente em runtime
+a partir de `RUNNER_TEMP`, via `GITHUB_ENV`. A `CORR-03` tornou todos os testes
+candidate-mode herméticos: cada caso cria e remove sua própria fixture Git,
+manifesto e identidade, sem depender de estado local ignorado.
 
 Todo `push` da `main` continua executando `validate`. O job não privilegiado
 `image-impact`, também limitado a esse evento e com somente `contents: read`,
@@ -316,8 +325,48 @@ faz `source` de todo `.sh` não executável encontrado em
 `/docker-entrypoint-initdb.d`. Mode `0755` ou qualquer outro mode diverge do
 contrato e bloqueia `committed-release`.
 
-Nenhum bundle desta tarefa é transferido à VPS. Uma entrega futura deve gerar
-o modo `committed-release` automaticamente depois do commit aprovado.
+Nenhum bundle pré-merge foi transferido à VPS. A prova pós-merge deve gerar o
+modo `committed-release` automaticamente a partir do commit aprovado; qualquer
+transferência futura exige nova tarefa e autorização operacional.
+
+Depois do merge, essa prova foi executada contra o squash
+`5268706d22cb69df7d065928c16b4425a03b41cf`: o bundle
+`committed-release` declarou esse `sourceCommit`, conteve exatamente os seis
+arquivos permitidos, todos em mode `0644`, e passou no builder e no validator
+operacional. O bundle pós-merge foi somente validado como artefato local e não
+foi transferido. Os bundles pré-merge em modo `candidate` continuam evidência
+não operacional e nunca foram promovidos ou enviados à VPS.
+
+## Precondições da 0.8-MVP-05B
+
+A `0.8-MVP-05B` permanece futura. A incorporação da 05A não inicia essa tarefa
+nem satisfaz suas precondições operacionais. Antes de qualquer escrita na VPS,
+ela exige, em tarefa própria e com autorização humana explícita:
+
+1. revalidar identidade, inventário, capacidade, baseline de segurança e
+   mecanismos anti-lockout da VPS;
+2. aprovar o commit e o bundle `committed-release` exatos e validar novamente
+   os seis arquivos, hashes, modes, digests e `linux/amd64`;
+3. planejar e autorizar instalação/configuração do Docker e Compose sem alterar
+   portas ou serviços fora do escopo;
+4. criar de forma controlada o layout root-only, o grupo de secrets com GID 70
+   e os arquivos reais `root:genesis-container-secrets` `0440`, sem imprimir,
+   transferir por logs ou versionar valores;
+5. criar explicitamente o volume externo `genesis-postgres-data` e comprovar
+   que ele não é removido por `down -v`;
+6. inicializar PostgreSQL com nomes distintos e atributos aprovados para
+   bootstrap, migration owner e runtime, revogando `PUBLIC` e memberships;
+7. executar migrations controladas e idempotentes com a credencial própria,
+   provar ACL negativa da role runtime e bloquear a API diante de falha;
+8. iniciar a API sem portas públicas, validar filesystem/hardening, ausência de
+   secrets em metadata/logs, health, readiness, shutdown e persistência após
+   restart;
+9. comprovar backup/restore, observabilidade e rollback exigidos antes de dados
+   reais, além de obter aprovação humana específica para qualquer abertura.
+
+Docker, layout, grupo, secrets reais, volume, PostgreSQL, roles, migrations,
+API, serviços, portas, dados, persistência e prontidão não foram executados nem
+comprovados pela 05A.
 
 ## Backup e restore
 

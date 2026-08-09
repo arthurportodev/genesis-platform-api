@@ -1,25 +1,26 @@
 # Estado atual
 
-- **Última atualização:** 2026-08-08
+- **Última atualização:** 2026-08-09
 - **Fase concluída:** 0.7 — Frontend operacional
 - **Fase atual:** 0.8-MVP — Primeira produção mínima viável
 - **Última tarefa funcional concluída:** 0.7.6 — Criação Manual de Leads
   (repositório `arthurportodev/genesis-platform-web`, PR #7, squash
   `4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`)
-- **Último delta incorporado:** `0.8-MVP-04-CORR-02 — publicação GHCR
-condicionada ao impacto real`, pelo PR #34, com `main` em
-  `876aa4ae5a7f88bfbfd65ff4e40e3dab33c4079b`
+- **Último delta incorporado:** `0.8-MVP-05A` — contrato versionado de
+  PostgreSQL, secrets e bundle de produção, incluindo `CORR-01`, `CORR-02` e
+  `CORR-03`, pelo PR #35, squash
+  `5268706d22cb69df7d065928c16b4425a03b41cf`
 - **Última tarefa de governança concluída:** 0.8.1.1 — Evolução do Sistema
   Operacional de Desenvolvimento, incorporada no backend pelo PR #26, squash
   `27d85416507ae4d8391d74b4181f8400c6d61301`, e no frontend pelo PR #9,
   squash `890a49fb62fd194f8c2adf04fbfeb0cdd84e32bf`.
-- **Tarefa atual:** `0.8-MVP-05A-CORR-01 — alinhamento da matriz sintética da
-CI`; correção local sobre o head `d04d1600584bf7764b5ea204c459f5d529388c32`
-  do PR #35, sem deploy e com Gate 2 renovada pendente
+- **Próxima tarefa planejada:** `0.8-MVP-05B` — instalação controlada da stack
+  na VPS; não iniciada e sem autorização operacional nesta documentação
 - **Produção:** infraestrutura ainda não publicada; nenhum dado real autorizado
-- **CI pós-merge da `main`:** execução `31249557339` aprovada integralmente no
-  squash `c6fbc0b865540abd9d13f93c7cc7542eb0936355`, incluindo validate, runtime,
-  scan local, push, identidade remota, package público, rescan e artifact
+- **CI pós-merge da `main`:** execução `31286630732` aprovada integralmente no
+  squash `5268706d22cb69df7d065928c16b4425a03b41cf`; o detector retornou
+  `shouldPublish=false`, o job `publish-image` permaneceu `skipped` e nenhuma
+  imagem foi criada ou publicada
 - **Experimento legado:** PR #28 superseded pelo PR #29 e fechado sem merge;
   branch histórica preservada, sem promoção para o MVP
 - **Proteção da `main`:** Pull Request e check
@@ -46,14 +47,19 @@ CI`; correção local sobre o head `d04d1600584bf7764b5ea204c459f5d529388c32`
   com PostgreSQL 17 privado, migration one-shot, roles separadas, health,
   persistência, hardening, limites e rotação de logs, incorporados pelo PR
   #31; sem deploy.
-- Candidata local da `0.8-MVP-05A` separa bootstrap/migration/runtime, remove
+- A `0.8-MVP-05A` incorporada separa bootstrap/migration/runtime, remove
   secrets do environment, fixa API/PostgreSQL por digest, protege o volume
   externo, adiciona shutdown de 90 segundos ao banco e gera bundle mínimo
-  determinístico. Esse item ainda não está incorporado nem implantado.
-- A correção `0.8-MVP-05A-CORR-01` fecha o drift determinístico da CI que omitia
-  `DATABASE_BOOTSTRAP_USER`: a matriz sintética agora cobre todos os inputs não
-  secretos, usa roles distintas e arquivos de secrets temporários, privados e
-  descartáveis. O resultado ainda é somente candidato local, sem mutação remota.
+  determinístico. `CORR-01` completou a matriz sintética com roles distintas,
+  arquivos temporários `0600` e cleanup fail-closed; `CORR-02` moveu a derivação
+  dos cinco paths para um step inicial baseado em `RUNNER_TEMP`; `CORR-03`
+  isolou os testes candidate-mode em fixtures Git herméticas.
+- O PR #35 foi incorporado em `2026-08-09T00:39:02Z`
+  (`2026-08-08T21:39:02-03:00`). O contrato operacional V2 está na `main`. A
+  validação pós-merge gerou um bundle `committed-release` operacional, ligado
+  ao squash por `sourceCommit`, com seis arquivos em mode `0644`, e terminou
+  em PASS. Bundles `candidate` anteriores continuam apenas evidência
+  pré-merge, não operacional, e nada foi transferido à VPS.
 - Package público `ghcr.io/arthurportodev/genesis-platform-api` vinculado ao
   repositório, com versões sob tags SHA completas. A versão histórica possui
   manifest digest
@@ -64,7 +70,10 @@ CI`; correção local sobre o head `d04d1600584bf7764b5ea204c459f5d529388c32`
   `sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
   e config
   `sha256:696d37b59113ad6bc45247c1b9381b2238a322eb365f82ad6c2c9135456765d9`.
-  Nenhuma tag `latest` ou `main` e nenhum deploy.
+  Nenhuma tag `latest` ou `main` e nenhum deploy. O merge da 05A preservou o
+  manifest digest canônico
+  `sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
+  sem criar nova tag.
 - Fundação 0.3.1 incorporada com `Lead`, `LeadEntry`, timeline, intake manual e `genesis_form` fail-closed, deduplicação E.164, idempotência durável, inbox tenant-scoped, edição básica e assignment.
 - Pipeline 0.3.2 incorporado com ciclos comerciais imutáveis, fechamento ganho/perdido/arquivado, reativação, revisão agregada de retornos e comandos idempotentes.
 - Atividades e Follow-up 0.3.3 incorporados com Activity e Note append-only, Next Action única, timezone IANA da Organization e timeline operacional paginada.
@@ -271,6 +280,10 @@ Consulte os [ADRs](decisions/README.md).
   `0.8-MVP-05B`.
 - Preview permanece sem API e nunca aponta para produção; staging não será
   criado inicialmente.
+- A 05A versiona o contrato, mas não instala Docker na VPS, não cria
+  grupo/layout/secrets reais, volume, banco, roles ou serviços, não executa
+  migrations e não abre portas. Persistência, readiness, backup/restore e
+  adequação operacional permanecem sem comprovação.
 
 ## Decisões abertas e riscos
 
