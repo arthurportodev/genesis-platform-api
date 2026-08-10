@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.agenciagenesis.invalid/genesis-harness/project-state.v1.schema.json",
+  "title": "Genesis Platform canonical project state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "instanceKind",
+    "stateRevision",
+    "project",
+    "updatedAt",
+    "authority",
+    "repositories",
+    "phase",
+    "currentWork",
+    "nextTask",
+    "operationalState",
+    "evidence",
+    "blockers",
+    "pendingHumanDecisions",
+    "supersededPlans",
+    "permanentInvariants",
+    "releaseGates",
+    "currentRestrictions",
+    "pointerMetadata"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "instanceKind": { "enum": ["current", "example", "historical-fixture"] },
+    "stateRevision": { "$ref": "#/$defs/identifier" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "const": "genesis-platform" },
+        "name": { "const": "Genesis Platform" }
+      }
+    },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "branch", "path", "revisionSource"],
+      "properties": {
+        "repository": { "const": "arthurportodev/genesis-platform-api" },
+        "branch": { "const": "main" },
+        "path": { "const": "docs/memory/project-state.v1.json" },
+        "revisionSource": { "const": "containing-commit" }
+      }
+    },
+    "repositories": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/$defs/repositoryState" }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "lastCompleted"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "title": { "$ref": "#/$defs/text" },
+        "lastCompleted": { "$ref": "#/$defs/taskRecord" }
+      }
+    },
+    "currentWork": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "summary"],
+      "properties": {
+        "status": { "enum": ["none", "planned", "in-progress", "blocked"] },
+        "summary": { "$ref": "#/$defs/text" },
+        "task": { "$ref": "#/$defs/taskIdentity" }
+      }
+    },
+    "nextTask": { "$ref": "#/$defs/taskIdentity" },
+    "operationalState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "basis", "documentedAt", "facts"],
+      "properties": {
+        "summary": { "$ref": "#/$defs/text" },
+        "basis": { "$ref": "#/$defs/basis" },
+        "documentedAt": { "type": "string", "format": "date-time" },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "facts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/operationalFact" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "blockers": { "type": "array", "items": { "$ref": "#/$defs/blocker" } },
+    "pendingHumanDecisions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/humanDecision" }
+    },
+    "supersededPlans": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/supersededPlan" }
+    },
+    "permanentInvariants": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/control" }
+    },
+    "releaseGates": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/releaseGate" }
+    },
+    "currentRestrictions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/currentRestriction" }
+    },
+    "pointerMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "path",
+        "schemaVersion",
+        "mode",
+        "transitionId",
+        "targetStateRevision"
+      ],
+      "properties": {
+        "repository": { "const": "arthurportodev/genesis-platform-web" },
+        "path": { "const": "docs/memory/project-state.pointer.v1.json" },
+        "schemaVersion": { "const": "1.0.0" },
+        "mode": { "const": "pointer-only" },
+        "transitionId": { "$ref": "#/$defs/identifier" },
+        "targetStateRevision": { "$ref": "#/$defs/identifier" }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,79}$"
+    },
+    "text": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "gitSha": { "type": "string", "pattern": "^(?!0{40}$)[a-f0-9]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "basis": { "enum": ["documented", "observed", "unknown"] },
+    "idList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/identifier" },
+      "uniqueItems": true
+    },
+    "taskIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "title": { "$ref": "#/$defs/text" }
+      }
+    },
+    "taskRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "completedAt", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "title": { "$ref": "#/$defs/text" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "memoryRevision": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "containing-commit" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "sha"],
+          "properties": {
+            "kind": { "const": "commit" },
+            "sha": { "$ref": "#/$defs/gitSha" }
+          }
+        }
+      ]
+    },
+    "repositoryState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "repository", "role", "status", "memoryRevision"],
+      "properties": {
+        "id": { "enum": ["api", "web"] },
+        "repository": {
+          "enum": [
+            "arthurportodev/genesis-platform-api",
+            "arthurportodev/genesis-platform-web"
+          ]
+        },
+        "role": { "enum": ["authority", "satellite"] },
+        "status": { "enum": ["integrated", "transition-pending", "unknown"] },
+        "memoryRevision": { "$ref": "#/$defs/memoryRevision" }
+      }
+    },
+    "operationalFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "statement",
+        "basis",
+        "documentedAt",
+        "evidenceIds"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "status": {
+          "enum": ["present", "absent", "partial", "unknown", "not-authorized"]
+        },
+        "statement": { "$ref": "#/$defs/text" },
+        "basis": { "$ref": "#/$defs/basis" },
+        "documentedAt": { "type": "string", "format": "date-time" },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "uri", "capturedAt"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "kind": {
+          "enum": [
+            "repository-file",
+            "github-pr",
+            "github-run",
+            "artifact",
+            "external-observation"
+          ]
+        },
+        "uri": { "type": "string", "format": "uri" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "capturedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "summary", "owner", "blocksTaskIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "status": { "enum": ["open", "resolved"] },
+        "summary": { "$ref": "#/$defs/text" },
+        "owner": { "enum": ["arthur", "agent", "external"] },
+        "blocksTaskIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "humanDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "question", "whyMaterial", "blockingTaskIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "question": { "$ref": "#/$defs/text" },
+        "whyMaterial": { "$ref": "#/$defs/text" },
+        "blockingTaskIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "supersededPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "supersededAt",
+        "replacedBy",
+        "sourceEvidenceIds"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "title": { "$ref": "#/$defs/text" },
+        "supersededAt": { "type": "string", "format": "date-time" },
+        "replacedBy": { "$ref": "#/$defs/identifier" },
+        "sourceEvidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "sourceEvidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "statement": { "$ref": "#/$defs/text" },
+        "sourceEvidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "releaseGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "status", "sourceEvidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "statement": { "$ref": "#/$defs/text" },
+        "status": { "enum": ["pending", "passed", "failed", "not-applicable"] },
+        "sourceEvidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "currentRestriction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "reviewTrigger", "sourceEvidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "statement": { "$ref": "#/$defs/text" },
+        "reviewTrigger": { "$ref": "#/$defs/text" },
+        "sourceEvidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    }
+  }
+}

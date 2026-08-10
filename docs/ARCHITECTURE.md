@@ -1,6 +1,14 @@
 # Arquitetura
 
-## Estado atual
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
+Este documento preserva arquitetura e fronteiras duráveis. Progresso, estado
+operacional e próximo trabalho pertencem somente a
+`docs/memory/project-state.v1.json`.
+
+<!-- genesis-memory-history:start -->
+
+## Snapshot histórico da arquitetura incorporada
 
 A API é um monólito modular NestJS executado em Node.js 24. PostgreSQL 17 é o banco relacional, TypeORM faz o mapeamento e migrations versionadas controlam o schema. Docker empacota a aplicação e o GitHub Actions valida cada Pull Request/push da `main`.
 
@@ -25,16 +33,17 @@ Dockerfile `production` e `compose.production.yml` são contratos separados de
 produção; a `0.8-MVP-05B` os implantou somente como baseline privada, sem
 exposição pública.
 
+<!-- genesis-memory-history:end -->
+
 ## Arquitetura de produção do MVP
 
-A topologia pública aceita em 3 de agosto de 2026 e incorporada à `main` em 4
-de agosto de 2026 continua planejada e ainda não foi publicada:
+A topologia pública aprovada é:
 
 ```text
 Navegador
-→ frontend na Vercel em app.<domínio>
+→ frontend na Vercel em app.agenciagenesismkt.com.br
 → proxy same-origin de /api/v1
-→ origem HTTPS protegida em origin-api.<domínio>
+→ API oficial em api.agenciagenesismkt.com.br
 → Traefik
 → uma instância da API NestJS
 → PostgreSQL 17 em rede privada
@@ -47,9 +56,12 @@ role de migrations, e secrets ficam fora do Git, frontend, imagem e logs. A
 primeira topologia mantém uma réplica enquanto rate limits e semáforos forem
 process-local.
 
-O navegador continua usando exclusivamente o proxy same-origin `/api/v1`; não
-há migração silenciosa para chamadas cross-origin diretas. Os domínios finais
-são **PENDING HUMAN DECISION**. Detalhes operacionais estão em
+O navegador usa exclusivamente o proxy same-origin `/api/v1`; não há migração
+silenciosa para chamadas cross-origin diretas. O ambiente inicial aprovado é
+somente produção, sem staging. Google Drive é o destino externo de backup e
+UptimeRobot sobre `/health` é o monitoramento externo aprovado. Esses elementos
+são arquitetura, não prova de implementação ou observação live. Detalhes
+operacionais estão em
 [PRODUCTION.md](PRODUCTION.md) e no
 [ADR-013](decisions/ADR-013-mvp-production-baseline.md).
 
@@ -61,8 +73,9 @@ identidades PostgreSQL: bootstrap/admin, migration owner do database/schema e
 runtime sem ownership. API/migration usam wrappers POSIX para secrets
 file-backed seletivos; imagens são fixadas por digest em `linux/amd64`; o
 projeto é `genesis` e a persistência é o volume externo
-`genesis-postgres-data`. A origem `https://genesis.invalid` permanece
-fail-closed até a `0.8-MVP-08`.
+`genesis-postgres-data`. A origem `https://genesis.invalid` é o default
+fail-closed do contrato até substituição por configuração de produção
+explicitamente validada.
 
 As correções integrantes da entrega fecharam três fronteiras do contrato: a
 `CORR-01` completou a matriz sintética da CI com secrets temporários e cleanup
@@ -243,7 +256,9 @@ Metadata no handler substitui metadata do controller. Ausência, lista vazia, va
 
 O `RoleGuard` depende somente de `Reflector`, lê a request sem modificá-la, não consulta repository, não adiciona query, não aceita papel do cliente e não implementa hierarquia, permissions ou autorização por recurso. Invitations e memberships usam essa infraestrutura em endpoints tenant-scoped de produção; uma matriz geral de capacidades continua fora do escopo. Consulte o [ADR-005](decisions/ADR-005-role-based-authorization.md).
 
-## Fronteiras
+<!-- genesis-memory-history:start -->
+
+## Snapshot histórico das fronteiras incorporadas
 
 - **Implementado na 0.7.0 e incorporado pelo PR #22, squash
   `9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`:** contrato web de sessão, CSRF,
@@ -291,6 +306,8 @@ PostgreSQL, roles, migrations e API. Ela não alterou a topologia aprovada nem
 abriu a origem. Traefik/HTTPS, backup/restore, observabilidade, Vercel/proxy,
 smoke cross-tenant e autorização para dados reais continuam não executados e
 dependem de tarefas e Gates próprios.
+
+<!-- genesis-memory-history:end -->
 
 ## Entrega e aceitação de convites
 

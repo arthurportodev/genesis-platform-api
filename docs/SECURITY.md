@@ -1,5 +1,11 @@
 # Segurança
 
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
+Este documento contém invariantes e controles de segurança duráveis. Status de
+release, restrições atuais e observações operacionais são resolvidos em
+`docs/memory/project-state.v1.json`.
+
 ## Credenciais e senhas
 
 - Senhas usam Argon2id com `memoryCost: 65536`, `timeCost: 3` e `parallelism: 1`.
@@ -128,7 +134,13 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   digest, o manifesto OCI bruto obtido por `--raw` fornece `config.digest` e
   `.Image` fornece plataforma e labels. A imagem remota por digest é reescaneada
   depois da verificação de identidade e do package e antes do artifact.
-- O package GHCR público foi aprovado explicitamente. A CI falha fechado se ele
+
+<!-- genesis-memory-history:start -->
+
+### Snapshot histórico do package GHCR público
+
+- No ciclo histórico da `0.8-MVP-04`, o package GHCR público foi aprovado
+  explicitamente. A CI falha fechado se ele
   estiver ausente, não estiver vinculado a `arthurportodev/genesis-platform-api`,
   não for `public`, se a versão selecionada não possuir somente a tag SHA esperada
   ou se existir tag mutável `latest`/`main`. A consulta usa a API oficial com o
@@ -143,6 +155,12 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   pós-merge preservou o package público e publicou apenas a tag imutável do
   squash aprovado. A correção de filtro não altera package, tags históricas,
   visibilidade, digests ou permissões do GHCR.
+
+<!-- genesis-memory-history:end -->
+
+- O destino arquitetural aprovado para o MVP é GHCR privado. A implementação
+  dessa transição e a visibilidade live não são inferidas do histórico nem
+  alteradas por esta correção.
 - Testes de integração recusam banco cujo nome não termine em `_test`.
 - O contrato da `0.8-MVP-05A`, incorporado pelo PR #35 no squash
   `5268706d22cb69df7d065928c16b4425a03b41cf`, remove secrets do `environment`
@@ -295,9 +313,18 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   rollback são requisitos para dados reais.
 - Vulnerabilidade Critical aplicável bloqueia a abertura até correção ou
   decisão humana explícita.
+- O destino aprovado usa Hostinger KVM 2, frontend Vercel em
+  `app.agenciagenesismkt.com.br`, API em `api.agenciagenesismkt.com.br`,
+  Traefik, NestJS em container, PostgreSQL privado, GHCR privado, deploy inicial
+  manual, backup externo no Google Drive, UptimeRobot sobre `/health` e somente
+  produção inicialmente. Essa decisão não comprova ativação live.
 - A imagem final de produção não contém npm, npx, Yarn, Corepack ou seus módulos
   globais. O Node é copiado isoladamente para Alpine 3.24, e o contrato de CI
   inspeciona o filesystem real antes do scan e de qualquer publicação.
+
+<!-- genesis-memory-history:start -->
+
+### Snapshot histórico da baseline privada
 
 Após o merge da 05A, o builder e o validator do bundle aprovaram um
 `committed-release` operacional. A `0.8-MVP-05B` reconstruiu e verificou o
@@ -311,9 +338,11 @@ zero limitations.
 A VPS Hostinger KVM 2 hospeda uma réplica privada da API e o PostgreSQL. Seu
 inventário, hardening, configuração e adequação ao escopo da 05B foram
 comprovados; somente TCP/22 permanece acessível externamente. O frontend na
-Vercel preserva o proxy same-origin
-`/api/v1`; Preview não recebe a origem de produção. Domínios finais, provedor
-de backup e ferramenta de monitoramento são **PENDING HUMAN DECISION**.
+Vercel preserva o proxy same-origin `/api/v1`; Preview não recebe a origem de
+produção. Naquele snapshot, domínios, provedor de backup e ferramenta de
+monitoramento ainda não tinham decisão registrada.
+
+<!-- genesis-memory-history:end -->
 
 ## Controles avançados adiados
 
@@ -328,17 +357,13 @@ chain e deploy totalmente automatizado.
 Esses controles não são declarados implementados. Eles pertencem ao backlog de
 maturidade e podem ser promovidos conforme adoção, dados, compliance e risco.
 
-## Limitações e decisões abertas
+## Limitações duráveis
 
-- O frontend oficial concluiu sessão, access em memória, HTTP, Organization
-  ativa, guards, coordenação entre abas e CRM; a origem de produção ainda não
-  foi publicada.
-- A 05B comprovou isolamento, firewall, redes, portas privadas, PostgreSQL,
-  secrets e persistência na VPS. Backup, restore, monitoramento e smoke de
-  abertura ainda precisam ser configurados e verificados.
-- A configuração do proxy same-origin de produção e o estado de Vercel,
-  domínio, DNS e deploy ainda precisam ser inventariados ou validados para esta
-  baseline.
+- Implementação e observação de Vercel, DNS, Traefik, backup e monitoramento
+  devem ser comprovadas separadamente da decisão arquitetural; o estado
+  temporal pertence a `docs/memory/project-state.v1.json`.
+- Dados reais exigem backup/restore, monitoramento, smoke cross-tenant e
+  autorização humana conforme os release gates da autoridade temporal.
 - Não há grace period backend: duas abas que reapresentem o mesmo refresh podem
   acionar reuse detection e revogar a família, conforme a política existente.
 - Rate limits e semáforos process-local exigem uma única réplica pública.

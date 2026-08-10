@@ -1,4 +1,11 @@
-# Roadmap
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-history:v1 -->
+
+# Roadmap — snapshot histórico/superseded
+
+Este arquivo preserva a evolução planejada e concluída até a implantação da
+memória canônica. Ele não define fase ou próxima tarefa atuais. Resolva esses
+fatos somente em `docs/memory/project-state.v1.json`.
 
 Estados: ✅ Concluído · 🚧 Em andamento · ⬜ Planejado · ⏸ Adiado · ↪ Superseded
 

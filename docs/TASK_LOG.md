@@ -1,4 +1,9 @@
+<!-- genesis-memory-history:v1 -->
+
 # Histórico de tarefas
+
+Este registro é histórico e append-only. Nenhum “atual” ou “próximo” registrado
+em uma entrada antiga substitui `docs/memory/project-state.v1.json`.
 
 ## 0.1.1 — Fundação do backend
 
@@ -681,3 +686,16 @@ Este registro encerra documentalmente a 05B quando incorporado, mas não declara
 a VPS pronta para produção. PostgreSQL e API continuam operacionais somente nas
 redes internas Docker; nenhuma etapa futura de exposição ou deploy público é
 autorizada por este closeout.
+
+## GH-01 / P-01 — Memória canônica e reconciliação cross-repo
+
+**Candidato preparado para revisão humana.** A API passa a conter a autoridade
+temporal estruturada `docs/memory/project-state.v1.json`; `CURRENT_STATE.md` é
+gerado deterministicamente, e o Web integrado permanece pointer-only no commit
+`fa4193fc28751d64923be824d293367499d4fba0`.
+
+O piloto P-01 reconciliou os entrypoints estáveis da API, rotulou o roadmap como
+snapshot histórico/superseded, corrigiu a afirmação obsoleta de que a 05B era
+futura e adicionou freshness checks locais e cross-repo. Este registro não
+declara a GH-01 concluída antes do merge futuro da API, não inicia trabalho
+posterior e não autoriza Git remoto ou produção.

@@ -1,0 +1,288 @@
+{
+  "schemaVersion": "1.0.0",
+  "instanceKind": "current",
+  "stateRevision": "GH-01-COMPLETE",
+  "project": {
+    "id": "genesis-platform",
+    "name": "Genesis Platform"
+  },
+  "updatedAt": "2026-08-10T19:42:11Z",
+  "authority": {
+    "repository": "arthurportodev/genesis-platform-api",
+    "branch": "main",
+    "path": "docs/memory/project-state.v1.json",
+    "revisionSource": "containing-commit"
+  },
+  "repositories": [
+    {
+      "id": "api",
+      "repository": "arthurportodev/genesis-platform-api",
+      "role": "authority",
+      "status": "integrated",
+      "memoryRevision": {
+        "kind": "containing-commit"
+      }
+    },
+    {
+      "id": "web",
+      "repository": "arthurportodev/genesis-platform-web",
+      "role": "satellite",
+      "status": "integrated",
+      "memoryRevision": {
+        "kind": "commit",
+        "sha": "fa4193fc28751d64923be824d293367499d4fba0"
+      }
+    }
+  ],
+  "phase": {
+    "id": "0.8-MVP",
+    "title": "Primeira produção mínima viável",
+    "lastCompleted": {
+      "id": "0.8-MVP-05B",
+      "title": "Baseline privada na VPS",
+      "completedAt": "2026-08-09T21:00:00Z",
+      "evidenceIds": ["EV-API-CURRENT-BASE", "EV-API-PRODUCTION-BASE"]
+    }
+  },
+  "currentWork": {
+    "status": "none",
+    "summary": "Nenhuma tarefa posterior é iniciada por esta autoridade."
+  },
+  "nextTask": {
+    "id": "0.8-MVP-06",
+    "title": "Traefik, HTTPS e exposição controlada da API"
+  },
+  "operationalState": {
+    "summary": "A evidência aprovada documenta uma baseline privada e destinos arquiteturais aprovados; o estado live não foi observado nesta tarefa.",
+    "basis": "documented",
+    "documentedAt": "2026-08-10T16:00:00Z",
+    "facts": [
+      {
+        "id": "OPS-PRIVATE-BASELINE",
+        "status": "present",
+        "statement": "API e PostgreSQL são documentados como instalados em uma baseline privada.",
+        "basis": "documented",
+        "documentedAt": "2026-08-10T16:00:00Z",
+        "evidenceIds": ["EV-API-CURRENT-BASE", "EV-API-PRODUCTION-BASE"]
+      },
+      {
+        "id": "OPS-PUBLIC-HTTPS",
+        "status": "absent",
+        "statement": "Traefik, HTTPS, DNS e exposição pública controlada não estão documentados como implementados.",
+        "basis": "documented",
+        "documentedAt": "2026-08-10T16:00:00Z",
+        "evidenceIds": ["EV-API-PRODUCTION-BASE"]
+      },
+      {
+        "id": "OPS-APPROVED-EDGE",
+        "status": "present",
+        "statement": "A arquitetura aprovada define frontend na Vercel em app.agenciagenesismkt.com.br, API em api.agenciagenesismkt.com.br e Traefik como proxy HTTPS; implementação e estado live não estão comprovados.",
+        "basis": "documented",
+        "documentedAt": "2026-08-10T19:42:11Z",
+        "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
+      },
+      {
+        "id": "OPS-APPROVED-RUNTIME",
+        "status": "present",
+        "statement": "A arquitetura aprovada define Hostinger KVM 2, API NestJS em container, PostgreSQL em rede privada e somente produção inicialmente, sem staging; estado live não está comprovado.",
+        "basis": "documented",
+        "documentedAt": "2026-08-10T19:42:11Z",
+        "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
+      },
+      {
+        "id": "OPS-APPROVED-DELIVERY",
+        "status": "present",
+        "statement": "O destino aprovado usa GHCR privado e deploy inicial manual com aprovação humana; o contrato implementado e a visibilidade live do package exigem verificação separada.",
+        "basis": "documented",
+        "documentedAt": "2026-08-10T19:42:11Z",
+        "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
+      },
+      {
+        "id": "OPS-APPROVED-RECOVERY",
+        "status": "present",
+        "statement": "Google Drive é o destino externo de backup aprovado; RPO, RTO, retenção, implementação e restore comprovado permanecem separados desta decisão.",
+        "basis": "documented",
+        "documentedAt": "2026-08-10T19:42:11Z",
+        "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
+      },
+      {
+        "id": "OPS-APPROVED-MONITORING",
+        "status": "present",
+        "statement": "UptimeRobot sobre /health é o monitoramento externo aprovado; alertas, destinatários, escalonamento, implementação e estado live permanecem separados desta decisão.",
+        "basis": "documented",
+        "documentedAt": "2026-08-10T19:42:11Z",
+        "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
+      },
+      {
+        "id": "OPS-GHCR-VISIBILITY",
+        "status": "unknown",
+        "statement": "Há histórico documentado de package GHCR público, mas a visibilidade live atual não foi observada nesta tarefa.",
+        "basis": "unknown",
+        "documentedAt": "2026-08-10T19:42:11Z",
+        "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
+      },
+      {
+        "id": "OPS-LIVE-STATE",
+        "status": "unknown",
+        "statement": "VPS, containers, banco, firewall e serviços externos não foram observados nesta tarefa.",
+        "basis": "unknown",
+        "documentedAt": "2026-08-10T16:00:00Z",
+        "evidenceIds": []
+      },
+      {
+        "id": "OPS-REAL-DATA",
+        "status": "not-authorized",
+        "statement": "Dados reais não estão autorizados.",
+        "basis": "documented",
+        "documentedAt": "2026-08-10T16:00:00Z",
+        "evidenceIds": ["EV-API-ADR013-BASE"]
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "EV-API-CURRENT-BASE",
+      "kind": "repository-file",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/blob/6c4bbb9b909dcd243f3e3d5165bf9368c3e16264/docs/CURRENT_STATE.md",
+      "sha256": "c0d86cbfbb96a2c8d422f1e5bc3e81ea3ca54ed9b54503a6aa5a0af4cbfacca0",
+      "capturedAt": "2026-08-10T12:00:00Z"
+    },
+    {
+      "id": "EV-API-PRODUCTION-BASE",
+      "kind": "repository-file",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/blob/6c4bbb9b909dcd243f3e3d5165bf9368c3e16264/docs/PRODUCTION.md",
+      "sha256": "924df18c30e695cff398fa1323ff152f64bc1692383c6f631050e5f40ce6da8e",
+      "capturedAt": "2026-08-10T12:00:00Z"
+    },
+    {
+      "id": "EV-API-ADR013-BASE",
+      "kind": "repository-file",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/blob/6c4bbb9b909dcd243f3e3d5165bf9368c3e16264/docs/decisions/ADR-013-mvp-production-baseline.md",
+      "sha256": "55549d880b0cbdf0e11711fcedb849c2fa3406e4a213383e621a0daf7cfb1f1f",
+      "capturedAt": "2026-08-10T12:00:00Z"
+    },
+    {
+      "id": "EV-API-ADR013-CANDIDATE",
+      "kind": "repository-file",
+      "uri": "repo://arthurportodev/genesis-platform-api/docs/decisions/ADR-013-mvp-production-baseline.md",
+      "sha256": "dd895aa5eed22ebe48a6774bad3e14bf0e9a9d1462c5e464395bdd54a4faed7c",
+      "capturedAt": "2026-08-10T19:42:11Z"
+    },
+    {
+      "id": "EV-WEB-PR11",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/11",
+      "capturedAt": "2026-08-10T15:00:00Z"
+    }
+  ],
+  "blockers": [
+    {
+      "id": "BLOCK-PUBLIC-ORIGIN",
+      "status": "open",
+      "summary": "Abertura exige implementar e comprovar Traefik, TLS, DNS dos hostnames aprovados e exposição controlada.",
+      "owner": "arthur",
+      "blocksTaskIds": ["0.8-MVP-06", "0.8-MVP-08"]
+    },
+    {
+      "id": "BLOCK-RECOVERY",
+      "status": "open",
+      "summary": "Google Drive foi aprovado como destino; RPO, RTO, retenção e restore sintético precisam ser aprovados ou comprovados antes de dados reais.",
+      "owner": "arthur",
+      "blocksTaskIds": ["0.8-MVP-07", "0.8-MVP-09"]
+    }
+  ],
+  "pendingHumanDecisions": [
+    {
+      "id": "HD-BACKUP",
+      "question": "Quais RPO, RTO e retenção serão aprovados para o backup externo no Google Drive?",
+      "whyMaterial": "Define risco de perda, custo e operação antes de dados reais.",
+      "blockingTaskIds": ["0.8-MVP-07", "0.8-MVP-09"]
+    },
+    {
+      "id": "HD-MONITORING",
+      "question": "Qual política de alertas, destinatários e escalonamento será aprovada para o UptimeRobot e os sinais internos?",
+      "whyMaterial": "A abertura controlada exige detecção e resposta operacional.",
+      "blockingTaskIds": ["0.8-MVP-07", "0.8-MVP-09"]
+    },
+    {
+      "id": "HD-REAL-DATA",
+      "question": "Quais primeiros usuários e dados reais poderão ser autorizados, e em qual momento?",
+      "whyMaterial": "Dados reais exigem release gates e autorização humana específica.",
+      "blockingTaskIds": ["0.8-MVP-09"]
+    }
+  ],
+  "supersededPlans": [
+    {
+      "id": "PLAN-0.8.2-0.8.11",
+      "title": "Sequência anterior de produção 0.8.2 a 0.8.11",
+      "supersededAt": "2026-08-03T12:00:00Z",
+      "replacedBy": "0.8-MVP",
+      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
+    }
+  ],
+  "permanentInvariants": [
+    {
+      "id": "PI-API-AUTHORITY",
+      "statement": "A API é a autoridade de segurança, tenant, regras de negócio e estado temporal do projeto.",
+      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
+    },
+    {
+      "id": "PI-SECRETS",
+      "statement": "Segredos não entram em Git, frontend, imagem, logs ou evidências.",
+      "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE"]
+    },
+    {
+      "id": "PI-NO-DIRECT-EXPOSURE",
+      "statement": "API e PostgreSQL não podem ser expostos diretamente à Internet.",
+      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
+    }
+  ],
+  "releaseGates": [
+    {
+      "id": "RG-TLS",
+      "statement": "Traefik, HTTPS e hostnames aprovados devem ser comprovados antes da abertura.",
+      "status": "pending",
+      "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE"]
+    },
+    {
+      "id": "RG-RECOVERY",
+      "statement": "Backup recuperável e restore sintético devem passar antes de dados reais.",
+      "status": "pending",
+      "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE"]
+    },
+    {
+      "id": "RG-CROSS-TENANT",
+      "statement": "Smoke funcional e teste adversarial cross-tenant devem passar antes dos primeiros usuários.",
+      "status": "pending",
+      "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE"]
+    }
+  ],
+  "currentRestrictions": [
+    {
+      "id": "OR-SINGLE-VPS",
+      "statement": "A baseline documentada usa uma única VPS e um único failure domain.",
+      "reviewTrigger": "Reavaliar com adoção, receita, SLO ou necessidade de alta disponibilidade.",
+      "sourceEvidenceIds": ["EV-API-ADR013-BASE", "EV-API-PRODUCTION-BASE"]
+    },
+    {
+      "id": "OR-SINGLE-REPLICA",
+      "statement": "A API pública permanece limitada a uma réplica enquanto controles forem process-local.",
+      "reviewTrigger": "Reavaliar antes de escalar horizontalmente.",
+      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
+    },
+    {
+      "id": "OR-NO-REAL-DATA",
+      "statement": "Dados reais permanecem não autorizados.",
+      "reviewTrigger": "Reavaliar somente após release gates e decisão humana explícita.",
+      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
+    }
+  ],
+  "pointerMetadata": {
+    "repository": "arthurportodev/genesis-platform-web",
+    "path": "docs/memory/project-state.pointer.v1.json",
+    "schemaVersion": "1.0.0",
+    "mode": "pointer-only",
+    "transitionId": "GH-01-CROSS-REPO",
+    "targetStateRevision": "GH-01-COMPLETE"
+  }
+}

@@ -1,5 +1,16 @@
 # Fluxo de desenvolvimento
 
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
+## Atualização da memória canônica
+
+Mudanças de fase, trabalho, operação, blockers, decisões ou restrições atualizam
+`docs/memory/project-state.v1.json` no mesmo candidato. Gere
+`docs/CURRENT_STATE.md` com `node scripts/validate-project-memory.cjs --mode
+render`, valide com `--mode local` e, para transições cross-repo, valide o
+pointer Web com `--mode cross-repo --web-source <checkout>`. O Web entra
+primeiro; a API registra o `memoryRevision` Web exato e entra por último.
+
 ## Ciclo de uma tarefa
 
 1. reidratar o contexto conforme [AGENTS.md](../AGENTS.md);
