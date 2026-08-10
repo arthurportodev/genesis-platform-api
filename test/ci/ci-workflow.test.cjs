@@ -41,6 +41,23 @@ test('accepts the authoritative workflow contract', () => {
   ]);
 });
 
+test('requires canonical memory validation and tests before the CI contract', () => {
+  rejects(
+    mutated(
+      'node scripts/validate-project-memory.cjs --mode local',
+      'node scripts/validate-project-memory.cjs --mode render',
+    ),
+    /memory|missing exact command/u,
+  );
+  rejects(
+    mutated(
+      'node --test test/project-memory/project-memory.test.cjs',
+      'node --test test/project-memory/missing.test.cjs',
+    ),
+    /memory|missing exact command/u,
+  );
+});
+
 test('parser ignores comments and preserves job/step hierarchy', () => {
   const withAdversarialComments = source.replace(
     'name: CI',

@@ -1,8 +1,14 @@
 # ADR-013 — Baseline mínima de produção do MVP
 
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
+Este ADR preserva decisões e riscos aceitos. Status operacional, release gates
+e restrições atuais são resolvidos somente em
+`docs/memory/project-state.v1.json`.
+
 - **Status:** Accepted
 - **Data:** 2026-08-03
-- **Última reconciliação documental:** 2026-08-09
+- **Última reconciliação documental:** 2026-08-10
 
 ## Contexto
 
@@ -23,9 +29,9 @@ volume de dados e receita crescerem.
 
 ```text
 Navegador
-→ frontend na Vercel
+→ frontend na Vercel em app.agenciagenesismkt.com.br
 → proxy same-origin de /api/v1
-→ origem HTTPS protegida
+→ API oficial em api.agenciagenesismkt.com.br
 → Traefik
 → uma instância da API NestJS
 → PostgreSQL 17 em rede privada
@@ -35,8 +41,10 @@ O navegador continua usando paths relativos `/api/v1`; chamadas cross-origin
 diretas não substituem esse contrato. Somente o Traefik publica a origem da
 API. As portas da API e do PostgreSQL não são expostas diretamente.
 
-Os hostnames finais permanecem **PENDING HUMAN DECISION**. Até a decisão, a
-documentação usa `app.<domínio>` e `origin-api.<domínio>`.
+Os hostnames oficiais aprovados são `app.agenciagenesismkt.com.br` para o
+frontend e `api.agenciagenesismkt.com.br` para a API. Eles definem destino
+arquitetural; este ADR não afirma DNS, TLS, Vercel, Traefik ou qualquer serviço
+como operacionalmente ativo.
 
 ### Infraestrutura inicial
 
@@ -44,17 +52,34 @@ documentação usa `app.<domínio>` e `origin-api.<domínio>`.
 - uma única VPS e uma única réplica pública da API inicialmente;
 - PostgreSQL 17 em container dedicado ou equivalente, com persistência e rede
   privada;
-- Traefik, API NestJS, PostgreSQL, backup e monitoramento básico como serviços
+- Traefik, API NestJS em container e PostgreSQL em rede privada como serviços
   mínimos;
+- backup externo no Google Drive, com restore sintético obrigatório;
+- UptimeRobot como monitoramento externo do endpoint `/health`;
+- somente o ambiente de produção na etapa inicial, sem staging;
 - Redis, n8n, Evolution API, Portainer e outros serviços somente quando uma
   funcionalidade do MVP comprovar a necessidade.
 
 ### Entrega
 
-O fluxo inicial é GitHub → CI essencial → imagem Docker → GHCR → aprovação
-humana → VPS → migration controlada → health e smoke → manter ou rollback. A
-imagem é identificada pela tag do commit e, quando publicada, por digest. O
-deploy é manual e o rollback manual deve estar documentado.
+O fluxo inicial é GitHub → CI essencial → imagem Docker → GHCR privado →
+aprovação humana → VPS → migration controlada → health e smoke → manter ou
+rollback. O registry-alvo do MVP é GHCR privado. A imagem é identificada pela
+tag do commit e, quando publicada, por digest. O deploy inicial manual está
+aprovado e o rollback manual deve estar documentado.
+
+### Distinção entre decisão, implementação e observação
+
+As escolhas desta seção são arquitetura ou destino aprovados. Implementação só
+é comprovada por código, migrations e testes da `main`. Estado live exige
+observação operacional autorizada e pertence à memória temporal canônica. Em
+particular, o histórico de um package GHCR público deve ser preservado, mas não
+comprova a visibilidade live atual; a transição para o alvo privado exige tarefa
+própria e evidência operacional.
+
+RPO, RTO e retenção de backup, política de alertas, destinatários e
+escalonamento, além da autorização dos primeiros usuários e dados reais,
+continuam decisões materiais separadas destas escolhas arquiteturais.
 
 ### Segurança mínima
 
@@ -122,9 +147,10 @@ ser revista quando usuários, dados e receita crescerem.
   o processo de desenvolvimento.
 - O [ADR-014](ADR-014-versioned-production-contract.md) especializa esta
   baseline para PostgreSQL, secrets, imagens e bundle da `0.8-MVP-05A`.
-- [PRODUCTION.md](../PRODUCTION.md) é a baseline operacional atual.
+- [PRODUCTION.md](../PRODUCTION.md) define contratos e runbooks operacionais;
+  estado temporal é resolvido pela memória canônica.
 
-## Implementação
+## Registro histórico de implementação
 
 O runtime health, container/Compose e CI/GHCR estão incorporados. A
 `0.8-MVP-05A`, incluindo `CORR-01`, `CORR-02` e `CORR-03`, foi incorporada pelo
@@ -141,9 +167,7 @@ continua evidência local não operacional. Esta incorporação não instalou a
 stack, não criou secrets reais, volume ou banco, não executou migrations,
 serviços, portas ou deploy e não autoriza dados reais.
 
-A `0.8-MVP-05B` continua futura e só pode começar sob tarefa e autorização
-operacional próprias, após revalidar o host e aprovar bundle, layout, secrets,
-volume, roles, migrations, persistência, readiness, backup/restore e portas
-privadas. Nenhuma dessas precondições é declarada satisfeita por esta decisão.
+A situação temporal da `0.8-MVP-05B` não é definida por este ADR. Consulte a
+memória canônica; nenhuma decisão registrada aqui autoriza operação em VPS.
 Os demais componentes seguem até `0.8-MVP-09`, cada um com escopo e validação
 próprios.

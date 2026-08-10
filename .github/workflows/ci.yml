@@ -95,6 +95,12 @@ jobs:
       - name: Run task-tool tests
         run: npm run test:task-tools
 
+      - name: Validate canonical project memory
+        run: node scripts/validate-project-memory.cjs --mode local
+
+      - name: Run canonical project-memory tests
+        run: node --test test/project-memory/project-memory.test.cjs
+
       - name: Validate CI workflow contract
         run: npm run ci:contract:validate
 

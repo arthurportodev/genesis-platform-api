@@ -1,5 +1,10 @@
 # ADR-012 — Development Operating System v2
 
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
+Este ADR preserva uma decisão durável e seu histórico. Estado temporal é
+resolvido somente em `docs/memory/project-state.v1.json`.
+
 - **Status:** Accepted
 - **Data:** 2026-07-30
 
@@ -120,7 +125,7 @@ tarefa e Gate próprios após o período de coexistência.
   contrato de evidência para uma operação futura.
 - O frontend deve referenciar este ADR como autoridade do contrato comum.
 
-## Implementação
+## Registro histórico de implementação
 
 A tarefa `0.8.1.1` implementa primeiro a autoridade backend. O port e a paridade
 frontend constituem o segundo candidato sequencial. Nenhum merge dispensa Gate

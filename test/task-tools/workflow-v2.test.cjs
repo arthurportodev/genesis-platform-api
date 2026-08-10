@@ -12,11 +12,29 @@ test('CI enforces contracts, formatting and task-tool tests', () => {
   const contracts = workflow.indexOf('npm run task:contracts');
   const formatting = workflow.indexOf('npm run format:check:task-tools');
   const tests = workflow.indexOf('npm run test:task-tools');
+  const memory = workflow.indexOf(
+    'node scripts/validate-project-memory.cjs --mode local',
+  );
+  const memoryTests = workflow.indexOf(
+    'node --test test/project-memory/project-memory.test.cjs',
+  );
   const application = workflow.indexOf('npm run format:check\n');
   assert.ok(contracts > 0);
   assert.ok(formatting > contracts);
   assert.ok(tests > formatting);
-  assert.ok(application > tests);
+  assert.ok(memory > tests);
+  assert.ok(memoryTests > memory);
+  assert.ok(application > memoryTests);
+});
+
+test('documents the API authority and deterministic current-state projection', () => {
+  const agents = read('AGENTS.md');
+  const workflow = read('docs/DEVELOPMENT_WORKFLOW.md');
+  for (const source of [agents, workflow]) {
+    assert.match(source, /docs\/memory\/project-state\.v1\.json/u);
+  }
+  assert.match(workflow, /--mode cross-repo/u);
+  assert.match(workflow, /memoryRevision/u);
 });
 
 test('documents explicit Critical Skill invocation and fallback', () => {

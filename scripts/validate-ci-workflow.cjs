@@ -1008,6 +1008,8 @@ function validateWorkflowDocument(workflow) {
     'npm run task:contracts',
     'npm run format:check:task-tools',
     'npm run test:task-tools',
+    'node scripts/validate-project-memory.cjs --mode local',
+    'node --test test/project-memory/project-memory.test.cjs',
     'npm run ci:contract:validate',
     'npm run format:check:ci',
     'npm run test:ci',
@@ -1027,6 +1029,22 @@ function validateWorkflowDocument(workflow) {
   for (const command of requiredValidationCommands) {
     if (!validateRuns.includes(command))
       failures.push(`validate is missing exact command: ${command}.`);
+  }
+  const memoryValidationIndex = validateRuns.indexOf(
+    'node scripts/validate-project-memory.cjs --mode local',
+  );
+  const memoryTestsIndex = validateRuns.indexOf(
+    'node --test test/project-memory/project-memory.test.cjs',
+  );
+  const ciContractIndex = validateRuns.indexOf('npm run ci:contract:validate');
+  if (
+    memoryValidationIndex < 0 ||
+    memoryTestsIndex !== memoryValidationIndex + 1 ||
+    ciContractIndex <= memoryTestsIndex
+  ) {
+    failures.push(
+      'canonical memory validation and tests must run consecutively before the CI contract.',
+    );
   }
   const composeStep = validateSteps.find(
     (step) =>

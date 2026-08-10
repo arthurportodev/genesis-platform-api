@@ -1,5 +1,11 @@
 # Architecture Decision Records
 
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
+ADRs preservam decisões e história. Eles não são autoridade de fase, trabalho,
+operação ou restrições atuais; esses fatos vêm de
+`docs/memory/project-state.v1.json`.
+
 ADRs registram decisões arquiteturais relevantes, seu contexto, alternativas e consequências. Eles explicam por que o sistema tomou uma direção; não substituem código, migrations ou documentação operacional.
 
 ## Status
@@ -45,5 +51,5 @@ Crie ADR quando a decisão afetar múltiplas tarefas, segurança, dados, isolame
 - [ADR-010 — Contrato web de sessão e bootstrap](ADR-010-web-session-contract.md) — Accepted; incorporado na tarefa 0.7.0 pelo PR #22, squash `9f0fb751f6e506ade1d0e0af0f7f80506b4a93f2`
 - [ADR-011 — Arquitetura da primeira produção](ADR-011-production-architecture.md) — Superseded pelo ADR-013; preservado como histórico
 - [ADR-012 — Development Operating System v2](ADR-012-development-operating-system-v2.md) — Accepted em 30 de julho de 2026; processo de desenvolvimento vigente
-- [ADR-013 — Baseline mínima de produção do MVP](ADR-013-mvp-production-baseline.md) — Accepted em 3 de agosto de 2026; supersede o ADR-011 e define a baseline operacional atual
+- [ADR-013 — Baseline mínima de produção do MVP](ADR-013-mvp-production-baseline.md) — Accepted em 3 de agosto de 2026; supersede o ADR-011 e define decisões duráveis de topologia, destinos e operação mínima sem declarar estado live
 - [ADR-014 — Contrato versionado de PostgreSQL, secrets e bundle](ADR-014-versioned-production-contract.md) — Accepted em 8 de agosto de 2026; especializa a baseline da 0.8-MVP-05A sem executar produção

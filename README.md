@@ -1,5 +1,13 @@
 # Genesis Platform API
 
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
+Fase, trabalho vigente, próxima tarefa, estado operacional, blockers e decisões
+humanas são resolvidos somente na
+[memória canônica](docs/memory/project-state.v1.json). O
+[estado atual](docs/CURRENT_STATE.md) é uma projeção gerada e não deve ser
+editado manualmente.
+
 Backend da Genesis Platform, um SaaS de CRM e operação comercial multiempresa.
 Esta versão contém a fundação técnica, núcleo persistente multi-tenant,
 autenticação, contexto de organização ativa, autorização por papel, convites e
@@ -14,16 +22,8 @@ A Tarefa 0.7.0 incorporou o contrato web de sessão no PR #22, squash
 protegido, CSRF cookie-to-header, logout idempotente e bootstrap autenticado de
 Organizations.
 
-A Fase `0.7` foi concluída no frontend oficial até a criação manual de Leads
-(`0.7.6`, PR #7, squash
-`4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`). A fase atual é `0.8-MVP`. A
-baseline com `0.8-MVP-01`, `0.8-MVP-02` e `0.8-MVP-02.1` foi incorporada à
-`main` pelo PR #29 no squash
-`5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`; a CI pós-merge `30892867828` foi
-aprovada integralmente. A tarefa atual é `0.8-MVP-03 — Container e Compose de
-produção`, com candidata local implementada e aguardando verificação
-independente e Gate 2. Nenhuma imagem ou infraestrutura foi publicada e dados
-reais não estão autorizados.
+O histórico de evolução funcional e operacional permanece em
+`docs/TASK_LOG.md`; não use entradas históricas para inferir o estado vigente.
 
 A gestão de memberships e ownership (0.2.5.4) concluiu a Fase 0.2 no PR #16,
 squash `4392d7347035a216a273ce4395fd9e1bd83ab91b`, com CI pós-merge
@@ -568,10 +568,8 @@ Os módulos de users e organizations não expõem CRUD. Invitations, memberships
 - **Porta ocupada:** altere `PORT` no `.env`.
 - **Versão incompatível do Node:** execute `nvm use` ou instale Node 24.
 
-## Próxima tarefa
+## Continuidade
 
-A baseline documental foi incorporada à `main`; a tarefa atual é
-`0.8-MVP-03 — Container e Compose de produção`. A candidata local aguarda
-verificação independente e Gate 2; isso não autoriza stage, entrega remota,
-publicação ou deploy. Comunicação, automações e integrações genéricas continuam
-futuras e sem escopo automaticamente aprovado.
+Consulte a [memória canônica](docs/memory/project-state.v1.json) para descobrir
+o próximo trabalho. Este README preserva somente contratos duráveis de uso e
+desenvolvimento.

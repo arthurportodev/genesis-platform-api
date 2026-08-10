@@ -1,10 +1,21 @@
 # Produção do MVP
 
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
+Este documento define contratos e runbooks duráveis. Toda afirmação datada de
+execução abaixo é evidência histórica, não estado live. Fase, operação atual,
+gates, blockers e decisões pendentes são resolvidos exclusivamente em
+`docs/memory/project-state.v1.json`.
+
 Este documento é a autoridade operacional da primeira produção da Genesis
 Platform. A decisão arquitetural está no
 [ADR-013](decisions/ADR-013-mvp-production-baseline.md). O objetivo é publicar o
 produto existente para testes reais com segurança proporcional ao MVP, sem
 antecipar uma infraestrutura definitiva.
+
+<!-- genesis-memory-history:start -->
+
+## Snapshot histórico da incorporação 05A/05B
 
 O contrato versionado de PostgreSQL, secrets e bundle está no
 [ADR-014](decisions/ADR-014-versioned-production-contract.md). A
@@ -15,13 +26,17 @@ na VPS a partir do commit
 `38baf1e8898194b618cfee787a3bea753677eb93`, sem exposição pública nem dados
 reais.
 
+<!-- genesis-memory-history:end -->
+
 ## Objetivo
 
 Operar uma instância pequena, compreensível e recuperável do frontend, da API e
 do PostgreSQL. A abertura para usuários exige os controles mínimos deste
 documento; requisitos avançados permanecem no backlog pós-MVP.
 
-## Estado atual
+<!-- genesis-memory-history:start -->
+
+## Snapshot histórico da baseline incorporada
 
 O runtime health, a rebaseline documental e o container/Compose de produção
 foram incorporados pelos PRs #29 e #31. A CI essencial e a publicação GHCR
@@ -61,13 +76,15 @@ em `2026-08-09T00:39:02Z` (`2026-08-08T21:39:02-03:00`), e a CI pós-merge
 foi preservado. Nada foi transferido à VPS e nenhum volume, secret ou serviço
 persistente foi criado.
 
+<!-- genesis-memory-history:end -->
+
 ## Arquitetura
 
 ```text
 Navegador
-→ frontend na Vercel em app.<domínio>
+→ frontend na Vercel em app.agenciagenesismkt.com.br
 → proxy same-origin de /api/v1
-→ origem HTTPS protegida em origin-api.<domínio>
+→ API oficial em api.agenciagenesismkt.com.br
 → Traefik
 → uma instância da API NestJS
 → PostgreSQL 17 em rede privada
@@ -78,9 +95,13 @@ de produção e falha fechado. Somente o Traefik publica a origem; as portas da
 API e do PostgreSQL não possuem exposição direta. Forwarded headers e
 `TRUST_PROXY_HOPS` serão ajustados e testados contra a topologia real.
 
-Os hostnames finais são **PENDING HUMAN DECISION**.
+Esses hostnames, Vercel e Traefik são destinos aprovados, não evidência de DNS,
+TLS, deploy ou operação live. O ambiente inicial aprovado é somente produção,
+sem staging.
 
-## Serviços
+<!-- genesis-memory-history:start -->
+
+## Snapshot histórico dos serviços da baseline privada
 
 A VPS Hostinger KVM 2 dedicada, com 2 vCPU, 8 GB de RAM e 100 GB NVMe, foi
 inventariada e validada para o escopo privado da `0.8-MVP-05B`. Docker está
@@ -101,8 +122,10 @@ a VPS não está pronta para produção.
 | Traefik       | HTTPS e único ingresso público da origem             | ainda não implantado; proxy reverso, TLS e exposição pública permanecem pendentes                       |
 | API NestJS    | contratos de sessão, tenant, CRM e runtime health    | implantada internamente; running/healthy, readiness `4/4`, sem porta publicada e recuperada após reboot |
 | PostgreSQL 17 | persistência privada, roles e migrations             | implantado internamente; running/healthy, volume e dez migrations persistentes, sem porta publicada     |
-| Backup        | cópia recuperável separada da persistência principal | provedor pendente; configuração ainda não comprovada                                                    |
-| Monitoramento | uptime, recursos, logs, health e backup              | ferramenta pendente; configuração ainda não comprovada                                                  |
+| Backup        | cópia recuperável separada da persistência principal | não configurado nem comprovado nesse snapshot                                                           |
+| Monitoramento | uptime, recursos, logs, health e backup              | não configurado nem comprovado nesse snapshot                                                           |
+
+<!-- genesis-memory-history:end -->
 
 Redis, n8n, Evolution API, Portainer e outros serviços só entram quando uma
 funcionalidade do MVP demonstrar dependência real. A primeira topologia usa
@@ -246,7 +269,11 @@ vínculo package/repositório. A referência autoritativa para deploy e rollback
 `latest` ou `main`; provenance, SBOM, assinatura, multiarch e cache remoto de
 build permanecem fora desta entrega.
 
-Arthur aprovou manter público o package
+<!-- genesis-memory-history:start -->
+
+### Snapshot histórico da publicação GHCR
+
+No ciclo histórico da `0.8-MVP-04`, Arthur aprovou manter público o package
 `ghcr.io/arthurportodev/genesis-platform-api`. A integridade não depende de
 sigilo do artefato: ela é garantida por tag com SHA completo, referência por
 digest, labels OCI, scans Critical e permissões mínimas. A versão histórica
@@ -261,8 +288,14 @@ O fechamento da correção publicou somente a tag
 e config digest
 `sha256:696d37b59113ad6bc45247c1b9381b2238a322eb365f82ad6c2c9135456765d9`.
 Esta correção de filtro não altera nem republica nenhuma dessas versões.
-O marcador visual “Latest” do GitHub não é uma tag `latest`. O package não será
-excluído, recriado ou tornado privado por esta correção.
+O marcador visual “Latest” do GitHub não é uma tag `latest`.
+
+<!-- genesis-memory-history:end -->
+
+O destino arquitetural aprovado para o MVP é GHCR privado. Esta correção
+documental não muda workflow, package ou visibilidade; a transição exige tarefa
+operacional própria. A visibilidade live é resolvida somente pela memória
+canônica e não é inferida do histórico acima.
 
 O runtime final usa `alpine:3.24`; `node:24-alpine3.24` fica restrito aos
 estágios que executam npm e build. A imagem final recebe somente o executável
@@ -353,7 +386,9 @@ operacional. O bundle pós-merge foi somente validado como artefato local e não
 foi transferido. Os bundles pré-merge em modo `candidate` continuam evidência
 não operacional e nunca foram promovidos ou enviados à VPS.
 
-## Execução e fechamento da 0.8-MVP-05B
+<!-- genesis-memory-history:start -->
+
+## Snapshot histórico — execução e fechamento da 0.8-MVP-05B
 
 A `0.8-MVP-05B` concluiu a baseline privada em 9 de agosto de 2026, sob tarefas
 operacionais autorizadas e checkpoints independentes. Foram comprovados:
@@ -412,12 +447,14 @@ cross-tenant e autorização específica para dados reais continuam pendentes.
 A VPS não está declarada pronta para produção, e este closeout não autoriza
 nenhuma etapa futura de exposição ou deploy público.
 
+<!-- genesis-memory-history:end -->
+
 ## Backup e restore
 
 Backup de PostgreSQL é obrigatório antes de dados reais e deve ser protegido
-contra perda junto com a VPS. O provedor, frequência e retenção são
-**PENDING HUMAN DECISION**. Secrets de backup não entram no repositório nem em
-logs.
+contra perda junto com a VPS. O destino externo aprovado é Google Drive. RPO,
+RTO e retenção são parâmetros temporais resolvidos na memória canônica. Secrets
+de backup não entram no repositório nem em logs.
 
 Um restore sintético deve ser testado em banco isolado antes da abertura. A
 prova mínima inclui obter o backup, verificar integridade, restaurar, confirmar
@@ -437,15 +474,20 @@ no banco ativo.
 Logs são estruturados e sanitizados: não contêm secrets, tokens, cookies,
 senhas, hashes ou PII desnecessária. O monitoramento inicial é básico e cobre
 ao menos uptime externo, health, reinícios, CPU, memória, disco, PostgreSQL,
-TLS e execução de backups. A ferramenta é **PENDING HUMAN DECISION**.
+TLS e execução de backups. O monitoramento externo aprovado é UptimeRobot sobre
+`/health`; política de alertas, destinatários e escalonamento são resolvidos na
+memória canônica.
 
 ## Frontend e proxy
 
-O frontend permanece na Vercel e usa proxy server-side same-origin para
-`/api/v1`. O proxy preserva cookies, status, body e headers contratuais, aplica
-`no-store` nas respostas sensíveis e impede que o fallback da SPA responda por
-rotas da API. Preview não usa a origem de produção. Cookies continuam
-host-only conforme o [ADR-010](decisions/ADR-010-web-session-contract.md).
+O frontend oficial aprovado é `app.agenciagenesismkt.com.br` na Vercel e usa
+proxy server-side same-origin para `/api/v1`, com a API oficial em
+`api.agenciagenesismkt.com.br`. O proxy preserva cookies, status, body e headers
+contratuais, aplica `no-store` nas respostas sensíveis e impede que o fallback
+da SPA responda por rotas da API. Preview não usa a origem de produção. Cookies
+continuam host-only conforme o
+[ADR-010](decisions/ADR-010-web-session-contract.md). Isso define arquitetura,
+não comprova configuração live.
 
 ## Smoke tests
 
@@ -511,12 +553,16 @@ e produzir `evidence-manifest.v1` com o estado e o resultado da operação.
 Esses controles permanecem no backlog de maturidade e não são gates da
 primeira publicação do MVP.
 
-## Decisões humanas pendentes
+## Autoridade dos parâmetros operacionais
 
-- domínio e subdomínios finais;
-- provedor, frequência e retenção de backup;
-- ferramenta de monitoramento;
-- momento de autorizar os primeiros dados reais.
+Hostinger KVM 2, Vercel, `app.agenciagenesismkt.com.br`,
+`api.agenciagenesismkt.com.br`, NestJS em container, PostgreSQL privado,
+Traefik, GHCR privado, deploy inicial manual aprovado, Google Drive,
+UptimeRobot sobre `/health` e produção sem staging são destinos arquiteturais
+aprovados no ADR-013. Sua implementação e seu estado live não são inferidos
+deste runbook.
 
-Até decisão explícita, use somente `app.<domínio>` e
-`origin-api.<domínio>` como placeholders.
+RPO, RTO, retenção, política de alertas, destinatários, escalonamento e
+autorização de usuários/dados reais são resolvidos exclusivamente em
+`docs/memory/project-state.v1.json`; não mantenha uma segunda lista temporal
+neste documento.

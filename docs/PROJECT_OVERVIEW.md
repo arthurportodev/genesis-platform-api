@@ -1,5 +1,11 @@
 # Visão geral do projeto
 
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
+Fase, trabalho, operação, blockers, decisões e restrições atuais pertencem
+somente a `docs/memory/project-state.v1.json`. Este documento preserva produto e
+fronteiras duráveis; trechos datados abaixo são contexto histórico.
+
 ## Produto
 
 A Genesis Platform é o SaaS multi-tenant da Agência Gênesis para centralizar a
@@ -18,40 +24,30 @@ Follow-up e métricas sem fragmentar identidade, contexto e autorização.
 - **Exploração visual:** Lovable permanece opcional e não substitui o frontend
   oficial.
 
-## Estado atual
+## Capacidades documentadas
 
 O backend implementa identidade, multi-tenancy, autenticação, sessões,
-convites, memberships/ownership e o CRM 0.3.1–0.3.4 com intake, Inbox,
-Pipeline, Activities, Notes, Follow-up, filas, detalhe e métricas. O runtime
-health e a baseline de produção do MVP também estão presentes na `main` desde o
-PR #29, squash `5e76b4fde61badce3a39792f7ba9e3ee6ea806ce`.
+convites, memberships/ownership e o CRM com intake, Inbox, Pipeline,
+Activities, Notes, Follow-up, filas, detalhe e métricas.
 
-O frontend oficial concluiu a Fase `0.7`: sessão e Organization ativa, cliente
-HTTP, Inbox, detalhe, Pipeline, Follow-up, métricas e criação manual de Leads.
-A última tarefa funcional foi `0.7.6`, incorporada pelo PR #7 no squash
-`4e4f8db0fcd31a4280d72f8cba0a1e0b47f4fa92`.
+O frontend oficial implementa sessão e Organization ativa, cliente HTTP,
+Inbox, detalhe, Pipeline, Follow-up, métricas e criação manual de Leads.
 
 O ciclo funcional existente é criar Lead → Inbox → detalhe → Pipeline →
 Follow-up → métricas. Importação, formulário público conectado, comunicação,
 WhatsApp, automações, calendário, estágios customizáveis e drag-and-drop
 continuam indisponíveis e não são compromissos automáticos de produto.
 
-## Fase atual e produção
+## Contrato durável de produção
 
-A Fase `0.8-MVP` prepara a primeira produção para testes reais, sem antecipar a
-infraestrutura definitiva. A baseline aceita usa Vercel + proxy same-origin
-`/api/v1` + origem HTTPS protegida + Traefik + uma API NestJS + PostgreSQL 17
-privado em uma VPS Hostinger KVM 2 dedicada (2 vCPU, 8 GB RAM e 100 GB NVMe).
-
-O runtime health e a rebaseline documental foram concluídos pelo PR #29; a CI
-pós-merge `30892867828` foi aprovada. A próxima etapa é a tarefa atual
-`0.8-MVP-03 — Container e Compose de produção`, ainda sem implementação
-iniciada ou aprovada. A VPS Hostinger KVM 2 já foi contratada e é o destino
-previsto, mas seu inventário, configuração e adequação à topologia do MVP ainda
-precisam ser comprovados. O estado de Vercel, DNS, origem, GHCR, banco, secrets,
-backup, restore, monitoramento e deploy permanece pendente de inventário,
-configuração ou validação para esta baseline. A infraestrutura real permanece
-pendente e a aplicação não está pronta para dados reais.
+A topologia aprovada usa Vercel em `app.agenciagenesismkt.com.br` + proxy
+same-origin `/api/v1` + API em `api.agenciagenesismkt.com.br` + Traefik + uma
+API NestJS em container + PostgreSQL 17 privado na Hostinger KVM 2. O destino
+de imagem é GHCR privado, o deploy inicial é manual, o backup externo usa
+Google Drive, o monitoramento externo usa UptimeRobot sobre `/health` e o
+ambiente inicial é somente produção, sem staging. Isso é arquitetura aprovada,
+não prova de implementação ou estado live; esses fatos temporais pertencem
+exclusivamente à memória canônica.
 
 Preview jamais acessará a API de produção. Consulte
 [PRODUCTION.md](PRODUCTION.md) e o

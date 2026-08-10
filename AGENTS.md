@@ -1,5 +1,16 @@
 # Protocolo de continuidade
 
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
+## Memória temporal canônica
+
+Resolva fase, trabalho vigente, próxima tarefa, estado operacional, blockers,
+decisões pendentes e restrições atuais exclusivamente em
+`docs/memory/project-state.v1.json`. `docs/CURRENT_STATE.md` é sua projeção
+determinística para leitura humana. Documentos estáveis e ADRs não substituem a
+autoridade; `docs/TASK_LOG.md` é histórico. O Web mantém somente um pointer e
+deve ser validado por receipt e `memoryRevision` antes do uso.
+
 ## Objetivo
 
 O projeto não pode depender da memória de uma pessoa, conversa ou agente de IA. O repositório é a memória oficial e deve permitir reconstruir o contexto antes de qualquer decisão ou implementação.
@@ -24,19 +35,29 @@ Use [docs/START_HERE.md](docs/START_HERE.md) como roteador, não como obrigaçã
 de ler todo o projeto. A recuperação completa continua obrigatória quando o
 delta não explicar o comportamento ou as fontes permanecerem inconsistentes.
 
-## Hierarquia das fontes
+## Autoridades por domínio
 
-Em caso de divergência, prevalecem:
+<!-- genesis-source-authorities:v1 implementation=main-code temporal=docs/memory/project-state.v1.json projection=derived architecture=accepted-adrs history=explicit -->
 
-1. código, migrations e testes da `main`;
-2. ADRs aceitos;
-3. [CURRENT_STATE.md](docs/CURRENT_STATE.md);
-4. [ROADMAP.md](docs/ROADMAP.md);
-5. [TASK_LOG.md](docs/TASK_LOG.md);
-6. Issues e Pull Requests;
-7. conversas e memórias externas.
+Não existe uma hierarquia linear única para perguntas de domínios diferentes:
 
-Não corrija uma divergência por suposição. Identifique a fonte autoritativa e registre a decisão persistente.
+- **verdade de implementação:** código, migrations e testes da `main`;
+- **verdade temporal do projeto:**
+  [project-state.v1.json](docs/memory/project-state.v1.json);
+- **projeção humana:** [CURRENT_STATE.md](docs/CURRENT_STATE.md), sempre derivada
+  da autoridade temporal e nunca editada manualmente;
+- **decisões e justificativas arquiteturais:** ADRs aceitos;
+- **histórico:** [TASK_LOG.md](docs/TASK_LOG.md), snapshots explicitamente
+  históricos e o roadmap integralmente superseded;
+- **evidência de colaboração:** Issues e Pull Requests;
+- **contexto não autoritativo:** conversas e memórias externas.
+
+ADRs aceitos orientam arquitetura, mas nunca vencem a autoridade temporal ao
+resolver fase, trabalho vigente, próxima tarefa, blockers abertos, decisões
+humanas ainda pendentes ou estado operacional documentado/observado. Código,
+migrations e testes vencem documentação em perguntas de implementação. Não
+corrija divergência por suposição: identifique primeiro o domínio e reconcilie a
+fonte correspondente.
 
 ## Operação por tarefa
 

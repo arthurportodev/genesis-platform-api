@@ -1,24 +1,35 @@
 # Comece aqui
 
+<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+
 Este diretório é a memória versionada da Genesis Platform. Comece pelo delta
 da tarefa e use as fontes abaixo como roteamento; não leia a sequência inteira
 sem um gatilho concreto.
 
-## Roteamento de fontes
+## Autoridades por domínio e roteamento
 
-1. [Visão do produto](PROJECT_OVERVIEW.md): propósito, público e limites do produto.
-2. [Estado atual](CURRENT_STATE.md): fotografia curta do que existe e do próximo passo.
-3. [Roadmap](ROADMAP.md): direção planejada e ordem das tarefas.
-4. [Arquitetura](ARCHITECTURE.md): estrutura técnica e fronteiras atuais.
-5. [Modelo de domínio](DOMAIN_MODEL.md): entidades e relações implementadas.
-6. [Segurança](SECURITY.md): controles, ameaças tratadas e limitações.
-7. [Produção](PRODUCTION.md): plano operacional, tarefas, DAG e critérios de abertura.
-8. [Classificação de tarefas](TASK_CLASSIFICATION.md): classes, gatilhos, gates e validação mínima.
-9. [Modelo operacional multiagente](MULTI_AGENT_OPERATING_MODEL.md): papéis, ownership, worktrees, autonomia e handoffs.
-10. [Fluxo de desenvolvimento](DEVELOPMENT_WORKFLOW.md): ciclo entre pessoas, agentes, Git e GitHub.
-11. [Templates de prompts](PROMPT_TEMPLATES.md): estruturas parametrizadas que aplicam as políticas canônicas.
-12. [Histórico de tarefas](TASK_LOG.md): entregas consolidadas.
-13. [ADRs](decisions/README.md): decisões arquiteturais e suas justificativas.
+<!-- genesis-source-authorities:v1 implementation=main-code temporal=docs/memory/project-state.v1.json projection=derived architecture=accepted-adrs history=explicit -->
+
+- **Implementação:** código, migrations e testes da `main`.
+- **Tempo do projeto:** [memória canônica](memory/project-state.v1.json), que
+  resolve fase, trabalho, operação, blockers, decisões e restrições.
+- **Leitura humana do tempo:** [estado atual](CURRENT_STATE.md), projeção
+  determinística que nunca deve ser editada manualmente.
+- **Arquitetura:** [arquitetura](ARCHITECTURE.md),
+  [segurança](SECURITY.md), [produção](PRODUCTION.md) e
+  [ADRs aceitos](decisions/README.md) preservam contratos e justificativas.
+- **Produto:** [visão do produto](PROJECT_OVERVIEW.md) e
+  [modelo de domínio](DOMAIN_MODEL.md) descrevem propósito, limites e entidades.
+- **Histórico:** [histórico de tarefas](TASK_LOG.md) é append-only e o
+  [roadmap](ROADMAP.md) é integralmente histórico/superseded.
+- **Operação do desenvolvimento:** [classificação](TASK_CLASSIFICATION.md),
+  [modelo multiagente](MULTI_AGENT_OPERATING_MODEL.md),
+  [fluxo](DEVELOPMENT_WORKFLOW.md) e [templates](PROMPT_TEMPLATES.md).
+
+ADRs não substituem a memória canônica para fase, trabalho vigente, próxima
+tarefa, blockers, decisões pendentes ou estado operacional. `CURRENT_STATE.md`
+é somente uma projeção. Em divergência de implementação, inspecione código,
+migrations e testes da `main`.
 
 O protocolo obrigatório para pessoas e agentes está em [AGENTS.md](../AGENTS.md).
 
@@ -29,6 +40,12 @@ diretamente `AGENTS.md`, a classificação, o fluxo e os templates versionados.
 
 ## Como recuperar contexto
 
-Se o contexto estiver ausente, desatualizado ou contraditório, interrompa a implementação. Leia o [estado atual](CURRENT_STATE.md), confira os ADRs relacionados, inspecione a `main`, as migrations, os testes e os Pull Requests. Corrija primeiro a memória oficial quando ela estiver divergente.
+Se o contexto estiver ausente, desatualizado ou contraditório, interrompa a
+implementação. Identifique o domínio da pergunta, consulte sua autoridade,
+inspecione a `main`, as migrations, os testes e os Pull Requests quando houver
+impacto de implementação e corrija primeiro a fonte correspondente.
 
-Decisões persistentes ficam em [docs/decisions](decisions/README.md). Planejamento fica no [roadmap](ROADMAP.md); ele não comprova implementação. O estado real é verificado no código, migrations e testes da `main`, que prevalecem sobre estes documentos em caso de divergência.
+Decisões persistentes ficam em [docs/decisions](decisions/README.md). O roadmap
+preserva planejamento histórico e não comprova implementação nem estado
+temporal. Código, migrations e testes da `main` comprovam implementação; a
+memória canônica comprova o tempo do projeto.
