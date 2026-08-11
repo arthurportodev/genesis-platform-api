@@ -370,10 +370,42 @@ test('initializes exactly five fixed paths through GITHUB_ENV before consumers',
 });
 
 test('requires the complete exact synthetic non-secret production matrix', () => {
+  const syntheticAcmeContact =
+    'ACME_EMAIL=acme-contact-required@genesis.invalid';
+  assert.equal(
+    SYNTHETIC_ENV_MATRIX.ACME_EMAIL,
+    'acme-contact-required@genesis.invalid',
+  );
   assert.equal(SYNTHETIC_ENV_MATRIX.TRUST_PROXY_HOPS, '1');
-  for (const [name, value] of Object.entries(SYNTHETIC_ENV_MATRIX)) {
+  for (const [name, value] of Object.entries(SYNTHETIC_ENV_MATRIX).filter(
+    ([name]) => name !== 'ACME_EMAIL',
+  )) {
     rejects(
       mutated(`          ${name}=${value}\n`, ''),
+      /complete approved matrix/u,
+    );
+  }
+  rejects(
+    mutated(`          ${syntheticAcmeContact}\n`, ''),
+    /complete approved matrix/u,
+  );
+  rejects(
+    mutated(
+      `          ${syntheticAcmeContact}`,
+      `          ${syntheticAcmeContact}\n          ${syntheticAcmeContact}`,
+    ),
+    /duplicates ACME_EMAIL|complete approved matrix/u,
+  );
+  for (const rejected of [
+    'ACME_EMAIL=',
+    'ACME_EMAIL=other-contact@genesis.invalid',
+    'ACME_EMAIL=acme-contact-required@example.invalid',
+    'ACME_EMAIL=${{ secrets.ACME_EMAIL }}',
+    'ACME_EMAIL= acme-contact-required@genesis.invalid',
+    'ACME_EMAIL=acme-contact-required@genesis.invalid\t',
+  ]) {
+    rejects(
+      mutated(syntheticAcmeContact, rejected),
       /complete approved matrix/u,
     );
   }

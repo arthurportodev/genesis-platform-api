@@ -76,6 +76,7 @@ const SYNTHETIC_ENV_MATRIX = Object.freeze({
   DATABASE_RUNTIME_ROLE: 'genesis_runtime',
   APP_NAME: 'Genesis Platform API',
   APP_VERSION: '0.1.0',
+  ACME_EMAIL: 'acme-contact-required@genesis.invalid',
   TRUST_PROXY_HOPS: '1',
   JWT_ACCESS_EXPIRES_IN: '15m',
   REFRESH_TOKEN_EXPIRES_IN_DAYS: '30',
