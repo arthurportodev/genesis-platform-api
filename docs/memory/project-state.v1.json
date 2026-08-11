@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-11T17:13:48Z",
+  "updatedAt": "2026-08-11T20:56:37.6832323Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -38,29 +38,29 @@
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-06A",
-      "title": "Traefik health-only edge — contrato incorporado",
-      "completedAt": "2026-08-11T15:48:01Z",
-      "evidenceIds": ["EV-MVP06A-PR41", "EV-MVP06A-POSTMERGE-CI"]
+      "id": "0.8-MVP-06B-WINDOW-1",
+      "title": "Private edge ativo — exposição pública fechada",
+      "completedAt": "2026-08-11T20:32:47.4228522Z",
+      "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
     }
   },
   "currentWork": {
-    "status": "planned",
-    "summary": "O Gate 1 operacional da 0.8-MVP-06B está pronto com condições. Nenhuma mutação live foi iniciada.",
+    "status": "in-progress",
+    "summary": "A Window 1 da 0.8-MVP-06B foi concluída com KEEP e edge privado ativo; a exposição pública permanece fechada e a Window 2 ainda depende de preflight e autorizações próprias.",
     "task": {
       "id": "0.8-MVP-06B",
       "title": "Traefik e HTTPS health-only — operação controlada"
     }
   },
   "nextTask": {
-    "id": "0.8-MVP-06B-CONDITIONS",
-    "title": "Decisões operacionais e autorização de preoperação"
+    "id": "0.8-MVP-06B-WINDOW-2-PREFLIGHT",
+    "title": "Preparar preflight e decisões humanas da Window 2, sem iniciar a operação"
   },
   "operationalState": {
-    "summary": "O Gate 1 observou a baseline privada saudável e pronta com condições, enquanto Traefik live, ACME, certificado, HTTPS público, bindings 80/443 e deployment 06B permanecem ausentes. Nenhuma operação foi autorizada ou iniciada.",
+    "summary": "A Window 1 foi concluída com KEEP: release 06A promovido, Traefik ativo somente em loopback e TRUST_PROXY_HOPS=1, enquanto API e PostgreSQL permanecem privados. DNS, TCP/80 e TCP/443 públicos, ACME, certificado, publicação, deploy público e rotas funcionais públicas permanecem ausentes ou não autorizados.",
     "basis": "observed",
-    "documentedAt": "2026-08-11T16:50:44Z",
-    "observedAt": "2026-08-11T16:26:00Z",
+    "documentedAt": "2026-08-11T20:40:48.3754942Z",
+    "observedAt": "2026-08-11T20:29:28.2308869Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -73,20 +73,20 @@
       {
         "id": "OPS-PRIVATE-BASELINE-LIVE",
         "status": "present",
-        "statement": "API e PostgreSQL foram observados running e healthy, sem bindings de porta no host; a rede do banco permanece privada.",
+        "statement": "API e PostgreSQL permaneceram running e healthy após a Window 1, com zero reinícios inesperados e sem bindings de porta no host; a rede do banco permanece privada.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:18:40Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:27:40Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-SSH-ONLY",
         "status": "present",
-        "statement": "Somente TCP/22 estava publicamente alcançável; TCP/80 e TCP/443 expiraram no snapshot aprovado.",
+        "statement": "A superfície pública permaneceu restrita a TCP/22; os testes externos finais não conectaram em TCP/80 nem TCP/443.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:22:00Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:29:28.2308869Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-06A-CONTRACTS",
@@ -128,101 +128,135 @@
       {
         "id": "OPS-COMMITTED-RELEASE-BUNDLE",
         "status": "present",
-        "statement": "O bundle committed-release foi derivado localmente do squash 06A e validado; não foi transferido para a VPS.",
+        "statement": "O bundle committed-release validado do squash 06A foi transferido, revalidado na VPS e promovido atomicamente como release ativo da Window 1; o release anterior foi preservado.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:33:07Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:27:40Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-API-IMAGE-PRESERVED",
         "status": "present",
-        "statement": "A imagem API atual foi preservada pelo digest aprovado; nenhuma publicação ocorreu no CI pós-merge.",
+        "statement": "A API usa o digest aprovado, está saudável com TRUST_PROXY_HOPS=1 e sem binding no host; somente a API foi recriada no Checkpoint C, com downtime medido de 4,711 segundos.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:26:00Z",
-        "evidenceIds": ["EV-MVP06A-POSTMERGE-CI", "EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:27:40Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-TRAEFIK-IMAGE-APPROVED",
         "status": "present",
-        "statement": "A imagem Traefik para linux/amd64 foi resolvida e aprovada por digest imutável; não foi instalada na VPS.",
+        "statement": "A imagem Traefik aprovada por digest imutável para linux/amd64 está ativa em modo internal, sem Docker socket, dashboard ou ACME habilitado.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:26:00Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:27:40Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-VPS-READINESS",
         "status": "present",
-        "statement": "Capacidade, NTP, Docker, UFW, Fail2ban, AppArmor e serviços essenciais da VPS foram observados saudáveis.",
+        "statement": "A observação da Window 1 registrou CPU máxima de 27,82%, memória máxima de 8,14%, disco em 5% e serviços essenciais saudáveis, sem disparar critério de rollback.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:18:40Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:25:32Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-TRAEFIK-LIVE",
-        "status": "absent",
-        "statement": "Nenhum container Traefik estava ativo ou instalado na VPS.",
+        "status": "present",
+        "statement": "O Traefik está running em modo internal, com zero reinícios e bindings exclusivos em 127.0.0.1:18080 e 127.0.0.1:18443; a matriz health-only passou e nenhuma rota funcional ficou pública.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:18:40Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:27:40Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-ACME-STATE",
-        "status": "absent",
-        "statement": "O diretório de estado Traefik e os arquivos ACME staging e production estavam ausentes.",
+        "status": "present",
+        "statement": "Os arquivos ACME staging e production existem vazios, root:root e modo 0600; nenhum conteúdo foi lido ou hasheado, nenhuma requisição ACME ocorreu e nenhum certificado foi emitido.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:18:40Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:27:40Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-CERTIFICATE",
         "status": "absent",
-        "statement": "Nenhum certificado público da API foi observável no Gate 1.",
-        "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:22:00Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "statement": "Nenhum certificado público da API foi solicitado ou emitido na Window 1.",
+        "basis": "documented",
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-HTTPS",
         "status": "absent",
-        "statement": "Nenhum endpoint HTTPS público da API estava disponível.",
+        "statement": "Nenhum endpoint HTTPS público da API foi habilitado; TCP/443 público permaneceu fechado.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:22:00Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:29:28.2308869Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-HTTP-BINDINGS",
         "status": "absent",
-        "statement": "Não havia listeners ou bindings públicos TCP/80 e TCP/443 no host.",
+        "statement": "Não há listeners ou bindings públicos TCP/80 e TCP/443; somente os listeners privados de loopback do Traefik foram mantidos.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:22:00Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:29:28.2308869Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-06B-DEPLOYMENT",
-        "status": "absent",
-        "statement": "Nenhuma implantação 06B, publicação ou mutação de produção foi executada.",
+        "status": "partial",
+        "statement": "A Window 1 executou somente a mutação privada aprovada e recebeu KEEP; a 06B integral não foi concluída, e não houve publicação, deploy público ou exposição funcional.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:26:00Z",
-        "evidenceIds": ["EV-MVP06A-POSTMERGE-CI", "EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:32:47.4228522Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-06B-WINDOW1-OBSERVATION",
+        "status": "present",
+        "statement": "A observação privada concluiu 61 amostras em 3.603 segundos, sem falha de health ou readiness, reinício inesperado, exposição pública, alteração de estado ACME ou critério de rollback.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:25:32Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-06B-WINDOW1-PROBE",
+        "status": "present",
+        "statement": "O probe sintético privado autorizado comprovou rate limiting, auditoria sanitizada e rejeição do forwarded header forjado, sem usuário ou dado real e sem editar ou apagar registros.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T19:59:06Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-06B-WINDOW1-KEEP",
+        "status": "present",
+        "statement": "Arthur Porto decidiu explicitamente KEEP após a observação, mantendo o edge privado e TRUST_PROXY_HOPS=1; a decisão não autorizou a Window 2 nem qualquer exposição pública.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:32:47.4228522Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-06B-ROLLBACK-READY",
+        "status": "present",
+        "statement": "O release anterior e o retorno para TRUST_PROXY_HOPS=0 permanecem preservados para rollback integral; nenhum rollback foi executado porque todos os gates passaram e a decisão foi KEEP.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "observedAt": "2026-08-11T20:27:40Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-DNS-API",
         "status": "absent",
-        "statement": "api.agenciagenesismkt.com.br retornou NXDOMAIN de forma consistente no snapshot do Gate 1.",
-        "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:21:31.506Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "statement": "Nenhuma alteração DNS foi executada na Window 1; api.agenciagenesismkt.com.br permaneceu NXDOMAIN na verificação externa do closeout.",
+        "basis": "documented",
+        "documentedAt": "2026-08-11T20:40:48.3754942Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
       },
       {
         "id": "OPS-DNS-APP",
@@ -346,15 +380,22 @@
       "uri": "artifact://genesis-platform/mvp06-06b-gate1-operational-readiness/18-FINAL-REPORT.md",
       "sha256": "6b90a11dd86cb656a263b69fef2e11bf3872ed666a354ca95a0de53935009d62",
       "capturedAt": "2026-08-11T16:50:44Z"
+    },
+    {
+      "id": "EV-MVP06B-WINDOW1-CLOSEOUT",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/mvp06-06b-window1-private-edge/24-FINAL-REPORT.md",
+      "sha256": "9fd6353db2a7d82cd4018c2a1b5378ebf2e03c1d3f9ac2fae0e23c52e3f3a605",
+      "capturedAt": "2026-08-11T20:40:48.3754942Z"
     }
   ],
   "blockers": [
     {
       "id": "BLOCK-PUBLIC-ORIGIN",
       "status": "open",
-      "summary": "O contrato 06A está incorporado; implantação live, DNS, TLS e exposição health-only continuam pendentes e exigem autorizações próprias.",
+      "summary": "O edge privado e TRUST_PROXY_HOPS=1 estão implantados após KEEP da Window 1; DNS, TCP/80, ACME, certificado, TCP/443 e exposição pública health-only continuam pendentes e exigem preflight e autorizações próprias.",
       "owner": "arthur",
-      "blocksTaskIds": ["0.8-MVP-06B-CONDITIONS", "0.8-MVP-08"]
+      "blocksTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT", "0.8-MVP-08"]
     },
     {
       "id": "BLOCK-WEB-VERCEL-FUNCTIONAL",
@@ -374,81 +415,69 @@
   "pendingHumanDecisions": [
     {
       "id": "HD-DNS-OPERATOR-AUTHORITY",
-      "question": "Quem operará o DNS e qual autoridade DNS será usada na preoperação?",
-      "whyMaterial": "Define responsabilidade e o ponto autorizado para a futura alteração do hostname da API.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "question": "Quem operará o DNS e qual autoridade DNS será usada no preflight da Window 2?",
+      "whyMaterial": "Define responsabilidade e o ponto autorizado para a futura alteração do hostname da API, sem conceder autorização de escrita.",
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
       "id": "HD-DNS-TTL",
-      "question": "Qual TTL será aprovado para os registros DNS da operação?",
-      "whyMaterial": "Determina propagação, reversão e duração de exposição durante a janela.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "question": "Qual TTL será aprovado para o futuro registro A da API na Window 2?",
+      "whyMaterial": "Determina propagação e reversão; esta decisão de parâmetro não autoriza criar o registro.",
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
       "id": "HD-CHANGE-WINDOW",
-      "question": "Qual janela de mudança será aprovada para a preoperação e a exposição controlada?",
-      "whyMaterial": "Delimita quando mutações e checkpoints humanos poderão ocorrer.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "question": "Qual janela operacional será aprovada para a Window 2?",
+      "whyMaterial": "Delimita quando as futuras mutações públicas, observação e rollback poderão ocorrer; esta reconciliação não inicia a janela.",
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
-      "id": "HD-DOWNTIME-TOLERANCE",
-      "question": "Qual tolerância de indisponibilidade será aceita durante a janela?",
-      "whyMaterial": "Define critérios de pausa e rollback diante de impacto na baseline privada.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "id": "HD-AUTHORIZE-DNS-A",
+      "question": "A criação do registro A de api.agenciagenesismkt.com.br para o IPv4 aprovado será autorizada na Window 2?",
+      "whyMaterial": "A mudança altera a autoridade DNS e deve permanecer separada da definição de operador, TTL e demais exposições.",
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
-      "id": "HD-SNAPSHOT-OR-WAIVER",
-      "question": "Será exigido snapshot prévio ou haverá dispensa humana explícita?",
-      "whyMaterial": "Define uma salvaguarda material antes da primeira mutação da VPS.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "id": "HD-AUTHORIZE-TCP80",
+      "question": "A abertura pública de TCP/80 será autorizada na Window 2 após DNS convergente?",
+      "whyMaterial": "A decisão cria alcance público e deve ter regra, prova e rollback próprios.",
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
-      "id": "HD-AUTHORIZE-PRIVATE-INSTALL",
-      "question": "A instalação privada do Traefik será autorizada na janela aprovada?",
-      "whyMaterial": "É a primeira mutação live e requer autorização separada.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
-    },
-    {
-      "id": "HD-AUTHORIZE-TRUST-PROXY-PROBE",
-      "question": "O probe sintético de trust proxy será autorizado?",
-      "whyMaterial": "O probe produz evidência operacional e deve permanecer condicionado a autorização humana.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
-    },
-    {
-      "id": "HD-AUTHORIZE-DNS-TCP80-ACME-STAGING",
-      "question": "DNS, TCP/80 e ACME staging serão autorizados em conjunto no checkpoint correspondente?",
-      "whyMaterial": "A transição cria alcance público e inicia validação ACME staging.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "id": "HD-AUTHORIZE-ACME-STAGING",
+      "question": "Uma única solicitação ACME staging será autorizada na Window 2 após DNS e TCP/80 comprovados?",
+      "whyMaterial": "Inicia comunicação com a CA de staging e não pode ser presumida pela existência dos arquivos ACME vazios.",
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
       "id": "HD-AUTHORIZE-ACME-PRODUCTION",
       "question": "A emissão ACME production será autorizada após o staging aprovado?",
       "whyMaterial": "O contato foi decidido, mas a emissão de certificado continua sem autorização.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
       "id": "HD-AUTHORIZE-TCP443-PUBLIC-FULL",
       "question": "TCP/443 e o override public-full serão autorizados após certificado válido?",
       "whyMaterial": "A decisão habilita HTTPS público health-only e precisa de Gate humano próprio.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
       "id": "HD-OBSERVATION-DURATION",
-      "question": "Qual duração de observação será exigida após cada transição?",
-      "whyMaterial": "Define o período mínimo para avaliar saúde, exposição e estabilidade.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "question": "Qual duração de observação pública será exigida após cada transição da Window 2?",
+      "whyMaterial": "Define o período mínimo para avaliar saúde, exposição, certificado e estabilidade.",
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
       "id": "HD-KEEP-OR-REVERT",
-      "question": "Quais critérios e quem decidirá keep ou revert ao fim da observação?",
-      "whyMaterial": "Evita que a manutenção da mudança seja presumida sem decisão humana.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "question": "Quais critérios e quem decidirá keep ou revert ao fim da observação pública da Window 2?",
+      "whyMaterial": "A decisão KEEP da Window 1 não se estende à futura exposição pública.",
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
       "id": "HD-ROLLBACK-OWNER-AUTHORIZATION",
-      "question": "Quem será o owner do rollback e qual autorização poderá acioná-lo?",
-      "whyMaterial": "Define responsabilidade e autoridade para reverter com segurança.",
-      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+      "question": "Quem será o owner do rollback da Window 2 e qual autorização poderá acioná-lo?",
+      "whyMaterial": "A autorização de rollback da Window 1 terminou com seu closeout e não é presumida para a exposição pública.",
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
     },
     {
       "id": "HD-WEB-VERCEL-RECONCILIATION",
@@ -544,13 +573,26 @@
       "id": "OR-POSTGRES-PRIVATE",
       "statement": "O PostgreSQL deve permanecer privado, sem binding de porta no host ou exposição direta à Internet.",
       "reviewTrigger": "Interromper antes de qualquer alteração que publique ou contorne a rede privada do banco.",
-      "sourceEvidenceIds": ["EV-API-ADR013-BASE", "EV-MVP06B-GATE1-REPORT"]
+      "sourceEvidenceIds": [
+        "EV-API-ADR013-BASE",
+        "EV-MVP06B-GATE1-REPORT",
+        "EV-MVP06B-WINDOW1-CLOSEOUT"
+      ]
     },
     {
       "id": "OR-FUNCTIONAL-API-FAIL-CLOSED",
       "statement": "A API funcional /api/v1 permanece fail-closed; a 06B limita a exposição pública ao health-only.",
       "reviewTrigger": "Reavaliar somente após reconciliação app./Vercel, testes funcionais, RG-CROSS-TENANT e autorização específica.",
-      "sourceEvidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      "sourceEvidenceIds": [
+        "EV-MVP06B-GATE1-REPORT",
+        "EV-MVP06B-WINDOW1-CLOSEOUT"
+      ]
+    },
+    {
+      "id": "OR-WINDOW2-NOT-AUTHORIZED",
+      "statement": "A próxima tarefa limita-se ao preflight da Window 2; DNS, TCP/80, ACME, certificado, TCP/443, exposição pública e observação pública não estão autorizados por esta reconciliação.",
+      "reviewTrigger": "Reavaliar somente após decisões humanas separadas, janela própria, preflight aprovado e autorização operacional explícita.",
+      "sourceEvidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
     }
   ],
   "pointerMetadata": {
