@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-10T19:42:11Z",
+  "updatedAt": "2026-08-11T17:13:48Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -38,24 +38,29 @@
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-05B",
-      "title": "Baseline privada na VPS",
-      "completedAt": "2026-08-09T21:00:00Z",
-      "evidenceIds": ["EV-API-CURRENT-BASE", "EV-API-PRODUCTION-BASE"]
+      "id": "0.8-MVP-06A",
+      "title": "Traefik health-only edge — contrato incorporado",
+      "completedAt": "2026-08-11T15:48:01Z",
+      "evidenceIds": ["EV-MVP06A-PR41", "EV-MVP06A-POSTMERGE-CI"]
     }
   },
   "currentWork": {
-    "status": "none",
-    "summary": "Nenhuma tarefa posterior é iniciada por esta autoridade."
+    "status": "planned",
+    "summary": "O Gate 1 operacional da 0.8-MVP-06B está pronto com condições. Nenhuma mutação live foi iniciada.",
+    "task": {
+      "id": "0.8-MVP-06B",
+      "title": "Traefik e HTTPS health-only — operação controlada"
+    }
   },
   "nextTask": {
-    "id": "0.8-MVP-06",
-    "title": "Traefik, HTTPS e exposição controlada da API"
+    "id": "0.8-MVP-06B-CONDITIONS",
+    "title": "Decisões operacionais e autorização de preoperação"
   },
   "operationalState": {
-    "summary": "A evidência aprovada documenta uma baseline privada e destinos arquiteturais aprovados; o estado live não foi observado nesta tarefa.",
-    "basis": "documented",
-    "documentedAt": "2026-08-10T16:00:00Z",
+    "summary": "O Gate 1 observou a baseline privada saudável e pronta com condições, enquanto Traefik live, ACME, certificado, HTTPS público, bindings 80/443 e deployment 06B permanecem ausentes. Nenhuma operação foi autorizada ou iniciada.",
+    "basis": "observed",
+    "documentedAt": "2026-08-11T16:50:44Z",
+    "observedAt": "2026-08-11T16:26:00Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -66,17 +71,40 @@
         "evidenceIds": ["EV-API-CURRENT-BASE", "EV-API-PRODUCTION-BASE"]
       },
       {
-        "id": "OPS-PUBLIC-HTTPS",
-        "status": "absent",
-        "statement": "Traefik, HTTPS, DNS e exposição pública controlada não estão documentados como implementados.",
-        "basis": "documented",
-        "documentedAt": "2026-08-10T16:00:00Z",
-        "evidenceIds": ["EV-API-PRODUCTION-BASE"]
+        "id": "OPS-PRIVATE-BASELINE-LIVE",
+        "status": "present",
+        "statement": "API e PostgreSQL foram observados running e healthy, sem bindings de porta no host; a rede do banco permanece privada.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:18:40Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-PUBLIC-SSH-ONLY",
+        "status": "present",
+        "statement": "Somente TCP/22 estava publicamente alcançável; TCP/80 e TCP/443 expiraram no snapshot aprovado.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:22:00Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-06A-CONTRACTS",
+        "status": "present",
+        "statement": "Os contratos 06A de edge Traefik health-only foram incorporados à API main por PR #41; o CI pós-merge passou sem publicação nem deploy.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:26:00Z",
+        "evidenceIds": [
+          "EV-MVP06A-PR41",
+          "EV-MVP06A-POSTMERGE-CI",
+          "EV-MVP06B-GATE1-REPORT"
+        ]
       },
       {
         "id": "OPS-APPROVED-EDGE",
         "status": "present",
-        "statement": "A arquitetura aprovada define frontend na Vercel em app.agenciagenesismkt.com.br, API em api.agenciagenesismkt.com.br e Traefik como proxy HTTPS; implementação e estado live não estão comprovados.",
+        "statement": "A arquitetura aprovada define frontend na Vercel em app.agenciagenesismkt.com.br, API em api.agenciagenesismkt.com.br e Traefik como proxy HTTPS; implementação e estado live são registrados separadamente.",
         "basis": "documented",
         "documentedAt": "2026-08-10T19:42:11Z",
         "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
@@ -84,7 +112,7 @@
       {
         "id": "OPS-APPROVED-RUNTIME",
         "status": "present",
-        "statement": "A arquitetura aprovada define Hostinger KVM 2, API NestJS em container, PostgreSQL em rede privada e somente produção inicialmente, sem staging; estado live não está comprovado.",
+        "statement": "A arquitetura aprovada define Hostinger KVM 2, API NestJS em container, PostgreSQL em rede privada e somente produção inicialmente, sem staging.",
         "basis": "documented",
         "documentedAt": "2026-08-10T19:42:11Z",
         "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
@@ -92,15 +120,140 @@
       {
         "id": "OPS-APPROVED-DELIVERY",
         "status": "present",
-        "statement": "O destino aprovado usa GHCR privado e deploy inicial manual com aprovação humana; o contrato implementado e a visibilidade live do package exigem verificação separada.",
+        "statement": "O destino aprovado usa GHCR privado e deploy inicial manual com aprovação humana; a visibilidade live observada é registrada separadamente.",
         "basis": "documented",
         "documentedAt": "2026-08-10T19:42:11Z",
         "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
       },
       {
+        "id": "OPS-COMMITTED-RELEASE-BUNDLE",
+        "status": "present",
+        "statement": "O bundle committed-release foi derivado localmente do squash 06A e validado; não foi transferido para a VPS.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:33:07Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-API-IMAGE-PRESERVED",
+        "status": "present",
+        "statement": "A imagem API atual foi preservada pelo digest aprovado; nenhuma publicação ocorreu no CI pós-merge.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:26:00Z",
+        "evidenceIds": ["EV-MVP06A-POSTMERGE-CI", "EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-TRAEFIK-IMAGE-APPROVED",
+        "status": "present",
+        "statement": "A imagem Traefik para linux/amd64 foi resolvida e aprovada por digest imutável; não foi instalada na VPS.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:26:00Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-VPS-READINESS",
+        "status": "present",
+        "statement": "Capacidade, NTP, Docker, UFW, Fail2ban, AppArmor e serviços essenciais da VPS foram observados saudáveis.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:18:40Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-TRAEFIK-LIVE",
+        "status": "absent",
+        "statement": "Nenhum container Traefik estava ativo ou instalado na VPS.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:18:40Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-ACME-STATE",
+        "status": "absent",
+        "statement": "O diretório de estado Traefik e os arquivos ACME staging e production estavam ausentes.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:18:40Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-PUBLIC-CERTIFICATE",
+        "status": "absent",
+        "statement": "Nenhum certificado público da API foi observável no Gate 1.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:22:00Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-PUBLIC-HTTPS",
+        "status": "absent",
+        "statement": "Nenhum endpoint HTTPS público da API estava disponível.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:22:00Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-PUBLIC-HTTP-BINDINGS",
+        "status": "absent",
+        "statement": "Não havia listeners ou bindings públicos TCP/80 e TCP/443 no host.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:22:00Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-06B-DEPLOYMENT",
+        "status": "absent",
+        "statement": "Nenhuma implantação 06B, publicação ou mutação de produção foi executada.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:26:00Z",
+        "evidenceIds": ["EV-MVP06A-POSTMERGE-CI", "EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-DNS-API",
+        "status": "absent",
+        "statement": "api.agenciagenesismkt.com.br retornou NXDOMAIN de forma consistente no snapshot do Gate 1.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:21:31.506Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-DNS-APP",
+        "status": "present",
+        "statement": "app.agenciagenesismkt.com.br apresentou A 185.158.133.1, sem CNAME ou AAAA, no snapshot do Gate 1.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:21:31.506Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-VERCEL-LINK",
+        "status": "unknown",
+        "statement": "O vínculo de app.agenciagenesismkt.com.br com a Vercel não foi comprovado; a Vercel não foi inspecionada por ausência de sessão read-only autorizada.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:24:00Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+      },
+      {
+        "id": "OPS-ACME-CONTACT",
+        "status": "present",
+        "statement": "Arthur aprovou contato@agenciagenesismkt.com.br como email de registro ACME para staging e production. A decisão não configura ACME nem autoriza emissão de certificado.",
+        "basis": "documented",
+        "documentedAt": "2026-08-11T17:07:39Z",
+        "evidenceIds": []
+      },
+      {
         "id": "OPS-APPROVED-RECOVERY",
         "status": "present",
-        "statement": "Google Drive é o destino externo de backup aprovado; RPO, RTO, retenção, implementação e restore comprovado permanecem separados desta decisão.",
+        "statement": "Google Drive permanece o destino externo de backup aprovado; RPO, RTO, retenção, implementação e restore comprovado seguem pendentes.",
         "basis": "documented",
         "documentedAt": "2026-08-10T19:42:11Z",
         "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
@@ -108,7 +261,7 @@
       {
         "id": "OPS-APPROVED-MONITORING",
         "status": "present",
-        "statement": "UptimeRobot sobre /health é o monitoramento externo aprovado; alertas, destinatários, escalonamento, implementação e estado live permanecem separados desta decisão.",
+        "statement": "UptimeRobot sobre /health permanece o destino de monitoramento externo aprovado; política de alertas e implementação seguem pendentes.",
         "basis": "documented",
         "documentedAt": "2026-08-10T19:42:11Z",
         "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
@@ -116,25 +269,26 @@
       {
         "id": "OPS-GHCR-VISIBILITY",
         "status": "unknown",
-        "statement": "Há histórico documentado de package GHCR público, mas a visibilidade live atual não foi observada nesta tarefa.",
+        "statement": "Há histórico documentado de package GHCR público; este fato preserva a separação entre o destino privado aprovado e observações live.",
         "basis": "unknown",
         "documentedAt": "2026-08-10T19:42:11Z",
         "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
       },
       {
-        "id": "OPS-LIVE-STATE",
-        "status": "unknown",
-        "statement": "VPS, containers, banco, firewall e serviços externos não foram observados nesta tarefa.",
-        "basis": "unknown",
-        "documentedAt": "2026-08-10T16:00:00Z",
-        "evidenceIds": []
+        "id": "OPS-GHCR-PUBLIC-READ-OBSERVED",
+        "status": "present",
+        "statement": "O package GHCR da API aceitou leitura anônima no Gate 1; a transição futura para privado permanece separada.",
+        "basis": "observed",
+        "documentedAt": "2026-08-11T16:50:44Z",
+        "observedAt": "2026-08-11T16:26:00Z",
+        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
       },
       {
         "id": "OPS-REAL-DATA",
         "status": "not-authorized",
         "statement": "Dados reais não estão autorizados.",
         "basis": "documented",
-        "documentedAt": "2026-08-10T16:00:00Z",
+        "documentedAt": "2026-08-11T16:50:44Z",
         "evidenceIds": ["EV-API-ADR013-BASE"]
       }
     ]
@@ -173,15 +327,41 @@
       "kind": "github-pr",
       "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/11",
       "capturedAt": "2026-08-10T15:00:00Z"
+    },
+    {
+      "id": "EV-MVP06A-PR41",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/pull/41",
+      "capturedAt": "2026-08-11T15:48:01Z"
+    },
+    {
+      "id": "EV-MVP06A-POSTMERGE-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/actions/runs/31503834501",
+      "capturedAt": "2026-08-11T16:26:00Z"
+    },
+    {
+      "id": "EV-MVP06B-GATE1-REPORT",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/mvp06-06b-gate1-operational-readiness/18-FINAL-REPORT.md",
+      "sha256": "6b90a11dd86cb656a263b69fef2e11bf3872ed666a354ca95a0de53935009d62",
+      "capturedAt": "2026-08-11T16:50:44Z"
     }
   ],
   "blockers": [
     {
       "id": "BLOCK-PUBLIC-ORIGIN",
       "status": "open",
-      "summary": "Abertura exige implementar e comprovar Traefik, TLS, DNS dos hostnames aprovados e exposição controlada.",
+      "summary": "O contrato 06A está incorporado; implantação live, DNS, TLS e exposição health-only continuam pendentes e exigem autorizações próprias.",
       "owner": "arthur",
-      "blocksTaskIds": ["0.8-MVP-06", "0.8-MVP-08"]
+      "blocksTaskIds": ["0.8-MVP-06B-CONDITIONS", "0.8-MVP-08"]
+    },
+    {
+      "id": "BLOCK-WEB-VERCEL-FUNCTIONAL",
+      "status": "open",
+      "summary": "O vínculo app./Vercel precisa ser reconciliado antes da futura exposição funcional /api/v1; não bloqueia o edge health-only da 06B.",
+      "owner": "arthur",
+      "blocksTaskIds": ["0.8-MVP-08"]
     },
     {
       "id": "BLOCK-RECOVERY",
@@ -192,6 +372,90 @@
     }
   ],
   "pendingHumanDecisions": [
+    {
+      "id": "HD-DNS-OPERATOR-AUTHORITY",
+      "question": "Quem operará o DNS e qual autoridade DNS será usada na preoperação?",
+      "whyMaterial": "Define responsabilidade e o ponto autorizado para a futura alteração do hostname da API.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-DNS-TTL",
+      "question": "Qual TTL será aprovado para os registros DNS da operação?",
+      "whyMaterial": "Determina propagação, reversão e duração de exposição durante a janela.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-CHANGE-WINDOW",
+      "question": "Qual janela de mudança será aprovada para a preoperação e a exposição controlada?",
+      "whyMaterial": "Delimita quando mutações e checkpoints humanos poderão ocorrer.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-DOWNTIME-TOLERANCE",
+      "question": "Qual tolerância de indisponibilidade será aceita durante a janela?",
+      "whyMaterial": "Define critérios de pausa e rollback diante de impacto na baseline privada.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-SNAPSHOT-OR-WAIVER",
+      "question": "Será exigido snapshot prévio ou haverá dispensa humana explícita?",
+      "whyMaterial": "Define uma salvaguarda material antes da primeira mutação da VPS.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-AUTHORIZE-PRIVATE-INSTALL",
+      "question": "A instalação privada do Traefik será autorizada na janela aprovada?",
+      "whyMaterial": "É a primeira mutação live e requer autorização separada.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-AUTHORIZE-TRUST-PROXY-PROBE",
+      "question": "O probe sintético de trust proxy será autorizado?",
+      "whyMaterial": "O probe produz evidência operacional e deve permanecer condicionado a autorização humana.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-AUTHORIZE-DNS-TCP80-ACME-STAGING",
+      "question": "DNS, TCP/80 e ACME staging serão autorizados em conjunto no checkpoint correspondente?",
+      "whyMaterial": "A transição cria alcance público e inicia validação ACME staging.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-AUTHORIZE-ACME-PRODUCTION",
+      "question": "A emissão ACME production será autorizada após o staging aprovado?",
+      "whyMaterial": "O contato foi decidido, mas a emissão de certificado continua sem autorização.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-AUTHORIZE-TCP443-PUBLIC-FULL",
+      "question": "TCP/443 e o override public-full serão autorizados após certificado válido?",
+      "whyMaterial": "A decisão habilita HTTPS público health-only e precisa de Gate humano próprio.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-OBSERVATION-DURATION",
+      "question": "Qual duração de observação será exigida após cada transição?",
+      "whyMaterial": "Define o período mínimo para avaliar saúde, exposição e estabilidade.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-KEEP-OR-REVERT",
+      "question": "Quais critérios e quem decidirá keep ou revert ao fim da observação?",
+      "whyMaterial": "Evita que a manutenção da mudança seja presumida sem decisão humana.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-ROLLBACK-OWNER-AUTHORIZATION",
+      "question": "Quem será o owner do rollback e qual autorização poderá acioná-lo?",
+      "whyMaterial": "Define responsabilidade e autoridade para reverter com segurança.",
+      "blockingTaskIds": ["0.8-MVP-06B-CONDITIONS"]
+    },
+    {
+      "id": "HD-WEB-VERCEL-RECONCILIATION",
+      "question": "Como app.agenciagenesismkt.com.br e a Vercel serão reconciliados antes do proxy funcional /api/v1?",
+      "whyMaterial": "O vínculo atual não foi comprovado; a decisão não bloqueia o health-only 06B.",
+      "blockingTaskIds": ["0.8-MVP-08"]
+    },
     {
       "id": "HD-BACKUP",
       "question": "Quais RPO, RTO e retenção serão aprovados para o backup externo no Google Drive?",
@@ -275,6 +539,18 @@
       "statement": "Dados reais permanecem não autorizados.",
       "reviewTrigger": "Reavaliar somente após release gates e decisão humana explícita.",
       "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
+    },
+    {
+      "id": "OR-POSTGRES-PRIVATE",
+      "statement": "O PostgreSQL deve permanecer privado, sem binding de porta no host ou exposição direta à Internet.",
+      "reviewTrigger": "Interromper antes de qualquer alteração que publique ou contorne a rede privada do banco.",
+      "sourceEvidenceIds": ["EV-API-ADR013-BASE", "EV-MVP06B-GATE1-REPORT"]
+    },
+    {
+      "id": "OR-FUNCTIONAL-API-FAIL-CLOSED",
+      "statement": "A API funcional /api/v1 permanece fail-closed; a 06B limita a exposição pública ao health-only.",
+      "reviewTrigger": "Reavaliar somente após reconciliação app./Vercel, testes funcionais, RG-CROSS-TENANT e autorização específica.",
+      "sourceEvidenceIds": ["EV-MVP06B-GATE1-REPORT"]
     }
   ],
   "pointerMetadata": {
