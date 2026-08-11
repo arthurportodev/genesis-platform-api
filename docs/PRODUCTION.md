@@ -566,3 +566,59 @@ RPO, RTO, retenção, política de alertas, destinatários, escalonamento e
 autorização de usuários/dados reais são resolvidos exclusivamente em
 `docs/memory/project-state.v1.json`; não mantenha uma segunda lista temporal
 neste documento.
+
+## Candidato 0.8-MVP-06A — Traefik, TLS e modos de exposição
+
+Este contrato está preparado na branch candidata e aguarda Gate 2; não está
+incorporado à `main` e não autoriza execução na VPS. A imagem oficial selecionada
+é Traefik `v3.7.9`, `linux/amd64`, fixada em
+`traefik@sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8`.
+Fonte: `https://github.com/traefik/traefik`; imagem criada em
+`2026-07-24T19:31:24.4220685Z`; seleção revisada em `2026-08-10`.
+
+### Arquivos e modos
+
+- `compose.production.yml`: Traefik sem `ports`, API e banco privados.
+- `compose.traefik-internal.yml`: somente loopback 18080/18443.
+- `compose.traefik-public-http.yml`: IPv4/80 público e 18443 em loopback;
+  staging é o default, e a produção pode ser selecionada mantendo este binding.
+- `compose.traefik-public-full.yml`: IPv4/80 e IPv4/443 públicos, somente após
+  certificado de produção válido.
+- `docker/traefik/traefik-internal.yml`: ACME desabilitado.
+- `docker/traefik/traefik-acme-staging.yml` e
+  `traefik-acme-production.yml`: CAs e storages separados.
+- `docker/traefik/dynamic/api-health-only.yml`: somente `GET /health` no host
+  da API; demais rotas e métodos retornam fail-closed no edge.
+
+`ACME_EMAIL` é parâmetro obrigatório e não secreto. O valor
+`acme-contact-required@genesis.invalid` serve apenas para validação local e deve
+ser substituído pelo email aprovado antes de qualquer ACME. O wrapper valida o
+formato, não imprime o valor e materializa a configuração somente no tmpfs
+read-only do container. `/opt/genesis/traefik-state` deve existir fora do Git
+com `acme-staging.json` e `acme.json` regulares, persistentes e `0600`; seu
+conteúdo nunca entra em logs, backup de evidência ou comandos de inspeção.
+
+### Sequência operacional futura — não executada
+
+1. Usar apenas bundle `committed-release` incorporado à `main` e autorização
+   live específica.
+2. Instalar o base sem portas e criar os dois arquivos ACME com `0600`.
+3. Iniciar `internal`, provar bindings loopback e matriz health-only.
+4. Configurar `TRUST_PROXY_HOPS=1`, recriar somente a API e provar IP real,
+   rate limit, auditoria e spoof adversarial.
+5. Após autoridade DNS e A sem AAAA, autorizar separadamente IPv4/80 no modo
+   `public-http`; executar ACME staging.
+6. Manter `public-http`, selecionar produção, obter e validar o certificado por
+   SNI em `127.0.0.1:18443` sem imprimir o estado ACME.
+7. Somente então autorizar `public-full` e executar smoke externo independente.
+
+Os modos públicos nunca são iniciados durante validação local. UFW permanece
+defesa do host, não gate de publicação Docker. Rollback começa por parar o
+Traefik ou recriá-lo em `internal`; se ele sair da topologia, restaurar
+`TRUST_PROXY_HOPS=0` e recriar somente a API. Nunca usar `down -v`, apagar
+estado ACME, tocar no volume PostgreSQL ou inferir privacidade pela ausência de
+regra UFW.
+
+Produção, DNS, firewall, GHCR, Vercel, certificados, usuários e dados reais
+continuam inalterados. HTTPS permanece não observado e o gate `RG-TLS` segue
+pendente.

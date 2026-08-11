@@ -7,6 +7,7 @@ const {
   API_IMAGE,
   PLATFORM,
   POSTGRES_IMAGE,
+  TRAEFIK_IMAGE,
 } = require('./validate-production-compose.cjs');
 
 const EXPECTED_ARTIFACTS = [
@@ -18,6 +19,21 @@ const EXPECTED_ARTIFACTS = [
   {
     path: 'config/production.env.example',
     sourcePath: '.env.production.example',
+    mode: '0644',
+  },
+  {
+    path: 'compose.traefik-internal.yml',
+    sourcePath: 'compose.traefik-internal.yml',
+    mode: '0644',
+  },
+  {
+    path: 'compose.traefik-public-http.yml',
+    sourcePath: 'compose.traefik-public-http.yml',
+    mode: '0644',
+  },
+  {
+    path: 'compose.traefik-public-full.yml',
+    sourcePath: 'compose.traefik-public-full.yml',
     mode: '0644',
   },
   {
@@ -35,12 +51,37 @@ const EXPECTED_ARTIFACTS = [
     sourcePath: 'docker/production/migrate-entrypoint.sh',
     mode: '0644',
   },
+  {
+    path: 'docker/traefik/render-static-config.sh',
+    sourcePath: 'docker/traefik/render-static-config.sh',
+    mode: '0644',
+  },
+  {
+    path: 'docker/traefik/traefik-internal.yml',
+    sourcePath: 'docker/traefik/traefik-internal.yml',
+    mode: '0644',
+  },
+  {
+    path: 'docker/traefik/traefik-acme-staging.yml',
+    sourcePath: 'docker/traefik/traefik-acme-staging.yml',
+    mode: '0644',
+  },
+  {
+    path: 'docker/traefik/traefik-acme-production.yml',
+    sourcePath: 'docker/traefik/traefik-acme-production.yml',
+    mode: '0644',
+  },
+  {
+    path: 'docker/traefik/dynamic/api-health-only.yml',
+    sourcePath: 'docker/traefik/dynamic/api-health-only.yml',
+    mode: '0644',
+  },
 ].sort((left, right) => left.path.localeCompare(right.path));
 const EXPECTED_FILES = [
   ...EXPECTED_ARTIFACTS.map((entry) => entry.path),
   'release-manifest.json',
 ].sort();
-const CONTRACT_VERSION = '0.8-MVP-05A.v2';
+const CONTRACT_VERSION = '0.8-MVP-06A.v1';
 const POSTGRES_LINUX_AMD64_MANIFEST =
   'sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a';
 
@@ -342,9 +383,32 @@ function validateProductionBundle(
     'PostgreSQL linux/amd64 manifest mismatch',
     failures,
   );
+  check(
+    manifest.images?.traefik?.reference === TRAEFIK_IMAGE,
+    'Traefik reference mismatch',
+    failures,
+  );
+  check(
+    manifest.images?.traefik?.digest === TRAEFIK_IMAGE.split('@')[1],
+    'Traefik digest mismatch',
+    failures,
+  );
+  check(
+    manifest.images?.traefik?.platform === PLATFORM &&
+      manifest.images?.traefik?.version === 'v3.7.9' &&
+      manifest.images?.traefik?.tag === 'v3.7.9' &&
+      manifest.images?.traefik?.source ===
+        'https://github.com/traefik/traefik' &&
+      manifest.images?.traefik?.imageCreatedAt ===
+        '2026-07-24T19:31:24.4220685Z' &&
+      manifest.images?.traefik?.selectedAt === '2026-08-10',
+    'Traefik provenance metadata mismatch',
+    failures,
+  );
   for (const [name, image] of [
     ['API', manifest.images?.api?.reference],
     ['PostgreSQL', manifest.images?.postgres?.reference],
+    ['Traefik', manifest.images?.traefik?.reference],
   ]) {
     check(
       typeof image === 'string' && /@sha256:[a-f0-9]{64}$/u.test(image),

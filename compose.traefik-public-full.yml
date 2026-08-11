@@ -1,0 +1,15 @@
+services:
+  traefik:
+    environment:
+      TRAEFIK_STATIC_CONFIG: traefik-acme-production.yml
+    ports: !override
+      - name: public-http
+        target: 80
+        published: '80'
+        host_ip: 0.0.0.0
+        protocol: tcp
+      - name: public-https
+        target: 443
+        published: '443'
+        host_ip: 0.0.0.0
+        protocol: tcp

@@ -456,3 +456,29 @@ maturidade e podem ser promovidos conforme adoção, dados, compliance e risco.
 - O resultado persistido de replace contém somente invitation anterior/nova e
   os snapshots fixos `pending`/`queued`; metadata da resposta/replay permanece
   separada e nunca adiciona campos ao payload público.
+
+## Candidato 0.8-MVP-06A — fronteira de confiança do edge
+
+O edge candidato reduz a superfície pública ao predicado exato
+`Host(api.agenciagenesismkt.com.br) && Path(/health) && Method(GET)`. Não há
+router catch-all: `/`, `/api/v1`, `/api/v1/health`, `/api/v1/auth/csrf`,
+`/dashboard/`, `/api/rawdata`, `POST /health`, outros métodos e outros hosts
+falham no Traefik antes de alcançar a API.
+
+O Traefik não recebe Docker socket, capabilities além de
+`NET_BIND_SERVICE`, filesystem gravável geral, dashboard/API ou porta 8080.
+Forwarded headers inseguros permanecem desabilitados nos entrypoints. A API
+confia exatamente um hop; com a cadeia sanitizada pelo Traefik, o endereço mais
+próximo é o IP efetivo para rate limit e auditoria, e um endereço forjado à
+esquerda não o controla. A topologia direta usa zero hops.
+
+O Compose base tem zero bindings. Cada modo exige `host_ip` explícito, proíbe
+IPv6 wildcard e substitui integralmente a lista de portas; API/3000,
+PostgreSQL/5432 e Traefik/8080 nunca são publicados. UFW não é evidência de
+privacidade de um binding Docker.
+
+ACME usa apenas HTTP-01. Staging e produção têm CAs e arquivos separados; o
+email é não secreto, mas é validado e não logado. Os arquivos de estado são
+regulares, persistentes, `0600`, externos ao Git e nunca são lidos para gerar
+evidência. A configuração de produção não é iniciada localmente e nenhum ACME
+live foi executado nesta candidata.

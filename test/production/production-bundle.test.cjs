@@ -245,6 +245,32 @@ test('builds a deterministic non-operational candidate with current bindings', (
   }
   assert.equal(builtFirst.manifest.generatedAt, '2023-11-14T22:13:20.000Z');
   assert.equal(builtFirst.manifest.generatedAtSemantics, 'source-date-epoch');
+  assert.deepEqual(builtFirst.manifest.images.traefik, {
+    reference:
+      'traefik@sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8',
+    digest:
+      'sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8',
+    platform: 'linux/amd64',
+    version: 'v3.7.9',
+    tag: 'v3.7.9',
+    source: 'https://github.com/traefik/traefik',
+    imageCreatedAt: '2026-07-24T19:31:24.4220685Z',
+    selectedAt: '2026-08-10',
+  });
+  for (const path of [
+    'compose.traefik-internal.yml',
+    'compose.traefik-public-http.yml',
+    'compose.traefik-public-full.yml',
+    'docker/traefik/traefik-internal.yml',
+    'docker/traefik/traefik-acme-staging.yml',
+    'docker/traefik/traefik-acme-production.yml',
+    'docker/traefik/dynamic/api-health-only.yml',
+  ]) {
+    assert.ok(
+      EXPECTED_FILES.includes(path),
+      `${path} is absent from the bundle`,
+    );
+  }
 });
 
 test('derives candidate time from the base commit without claiming artifact provenance', (t) => {
@@ -560,6 +586,22 @@ test('rejects unexpected files, hash drift and mutable image references', (t) =>
       cwd: fixture.repository,
     }).failures.join('\n'),
     /API reference mismatch|API image is not immutable/u,
+  );
+
+  const traefikTag = join(fixture.root, 'traefik-tag');
+  buildProductionBundle({ cwd: fixture.repository, output: traefikTag });
+  const traefikManifestPath = join(traefikTag, 'release-manifest.json');
+  const traefikManifest = JSON.parse(readFileSync(traefikManifestPath, 'utf8'));
+  traefikManifest.images.traefik.reference = 'traefik:v3.7.9';
+  writeFileSync(
+    traefikManifestPath,
+    `${JSON.stringify(traefikManifest, null, 2)}\n`,
+  );
+  assert.match(
+    validateProductionBundle(traefikTag, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
+    /Traefik reference mismatch|Traefik image is not immutable/u,
   );
 });
 

@@ -15,9 +15,10 @@ const {
   API_IMAGE,
   PLATFORM,
   POSTGRES_IMAGE,
+  TRAEFIK_IMAGE,
 } = require('./validate-production-compose.cjs');
 
-const CONTRACT_VERSION = '0.8-MVP-05A.v2';
+const CONTRACT_VERSION = '0.8-MVP-06A.v1';
 const BUNDLE_MODES = new Set(['candidate', 'committed-release']);
 const POSTGRES_LINUX_AMD64_MANIFEST =
   'sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a';
@@ -35,6 +36,21 @@ const ARTIFACTS = [
     mode: '0644',
   },
   {
+    source: 'compose.traefik-internal.yml',
+    path: 'compose.traefik-internal.yml',
+    mode: '0644',
+  },
+  {
+    source: 'compose.traefik-public-http.yml',
+    path: 'compose.traefik-public-http.yml',
+    mode: '0644',
+  },
+  {
+    source: 'compose.traefik-public-full.yml',
+    path: 'compose.traefik-public-full.yml',
+    mode: '0644',
+  },
+  {
     source: 'docker/postgres/init-runtime-role.sh',
     path: 'docker/postgres/init-runtime-role.sh',
     mode: '0644',
@@ -47,6 +63,31 @@ const ARTIFACTS = [
   {
     source: 'docker/production/migrate-entrypoint.sh',
     path: 'docker/production/migrate-entrypoint.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/traefik/render-static-config.sh',
+    path: 'docker/traefik/render-static-config.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/traefik/traefik-internal.yml',
+    path: 'docker/traefik/traefik-internal.yml',
+    mode: '0644',
+  },
+  {
+    source: 'docker/traefik/traefik-acme-staging.yml',
+    path: 'docker/traefik/traefik-acme-staging.yml',
+    mode: '0644',
+  },
+  {
+    source: 'docker/traefik/traefik-acme-production.yml',
+    path: 'docker/traefik/traefik-acme-production.yml',
+    mode: '0644',
+  },
+  {
+    source: 'docker/traefik/dynamic/api-health-only.yml',
+    path: 'docker/traefik/dynamic/api-health-only.yml',
     mode: '0644',
   },
 ].sort((left, right) =>
@@ -309,6 +350,16 @@ function buildProductionBundle({
           platformManifestDigest: POSTGRES_LINUX_AMD64_MANIFEST,
           version: POSTGRES_VERSION,
           sourceRevision: POSTGRES_SOURCE_REVISION,
+        },
+        traefik: {
+          reference: TRAEFIK_IMAGE,
+          digest: TRAEFIK_IMAGE.split('@')[1],
+          platform: PLATFORM,
+          version: 'v3.7.9',
+          tag: 'v3.7.9',
+          source: 'https://github.com/traefik/traefik',
+          imageCreatedAt: '2026-07-24T19:31:24.4220685Z',
+          selectedAt: '2026-08-10',
         },
       },
       artifacts: entries,

@@ -699,3 +699,18 @@ snapshot histórico/superseded, corrigiu a afirmação obsoleta de que a 05B era
 futura e adicionou freshness checks locais e cross-repo. Este registro não
 declara a GH-01 concluída antes do merge futuro da API, não inicia trabalho
 posterior e não autoriza Git remoto ou produção.
+
+## Candidato 0.8-MVP-06A — Traefik, HTTPS e health-only edge
+
+Em 10 de agosto de 2026 foi preparado localmente, sem stage, commit, push, PR
+ou operação live, o candidato Critical da `0.8-MVP-06A` sobre a base
+`67f10bb04d4e2af0c421b932067ef0bcb3d9e821`. O Gate 1 aprovou HTTP-01,
+health-only e três modos explícitos de binding.
+
+O candidato adiciona Traefik oficial `v3.7.9` por digest, file provider, base
+sem portas, overrides internal/public-http/public-full, configurações ACME
+separadas, router exclusivo de `GET /health`, trust proxy de um hop,
+validators, testes e bundle ampliado. Produção, DNS, firewall, ACME live,
+certificados, GHCR, Vercel, Web, usuários e dados reais não foram alterados.
+HTTPS permanece não observado e a `0.8-MVP-06` não está concluída. O candidato
+aguarda verificação independente e Gate 2.

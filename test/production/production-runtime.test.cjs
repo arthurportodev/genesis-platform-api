@@ -15,9 +15,10 @@ const {
   API_IMAGE,
   POSTGRES_IMAGE,
   SERVICE_SECRETS,
+  TRAEFIK_IMAGE,
 } = require('../../scripts/validate-production-compose.cjs');
 
-const enabled = process.env.GENESIS_MVP05A_DOCKER_RUNTIME === '1';
+const enabled = process.env.GENESIS_MVP06A_DOCKER_RUNTIME === '1';
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -45,6 +46,8 @@ function composeArgs(project, override, ...args) {
     project,
     '-f',
     resolve('compose.production.yml'),
+    '-f',
+    resolve('compose.traefik-internal.yml'),
     '-f',
     override,
     '--env-file',
@@ -78,14 +81,19 @@ function writeSecrets(root, suffix = '') {
   return { directory, values };
 }
 
-function writeOverride(root, name, volume, secrets, extra = '') {
+function writeOverride(root, name, volume, secrets, traefikVolume, extra = '') {
   const path = join(root, `${name}.override.yml`);
   const file = (secret) => yamlString(join(secrets, secret));
   writeFileSync(
     path,
     [
       'services:',
-      extra || '  {}',
+      ...(extra ? [extra] : []),
+      '  traefik:',
+      '    volumes:',
+      '      - type: volume',
+      `        source: ${traefikVolume}`,
+      '        target: /var/lib/traefik',
       'secrets:',
       `  postgres_bootstrap_password:\n    file: ${file('postgres_bootstrap_password')}`,
       `  database_migration_password:\n    file: ${file('database_migration_password')}`,
@@ -97,10 +105,86 @@ function writeOverride(root, name, volume, secrets, extra = '') {
       '  postgres_data:',
       '    external: true',
       `    name: ${volume}`,
+      `  ${traefikVolume}:`,
+      '    external: true',
+      `    name: ${traefikVolume}`,
       '',
     ].join('\n'),
   );
   return path;
+}
+
+function initializeTraefikState(volume) {
+  succeed('docker', ['volume', 'create', volume]);
+  succeed('docker', [
+    'run',
+    '--rm',
+    '--network',
+    'none',
+    '--entrypoint',
+    '/bin/sh',
+    '--mount',
+    `type=volume,src=${volume},dst=/state`,
+    TRAEFIK_IMAGE,
+    '-ec',
+    'umask 077; : > /state/acme-staging.json; : > /state/acme.json; chmod 0600 /state/acme-staging.json /state/acme.json; stat -c "%F:%a:%n" /state/acme-staging.json /state/acme.json',
+  ]);
+  const metadata = succeed('docker', [
+    'run',
+    '--rm',
+    '--network',
+    'none',
+    '--entrypoint',
+    '/bin/sh',
+    '--mount',
+    `type=volume,src=${volume},dst=/state,readonly`,
+    TRAEFIK_IMAGE,
+    '-ec',
+    'stat -c "%F:%a:%n" /state/acme-staging.json /state/acme.json',
+  ]);
+  assert.match(
+    metadata,
+    /regular(?: empty)? file:600:\/state\/acme-staging\.json/u,
+  );
+  assert.match(metadata, /regular(?: empty)? file:600:\/state\/acme\.json/u);
+}
+
+function probeHealthOnlyEdge() {
+  const script = String.raw`
+    const http = require('node:http');
+    const cases = [
+      ['GET', '/health', 'api.agenciagenesismkt.com.br'],
+      ['GET', '/', 'api.agenciagenesismkt.com.br'],
+      ['GET', '/api/v1', 'api.agenciagenesismkt.com.br'],
+      ['GET', '/api/v1/health', 'api.agenciagenesismkt.com.br'],
+      ['GET', '/api/v1/auth/csrf', 'api.agenciagenesismkt.com.br'],
+      ['GET', '/dashboard/', 'api.agenciagenesismkt.com.br'],
+      ['GET', '/api/rawdata', 'api.agenciagenesismkt.com.br'],
+      ['POST', '/health', 'api.agenciagenesismkt.com.br'],
+      ['HEAD', '/health', 'api.agenciagenesismkt.com.br'],
+      ['GET', '/health', 'different.example.invalid']
+    ];
+    const probe = ([method, path, host]) => new Promise((resolve, reject) => {
+      const request = http.request({
+        hostname: '127.0.0.1', port: 18080, method, path, headers: { Host: host }
+      }, (response) => {
+        response.resume();
+        response.on('end', () => resolve({
+          method, path, host, status: response.statusCode,
+          cacheControl: response.headers['cache-control'] ?? null
+        }));
+      });
+      request.on('error', reject);
+      request.end();
+    });
+    Promise.all(cases.map(probe)).then((results) => {
+      process.stdout.write(JSON.stringify(results));
+    }).catch((error) => {
+      console.error(error.message);
+      process.exit(1);
+    });
+  `;
+  return JSON.parse(succeed('node', ['-e', script]));
 }
 
 function volumeExists(name) {
@@ -468,24 +552,34 @@ function assertInitGuardMutation({
 }
 
 test(
-  'validates the isolated production runtime, privileges, secrets and external volume',
+  'validates the isolated internal Traefik runtime, health-only edge, privileges and secrets',
   { skip: !enabled, timeout: 900_000 },
   () => {
     const suffix = `${process.pid}-${randomBytes(3).toString('hex')}`;
-    const root = mkdtempSync(join(tmpdir(), 'genesis-mvp05a-runtime-'));
-    const project = `genesis-mvp05a-runtime-${suffix}`;
-    const failureProject = `genesis-mvp05a-failure-${suffix}`;
-    const missingProject = `genesis-mvp05a-missing-${suffix}`;
-    const volume = `genesis-mvp05a-runtime-${suffix}`;
-    const failureVolume = `genesis-mvp05a-failure-${suffix}`;
-    const missingVolume = `genesis-mvp05a-missing-${suffix}`;
+    const root = mkdtempSync(join(tmpdir(), 'genesis-mvp06a-runtime-'));
+    const project = `genesis-mvp06a-runtime-${suffix}`;
+    const failureProject = `genesis-mvp06a-failure-${suffix}`;
+    const missingProject = `genesis-mvp06a-missing-${suffix}`;
+    const volume = `genesis-mvp06a-runtime-${suffix}`;
+    const failureVolume = `genesis-mvp06a-failure-${suffix}`;
+    const missingVolume = `genesis-mvp06a-missing-${suffix}`;
+    const traefikVolume = `genesis-mvp06a-traefik-${suffix}`;
+    const failureTraefikVolume = `genesis-mvp06a-traefik-failure-${suffix}`;
+    const missingTraefikVolume = `genesis-mvp06a-traefik-missing-${suffix}`;
     const { directory, values } = writeSecrets(root);
-    const override = writeOverride(root, 'runtime', volume, directory);
+    const override = writeOverride(
+      root,
+      'runtime',
+      volume,
+      directory,
+      traefikVolume,
+    );
     const failureOverride = writeOverride(
       root,
       'failure',
       failureVolume,
       directory,
+      failureTraefikVolume,
       "  migrate:\n    command: ['/bin/sh', '-c', 'exit 42']",
     );
     const missingOverride = writeOverride(
@@ -493,8 +587,31 @@ test(
       'missing',
       missingVolume,
       directory,
+      missingTraefikVolume,
     );
 
+    assert.equal(
+      succeed('docker', [
+        'ps',
+        '--filter',
+        'publish=18080',
+        '--format',
+        '{{.ID}}',
+      ]),
+      '',
+      'host port 18080 is already in use',
+    );
+    assert.equal(
+      succeed('docker', [
+        'ps',
+        '--filter',
+        'publish=18443',
+        '--format',
+        '{{.ID}}',
+      ]),
+      '',
+      'host port 18443 is already in use',
+    );
     assert.equal(volumeExists('genesis-postgres-data'), false);
     assert.equal(volumeExists(missingVolume), false);
     const missing = run(
@@ -535,6 +652,8 @@ test(
         expected: /Unexpected membership involving production roles/u,
       });
 
+      initializeTraefikState(traefikVolume);
+      initializeTraefikState(failureTraefikVolume);
       succeed('docker', ['volume', 'create', volume]);
       succeed(
         'docker',
@@ -652,6 +771,30 @@ test(
       );
       assert.match(readiness, /^200:/u);
 
+      const edgeResults = probeHealthOnlyEdge();
+      assert.equal(edgeResults[0].status, 200);
+      assert.equal(edgeResults[0].cacheControl, 'no-store');
+      for (const result of edgeResults.slice(1)) {
+        assert.equal(
+          result.status,
+          404,
+          `${result.method} ${result.host}${result.path} escaped health-only routing`,
+        );
+      }
+      const traefikInspection = inspectService(project, override, 'traefik');
+      assert.deepEqual(traefikInspection.NetworkSettings.Ports['80/tcp'], [
+        { HostIp: '127.0.0.1', HostPort: '18080' },
+      ]);
+      assert.deepEqual(traefikInspection.NetworkSettings.Ports['443/tcp'], [
+        { HostIp: '127.0.0.1', HostPort: '18443' },
+      ]);
+      assert.equal(
+        traefikInspection.Mounts.some(
+          (mount) => mount.Destination === '/var/run/docker.sock',
+        ),
+        false,
+      );
+
       for (const service of ['postgres', 'migrate', 'api']) {
         const inspection = inspectService(project, override, service);
         const env = inspection.Config.Env.join('\n');
@@ -730,7 +873,7 @@ test(
 
       succeed(
         'docker',
-        composeArgs(project, override, 'down', '-v', '--remove-orphans'),
+        composeArgs(project, override, 'down', '--remove-orphans'),
       );
       assert.equal(volumeExists(volume), true);
       succeed(
@@ -739,7 +882,6 @@ test(
           failureProject,
           failureOverride,
           'down',
-          '-v',
           '--remove-orphans',
         ),
       );
@@ -756,12 +898,18 @@ test(
             cleanupProject,
             cleanupOverride,
             'down',
-            '-v',
             '--remove-orphans',
           ),
         );
       }
-      for (const cleanupVolume of [volume, failureVolume, missingVolume]) {
+      for (const cleanupVolume of [
+        volume,
+        failureVolume,
+        missingVolume,
+        traefikVolume,
+        failureTraefikVolume,
+        missingTraefikVolume,
+      ]) {
         if (volumeExists(cleanupVolume)) {
           const remove = run('docker', ['volume', 'rm', cleanupVolume]);
           assert.equal(remove.status, 0, remove.stderr);

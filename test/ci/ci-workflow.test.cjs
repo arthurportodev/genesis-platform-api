@@ -370,12 +370,64 @@ test('initializes exactly five fixed paths through GITHUB_ENV before consumers',
 });
 
 test('requires the complete exact synthetic non-secret production matrix', () => {
-  for (const [name, value] of Object.entries(SYNTHETIC_ENV_MATRIX)) {
+  const syntheticAcmeContact =
+    'ACME_EMAIL=acme-contact-required@genesis.invalid';
+  assert.equal(
+    SYNTHETIC_ENV_MATRIX.ACME_EMAIL,
+    'acme-contact-required@genesis.invalid',
+  );
+  assert.equal(SYNTHETIC_ENV_MATRIX.TRUST_PROXY_HOPS, '1');
+  for (const [name, value] of Object.entries(SYNTHETIC_ENV_MATRIX).filter(
+    ([name]) => name !== 'ACME_EMAIL',
+  )) {
     rejects(
       mutated(`          ${name}=${value}\n`, ''),
       /complete approved matrix/u,
     );
   }
+  rejects(
+    mutated(`          ${syntheticAcmeContact}\n`, ''),
+    /complete approved matrix/u,
+  );
+  rejects(
+    mutated(
+      `          ${syntheticAcmeContact}`,
+      `          ${syntheticAcmeContact}\n          ${syntheticAcmeContact}`,
+    ),
+    /duplicates ACME_EMAIL|complete approved matrix/u,
+  );
+  for (const rejected of [
+    'ACME_EMAIL=',
+    'ACME_EMAIL=other-contact@genesis.invalid',
+    'ACME_EMAIL=acme-contact-required@example.invalid',
+    'ACME_EMAIL=${{ secrets.ACME_EMAIL }}',
+    'ACME_EMAIL= acme-contact-required@genesis.invalid',
+    'ACME_EMAIL=acme-contact-required@genesis.invalid\t',
+  ]) {
+    rejects(
+      mutated(syntheticAcmeContact, rejected),
+      /complete approved matrix/u,
+    );
+  }
+  rejects(
+    mutated('          TRUST_PROXY_HOPS=1\n', ''),
+    /complete approved matrix/u,
+  );
+  rejects(
+    mutated('          TRUST_PROXY_HOPS=1', '          TRUST_PROXY_HOPS=0'),
+    /complete approved matrix/u,
+  );
+  rejects(
+    mutated('          TRUST_PROXY_HOPS=1', '          TRUST_PROXY_HOPS=2'),
+    /complete approved matrix/u,
+  );
+  rejects(
+    mutated(
+      '          TRUST_PROXY_HOPS=1',
+      '          TRUST_PROXY_HOPS=1\n          TRUST_PROXY_HOPS=1',
+    ),
+    /duplicates TRUST_PROXY_HOPS|complete approved matrix/u,
+  );
   rejects(
     mutated(
       '          DATABASE_RUNTIME_ROLE=genesis_runtime',

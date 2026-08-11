@@ -1,0 +1,14 @@
+http:
+  routers:
+    api-health-only:
+      entryPoints:
+        - web
+        - websecure
+      rule: 'Host(`api.agenciagenesismkt.com.br`) && Path(`/health`) && Method(`GET`)'
+      service: api-health
+
+  services:
+    api-health:
+      loadBalancer:
+        servers:
+          - url: http://api:3000

@@ -1,6 +1,45 @@
 name: genesis
 
 services:
+  traefik:
+    image: traefik@sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8
+    platform: linux/amd64
+    restart: unless-stopped
+    init: true
+    entrypoint: ['/bin/sh', '/etc/traefik/render-static-config.sh']
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+      TRAEFIK_STATIC_CONFIG: ${TRAEFIK_STATIC_CONFIG:-traefik-internal.yml}
+    volumes:
+      - ./docker/traefik/render-static-config.sh:/etc/traefik/render-static-config.sh:ro
+      - ./docker/traefik/traefik-internal.yml:/etc/traefik/static/traefik-internal.yml:ro
+      - ./docker/traefik/traefik-acme-staging.yml:/etc/traefik/static/traefik-acme-staging.yml:ro
+      - ./docker/traefik/traefik-acme-production.yml:/etc/traefik/static/traefik-acme-production.yml:ro
+      - ./docker/traefik/dynamic:/etc/traefik/dynamic:ro
+      - /opt/genesis/traefik-state:/var/lib/traefik
+    tmpfs:
+      - /run/traefik:rw,noexec,nosuid,nodev,size=1m,mode=0700
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    cpus: ${TRAEFIK_CPUS:-0.50}
+    mem_limit: ${TRAEFIK_MEMORY_LIMIT:-256m}
+    pids_limit: ${TRAEFIK_PIDS_LIMIT:-128}
+    logging: &rotating-logs
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+    networks:
+      - edge
+
   postgres:
     image: postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     platform: linux/amd64
@@ -29,11 +68,7 @@ services:
     cpus: ${POSTGRES_CPUS:-1.0}
     mem_limit: ${POSTGRES_MEMORY_LIMIT:-2g}
     pids_limit: ${POSTGRES_PIDS_LIMIT:-256}
-    logging: &rotating-logs
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: '5'
+    logging: *rotating-logs
     networks:
       - database
 
@@ -99,7 +134,7 @@ services:
       DATABASE_USER: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
       DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
       FRONTEND_URL: https://genesis.invalid
-      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
       JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-30}
       API_PUBLIC_REPLICA_COUNT: 1
