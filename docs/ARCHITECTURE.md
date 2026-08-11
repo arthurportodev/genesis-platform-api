@@ -363,3 +363,28 @@ As projeções operacionais são consultas `SELECT` tenant-scoped. Cada statemen
 A lista combina busca por prefixo NFC ou telefone E.164 exato com filtros allowlisted. Cursores versionados carregam apenas sort, chave temporal, UUID e MAC dos filtros; não carregam PII. O Kanban executa totais e previews das colunas no mesmo statement, e a continuação é independente por stage. Datas civis e estados temporais são convertidos pelo PostgreSQL usando `organizations.crm_time_zone`.
 
 A migration `1785606000000-AddLeadOperationalReadIndexes.ts` adiciona somente nove índices. Readiness específico verifica UTF8, validade, readiness, expressões, opclasses e predicados antes dessas superfícies. Cada projeção usa transação curta com timeout local configurável; rate limits de Membership, IP e métricas permanecem process-local. Nenhuma função, grant, DML ou dado persistido foi adicionado.
+
+## Candidato 0.8-MVP-06A — edge Traefik health-only
+
+O candidato local da `0.8-MVP-06A` prepara, sem incorporar nem operar, o edge
+aprovado no ADR-015. O Compose base adiciona Traefik somente à rede `edge` e
+continua sem `ports`; API/3000 e PostgreSQL/5432 permanecem sem bindings. O
+Traefik usa exclusivamente o file provider, sem Docker socket, dashboard, API
+insegura ou porta 8080.
+
+Três overrides substituem integralmente a lista de portas e são mutuamente
+exclusivos: `internal` publica somente `127.0.0.1:18080→80` e
+`127.0.0.1:18443→443`; `public-http` publica IPv4/80 e mantém 443 em loopback;
+`public-full` publica IPv4/80 e IPv4/443. Nenhum modo aceita wildcard IPv6.
+
+O único router é
+`Host(api.agenciagenesismkt.com.br) && Path(/health) && Method(GET)` e seu
+único upstream é `http://api:3000`. Rotas funcionais, outros hosts e métodos
+falham no edge. `FRONTEND_URL=https://genesis.invalid` continua fail-closed e
+`TRUST_PROXY_HOPS=1` representa exatamente o salto Traefik→API; remover o
+Traefik exige voltar a zero e recriar somente a API.
+
+Configurações ACME staging e produção usam HTTP-01 na porta 80, estados
+separados e persistentes e email não secreto renderizado em runtime. O estado
+ACME fica fora do Git. Nada nesta candidata comprova DNS, certificado, HTTPS
+live, binding público, frontend Vercel ou conclusão da `0.8-MVP-06`.

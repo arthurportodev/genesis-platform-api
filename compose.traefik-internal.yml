@@ -1,0 +1,15 @@
+services:
+  traefik:
+    environment:
+      TRAEFIK_STATIC_CONFIG: traefik-internal.yml
+    ports: !override
+      - name: internal-http
+        target: 80
+        published: '18080'
+        host_ip: 127.0.0.1
+        protocol: tcp
+      - name: internal-https
+        target: 443
+        published: '18443'
+        host_ip: 127.0.0.1
+        protocol: tcp

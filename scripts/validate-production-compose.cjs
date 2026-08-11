@@ -1,12 +1,62 @@
 const { spawnSync } = require('node:child_process');
-const { resolve } = require('node:path');
+const { existsSync, readFileSync } = require('node:fs');
+const { basename, resolve } = require('node:path');
 
 const API_IMAGE =
   'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';
 const POSTGRES_IMAGE =
   'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
+const TRAEFIK_IMAGE =
+  'traefik@sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8';
 const PLATFORM = 'linux/amd64';
-const EXPECTED_SERVICES = ['api', 'migrate', 'postgres'];
+const EXPECTED_SERVICES = ['api', 'migrate', 'postgres', 'traefik'];
+const BASE_COMPOSE = 'compose.production.yml';
+const PUBLIC_HTTP_STATIC_CONFIGS = [
+  'traefik-acme-staging.yml',
+  'traefik-acme-production.yml',
+];
+const MODE_CONTRACTS = {
+  base: {
+    override: null,
+    staticConfig: 'traefik-internal.yml',
+    ports: [],
+  },
+  internal: {
+    override: 'compose.traefik-internal.yml',
+    staticConfig: 'traefik-internal.yml',
+    ports: [
+      { host_ip: '127.0.0.1', target: 80, published: '18080', protocol: 'tcp' },
+      {
+        host_ip: '127.0.0.1',
+        target: 443,
+        published: '18443',
+        protocol: 'tcp',
+      },
+    ],
+  },
+  'public-http': {
+    override: 'compose.traefik-public-http.yml',
+    staticConfig: 'traefik-acme-staging.yml',
+    staticConfigs: PUBLIC_HTTP_STATIC_CONFIGS,
+    ports: [
+      { host_ip: '0.0.0.0', target: 80, published: '80', protocol: 'tcp' },
+      {
+        host_ip: '127.0.0.1',
+        target: 443,
+        published: '18443',
+        protocol: 'tcp',
+      },
+    ],
+  },
+  'public-full': {
+    override: 'compose.traefik-public-full.yml',
+    staticConfig: 'traefik-acme-production.yml',
+    ports: [
+      { host_ip: '0.0.0.0', target: 80, published: '80', protocol: 'tcp' },
+      { host_ip: '0.0.0.0', target: 443, published: '443', protocol: 'tcp' },
+    ],
+  },
+};
 const MIGRATION_COMMAND = [
   'node',
   'node_modules/typeorm/cli.js',
@@ -80,8 +130,18 @@ const POSTGRES_HEALTHCHECK = {
   start_period: '10s',
 };
 
-function validateProductionCompose(config, rawConfig) {
+function validateProductionCompose(
+  config,
+  rawConfig,
+  { mode = 'base', cwd = process.cwd(), selectedStaticConfig } = {},
+) {
   const failures = [];
+  const modeContract = MODE_CONTRACTS[mode];
+  check(
+    Boolean(modeContract),
+    `unknown Traefik binding mode: ${mode}`,
+    failures,
+  );
   const services = isPlainObject(config?.services) ? config.services : {};
   const rawServices = isPlainObject(rawConfig?.services)
     ? rawConfig.services
@@ -113,16 +173,20 @@ function validateProductionCompose(config, rawConfig) {
   const postgres = services.postgres ?? {};
   const migrate = services.migrate ?? {};
   const api = services.api ?? {};
+  const traefik = services.traefik ?? {};
   const rawPostgres = rawServices.postgres ?? {};
   const rawMigrate = rawServices.migrate ?? {};
   const rawApi = rawServices.api ?? {};
+  const rawTraefik = rawServices.traefik ?? {};
 
   for (const [name, service] of Object.entries(services)) {
-    check(
-      service.ports === undefined,
-      `${name} must not publish ports`,
-      failures,
-    );
+    if (name !== 'traefik') {
+      check(
+        service.ports === undefined,
+        `${name} must not publish ports`,
+        failures,
+      );
+    }
     check(!('build' in service), `${name} must not define build`, failures);
     check(
       service.platform === PLATFORM,
@@ -145,10 +209,16 @@ function validateProductionCompose(config, rawConfig) {
     'postgres image must use the approved digest',
     failures,
   );
+  check(
+    traefik.image === TRAEFIK_IMAGE,
+    'traefik image must use the approved official digest',
+    failures,
+  );
   for (const [name, image] of Object.entries({
     api: rawApi.image,
     migrate: rawMigrate.image,
     postgres: rawPostgres.image,
+    traefik: rawTraefik.image,
   })) {
     checkImmutableImage(image, name, failures);
   }
@@ -156,6 +226,7 @@ function validateProductionCompose(config, rawConfig) {
   checkNetworks(postgres, ['database'], 'postgres', failures);
   checkNetworks(migrate, ['database'], 'migrate', failures);
   checkNetworks(api, ['database', 'edge'], 'api', failures);
+  checkNetworks(traefik, ['edge'], 'traefik', failures);
   check(
     config.networks?.database?.internal === true,
     'database network must be internal',
@@ -174,8 +245,14 @@ function validateProductionCompose(config, rawConfig) {
   );
   check(migrate.restart === 'no', 'migrate must be one-shot', failures);
   check(api.restart === 'unless-stopped', 'api restart policy', failures);
+  check(
+    traefik.restart === 'unless-stopped',
+    'traefik restart policy',
+    failures,
+  );
   check(api.init === true, 'api must enable init', failures);
   check(migrate.init === true, 'migrate must enable init', failures);
+  check(traefik.init === true, 'traefik must enable init', failures);
   check(
     api.stop_grace_period === '20s',
     'api grace period must be 20s',
@@ -193,8 +270,19 @@ function validateProductionCompose(config, rawConfig) {
     'migrate filesystem must be read-only',
     failures,
   );
+  check(
+    traefik.read_only === true,
+    'traefik filesystem must be read-only',
+    failures,
+  );
   checkHardening(api, 'api', failures);
   checkHardening(migrate, 'migrate', failures);
+  checkHardening(traefik, 'traefik', failures);
+  check(
+    sameStringArray(traefik.cap_add, ['NET_BIND_SERVICE']),
+    'traefik must add only NET_BIND_SERVICE',
+    failures,
+  );
 
   check(
     sameStringArray(api.entrypoint, [
@@ -243,6 +331,46 @@ function validateProductionCompose(config, rawConfig) {
     'postgres',
     failures,
   );
+  for (const [source, target] of [
+    [
+      'docker/traefik/render-static-config.sh',
+      '/etc/traefik/render-static-config.sh',
+    ],
+    [
+      'docker/traefik/traefik-internal.yml',
+      '/etc/traefik/static/traefik-internal.yml',
+    ],
+    [
+      'docker/traefik/traefik-acme-staging.yml',
+      '/etc/traefik/static/traefik-acme-staging.yml',
+    ],
+    [
+      'docker/traefik/traefik-acme-production.yml',
+      '/etc/traefik/static/traefik-acme-production.yml',
+    ],
+    ['docker/traefik/dynamic', '/etc/traefik/dynamic'],
+  ]) {
+    checkReadOnlyBind(traefik, source, target, 'traefik', failures);
+  }
+  check(
+    sameStringArray(traefik.entrypoint, [
+      '/bin/sh',
+      '/etc/traefik/render-static-config.sh',
+    ]),
+    'traefik wrapper must be invoked by /bin/sh',
+    failures,
+  );
+  check(
+    JSON.stringify(traefik.volumes ?? []).includes('/var/lib/traefik') &&
+      !JSON.stringify(traefik.volumes ?? []).includes('/var/run/docker.sock'),
+    'traefik must mount only external ACME state and never the Docker socket',
+    failures,
+  );
+  check(
+    !JSON.stringify(config).includes('/var/run/docker.sock'),
+    'Docker socket is forbidden anywhere in production Compose',
+    failures,
+  );
 
   check(
     postgres.environment?.POSTGRES_PASSWORD_FILE ===
@@ -272,6 +400,30 @@ function validateProductionCompose(config, rawConfig) {
   check(
     api.environment?.FRONTEND_URL === 'https://genesis.invalid',
     'frontend origin must remain fail-closed',
+    failures,
+  );
+  check(
+    String(api.environment?.TRUST_PROXY_HOPS) === '1',
+    'API must trust exactly one Traefik proxy hop',
+    failures,
+  );
+  failures.push(...validateStaticConfigSelection(mode, selectedStaticConfig));
+  const allowedStaticConfigs = modeContract?.staticConfigs ?? [
+    modeContract?.staticConfig,
+  ];
+  check(
+    allowedStaticConfigs.includes(traefik.environment?.TRAEFIK_STATIC_CONFIG),
+    `traefik static configuration does not match ${mode}`,
+    failures,
+  );
+  check(
+    traefik.environment?.ACME_EMAIL === 'acme-contact-required@genesis.invalid',
+    'ACME email must be a required non-secret parameter with the safe example value',
+    failures,
+  );
+  check(
+    traefik.depends_on?.api?.condition === 'service_healthy',
+    'traefik must wait for the healthy API',
     failures,
   );
   for (const key of [
@@ -304,7 +456,15 @@ function validateProductionCompose(config, rawConfig) {
   checkResources(api, 0.75, 1024 ** 3, 128, 'api', failures);
   checkResources(migrate, 0.75, 1024 ** 3, 128, 'migrate', failures);
   checkResources(postgres, 1, 2 * 1024 ** 3, 256, 'postgres', failures);
-  for (const [name, service] of Object.entries({ api, migrate, postgres })) {
+  checkResources(traefik, 0.5, 256 * 1024 ** 2, 128, 'traefik', failures);
+  checkTraefikPorts(services, modeContract?.ports ?? [], failures);
+  validateTraefikSources(cwd, failures);
+  for (const [name, service] of Object.entries({
+    api,
+    migrate,
+    postgres,
+    traefik,
+  })) {
     checkLogging(service, name, failures);
   }
 
@@ -313,6 +473,280 @@ function validateProductionCompose(config, rawConfig) {
     serviceNames: names,
     failures,
   };
+}
+
+function checkTraefikPorts(services, expected, failures) {
+  const actual = Array.isArray(services.traefik?.ports)
+    ? services.traefik.ports.map((entry) => ({
+        host_ip: entry.host_ip,
+        target: Number(entry.target),
+        published: String(entry.published),
+        protocol: entry.protocol,
+      }))
+    : [];
+  check(
+    JSON.stringify(actual) === JSON.stringify(expected),
+    'Traefik bindings do not match the selected exclusive mode',
+    failures,
+  );
+  for (const [serviceName, service] of Object.entries(services)) {
+    for (const port of service.ports ?? []) {
+      check(
+        typeof port.host_ip === 'string' && port.host_ip.length > 0,
+        `${serviceName} contains an implicit wildcard binding`,
+        failures,
+      );
+      check(
+        !String(port.host_ip).includes('::'),
+        `${serviceName} contains a forbidden IPv6 wildcard binding`,
+        failures,
+      );
+      check(
+        serviceName === 'traefik' && [80, 443].includes(Number(port.target)),
+        `${serviceName} publishes a forbidden target port`,
+        failures,
+      );
+      check(
+        ![3000, 5432, 8080].includes(Number(port.published)),
+        `${serviceName} publishes forbidden host port ${port.published}`,
+        failures,
+      );
+    }
+  }
+}
+
+function validateTraefikSources(cwd, failures) {
+  const paths = {
+    base: 'compose.production.yml',
+    internalOverride: 'compose.traefik-internal.yml',
+    publicHttpOverride: 'compose.traefik-public-http.yml',
+    publicFullOverride: 'compose.traefik-public-full.yml',
+    render: 'docker/traefik/render-static-config.sh',
+    internal: 'docker/traefik/traefik-internal.yml',
+    staging: 'docker/traefik/traefik-acme-staging.yml',
+    production: 'docker/traefik/traefik-acme-production.yml',
+    dynamic: 'docker/traefik/dynamic/api-health-only.yml',
+  };
+  const sources = {};
+  for (const [name, path] of Object.entries(paths)) {
+    try {
+      sources[name] = readFileSync(resolve(cwd, path), 'utf8');
+    } catch (error) {
+      failures.push(
+        `required Traefik source is unavailable: ${path}: ${error.message}`,
+      );
+    }
+  }
+  if (Object.keys(sources).length !== Object.keys(paths).length) return;
+
+  const traefikBase =
+    sources.base.match(/\n  traefik:[\s\S]*?\n  postgres:/u)?.[0] ?? '';
+  check(
+    !/^\s+ports:/mu.test(traefikBase),
+    'base Traefik service must not define ports',
+    failures,
+  );
+  for (const [name, source] of [
+    ['internal', sources.internalOverride],
+    ['public-http', sources.publicHttpOverride],
+    ['public-full', sources.publicFullOverride],
+  ]) {
+    check(
+      /ports:\s*!override/u.test(source),
+      `${name} override must replace the port list integrally`,
+      failures,
+    );
+    check(
+      !/\[::\]|host_ip:\s*::/u.test(source),
+      `${name} override contains IPv6 wildcard`,
+      failures,
+    );
+  }
+
+  for (const [name, source] of [
+    ['internal', sources.internal],
+    ['staging', sources.staging],
+    ['production', sources.production],
+  ]) {
+    check(
+      /dashboard:\s*false/u.test(source),
+      `${name} must disable the dashboard`,
+      failures,
+    );
+    check(
+      /insecure:\s*false/u.test(source),
+      `${name} must disable insecure API exposure`,
+      failures,
+    );
+    check(
+      /providers:\s*\n\s+file:/u.test(source),
+      `${name} must use the file provider`,
+      failures,
+    );
+    check(
+      !/docker:/u.test(source),
+      `${name} must not enable the Docker provider`,
+      failures,
+    );
+    check(
+      !/:8080\b/u.test(source),
+      `${name} must not define port 8080`,
+      failures,
+    );
+    check(
+      (source.match(/forwardedHeaders:\s*\n\s+insecure:\s*false/gu) ?? [])
+        .length === 2,
+      `${name} must disable insecure forwarded headers on both entrypoints`,
+      failures,
+    );
+  }
+  check(
+    !/certificatesResolvers:|\bacme:/u.test(sources.internal),
+    'internal config must keep ACME disabled',
+    failures,
+  );
+  check(
+    /__ACME_EMAIL__/u.test(sources.staging),
+    'staging config must require rendered ACME email',
+    failures,
+  );
+  check(
+    /__ACME_EMAIL__/u.test(sources.production),
+    'production config must require rendered ACME email',
+    failures,
+  );
+  check(
+    /acme-staging-v02\.api\.letsencrypt\.org/u.test(sources.staging),
+    "staging config must use the Let's Encrypt staging CA",
+    failures,
+  );
+  check(
+    /acme-v02\.api\.letsencrypt\.org/u.test(sources.production),
+    "production config must use the Let's Encrypt production CA",
+    failures,
+  );
+  check(
+    /storage:\s*\/var\/lib\/traefik\/acme-staging\.json/u.test(sources.staging),
+    'staging ACME state path is invalid',
+    failures,
+  );
+  check(
+    /storage:\s*\/var\/lib\/traefik\/acme\.json/u.test(sources.production),
+    'production ACME state path is invalid',
+    failures,
+  );
+  for (const source of [sources.staging, sources.production]) {
+    check(
+      /httpChallenge:\s*\n\s+entryPoint:\s*web/u.test(source),
+      'ACME must use HTTP-01 on the port 80 entrypoint',
+      failures,
+    );
+    check(
+      /redirections:[\s\S]*to:\s*websecure/u.test(source),
+      'ACME modes must preserve HTTP to HTTPS redirect',
+      failures,
+    );
+    check(
+      !/dnsChallenge|TLS_CHALLENGE|tlsChallenge/u.test(source),
+      'only HTTP-01 is allowed',
+      failures,
+    );
+  }
+
+  const expectedRule =
+    'Host(`api.agenciagenesismkt.com.br`) && Path(`/health`) && Method(`GET`)';
+  check(
+    sources.dynamic.includes(expectedRule),
+    'health-only router rule is not exact',
+    failures,
+  );
+  check(
+    /url:\s*http:\/\/api:3000/u.test(sources.dynamic),
+    'health-only upstream must be http://api:3000',
+    failures,
+  );
+  check(
+    (sources.dynamic.match(/^\s{4}[a-z][a-z0-9-]+:\s*$/gmu) ?? []).length === 2,
+    'dynamic config must contain only one router and one service',
+    failures,
+  );
+  for (const forbidden of ['/api/v1', '/dashboard', '/api/rawdata', 'POST']) {
+    check(
+      !sources.dynamic.includes(forbidden),
+      `dynamic config contains forbidden route token ${forbidden}`,
+      failures,
+    );
+  }
+
+  check(
+    /case "\$config_name"/u.test(sources.render),
+    'render wrapper must allowlist static configurations',
+    failures,
+  );
+  check(
+    /ACME_EMAIL must be one safe non-secret email address/u.test(
+      sources.render,
+    ),
+    'render wrapper must validate ACME_EMAIL',
+    failures,
+  );
+  check(
+    !/echo .*\$acme_email|printf .*\$acme_email/u.test(sources.render),
+    'render wrapper must never log ACME_EMAIL',
+    failures,
+  );
+  for (const forbiddenState of [
+    'docker/traefik/acme.json',
+    'docker/traefik/acme-staging.json',
+  ]) {
+    check(
+      !existsSync(resolve(cwd, forbiddenState)),
+      `${forbiddenState} must remain outside Git`,
+      failures,
+    );
+  }
+}
+
+function validateComposeFileSelection(composePaths) {
+  const failures = [];
+  const names = composePaths.map((entry) => basename(entry));
+  check(
+    names.filter((name) => name === BASE_COMPOSE).length === 1,
+    'Compose selection must contain the base exactly once',
+    failures,
+  );
+  const selectedOverrides = names.filter((name) =>
+    Object.values(MODE_CONTRACTS).some(
+      (contract) => contract.override === name,
+    ),
+  );
+  check(
+    selectedOverrides.length <= 1,
+    'Compose selection must not combine Traefik binding modes',
+    failures,
+  );
+  check(
+    names.length === 1 + selectedOverrides.length,
+    'Compose selection contains an unexpected file',
+    failures,
+  );
+  return failures;
+}
+
+function validateStaticConfigSelection(mode, selectedStaticConfig) {
+  const failures = [];
+  if (mode !== 'public-http') return failures;
+  const selected =
+    selectedStaticConfig === undefined
+      ? MODE_CONTRACTS['public-http'].staticConfig
+      : selectedStaticConfig;
+  check(
+    typeof selected === 'string' &&
+      PUBLIC_HTTP_STATIC_CONFIGS.includes(selected),
+    `public-http static configuration must be one of: ${PUBLIC_HTTP_STATIC_CONFIGS.join(', ')}`,
+    failures,
+  );
+  return failures;
 }
 
 function checkRequiredBindings(services, failures) {
@@ -567,13 +1001,34 @@ function memoryBytes(value) {
   return Number(match[1]) * 1024 ** exponent;
 }
 
-function loadProductionCompose({ cwd, composePath, envFile }) {
-  const failures = [];
-  const rendered = runComposeConfig({ cwd, composePath, envFile });
+function loadProductionCompose({
+  cwd,
+  composePath,
+  composePaths,
+  envFile,
+  environment = {},
+}) {
+  const paths = composePaths ?? [composePath];
+  const failures = validateComposeFileSelection(paths);
+  if (failures.length > 0) {
+    return {
+      status: 'failed',
+      failures,
+      config: undefined,
+      rawConfig: undefined,
+    };
+  }
+  const rendered = runComposeConfig({
+    cwd,
+    composePaths: paths,
+    envFile,
+    environment,
+  });
   const raw = runComposeConfig({
     cwd,
-    composePath,
+    composePaths: paths,
     envFile,
+    environment,
     noInterpolate: true,
   });
   if (rendered.status !== 0)
@@ -604,14 +1059,21 @@ function loadProductionCompose({ cwd, composePath, envFile }) {
 
 function runComposeConfig({
   cwd,
-  composePath,
+  composePaths,
   envFile,
+  environment,
   noInterpolate = false,
 }) {
-  const args = ['compose', '--env-file', envFile, '-f', composePath, 'config'];
+  const args = ['compose', '--env-file', envFile];
+  for (const composePath of composePaths) args.push('-f', composePath);
+  args.push('config');
   if (noInterpolate) args.push('--no-interpolate');
   args.push('--format', 'json');
-  return spawnSync('docker', args, { cwd, encoding: 'utf8', env: process.env });
+  return spawnSync('docker', args, {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, ...environment },
+  });
 }
 
 function main() {
@@ -622,35 +1084,72 @@ function main() {
     process.exitCode = 1;
     return;
   }
-  const loaded = loadProductionCompose({
-    cwd,
-    composePath: resolve(cwd, 'compose.production.yml'),
-    envFile: resolve(cwd, envFile),
-  });
-  if (loaded.status !== 'passed') {
-    for (const failure of loaded.failures) console.error(`FAIL: ${failure}`);
-    process.exitCode = 1;
-    return;
+  const validations = [];
+  for (const [mode, contract] of Object.entries(MODE_CONTRACTS)) {
+    const composePaths = [resolve(cwd, BASE_COMPOSE)];
+    if (contract.override) composePaths.push(resolve(cwd, contract.override));
+    const selections =
+      mode === 'public-http' ? PUBLIC_HTTP_STATIC_CONFIGS : [undefined];
+    for (const selectedStaticConfig of selections) {
+      const validationMode = selectedStaticConfig
+        ? `${mode}+${selectedStaticConfig}`
+        : mode;
+      const loaded = loadProductionCompose({
+        cwd,
+        composePaths,
+        envFile: resolve(cwd, envFile),
+        environment:
+          selectedStaticConfig === undefined
+            ? {}
+            : { TRAEFIK_PUBLIC_HTTP_CONFIG: selectedStaticConfig },
+      });
+      if (loaded.status !== 'passed') {
+        validations.push({
+          mode: validationMode,
+          status: 'failed',
+          failures: loaded.failures,
+        });
+        continue;
+      }
+      validations.push({
+        mode: validationMode,
+        ...validateProductionCompose(loaded.config, loaded.rawConfig, {
+          mode,
+          cwd,
+          selectedStaticConfig,
+        }),
+      });
+    }
   }
-  const validation = validateProductionCompose(loaded.config, loaded.rawConfig);
-  for (const failure of validation.failures) console.error(`FAIL: ${failure}`);
+  const failures = validations.flatMap((entry) =>
+    entry.failures.map((failure) => `${entry.mode}: ${failure}`),
+  );
+  for (const failure of failures) console.error(`FAIL: ${failure}`);
   console.log(
     JSON.stringify({
       command: 'npm run production:compose:validate',
-      ...validation,
+      status: failures.length === 0 ? 'passed' : 'failed',
+      modes: validations,
+      failures,
     }),
   );
-  if (validation.status !== 'passed') process.exitCode = 1;
+  if (failures.length > 0) process.exitCode = 1;
 }
 
 if (require.main === module) main();
 
 module.exports = {
   API_IMAGE,
+  BASE_COMPOSE,
+  MODE_CONTRACTS,
   PLATFORM,
   POSTGRES_IMAGE,
+  PUBLIC_HTTP_STATIC_CONFIGS,
+  TRAEFIK_IMAGE,
   SECRET_FILES,
   SERVICE_SECRETS,
   loadProductionCompose,
+  validateComposeFileSelection,
   validateProductionCompose,
+  validateStaticConfigSelection,
 };

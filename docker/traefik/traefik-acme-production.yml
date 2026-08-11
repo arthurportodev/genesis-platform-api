@@ -1,0 +1,43 @@
+api:
+  dashboard: false
+  insecure: false
+
+entryPoints:
+  web:
+    address: ':80'
+    forwardedHeaders:
+      insecure: false
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ':443'
+    forwardedHeaders:
+      insecure: false
+    http:
+      tls:
+        certResolver: letsencrypt
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: __ACME_EMAIL__
+      caServer: https://acme-v02.api.letsencrypt.org/directory
+      storage: /var/lib/traefik/acme.json
+      httpChallenge:
+        entryPoint: web
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json

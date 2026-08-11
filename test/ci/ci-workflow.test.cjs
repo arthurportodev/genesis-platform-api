@@ -370,12 +370,32 @@ test('initializes exactly five fixed paths through GITHUB_ENV before consumers',
 });
 
 test('requires the complete exact synthetic non-secret production matrix', () => {
+  assert.equal(SYNTHETIC_ENV_MATRIX.TRUST_PROXY_HOPS, '1');
   for (const [name, value] of Object.entries(SYNTHETIC_ENV_MATRIX)) {
     rejects(
       mutated(`          ${name}=${value}\n`, ''),
       /complete approved matrix/u,
     );
   }
+  rejects(
+    mutated('          TRUST_PROXY_HOPS=1\n', ''),
+    /complete approved matrix/u,
+  );
+  rejects(
+    mutated('          TRUST_PROXY_HOPS=1', '          TRUST_PROXY_HOPS=0'),
+    /complete approved matrix/u,
+  );
+  rejects(
+    mutated('          TRUST_PROXY_HOPS=1', '          TRUST_PROXY_HOPS=2'),
+    /complete approved matrix/u,
+  );
+  rejects(
+    mutated(
+      '          TRUST_PROXY_HOPS=1',
+      '          TRUST_PROXY_HOPS=1\n          TRUST_PROXY_HOPS=1',
+    ),
+    /duplicates TRUST_PROXY_HOPS|complete approved matrix/u,
+  );
   rejects(
     mutated(
       '          DATABASE_RUNTIME_ROLE=genesis_runtime',

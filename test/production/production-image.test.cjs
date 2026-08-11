@@ -2,6 +2,9 @@ const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const { readFileSync } = require('node:fs');
 const test = require('node:test');
+const {
+  TRAEFIK_IMAGE,
+} = require('../../scripts/validate-production-compose.cjs');
 
 function logicalDockerfileLines(source) {
   const lines = [];
@@ -166,6 +169,44 @@ test('rejects weakened production runtime structures', () => {
 });
 
 const image = process.env.PRODUCTION_IMAGE_UNDER_TEST;
+const traefikImage = process.env.TRAEFIK_IMAGE_UNDER_TEST;
+
+test('pins the official Traefik v3.7.9 linux/amd64 image by verified digest', () => {
+  assert.equal(
+    TRAEFIK_IMAGE,
+    'traefik@sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8',
+  );
+  assert.match(TRAEFIK_IMAGE, /^traefik@sha256:[a-f0-9]{64}$/u);
+});
+
+test(
+  'validates the selected official Traefik image identity when requested',
+  { skip: !traefikImage },
+  () => {
+    const inspection = JSON.parse(
+      execFileSync('docker', ['image', 'inspect', traefikImage], {
+        encoding: 'utf8',
+      }),
+    )[0];
+    assert.equal(inspection.Os, 'linux');
+    assert.equal(inspection.Architecture, 'amd64');
+    assert.equal(
+      inspection.Id,
+      'sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8',
+    );
+    assert.ok(inspection.RepoDigests.includes(TRAEFIK_IMAGE));
+    assert.equal(
+      inspection.Config.Labels['org.opencontainers.image.version'],
+      'v3.7.9',
+    );
+    assert.equal(
+      inspection.Config.Labels['org.opencontainers.image.source'],
+      'https://github.com/traefik/traefik',
+    );
+    assert.deepEqual(inspection.Config.Entrypoint, ['/entrypoint.sh']);
+    assert.deepEqual(inspection.Config.Cmd, ['traefik']);
+  },
+);
 
 test(
   'validates the built image configuration and filesystem when requested',
@@ -279,6 +320,10 @@ test('keeps versioned production configuration free of secret fields', () => {
     assert.doesNotMatch(example, new RegExp(`^${variable}=`, 'mu'));
   }
   assert.doesNotMatch(example, /^GENESIS_API_IMAGE=/mu);
+  assert.match(
+    example,
+    /^ACME_EMAIL=acme-contact-required@genesis\.invalid$/mu,
+  );
   assert.match(example, /^DATABASE_BOOTSTRAP_USER=genesis_bootstrap$/mu);
 });
 

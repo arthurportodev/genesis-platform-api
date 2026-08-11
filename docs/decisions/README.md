@@ -53,3 +53,4 @@ Crie ADR quando a decisão afetar múltiplas tarefas, segurança, dados, isolame
 - [ADR-012 — Development Operating System v2](ADR-012-development-operating-system-v2.md) — Accepted em 30 de julho de 2026; processo de desenvolvimento vigente
 - [ADR-013 — Baseline mínima de produção do MVP](ADR-013-mvp-production-baseline.md) — Accepted em 3 de agosto de 2026; supersede o ADR-011 e define decisões duráveis de topologia, destinos e operação mínima sem declarar estado live
 - [ADR-014 — Contrato versionado de PostgreSQL, secrets e bundle](ADR-014-versioned-production-contract.md) — Accepted em 8 de agosto de 2026; especializa a baseline da 0.8-MVP-05A sem executar produção
+- [ADR-015 — Traefik, HTTPS e edge health-only](ADR-015-traefik-edge-and-tls.md) — Accepted em 10 de agosto de 2026; define file provider, HTTP-01, três modos exclusivos de binding e exposição provisória somente de `GET /health`, sem declarar estado live

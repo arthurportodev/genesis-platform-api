@@ -1,0 +1,27 @@
+api:
+  dashboard: false
+  insecure: false
+
+entryPoints:
+  web:
+    address: ':80'
+    forwardedHeaders:
+      insecure: false
+  websecure:
+    address: ':443'
+    forwardedHeaders:
+      insecure: false
+    http:
+      tls: {}
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json

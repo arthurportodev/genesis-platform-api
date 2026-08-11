@@ -4,36 +4,164 @@ const { resolve } = require('node:path');
 const test = require('node:test');
 const {
   API_IMAGE,
+  BASE_COMPOSE,
+  MODE_CONTRACTS,
   POSTGRES_IMAGE,
+  PUBLIC_HTTP_STATIC_CONFIGS,
   SECRET_FILES,
   SERVICE_SECRETS,
+  TRAEFIK_IMAGE,
   loadProductionCompose,
+  validateComposeFileSelection,
   validateProductionCompose,
+  validateStaticConfigSelection,
 } = require('../../scripts/validate-production-compose.cjs');
 
-const loaded = loadProductionCompose({
-  cwd: process.cwd(),
-  composePath: resolve('compose.production.yml'),
-  envFile: resolve('.env.production.example'),
-});
+function loadMode(mode, selectedStaticConfig) {
+  const contract = MODE_CONTRACTS[mode];
+  const composePaths = [resolve(BASE_COMPOSE)];
+  if (contract.override) composePaths.push(resolve(contract.override));
+  return loadProductionCompose({
+    cwd: process.cwd(),
+    composePaths,
+    envFile: resolve('.env.production.example'),
+    environment:
+      selectedStaticConfig === undefined
+        ? {}
+        : { TRAEFIK_PUBLIC_HTTP_CONFIG: selectedStaticConfig },
+  });
+}
+
+const loaded = loadMode('base');
+const modes = Object.fromEntries(
+  Object.keys(MODE_CONTRACTS).map((mode) => [mode, loadMode(mode)]),
+);
 
 test('renders and validates the complete production Compose contract', () => {
   assert.equal(loaded.status, 'passed', loaded.failures.join('\n'));
   assert.deepEqual(validateProductionCompose(loaded.config, loaded.rawConfig), {
     status: 'passed',
-    serviceNames: ['api', 'migrate', 'postgres'],
+    serviceNames: ['api', 'migrate', 'postgres', 'traefik'],
     failures: [],
   });
 });
 
-test('pins both images by approved digest for linux/amd64', () => {
+test('pins every image by approved digest for linux/amd64', () => {
   assert.equal(loaded.config.services.api.image, API_IMAGE);
   assert.equal(loaded.config.services.migrate.image, API_IMAGE);
   assert.equal(loaded.config.services.postgres.image, POSTGRES_IMAGE);
+  assert.equal(loaded.config.services.traefik.image, TRAEFIK_IMAGE);
   for (const service of Object.values(loaded.config.services)) {
     assert.equal(service.platform, 'linux/amd64');
     assert.match(service.image, /@sha256:[a-f0-9]{64}$/u);
   }
+});
+
+test('renders four mutually exclusive binding modes with exact host IPs', () => {
+  for (const [mode, modeLoaded] of Object.entries(modes)) {
+    assert.equal(modeLoaded.status, 'passed', modeLoaded.failures.join('\n'));
+    assert.deepEqual(
+      validateProductionCompose(modeLoaded.config, modeLoaded.rawConfig, {
+        mode,
+      }),
+      {
+        status: 'passed',
+        serviceNames: ['api', 'migrate', 'postgres', 'traefik'],
+        failures: [],
+      },
+    );
+    assert.deepEqual(
+      (modeLoaded.config.services.traefik.ports ?? []).map((entry) => ({
+        host_ip: entry.host_ip,
+        target: entry.target,
+        published: entry.published,
+        protocol: entry.protocol,
+      })),
+      MODE_CONTRACTS[mode].ports,
+    );
+    assert.equal(modeLoaded.config.services.api.ports, undefined);
+    assert.equal(modeLoaded.config.services.postgres.ports, undefined);
+  }
+});
+
+test('accepts public-http with staging and production using identical loopback-safe bindings', () => {
+  for (const selectedStaticConfig of PUBLIC_HTTP_STATIC_CONFIGS) {
+    const modeLoaded = loadMode('public-http', selectedStaticConfig);
+    assert.equal(modeLoaded.status, 'passed', modeLoaded.failures.join('\n'));
+    assert.deepEqual(
+      validateProductionCompose(modeLoaded.config, modeLoaded.rawConfig, {
+        mode: 'public-http',
+        selectedStaticConfig,
+      }),
+      {
+        status: 'passed',
+        serviceNames: ['api', 'migrate', 'postgres', 'traefik'],
+        failures: [],
+      },
+    );
+    assert.equal(
+      modeLoaded.config.services.traefik.environment.TRAEFIK_STATIC_CONFIG,
+      selectedStaticConfig,
+    );
+    assert.deepEqual(
+      modeLoaded.config.services.traefik.ports.map((entry) => ({
+        host_ip: entry.host_ip,
+        target: entry.target,
+        published: entry.published,
+        protocol: entry.protocol,
+      })),
+      MODE_CONTRACTS['public-http'].ports,
+    );
+    assert.equal(
+      modeLoaded.config.services.traefik.ports.some(
+        (entry) => entry.host_ip === '0.0.0.0' && entry.target === 443,
+      ),
+      false,
+    );
+  }
+});
+
+test('rejects every public-http static configuration outside the explicit allowlist', () => {
+  for (const selectedStaticConfig of [
+    'traefik-internal.yml',
+    'arbitrary.yml',
+    '/etc/traefik/static/traefik-acme-production.yml',
+    '../traefik-acme-production.yml',
+    '',
+    'traefik-acme-preview.yml',
+  ]) {
+    const modeLoaded = loadMode('public-http', selectedStaticConfig);
+    assert.equal(modeLoaded.status, 'passed', modeLoaded.failures.join('\n'));
+    const validation = validateProductionCompose(
+      modeLoaded.config,
+      modeLoaded.rawConfig,
+      {
+        mode: 'public-http',
+        selectedStaticConfig,
+      },
+    );
+    assert.equal(validation.status, 'failed');
+    assert.ok(
+      validation.failures.includes(
+        'public-http static configuration must be one of: traefik-acme-staging.yml, traefik-acme-production.yml',
+      ),
+    );
+  }
+  assert.deepEqual(validateStaticConfigSelection('public-http', undefined), []);
+});
+
+test('rejects cumulative modes and unexpected Compose files before rendering', () => {
+  assert.deepEqual(
+    validateComposeFileSelection([
+      BASE_COMPOSE,
+      'compose.traefik-internal.yml',
+      'compose.traefik-public-http.yml',
+    ]),
+    ['Compose selection must not combine Traefik binding modes'],
+  );
+  assert.deepEqual(validateComposeFileSelection([BASE_COMPOSE, 'other.yml']), [
+    'Compose selection contains an unexpected file',
+  ]);
 });
 
 test('keeps all secret values outside environment and interpolation', () => {
@@ -145,6 +273,24 @@ test('rejects security and persistence regressions', () => {
     (config) => {
       config.services.api.environment.FRONTEND_URL = 'https://example.com';
     },
+    (config) => {
+      config.services.api.environment.TRUST_PROXY_HOPS = '0';
+    },
+    (config) => {
+      config.services.traefik.image = 'traefik:v3.7.9';
+    },
+    (config) => {
+      config.services.traefik.ports = [
+        { target: 8080, published: '8080', protocol: 'tcp' },
+      ];
+    },
+    (config) => {
+      config.services.traefik.volumes.push({
+        type: 'bind',
+        source: '/var/run/docker.sock',
+        target: '/var/run/docker.sock',
+      });
+    },
   ];
 
   for (const mutate of mutations) {
@@ -155,6 +301,41 @@ test('rejects security and persistence regressions', () => {
       'failed',
     );
   }
+});
+
+test('keeps the edge health-only and ACME states separate and outside Git', () => {
+  const dynamic = readFileSync(
+    'docker/traefik/dynamic/api-health-only.yml',
+    'utf8',
+  );
+  assert.match(
+    dynamic,
+    /Host\(`api\.agenciagenesismkt\.com\.br`\) && Path\(`\/health`\) && Method\(`GET`\)/u,
+  );
+  assert.match(dynamic, /url: http:\/\/api:3000/u);
+  for (const forbidden of [
+    '/api/v1',
+    '/api/v1/health',
+    '/api/v1/auth/csrf',
+    '/dashboard/',
+    '/api/rawdata',
+    'POST',
+  ]) {
+    assert.equal(dynamic.includes(forbidden), false);
+  }
+  const internal = readFileSync('docker/traefik/traefik-internal.yml', 'utf8');
+  const staging = readFileSync(
+    'docker/traefik/traefik-acme-staging.yml',
+    'utf8',
+  );
+  const production = readFileSync(
+    'docker/traefik/traefik-acme-production.yml',
+    'utf8',
+  );
+  assert.doesNotMatch(internal, /certificatesResolvers|\bacme:/u);
+  assert.match(staging, /storage: \/var\/lib\/traefik\/acme-staging\.json/u);
+  assert.match(production, /storage: \/var\/lib\/traefik\/acme\.json/u);
+  assert.doesNotMatch(staging, /storage: \/var\/lib\/traefik\/acme\.json/u);
 });
 
 test('keeps the versioned environment example non-secret', () => {
