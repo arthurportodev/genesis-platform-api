@@ -10,6 +10,7 @@ const {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   utimesSync,
   writeFileSync,
 } = require('node:fs');
@@ -130,6 +131,23 @@ test(
           `RECOVERY_RESTORE_SECRETS_DIR=${secrets}`,
           '',
         ].join('\n'),
+      );
+      const rootOwnedFixtures = [
+        join(bin, 'age'),
+        join(bin, 'docker'),
+        join(bin, 'rclone'),
+        join(bundledRecovery, 'backup-runner.sh'),
+        join(bundledRecovery, 'common.sh'),
+        join(bundledRecovery, 'retention-runner.sh'),
+        recipient,
+        pgpass,
+        rcloneConfig,
+        envFile,
+      ];
+      for (const path of rootOwnedFixtures) chownSync(path, 0, 0);
+      assert.deepEqual(
+        rootOwnedFixtures.map((path) => statSync(path).uid),
+        rootOwnedFixtures.map(() => 0),
       );
       const environment = {
         ...process.env,
