@@ -45,6 +45,8 @@ for (const forbidden of [
   { refreshToken: 'never' },
   { nested: { authorizationCode: 'never' } },
   { rcloneConfig: 'never' },
+  { client_secret_value: 'GOCSPX-never-accepted-secret' },
+  { nested: { refresh_token_material: 'never' } },
 ]) {
   test(`rejects secret-bearing evidence field ${Object.keys(forbidden)[0]}`, () => {
     assert.throws(
@@ -53,6 +55,28 @@ for (const forbidden of [
     );
   });
 }
+
+for (const secretValue of [
+  'ya29.a0AfH6SMBtokenmaterial',
+  'GOCSPX-exampleSecretMaterial123',
+  '1//0exampleRefreshTokenMaterial123456789',
+  'client_secret=hidden-material',
+]) {
+  test('rejects secret-shaped values in otherwise benign fields', () => {
+    assert.throws(
+      () =>
+        validateOAuthEvidence(evidence({ evidenceReferences: [secretValue] })),
+      /secret-shaped value|opaque non-secret evidenceReferences/u,
+    );
+  });
+}
+
+test('rejects arbitrary additional fields under a closed evidence schema', () => {
+  assert.throws(
+    () => validateOAuthEvidence(evidence({ notes: 'benign-looking' })),
+    /unexpected evidence field: notes/u,
+  );
+});
 
 test('drive fallback requires a new explicit gate and empty-account proof', () => {
   const fallback = evidence({

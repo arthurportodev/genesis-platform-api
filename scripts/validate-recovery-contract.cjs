@@ -444,6 +444,8 @@ function validateRecoveryContract(root = process.cwd()) {
     oauthPreflight.includes("'In production'") &&
       oauthPreflight.includes("'https://www.googleapis.com/auth/drive.file'") &&
       oauthPreflight.includes('FORBIDDEN_KEYS') &&
+      oauthPreflight.includes('SECRET_VALUE_PATTERNS') &&
+      oauthPreflight.includes('ALLOWED_KEYS') &&
       oauthPreflight.includes('allowDriveFallback') &&
       oauthPreflight.includes('dedicatedAccountEmpty'),
     'OAuth non-secret preflight is incomplete',

@@ -16,6 +16,7 @@ const {
 
 function fixture() {
   const root = mkdtempSync(join(os.tmpdir(), 'genesis-recovery-contract-'));
+  cpSync(join(process.cwd(), 'package.json'), join(root, 'package.json'));
   for (const path of RUNTIME_FILES) {
     const target = join(root, ...path.split('/'));
     cpSync(join(process.cwd(), ...path.split('/')), target, {
@@ -34,6 +35,16 @@ function mutateJson(root, path, update) {
 
 test('the incorporated recovery contract is internally valid', () => {
   assert.deepEqual(validateRecoveryContract().failures, []);
+});
+
+test('enforces formatting for operational recovery CJS', () => {
+  const packageJson = JSON.parse(
+    readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
+  );
+  assert.match(
+    packageJson.scripts['format:check:recovery'],
+    /docker\/recovery\/\*\.cjs/u,
+  );
 });
 
 for (const scenario of [
