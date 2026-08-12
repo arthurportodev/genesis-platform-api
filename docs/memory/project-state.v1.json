@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-12T07:56:13.6858221Z",
+  "updatedAt": "2026-08-12T10:47:26.6039363Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -38,29 +38,25 @@
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-06B-WINDOW-2A-ATTEMPT-1",
-      "title": "Window 2A revertida — exposição pública restaurada ao estado fechado",
-      "completedAt": "2026-08-12T00:46:43Z",
-      "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+      "id": "0.8-MVP-06B",
+      "title": "HTTPS público health-only",
+      "completedAt": "2026-08-12T10:17:13.281Z",
+      "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
     }
   },
   "currentWork": {
-    "status": "in-progress",
-    "summary": "A tentativa 1 da Window 2A comprovou DNS, TCP/80, Traefik public-http, HTTP-01 e ACME staging, mas foi encerrada em REVERT por violação do contrato de coleta de evidências; a superfície pública foi restaurada ao estado fechado e a 0.8-MVP-06B continua em andamento.",
-    "task": {
-      "id": "0.8-MVP-06B",
-      "title": "Traefik e HTTPS health-only — operação controlada"
-    }
+    "status": "none",
+    "summary": "A 0.8-MVP-06B foi concluída com decisão KEEP: HTTPS público permanece ativo exclusivamente para GET /health, e nenhuma tarefa posterior foi iniciada."
   },
   "nextTask": {
-    "id": "0.8-MVP-06B-WINDOW-2A-EVIDENCE-CLOSEOUT",
-    "title": "Validar protocolo seguro de evidências antes da repetição da Window 2A"
+    "id": "0.8-MVP-07",
+    "title": "Backup externo e restore comprovado"
   },
   "operationalState": {
-    "summary": "A tentativa 1 da Window 2A terminou em REVERT por falha no procedimento de coleta de evidências, não por falha comprovada de DNS, TCP/80, Traefik, HTTP-01 ou ACME staging. DNS da API voltou a NXDOMAIN/NODATA, TCP/80 e TCP/443 públicos estão fechados, Traefik está novamente internal em loopback, API e PostgreSQL permanecem privados e saudáveis, o estado ACME staging foi preservado sem leitura de conteúdo e ACME production permanece ausente.",
+    "summary": "A 0.8-MVP-06B terminou em KEEP com api.agenciagenesismkt.com.br publicada por HTTPS exclusivamente para GET /health. TCP/80 redireciona para HTTPS, TCP/443 usa certificado Let's Encrypt production válido e as rotas funcionais permanecem fail-closed; API e PostgreSQL continuam privados e saudáveis.",
     "basis": "observed",
-    "documentedAt": "2026-08-12T07:56:13.6858221Z",
-    "observedAt": "2026-08-12T00:46:43Z",
+    "documentedAt": "2026-08-12T10:47:26.6039363Z",
+    "observedAt": "2026-08-12T10:17:13.281Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -73,20 +69,20 @@
       {
         "id": "OPS-PRIVATE-BASELINE-LIVE",
         "status": "present",
-        "statement": "API e PostgreSQL permaneceram running e healthy após o rollback da Window 2A, com IDs preservados, restart count zero e sem bindings de porta no host; a rede do banco permanece privada.",
+        "statement": "API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.",
         "basis": "observed",
-        "documentedAt": "2026-08-12T07:56:13.6858221Z",
-        "observedAt": "2026-08-12T00:46:43Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
-        "id": "OPS-PUBLIC-SSH-ONLY",
+        "id": "OPS-PUBLIC-PORTS",
         "status": "present",
-        "statement": "Após o rollback da Window 2A, a superfície pública voltou a ficar restrita a TCP/22; TCP/80, 443, 3000, 5432 e 8080 permaneceram fechadas na verificação final.",
+        "statement": "A superfície pública final contém somente TCP/22, TCP/80 e TCP/443; as portas 3000, 5432 e 8080 permanecem fechadas.",
         "basis": "observed",
-        "documentedAt": "2026-08-12T07:56:13.6858221Z",
-        "observedAt": "2026-08-12T00:46:43Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-06A-CONTRACTS",
@@ -146,91 +142,92 @@
       {
         "id": "OPS-TRAEFIK-IMAGE-APPROVED",
         "status": "present",
-        "statement": "A imagem Traefik aprovada por digest imutável para linux/amd64 está ativa em modo internal, sem Docker socket, dashboard ou ACME habilitado.",
+        "statement": "A imagem Traefik aprovada por digest imutável para linux/amd64 está ativa em modo public-full health-only, sem Docker socket ou dashboard público.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "observedAt": "2026-08-11T20:27:40Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-VPS-READINESS",
         "status": "present",
-        "statement": "A observação da Window 1 registrou CPU máxima de 27,82%, memória máxima de 8,14%, disco em 5% e serviços essenciais saudáveis, sem disparar critério de rollback.",
+        "statement": "A observação pública registrou 30/30 amostras PASS, zero falhas, zero respostas 5xx, CPU máxima de 39,08%, memória máxima de 8,21% e disco em 5%, sem disparar rollback.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "observedAt": "2026-08-11T20:25:32Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-TRAEFIK-LIVE",
         "status": "present",
-        "statement": "Após o rollback da Window 2A, o Traefik está running em modo internal, com restart count zero e bindings exclusivos em 127.0.0.1:18080 e 127.0.0.1:18443; a matriz health-only passou e nenhuma rota funcional ficou pública.",
+        "statement": "O Traefik está running em modo public-full health-only com TRUST_PROXY_HOPS=1 e restart count zero; GET /health é a única rota pública bem-sucedida e a matriz fail-closed passou.",
         "basis": "observed",
-        "documentedAt": "2026-08-12T07:56:13.6858221Z",
-        "observedAt": "2026-08-12T00:46:43Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-ACME-STATE",
         "status": "present",
-        "statement": "A tentativa 1 comprovou ACME staging tecnicamente e preservou acme-staging.json com 16.293 bytes, root:root e modo 0600, sem ler ou hashear conteúdo; acme.json production permanece root:root, modo 0600 e zero bytes, sem solicitação production.",
+        "statement": "O estado ACME staging foi preservado e reutilizado sem novo ciclo; ocorreu uma única solicitação production e um certificado production foi emitido, sem consulta a logs brutos nem a conteúdo ou hash dos arquivos ACME.",
         "basis": "observed",
-        "documentedAt": "2026-08-12T07:56:13.6858221Z",
-        "observedAt": "2026-08-12T00:46:43Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-CERTIFICATE",
-        "status": "absent",
-        "statement": "Nenhum certificado ACME production foi solicitado ou emitido; a tentativa 1 retornou somente certificado de staging, sem abrir TCP/443 público.",
-        "basis": "documented",
-        "documentedAt": "2026-08-12T07:56:13.6858221Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+        "status": "present",
+        "statement": "Um certificado Let's Encrypt production confiável está ativo para api.agenciagenesismkt.com.br, com SAN e hostname corretos e renovação administrada pelo Traefik.",
+        "basis": "observed",
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-HTTPS",
-        "status": "absent",
-        "statement": "Nenhum endpoint HTTPS público da API foi habilitado; TCP/443 público permaneceu fechado.",
+        "status": "present",
+        "statement": "TCP/443 está público e GET https://api.agenciagenesismkt.com.br/health retorna 200; /api/v1, /api/v1/health, dashboard, métodos não permitidos e demais rotas funcionais permanecem fail-closed.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "observedAt": "2026-08-11T20:29:28.2308869Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT", "EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-HTTP-BINDINGS",
-        "status": "absent",
-        "statement": "Após o rollback, não há listeners ou bindings públicos TCP/80 e TCP/443; somente os listeners privados de loopback do Traefik foram restaurados.",
+        "status": "present",
+        "statement": "TCP/80 e TCP/443 estão públicos no Traefik; requisições HTTP em TCP/80 são redirecionadas para HTTPS.",
         "basis": "observed",
-        "documentedAt": "2026-08-12T07:56:13.6858221Z",
-        "observedAt": "2026-08-12T00:46:43Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-06B-DEPLOYMENT",
-        "status": "partial",
-        "statement": "A Window 1 permanece em KEEP; a tentativa 1 da Window 2A foi revertida integralmente após comprovar ACME staging. A 06B continua parcial, sem publicação, deploy público, exposição funcional ou dados reais.",
-        "basis": "observed",
-        "documentedAt": "2026-08-12T07:56:13.6858221Z",
-        "observedAt": "2026-08-12T00:46:43Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT", "EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
-      },
-      {
-        "id": "OPS-06B-WINDOW2A-ATTEMPT1",
-        "status": "partial",
-        "statement": "A tentativa 1 da Window 2A comprovou DNS convergente, TCP/80 alcançável, Traefik public-http, HTTP-01 válido e certificado ACME staging; um coletor registrou um valor sensível efêmero e acionou REVERT antes da observação de 30 minutos.",
-        "basis": "observed",
-        "documentedAt": "2026-08-12T07:56:13.6858221Z",
-        "observedAt": "2026-08-12T00:36:43Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
-      },
-      {
-        "id": "OPS-06B-WINDOW2A-REVERT",
         "status": "present",
-        "statement": "O rollback aprovado restaurou DNS ausente, TCP/80 e TCP/443 públicos fechados e Traefik internal/loopback; a causa foi violação do contrato de coleta de evidências, sem falha estrutural comprovada em DNS, TCP/80, Traefik ou HTTP-01.",
+        "statement": "A 0.8-MVP-06B foi concluída com decisão KEEP e HTTPS público estritamente health-only; nenhuma imagem foi publicada, nenhum application deploy ocorreu e nenhuma rota funcional ou dado real foi liberado.",
         "basis": "observed",
-        "documentedAt": "2026-08-12T07:56:13.6858221Z",
-        "observedAt": "2026-08-12T00:46:43Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-06B-WINDOW2-OBSERVATION",
+        "status": "present",
+        "statement": "A observação mínima foi concluída com 30/30 amostras PASS, zero falhas, zero respostas 5xx, zero reinícios inesperados e zero respostas funcionais de sucesso.",
+        "basis": "observed",
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-06B-SCOPE-LIMITS",
+        "status": "present",
+        "statement": "O closeout registrou zero publicação de imagem, application deploy, operação Vercel, UptimeRobot ou GHCR, migration, usuário ou dado real; o rollback permanece preservado.",
+        "basis": "observed",
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-06B-WINDOW1-OBSERVATION",
@@ -253,7 +250,7 @@
       {
         "id": "OPS-06B-WINDOW1-KEEP",
         "status": "present",
-        "statement": "Arthur Porto decidiu explicitamente KEEP após a observação, mantendo o edge privado e TRUST_PROXY_HOPS=1; a decisão não autorizou a Window 2 nem qualquer exposição pública.",
+        "statement": "A Window 1 terminou em KEEP mantendo o edge privado e TRUST_PROXY_HOPS=1 naquele checkpoint; a Window 2 foi autorizada separadamente e posteriormente concluiu o HTTPS público health-only.",
         "basis": "observed",
         "documentedAt": "2026-08-11T20:40:48.3754942Z",
         "observedAt": "2026-08-11T20:32:47.4228522Z",
@@ -262,7 +259,7 @@
       {
         "id": "OPS-06B-ROLLBACK-READY",
         "status": "present",
-        "statement": "O release anterior e o retorno para TRUST_PROXY_HOPS=0 permanecem preservados para rollback integral; nenhum rollback foi executado porque todos os gates passaram e a decisão foi KEEP.",
+        "statement": "O release anterior e o procedimento de retorno permanecem preservados para rollback integral; nenhum rollback foi executado na Window 2 porque todos os critérios passaram e a decisão foi KEEP.",
         "basis": "observed",
         "documentedAt": "2026-08-11T20:40:48.3754942Z",
         "observedAt": "2026-08-11T20:27:40Z",
@@ -270,12 +267,12 @@
       },
       {
         "id": "OPS-DNS-API",
-        "status": "absent",
-        "statement": "O registro A da API criado na tentativa 1 da Window 2A foi removido no rollback; api.agenciagenesismkt.com.br voltou a NXDOMAIN/NODATA nas verificações finais.",
+        "status": "present",
+        "statement": "api.agenciagenesismkt.com.br possui um único registro A para 147.79.82.44, sem AAAA ou CNAME no closeout.",
         "basis": "observed",
-        "documentedAt": "2026-08-12T07:56:13.6858221Z",
-        "observedAt": "2026-08-12T00:44:34Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-DNS-APP",
@@ -298,10 +295,11 @@
       {
         "id": "OPS-ACME-CONTACT",
         "status": "present",
-        "statement": "Arthur aprovou contato@agenciagenesismkt.com.br como email de registro ACME para staging e production. A decisão não configura ACME nem autoriza emissão de certificado.",
-        "basis": "documented",
-        "documentedAt": "2026-08-11T17:07:39Z",
-        "evidenceIds": []
+        "statement": "O contato aprovado contato@agenciagenesismkt.com.br foi usado na solicitação ACME production única concluída pela Window 2.",
+        "basis": "observed",
+        "documentedAt": "2026-08-12T10:47:26.6039363Z",
+        "observedAt": "2026-08-12T10:17:13.281Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
       },
       {
         "id": "OPS-APPROVED-RECOVERY",
@@ -413,19 +411,22 @@
       "uri": "artifact://genesis-platform/mvp06-06b-window2a-dns-http80-acme-staging/10-FINAL-REPORT.md",
       "sha256": "3c098d936a74bf0594e7f9daa1b5659fefbe4df66cee709f9821b69887056580",
       "capturedAt": "2026-08-12T00:57:08.2421663Z"
+    },
+    {
+      "id": "EV-MVP06B-WINDOW2-CLOSEOUT",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/mvp06-06b-window2-retry-https-health-only/09-FINAL-REPORT.md",
+      "sha256": "fb296b9490a3340539a0db3c675d9e15a431ea45a4df0f38b8e165dc9a4a9f09",
+      "capturedAt": "2026-08-12T10:17:35.0427409Z"
     }
   ],
   "blockers": [
     {
       "id": "BLOCK-PUBLIC-ORIGIN",
-      "status": "open",
-      "summary": "A tentativa 1 da Window 2A foi revertida por violação do contrato de coleta de evidências; a superfície pública está fechada e uma repetição exige protocolo seguro validado, novo Gate humano e autorização operacional explícita.",
+      "status": "resolved",
+      "summary": "O blocker de DNS, TLS e HTTPS health-only foi resolvido pela Window 2 com decisão KEEP; esta resolução não autoriza /api/v1 nem qualquer rota funcional.",
       "owner": "arthur",
-      "blocksTaskIds": [
-        "0.8-MVP-06B-WINDOW-2A-EVIDENCE-CLOSEOUT",
-        "0.8-MVP-06B-WINDOW-2A-RETRY",
-        "0.8-MVP-08"
-      ]
+      "blocksTaskIds": []
     },
     {
       "id": "BLOCK-WEB-VERCEL-FUNCTIONAL",
@@ -443,24 +444,6 @@
     }
   ],
   "pendingHumanDecisions": [
-    {
-      "id": "HD-AUTHORIZE-WINDOW2A-RETRY",
-      "question": "A repetição da Window 2A será autorizada após aprovação humana do protocolo seguro de evidências?",
-      "whyMaterial": "A tentativa 1 terminou em REVERT; nenhuma nova mutação DNS, firewall, container ou ACME pode ocorrer sem protocolo validado, nova janela e autorização explícita.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2A-RETRY"]
-    },
-    {
-      "id": "HD-AUTHORIZE-ACME-PRODUCTION",
-      "question": "A emissão ACME production será autorizada após o staging aprovado?",
-      "whyMaterial": "O contato foi decidido, mas a emissão de certificado continua sem autorização.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2B"]
-    },
-    {
-      "id": "HD-AUTHORIZE-TCP443-PUBLIC-FULL",
-      "question": "TCP/443 e o override public-full serão autorizados após certificado válido?",
-      "whyMaterial": "A decisão habilita HTTPS público health-only e precisa de Gate humano próprio.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2B"]
-    },
     {
       "id": "HD-WEB-VERCEL-RECONCILIATION",
       "question": "Como app.agenciagenesismkt.com.br e a Vercel serão reconciliados antes do proxy funcional /api/v1?",
@@ -515,9 +498,9 @@
   "releaseGates": [
     {
       "id": "RG-TLS",
-      "statement": "Traefik, HTTPS e hostnames aprovados devem ser comprovados antes da abertura.",
-      "status": "pending",
-      "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE"]
+      "statement": "Traefik, HTTPS e hostname foram comprovados exclusivamente para public HTTPS health-only; o gate não autoriza /api/v1 nem qualquer rota funcional.",
+      "status": "passed",
+      "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE", "EV-MVP06B-WINDOW2-CLOSEOUT"]
     },
     {
       "id": "RG-RECOVERY",
@@ -567,16 +550,16 @@
       "reviewTrigger": "Reavaliar somente após reconciliação app./Vercel, testes funcionais, RG-CROSS-TENANT e autorização específica.",
       "sourceEvidenceIds": [
         "EV-MVP06B-GATE1-REPORT",
-        "EV-MVP06B-WINDOW1-CLOSEOUT"
+        "EV-MVP06B-WINDOW1-CLOSEOUT",
+        "EV-MVP06B-WINDOW2-CLOSEOUT"
       ]
     },
     {
-      "id": "OR-WINDOW2-NOT-AUTHORIZED",
-      "statement": "A próxima tarefa limita-se a validar o protocolo seguro de evidências; repetir a Window 2A ou alterar DNS, TCP/80, ACME, certificado, TCP/443, exposição pública ou observação pública não está autorizado por esta reconciliação.",
-      "reviewTrigger": "Reavaliar somente após aprovação humana do protocolo, janela própria, preflight atualizado e nova autorização operacional explícita.",
+      "id": "OR-PUBLIC-HEALTH-ONLY",
+      "statement": "A exposição pública permanece limitada a GET /health por HTTPS; /api/v1, demais rotas funcionais, dashboard e métodos não permitidos continuam fail-closed.",
+      "reviewTrigger": "Reavaliar somente após vínculo app./Vercel, testes funcionais e cross-tenant, recovery aplicável e autorização humana específica para rota funcional.",
       "sourceEvidenceIds": [
-        "EV-MVP06B-WINDOW1-CLOSEOUT",
-        "EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"
+        "EV-MVP06B-WINDOW2-CLOSEOUT"
       ]
     }
   ],
