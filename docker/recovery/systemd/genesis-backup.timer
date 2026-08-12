@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Genesis encrypted backup every 12 hours
+
+[Timer]
+OnCalendar=*-*-* 00,12:15:00 UTC
+Persistent=true
+AccuracySec=1m
+RandomizedDelaySec=5m
+Unit=genesis-backup.service
+
+[Install]
+WantedBy=timers.target

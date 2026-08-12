@@ -1,0 +1,205 @@
+{
+  "planVersion": "0.8-MVP-07B.window-r.v2",
+  "status": "planned-not-authorized",
+  "requiresCommittedRelease": true,
+  "allowedActions": [
+    "verify-host-preconditions",
+    "install-pinned-tools-into-recovery-prefix",
+    "create-recovery-directories",
+    "receive-public-age-recipient-by-reference",
+    "receive-secret-files-by-reference",
+    "materialize-backup-pgpass-from-stdin",
+    "classify-dedicated-backup-role",
+    "provision-dedicated-backup-role-if-absent",
+    "verify-dedicated-backup-role",
+    "validate-rclone-oauth-non-secret-evidence",
+    "configure-rclone-oauth-in-dedicated-account",
+    "run-synthetic-preflight",
+    "run-one-checkpoint-backup",
+    "verify-remote-round-trip",
+    "run-isolated-restore-proof",
+    "install-inactive-systemd-units",
+    "enable-and-start-backup-timer-after-proof",
+    "capture-machine-readable-status"
+  ],
+  "forbiddenActions": [
+    "access-active-database-volume",
+    "restore-active-database",
+    "publish-restore-port",
+    "permanent-drive-purge",
+    "docker-compose-down-v",
+    "restart-api",
+    "restart-postgresql",
+    "restart-traefik",
+    "expose-api-v1",
+    "write-real-data",
+    "silently-reconcile-divergent-backup-role",
+    "record-oauth-token-or-secret-in-artifact",
+    "accept-testing-oauth-token",
+    "merge-pull-request"
+  ],
+  "exactPaths": {
+    "releaseRoot": "/opt/genesis/release",
+    "recoveryRoot": "/opt/genesis/recovery",
+    "binaryRoot": "/opt/genesis/recovery/bin",
+    "stagingRoot": "/var/lib/genesis/recovery/staging",
+    "statusRoot": "/var/lib/genesis/recovery/status",
+    "secretRoot": "/opt/genesis/secrets",
+    "systemdService": "/etc/systemd/system/genesis-backup.service",
+    "systemdTimer": "/etc/systemd/system/genesis-backup.timer",
+    "backupRoleProvenance": "/var/lib/genesis/recovery/status/backup-role-provenance.v1.json",
+    "oauthEvidence": "/var/lib/genesis/recovery/status/oauth-evidence.v1.json"
+  },
+  "docker": {
+    "allowedImage": "postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193",
+    "allowedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659",
+    "allowedResourcePrefixes": [
+      "genesis-recovery-dump-",
+      "genesis-recovery-pg-",
+      "genesis-recovery-api-",
+      "genesis-recovery-manifest-",
+      "genesis-recovery-restore-",
+      "genesis-recovery-verify-",
+      "genesis-recovery-net-",
+      "genesis-recovery-data-"
+    ],
+    "requiredLabel": "com.genesis.recovery.run",
+    "publishedPorts": 0,
+    "activeVolumeDenylist": ["genesis-postgres-data"]
+  },
+  "locks": ["/run/lock/genesis-backup.lock", "/run/lock/genesis-restore.lock"],
+  "preconditions": [
+    "gate-3-a-merged",
+    "release-source-commit-is-ancestor-of-main",
+    "release-bundle-mode-is-committed-release",
+    "release-manifest-is-valid",
+    "credential-production-gate-approved",
+    "postgres-role-production-mutation-explicitly-approved",
+    "postgres-administrative-identity-is-exactly-genesis-bootstrap",
+    "postgres-bootstrap-pgpass-is-root-only",
+    "backup-role-is-absent-or-exactly-conformant",
+    "oauth-user-type-is-external",
+    "oauth-publishing-status-is-in-production",
+    "oauth-scope-is-exactly-drive-file",
+    "oauth-evidence-is-non-secret",
+    "dedicated-google-account-confirmed-empty-for-fallback-scope",
+    "age-recipient-custody-procedure-approved",
+    "active-volume-denylist-confirmed",
+    "zero-restore-published-ports-confirmed"
+  ],
+  "attemptLimits": {
+    "oauth": 1,
+    "backupRoleProvision": 1,
+    "toolInstall": 2,
+    "backup": 2,
+    "upload": 3,
+    "remoteDownload": 3,
+    "restoreProof": 2,
+    "timerEnable": 1
+  },
+  "stopConditions": [
+    "credential-reference-missing-or-readable-by-non-root",
+    "backup-role-is-divergent",
+    "backup-role-ownership-or-write-capability-detected",
+    "backup-role-rls-completeness-proof-fails",
+    "backup-role-provenance-mismatch",
+    "oauth-publishing-status-is-testing-or-unprovable",
+    "oauth-evidence-contains-token-secret-or-credential",
+    "oauth-account-or-scope-mismatch",
+    "drive-fallback-lacks-new-explicit-gate-or-empty-account-proof",
+    "release-identity-mismatch",
+    "unexpected-docker-resource",
+    "active-volume-reference-detected",
+    "remote-object-identity-mismatch",
+    "ciphertext-sha256-mismatch",
+    "rls-completeness-proof-fails",
+    "restore-or-api-readiness-fails",
+    "drive-scope-exceeds-approved-boundary",
+    "permanent-delete-semantics-detected",
+    "production-service-restart-required"
+  ],
+  "rollbackByAction": {
+    "install-pinned-tools-into-recovery-prefix": "remove-only-versioned-files-created-by-the-window-after-hash-recheck",
+    "create-recovery-directories": "remove-only-empty-window-created-directories",
+    "materialize-backup-pgpass-from-stdin": "remove-only-the-root-owned-pgpass-created-by-the-same-window-and-recorded-in-provenance",
+    "provision-dedicated-backup-role-if-absent": "drop-only-the-exact-window-created-role-after-cluster-role-provenance-recheck-zero-ownership-and-zero-active-sessions",
+    "validate-rclone-oauth-non-secret-evidence": "no-mutation-validation-only",
+    "configure-rclone-oauth-in-dedicated-account": "revoke-the-window-created-token-and-remove-only-its-root-owned-config",
+    "run-one-checkpoint-backup": "trash-only-the-exact-window-object-after-id-reverification",
+    "run-isolated-restore-proof": "remove-only-run-labeled-container-network-volume-resources",
+    "install-inactive-systemd-units": "disable-inactive-window-units-and-remove-only-matching-files",
+    "enable-and-start-backup-timer-after-proof": "disable-the-timer-without-stopping-production-services"
+  },
+  "futureMutationContract": {
+    "authorization": {
+      "requiredFlag": "--authorize-production-mutation",
+      "requiredEnvironment": "RECOVERY_PRODUCTION_MUTATION_AUTHORIZED=true",
+      "requiredWindowRunId": "16-lowercase-hex",
+      "administrativeIdentity": "genesis_bootstrap"
+    },
+    "backupRole": {
+      "target": "genesis_backup",
+      "permittedStateTransition": "absent-to-exact-contract-only",
+      "conformantStateMutationCount": 0,
+      "absentStateDatabaseMutationCount": 3,
+      "absentStateDatabaseMutations": [
+        "CREATE ROLE genesis_backup",
+        "GRANT pg_read_all_data TO genesis_backup",
+        "GRANT CONNECT ON DATABASE genesis_platform TO genesis_backup"
+      ],
+      "maximumHostSecretFileMutations": 1,
+      "divergentStateMutationCount": 0,
+      "evidence": [
+        "non-secret-role-attribute-and-membership-report",
+        "cluster-system-identifier-and-role-oid-provenance",
+        "full-rls-read-proof",
+        "write-denial-proof",
+        "zero-owned-object-proof"
+      ]
+    },
+    "oauth": {
+      "validationMutationCount": 0,
+      "requiredAccount": "admreserva433@gmail.com",
+      "requiredPublishingStatus": "In production",
+      "primaryScope": "https://www.googleapis.com/auth/drive.file",
+      "fallbackScope": "https://www.googleapis.com/auth/drive",
+      "fallbackRequiresNewExplicitGate": true,
+      "fallbackRequiresDedicatedAccountEmpty": true,
+      "secretsAllowedInEvidence": false
+    }
+  },
+  "credentialClasses": [
+    {
+      "class": "postgres-backup-pgpass",
+      "reference": "/opt/genesis/secrets/recovery-backup-pgpass",
+      "valueInPlan": false
+    },
+    {
+      "class": "age-public-recipient",
+      "reference": "/opt/genesis/recovery/age-recipient.txt",
+      "valueInPlan": false
+    },
+    {
+      "class": "age-private-identity",
+      "reference": "/opt/genesis/secrets/recovery-age-identity",
+      "valueInPlan": false
+    },
+    {
+      "class": "rclone-google-oauth",
+      "reference": "/opt/genesis/secrets/recovery-rclone.conf",
+      "valueInPlan": false
+    },
+    {
+      "class": "isolated-restore-synthetic-secrets",
+      "reference": "/opt/genesis/secrets/recovery-synthetic",
+      "valueInPlan": false
+    }
+  ],
+  "committedReleaseIdentity": {
+    "bundleMode": "committed-release",
+    "operational": true,
+    "sourceCommit": "required-full-sha-at-window-start",
+    "manifestContractVersion": "0.8-MVP-07A.v2",
+    "candidateIdentityAllowed": false
+  }
+}

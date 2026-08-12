@@ -482,3 +482,23 @@ email é não secreto, mas é validado e não logado. Os arquivos de estado são
 regulares, persistentes, `0600`, externos ao Git e nunca são lidos para gerar
 evidência. A configuração de produção não é iniciada localmente e nenhum ACME
 live foi executado nesta candidata.
+
+## Recovery boundary 0.8-MVP-07A
+
+Backups lógicos falham se a credencial não provar acesso completo apesar de
+RLS. O runtime da API continua `NOBYPASSRLS`; `genesis_backup` é uma role
+dedicada `LOGIN`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`,
+`BYPASSRLS`, `CONNECTION LIMIT 1`, com membership exclusiva e restrita em
+`pg_read_all_data`. Ela deve ter leitura completa, inclusive sob RLS, sem
+escrita, ownership, schema create ou membros próprios. Plaintext
+existe só como temporário root-only e não recebe hash registrado. Somente o
+ciphertext age é transportado e identificado por SHA-256.
+
+OAuth rclone, identidade privada age, pgpass e secrets sintéticos de restore
+são referências root-only fora de Git, imagem, bundle, logs e evidências. Drive
+usa conta dedicada e lixeira. O preflight aceita somente evidência não secreta
+de OAuth externo `In production` para `admreserva433@gmail.com` com scope exato
+`drive.file`; rejeita `Testing`, status não comprovável e qualquer token/segredo.
+Scope amplo exige novo gate e prova de conta dedicada vazia; purge permanente é
+inválido. Restore e cleanup aceitam apenas recursos
+isolados rotulados por run, negam o volume ativo e publicam zero portas.

@@ -51,6 +51,17 @@ try {
   runNpm(['run', 'task:contracts']);
   runNpm(['run', 'format:check:task-tools']);
   runNpm(['run', 'test:task-tools']);
+  runNpm(['run', 'format:check:recovery']);
+  runNpm(['run', 'recovery:validate']);
+  runNpm(['run', 'test:recovery']);
+  runNpm(['run', 'test:recovery:integration']);
+  run('node', ['scripts/validate-project-memory.cjs', '--mode', 'local']);
+  run('node', ['--test', 'test/project-memory/project-memory.test.cjs']);
+  runNpm(['run', 'ci:contract:validate']);
+  runNpm(['run', 'format:check:ci']);
+  runNpm(['run', 'test:ci']);
+  runNpm(['run', 'format:check:production']);
+  runNpm(['run', 'test:production']);
   runNpm(['run', 'db:test:env']);
   runNpm(['run', 'test:db:up']);
   databaseStarted = true;
