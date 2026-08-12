@@ -43,6 +43,8 @@ const STABLE = [
   'docs/decisions/ADR-014-versioned-production-contract.md',
 ];
 const FIXTURES = [];
+const REPOSITORY_EVIDENCE_PREFIX =
+  'repo://arthurportodev/genesis-platform-api/';
 const POINTER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -119,7 +121,19 @@ function copy(root, path) {
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'genesis-api-memory-'));
   FIXTURES.push(root);
-  for (const path of [AUTHORITY_PATH, SCHEMA_PATH, PROJECTION_PATH, ...STABLE])
+  const authority = JSON.parse(
+    readFileSync(target(ROOT, AUTHORITY_PATH), 'utf8'),
+  );
+  const repositoryEvidence = authority.evidence
+    .filter((entry) => entry.uri.startsWith(REPOSITORY_EVIDENCE_PREFIX))
+    .map((entry) => entry.uri.slice(REPOSITORY_EVIDENCE_PREFIX.length));
+  for (const path of new Set([
+    AUTHORITY_PATH,
+    SCHEMA_PATH,
+    PROJECTION_PATH,
+    ...STABLE,
+    ...repositoryEvidence,
+  ]))
     copy(root, path);
   return root;
 }
@@ -469,11 +483,7 @@ test('records approved destinations as documented without reopening resolved cho
     state.pendingHumanDecisions.map((entry) => entry.id),
   );
   assert.equal(decisions.has('HD-DOMAIN'), false);
-  assert.match(
-    state.pendingHumanDecisions.find((entry) => entry.id === 'HD-BACKUP')
-      .question,
-    /RPO, RTO e retenção/u,
-  );
+  assert.equal(decisions.has('HD-BACKUP'), false);
   assert.match(
     state.pendingHumanDecisions.find((entry) => entry.id === 'HD-MONITORING')
       .question,
@@ -488,10 +498,19 @@ test('records approved destinations as documented without reopening resolved cho
     'OPS-APPROVED-DELIVERY',
     'OPS-APPROVED-RECOVERY',
     'OPS-APPROVED-MONITORING',
+    'OPS-RECOVERY-TOOLING',
   ]) {
     assert.equal(facts[id].basis, 'documented');
     assert.equal(Object.hasOwn(facts[id], 'observedAt'), false);
   }
+  assert.match(
+    facts['OPS-APPROVED-RECOVERY'].statement,
+    /RPO de 24 horas.*frequência de 12 horas.*RTO lógico sintético de quatro horas.*30\/90 dias.*duas cópias verificadas.*trash-only/u,
+  );
+  assert.match(
+    facts['OPS-RECOVERY-TOOLING'].statement,
+    /nenhum backup, OAuth, timer ou restore live foi executado/u,
+  );
   assert.equal(facts['OPS-GHCR-VISIBILITY'].basis, 'unknown');
 });
 

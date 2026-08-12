@@ -28,7 +28,7 @@
     "task:fingerprint": "node scripts/task-fingerprint.cjs",
     "task:contracts": "node scripts/task-contracts.cjs",
     "task:validate": "node scripts/task-validate.cjs",
-    "format:check:task-tools": "prettier --check \"scripts/**/*.cjs\" \"test/task-tools/**/*.cjs\" \".codex/task-manifest.example.json\" \".agents/skills/**/*.md\" \".agents/skills/**/*.yaml\" \"schemas/development-operations/**/*.json\"",
+    "format:check:task-tools": "prettier --check \"scripts/**/*.cjs\" \"test/task-tools/**/*.cjs\" \"test/project-memory/**/*.cjs\" \".codex/task-manifest.example.json\" \".agents/skills/**/*.md\" \".agents/skills/**/*.yaml\" \"schemas/development-operations/**/*.json\"",
     "test:task-tools": "node --test test/task-tools/*.test.cjs",
     "db:test:env": "node scripts/db-test-env.cjs",
     "gate2:validate": "node scripts/gate2-validate.cjs",

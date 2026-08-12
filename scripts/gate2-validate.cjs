@@ -56,6 +56,7 @@ try {
   runNpm(['run', 'test:recovery']);
   runNpm(['run', 'test:recovery:integration']);
   run('node', ['scripts/validate-project-memory.cjs', '--mode', 'local']);
+  run('node', ['--test', 'test/project-memory/project-memory.test.cjs']);
   runNpm(['run', 'ci:contract:validate']);
   runNpm(['run', 'format:check:ci']);
   runNpm(['run', 'test:ci']);
