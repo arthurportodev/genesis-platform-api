@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-11T20:56:37.6832323Z",
+  "updatedAt": "2026-08-12T07:56:13.6858221Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -38,29 +38,29 @@
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-06B-WINDOW-1",
-      "title": "Private edge ativo — exposição pública fechada",
-      "completedAt": "2026-08-11T20:32:47.4228522Z",
-      "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+      "id": "0.8-MVP-06B-WINDOW-2A-ATTEMPT-1",
+      "title": "Window 2A revertida — exposição pública restaurada ao estado fechado",
+      "completedAt": "2026-08-12T00:46:43Z",
+      "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
     }
   },
   "currentWork": {
     "status": "in-progress",
-    "summary": "A Window 1 da 0.8-MVP-06B foi concluída com KEEP e edge privado ativo; a exposição pública permanece fechada e a Window 2 ainda depende de preflight e autorizações próprias.",
+    "summary": "A tentativa 1 da Window 2A comprovou DNS, TCP/80, Traefik public-http, HTTP-01 e ACME staging, mas foi encerrada em REVERT por violação do contrato de coleta de evidências; a superfície pública foi restaurada ao estado fechado e a 0.8-MVP-06B continua em andamento.",
     "task": {
       "id": "0.8-MVP-06B",
       "title": "Traefik e HTTPS health-only — operação controlada"
     }
   },
   "nextTask": {
-    "id": "0.8-MVP-06B-WINDOW-2-PREFLIGHT",
-    "title": "Preparar preflight e decisões humanas da Window 2, sem iniciar a operação"
+    "id": "0.8-MVP-06B-WINDOW-2A-EVIDENCE-CLOSEOUT",
+    "title": "Validar protocolo seguro de evidências antes da repetição da Window 2A"
   },
   "operationalState": {
-    "summary": "A Window 1 foi concluída com KEEP: release 06A promovido, Traefik ativo somente em loopback e TRUST_PROXY_HOPS=1, enquanto API e PostgreSQL permanecem privados. DNS, TCP/80 e TCP/443 públicos, ACME, certificado, publicação, deploy público e rotas funcionais públicas permanecem ausentes ou não autorizados.",
+    "summary": "A tentativa 1 da Window 2A terminou em REVERT por falha no procedimento de coleta de evidências, não por falha comprovada de DNS, TCP/80, Traefik, HTTP-01 ou ACME staging. DNS da API voltou a NXDOMAIN/NODATA, TCP/80 e TCP/443 públicos estão fechados, Traefik está novamente internal em loopback, API e PostgreSQL permanecem privados e saudáveis, o estado ACME staging foi preservado sem leitura de conteúdo e ACME production permanece ausente.",
     "basis": "observed",
-    "documentedAt": "2026-08-11T20:40:48.3754942Z",
-    "observedAt": "2026-08-11T20:29:28.2308869Z",
+    "documentedAt": "2026-08-12T07:56:13.6858221Z",
+    "observedAt": "2026-08-12T00:46:43Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -73,20 +73,20 @@
       {
         "id": "OPS-PRIVATE-BASELINE-LIVE",
         "status": "present",
-        "statement": "API e PostgreSQL permaneceram running e healthy após a Window 1, com zero reinícios inesperados e sem bindings de porta no host; a rede do banco permanece privada.",
+        "statement": "API e PostgreSQL permaneceram running e healthy após o rollback da Window 2A, com IDs preservados, restart count zero e sem bindings de porta no host; a rede do banco permanece privada.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "observedAt": "2026-08-11T20:27:40Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "documentedAt": "2026-08-12T07:56:13.6858221Z",
+        "observedAt": "2026-08-12T00:46:43Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-SSH-ONLY",
         "status": "present",
-        "statement": "A superfície pública permaneceu restrita a TCP/22; os testes externos finais não conectaram em TCP/80 nem TCP/443.",
+        "statement": "Após o rollback da Window 2A, a superfície pública voltou a ficar restrita a TCP/22; TCP/80, 443, 3000, 5432 e 8080 permaneceram fechadas na verificação final.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "observedAt": "2026-08-11T20:29:28.2308869Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "documentedAt": "2026-08-12T07:56:13.6858221Z",
+        "observedAt": "2026-08-12T00:46:43Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
       },
       {
         "id": "OPS-06A-CONTRACTS",
@@ -164,28 +164,28 @@
       {
         "id": "OPS-TRAEFIK-LIVE",
         "status": "present",
-        "statement": "O Traefik está running em modo internal, com zero reinícios e bindings exclusivos em 127.0.0.1:18080 e 127.0.0.1:18443; a matriz health-only passou e nenhuma rota funcional ficou pública.",
+        "statement": "Após o rollback da Window 2A, o Traefik está running em modo internal, com restart count zero e bindings exclusivos em 127.0.0.1:18080 e 127.0.0.1:18443; a matriz health-only passou e nenhuma rota funcional ficou pública.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "observedAt": "2026-08-11T20:27:40Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "documentedAt": "2026-08-12T07:56:13.6858221Z",
+        "observedAt": "2026-08-12T00:46:43Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
       },
       {
         "id": "OPS-ACME-STATE",
         "status": "present",
-        "statement": "Os arquivos ACME staging e production existem vazios, root:root e modo 0600; nenhum conteúdo foi lido ou hasheado, nenhuma requisição ACME ocorreu e nenhum certificado foi emitido.",
+        "statement": "A tentativa 1 comprovou ACME staging tecnicamente e preservou acme-staging.json com 16.293 bytes, root:root e modo 0600, sem ler ou hashear conteúdo; acme.json production permanece root:root, modo 0600 e zero bytes, sem solicitação production.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "observedAt": "2026-08-11T20:27:40Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "documentedAt": "2026-08-12T07:56:13.6858221Z",
+        "observedAt": "2026-08-12T00:46:43Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-CERTIFICATE",
         "status": "absent",
-        "statement": "Nenhum certificado público da API foi solicitado ou emitido na Window 1.",
+        "statement": "Nenhum certificado ACME production foi solicitado ou emitido; a tentativa 1 retornou somente certificado de staging, sem abrir TCP/443 público.",
         "basis": "documented",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "documentedAt": "2026-08-12T07:56:13.6858221Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-HTTPS",
@@ -194,25 +194,43 @@
         "basis": "observed",
         "documentedAt": "2026-08-11T20:40:48.3754942Z",
         "observedAt": "2026-08-11T20:29:28.2308869Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT", "EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
       },
       {
         "id": "OPS-PUBLIC-HTTP-BINDINGS",
         "status": "absent",
-        "statement": "Não há listeners ou bindings públicos TCP/80 e TCP/443; somente os listeners privados de loopback do Traefik foram mantidos.",
+        "statement": "Após o rollback, não há listeners ou bindings públicos TCP/80 e TCP/443; somente os listeners privados de loopback do Traefik foram restaurados.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "observedAt": "2026-08-11T20:29:28.2308869Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "documentedAt": "2026-08-12T07:56:13.6858221Z",
+        "observedAt": "2026-08-12T00:46:43Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
       },
       {
         "id": "OPS-06B-DEPLOYMENT",
         "status": "partial",
-        "statement": "A Window 1 executou somente a mutação privada aprovada e recebeu KEEP; a 06B integral não foi concluída, e não houve publicação, deploy público ou exposição funcional.",
+        "statement": "A Window 1 permanece em KEEP; a tentativa 1 da Window 2A foi revertida integralmente após comprovar ACME staging. A 06B continua parcial, sem publicação, deploy público, exposição funcional ou dados reais.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "observedAt": "2026-08-11T20:32:47.4228522Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "documentedAt": "2026-08-12T07:56:13.6858221Z",
+        "observedAt": "2026-08-12T00:46:43Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT", "EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-06B-WINDOW2A-ATTEMPT1",
+        "status": "partial",
+        "statement": "A tentativa 1 da Window 2A comprovou DNS convergente, TCP/80 alcançável, Traefik public-http, HTTP-01 válido e certificado ACME staging; um coletor registrou um valor sensível efêmero e acionou REVERT antes da observação de 30 minutos.",
+        "basis": "observed",
+        "documentedAt": "2026-08-12T07:56:13.6858221Z",
+        "observedAt": "2026-08-12T00:36:43Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-06B-WINDOW2A-REVERT",
+        "status": "present",
+        "statement": "O rollback aprovado restaurou DNS ausente, TCP/80 e TCP/443 públicos fechados e Traefik internal/loopback; a causa foi violação do contrato de coleta de evidências, sem falha estrutural comprovada em DNS, TCP/80, Traefik ou HTTP-01.",
+        "basis": "observed",
+        "documentedAt": "2026-08-12T07:56:13.6858221Z",
+        "observedAt": "2026-08-12T00:46:43Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
       },
       {
         "id": "OPS-06B-WINDOW1-OBSERVATION",
@@ -253,10 +271,11 @@
       {
         "id": "OPS-DNS-API",
         "status": "absent",
-        "statement": "Nenhuma alteração DNS foi executada na Window 1; api.agenciagenesismkt.com.br permaneceu NXDOMAIN na verificação externa do closeout.",
-        "basis": "documented",
-        "documentedAt": "2026-08-11T20:40:48.3754942Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+        "statement": "O registro A da API criado na tentativa 1 da Window 2A foi removido no rollback; api.agenciagenesismkt.com.br voltou a NXDOMAIN/NODATA nas verificações finais.",
+        "basis": "observed",
+        "documentedAt": "2026-08-12T07:56:13.6858221Z",
+        "observedAt": "2026-08-12T00:44:34Z",
+        "evidenceIds": ["EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"]
       },
       {
         "id": "OPS-DNS-APP",
@@ -387,15 +406,26 @@
       "uri": "artifact://genesis-platform/mvp06-06b-window1-private-edge/24-FINAL-REPORT.md",
       "sha256": "9fd6353db2a7d82cd4018c2a1b5378ebf2e03c1d3f9ac2fae0e23c52e3f3a605",
       "capturedAt": "2026-08-11T20:40:48.3754942Z"
+    },
+    {
+      "id": "EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/mvp06-06b-window2a-dns-http80-acme-staging/10-FINAL-REPORT.md",
+      "sha256": "3c098d936a74bf0594e7f9daa1b5659fefbe4df66cee709f9821b69887056580",
+      "capturedAt": "2026-08-12T00:57:08.2421663Z"
     }
   ],
   "blockers": [
     {
       "id": "BLOCK-PUBLIC-ORIGIN",
       "status": "open",
-      "summary": "O edge privado e TRUST_PROXY_HOPS=1 estão implantados após KEEP da Window 1; DNS, TCP/80, ACME, certificado, TCP/443 e exposição pública health-only continuam pendentes e exigem preflight e autorizações próprias.",
+      "summary": "A tentativa 1 da Window 2A foi revertida por violação do contrato de coleta de evidências; a superfície pública está fechada e uma repetição exige protocolo seguro validado, novo Gate humano e autorização operacional explícita.",
       "owner": "arthur",
-      "blocksTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT", "0.8-MVP-08"]
+      "blocksTaskIds": [
+        "0.8-MVP-06B-WINDOW-2A-EVIDENCE-CLOSEOUT",
+        "0.8-MVP-06B-WINDOW-2A-RETRY",
+        "0.8-MVP-08"
+      ]
     },
     {
       "id": "BLOCK-WEB-VERCEL-FUNCTIONAL",
@@ -414,70 +444,22 @@
   ],
   "pendingHumanDecisions": [
     {
-      "id": "HD-DNS-OPERATOR-AUTHORITY",
-      "question": "Quem operará o DNS e qual autoridade DNS será usada no preflight da Window 2?",
-      "whyMaterial": "Define responsabilidade e o ponto autorizado para a futura alteração do hostname da API, sem conceder autorização de escrita.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
-    },
-    {
-      "id": "HD-DNS-TTL",
-      "question": "Qual TTL será aprovado para o futuro registro A da API na Window 2?",
-      "whyMaterial": "Determina propagação e reversão; esta decisão de parâmetro não autoriza criar o registro.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
-    },
-    {
-      "id": "HD-CHANGE-WINDOW",
-      "question": "Qual janela operacional será aprovada para a Window 2?",
-      "whyMaterial": "Delimita quando as futuras mutações públicas, observação e rollback poderão ocorrer; esta reconciliação não inicia a janela.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
-    },
-    {
-      "id": "HD-AUTHORIZE-DNS-A",
-      "question": "A criação do registro A de api.agenciagenesismkt.com.br para o IPv4 aprovado será autorizada na Window 2?",
-      "whyMaterial": "A mudança altera a autoridade DNS e deve permanecer separada da definição de operador, TTL e demais exposições.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
-    },
-    {
-      "id": "HD-AUTHORIZE-TCP80",
-      "question": "A abertura pública de TCP/80 será autorizada na Window 2 após DNS convergente?",
-      "whyMaterial": "A decisão cria alcance público e deve ter regra, prova e rollback próprios.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
-    },
-    {
-      "id": "HD-AUTHORIZE-ACME-STAGING",
-      "question": "Uma única solicitação ACME staging será autorizada na Window 2 após DNS e TCP/80 comprovados?",
-      "whyMaterial": "Inicia comunicação com a CA de staging e não pode ser presumida pela existência dos arquivos ACME vazios.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
+      "id": "HD-AUTHORIZE-WINDOW2A-RETRY",
+      "question": "A repetição da Window 2A será autorizada após aprovação humana do protocolo seguro de evidências?",
+      "whyMaterial": "A tentativa 1 terminou em REVERT; nenhuma nova mutação DNS, firewall, container ou ACME pode ocorrer sem protocolo validado, nova janela e autorização explícita.",
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2A-RETRY"]
     },
     {
       "id": "HD-AUTHORIZE-ACME-PRODUCTION",
       "question": "A emissão ACME production será autorizada após o staging aprovado?",
       "whyMaterial": "O contato foi decidido, mas a emissão de certificado continua sem autorização.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2B"]
     },
     {
       "id": "HD-AUTHORIZE-TCP443-PUBLIC-FULL",
       "question": "TCP/443 e o override public-full serão autorizados após certificado válido?",
       "whyMaterial": "A decisão habilita HTTPS público health-only e precisa de Gate humano próprio.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
-    },
-    {
-      "id": "HD-OBSERVATION-DURATION",
-      "question": "Qual duração de observação pública será exigida após cada transição da Window 2?",
-      "whyMaterial": "Define o período mínimo para avaliar saúde, exposição, certificado e estabilidade.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
-    },
-    {
-      "id": "HD-KEEP-OR-REVERT",
-      "question": "Quais critérios e quem decidirá keep ou revert ao fim da observação pública da Window 2?",
-      "whyMaterial": "A decisão KEEP da Window 1 não se estende à futura exposição pública.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
-    },
-    {
-      "id": "HD-ROLLBACK-OWNER-AUTHORIZATION",
-      "question": "Quem será o owner do rollback da Window 2 e qual autorização poderá acioná-lo?",
-      "whyMaterial": "A autorização de rollback da Window 1 terminou com seu closeout e não é presumida para a exposição pública.",
-      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2-PREFLIGHT"]
+      "blockingTaskIds": ["0.8-MVP-06B-WINDOW-2B"]
     },
     {
       "id": "HD-WEB-VERCEL-RECONCILIATION",
@@ -590,9 +572,12 @@
     },
     {
       "id": "OR-WINDOW2-NOT-AUTHORIZED",
-      "statement": "A próxima tarefa limita-se ao preflight da Window 2; DNS, TCP/80, ACME, certificado, TCP/443, exposição pública e observação pública não estão autorizados por esta reconciliação.",
-      "reviewTrigger": "Reavaliar somente após decisões humanas separadas, janela própria, preflight aprovado e autorização operacional explícita.",
-      "sourceEvidenceIds": ["EV-MVP06B-WINDOW1-CLOSEOUT"]
+      "statement": "A próxima tarefa limita-se a validar o protocolo seguro de evidências; repetir a Window 2A ou alterar DNS, TCP/80, ACME, certificado, TCP/443, exposição pública ou observação pública não está autorizado por esta reconciliação.",
+      "reviewTrigger": "Reavaliar somente após aprovação humana do protocolo, janela própria, preflight atualizado e nova autorização operacional explícita.",
+      "sourceEvidenceIds": [
+        "EV-MVP06B-WINDOW1-CLOSEOUT",
+        "EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT"
+      ]
     }
   ],
   "pointerMetadata": {
