@@ -514,6 +514,8 @@ async function main() {
       'linux/amd64',
       '--network',
       network,
+      '--group-add',
+      '70',
       '--read-only',
       '--cap-drop',
       'ALL',
