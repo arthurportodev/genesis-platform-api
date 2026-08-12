@@ -402,3 +402,11 @@ PostgreSQL/API fixados por digest. Não há portas publicadas nem referência ao
 volume ativo. O plano Window R é específico, machine-readable e fail-closed;
 não é plataforma genérica de operação remota. Ferramentas e units só podem ser
 ativados na 07B a partir de bundle committed-release incorporado.
+
+O boundary administrativo da futura Window R inclui um provisioner específico,
+não um reconciliador genérico: `genesis_bootstrap` pode transicionar somente
+`genesis_backup` ausente para a role `BYPASSRLS`/`pg_read_all_data` exata. Estado
+conforme não muta e estado divergente para. A procedência local liga rollback ao
+run, cluster e OID. O boundary OAuth é igualmente prévio e read-only: rclone só
+pode ser configurado após evidência não secreta de app externo `In production`,
+conta dedicada e scope `drive.file`; nenhum token faz parte do artefato.

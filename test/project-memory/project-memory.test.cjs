@@ -509,7 +509,7 @@ test('records approved destinations as documented without reopening resolved cho
   );
   assert.match(
     facts['OPS-RECOVERY-TOOLING'].statement,
-    /nenhum backup, OAuth, timer ou restore live foi executado/u,
+    /genesis_backup somente sob autorização explícita.*OAuth externo.*status In production.*scope drive\.file.*nenhum backup, OAuth, role, timer ou restore live foi executado/u,
   );
   assert.equal(facts['OPS-GHCR-VISIBILITY'].basis, 'unknown');
 });

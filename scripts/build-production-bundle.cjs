@@ -126,6 +126,16 @@ const ARTIFACTS = [
     mode: '0644',
   },
   {
+    source: 'docker/recovery/oauth-evidence-preflight.cjs',
+    path: 'docker/recovery/oauth-evidence-preflight.cjs',
+    mode: '0644',
+  },
+  {
+    source: 'docker/recovery/provision-backup-role.sh',
+    path: 'docker/recovery/provision-backup-role.sh',
+    mode: '0644',
+  },
+  {
     source: 'docker/recovery/restore-proof-runner.sh',
     path: 'docker/recovery/restore-proof-runner.sh',
     mode: '0644',
@@ -423,9 +433,9 @@ function buildProductionBundle({
         },
       },
       recovery: {
-        contractVersion: '0.8-MVP-07A.v1',
+        contractVersion: '0.8-MVP-07A.v2',
         lifecycle: 'incorporated-not-activated',
-        windowPlanVersion: '0.8-MVP-07B.window-r.v1',
+        windowPlanVersion: '0.8-MVP-07B.window-r.v2',
         productionMutationCount: 0,
         driveMutationCount: 0,
       },

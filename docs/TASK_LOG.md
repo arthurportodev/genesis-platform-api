@@ -728,6 +728,13 @@ Drive trash-only. O plano Window R nega volume ativo, portas, purge, reinícios 
 candidate bundles. Produção, Drive, OAuth, chave definitiva, timers live, dados
 reais e merge permaneceram sem mutação/autorização; operação real segue à 07B.
 
+Na correção pré-Gate 3 A, dois findings humanos foram incorporados ao mesmo
+envelope: provisionamento futuro idempotente e provenance-bound da role mínima
+`genesis_backup`, e preflight não secreto que rejeita OAuth externo em `Testing`
+ou status não comprovável. A execução da correção usa somente PostgreSQL 17
+efêmero e dados sintéticos; produção, Drive e OAuth real continuam com zero
+mutação. O candidate ID, CI e verificador anteriores foram invalidados.
+
 O primeiro Gate 2 independente bloqueou três gaps High autônomos: fixtures Linux
 sem ownership root, handoff de retenção dependente de modo executável e restore
 sem convergência de ownership. A correção executa a suíte Linux/root sem skips e

@@ -689,6 +689,12 @@ async function main() {
         'sudo',
         [
           'env',
+          ...(process.env.DOCKER_HOST
+            ? [`DOCKER_HOST=${process.env.DOCKER_HOST}`]
+            : []),
+          ...(process.env.DOCKER_TLS_CERTDIR !== undefined
+            ? [`DOCKER_TLS_CERTDIR=${process.env.DOCKER_TLS_CERTDIR}`]
+            : []),
           'RECOVERY_TEST_MODE=1',
           `RECOVERY_AGE_BIN=${join(root, 'age/age')}`,
           'bash',

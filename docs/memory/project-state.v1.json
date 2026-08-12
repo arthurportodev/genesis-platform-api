@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-12T13:32:38.1112510Z",
+  "updatedAt": "2026-08-12T19:00:00Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -46,7 +46,7 @@
   },
   "currentWork": {
     "status": "in-progress",
-    "summary": "A 0.8-MVP-07 foi iniciada: a 07A incorporou contrato e tooling de recovery sem operação live; a 07B é o trabalho vigente e exige gates próprios de credencial, produção e merge.",
+    "summary": "A 0.8-MVP-07 foi iniciada: a 07A incorporou contrato e tooling de recovery sem operação live, incluindo o envelope futuro da role genesis_backup e o preflight OAuth In production; a 07B é o trabalho vigente e exige gates próprios de credencial, produção e merge.",
     "task": {
       "id": "0.8-MVP-07B",
       "title": "Window R de backup externo e restore comprovado"
@@ -316,7 +316,7 @@
       {
         "id": "OPS-RECOVERY-TOOLING",
         "status": "present",
-        "statement": "A 07A incorporou contrato versionado, runners, configuração não secreta, systemd, validação, testes e plano Window R; nenhum backup, OAuth, timer ou restore live foi executado.",
+        "statement": "A 07A incorporou contrato versionado, runners, configuração não secreta, systemd, validação, testes e plano Window R; o tooling futuro classifica e provisiona genesis_backup somente sob autorização explícita, e rejeita OAuth externo que não prove status In production com scope drive.file; nenhum backup, OAuth, role, timer ou restore live foi executado.",
         "basis": "documented",
         "documentedAt": "2026-08-12T13:32:38.1112510Z",
         "evidenceIds": ["EV-MVP07A-RECOVERY-CONTRACT"]
@@ -435,8 +435,8 @@
       "id": "EV-MVP07A-RECOVERY-CONTRACT",
       "kind": "repository-file",
       "uri": "repo://arthurportodev/genesis-platform-api/config/recovery/backup-restore.v1.json",
-      "sha256": "05e41299666ef5d404674746e403cd2454ac68636fdae8bf18cbde0d3a6926ba",
-      "capturedAt": "2026-08-12T13:32:38.1112510Z"
+      "sha256": "006dc9de827c31c3c93c6371e71c2882bd81a14efef955ae00df6d888d924773",
+      "capturedAt": "2026-08-12T19:00:00Z"
     }
   ],
   "blockers": [
@@ -457,7 +457,7 @@
     {
       "id": "BLOCK-RECOVERY",
       "status": "open",
-      "summary": "Contrato e parâmetros de recovery foram aprovados e incorporados pela 07A; credenciais, operação Google Drive, backup externo e restore sintético ainda precisam ser comprovados na 07B antes de dados reais.",
+      "summary": "Contrato e parâmetros de recovery foram aprovados e incorporados pela 07A; a 07B ainda deve autorizar e provar a role genesis_backup, OAuth externo In production, credenciais, operação Google Drive, backup externo e restore sintético antes de dados reais.",
       "owner": "arthur",
       "blocksTaskIds": ["0.8-MVP-07B", "0.8-MVP-09"]
     }

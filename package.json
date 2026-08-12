@@ -46,7 +46,7 @@
     "recovery:validate": "node scripts/validate-recovery-contract.cjs",
     "test:production": "node --test test/production/*.test.cjs",
     "test:recovery": "node --test test/recovery/*.test.cjs",
-    "test:recovery:integration": "node test/recovery/recovery-integration.cjs",
+    "test:recovery:integration": "node test/recovery/backup-role-integration.cjs && node test/recovery/recovery-integration.cjs",
     "format:check:production": "prettier --check compose.production.yml package.json scripts/validate-production-compose.cjs test/production/*.test.cjs",
     "format:check:recovery": "prettier --check config/recovery/*.json package.json scripts/validate-recovery-contract.cjs test/recovery/*.cjs docs/RECOVERY_RUNBOOK.md docs/decisions/ADR-016-recovery-contract-and-tooling.md",
     "ci:contract:validate": "node scripts/validate-ci-workflow.cjs",

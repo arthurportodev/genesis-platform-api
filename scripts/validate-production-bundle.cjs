@@ -115,6 +115,16 @@ const EXPECTED_ARTIFACTS = [
     mode: '0644',
   },
   {
+    path: 'docker/recovery/oauth-evidence-preflight.cjs',
+    sourcePath: 'docker/recovery/oauth-evidence-preflight.cjs',
+    mode: '0644',
+  },
+  {
+    path: 'docker/recovery/provision-backup-role.sh',
+    sourcePath: 'docker/recovery/provision-backup-role.sh',
+    mode: '0644',
+  },
+  {
     path: 'docker/recovery/restore-proof-runner.sh',
     sourcePath: 'docker/recovery/restore-proof-runner.sh',
     mode: '0644',
@@ -461,9 +471,9 @@ function validateProductionBundle(
     failures,
   );
   check(
-    manifest.recovery?.contractVersion === '0.8-MVP-07A.v1' &&
+    manifest.recovery?.contractVersion === '0.8-MVP-07A.v2' &&
       manifest.recovery?.lifecycle === 'incorporated-not-activated' &&
-      manifest.recovery?.windowPlanVersion === '0.8-MVP-07B.window-r.v1' &&
+      manifest.recovery?.windowPlanVersion === '0.8-MVP-07B.window-r.v2' &&
       manifest.recovery?.productionMutationCount === 0 &&
       manifest.recovery?.driveMutationCount === 0,
     'recovery provenance metadata mismatch',

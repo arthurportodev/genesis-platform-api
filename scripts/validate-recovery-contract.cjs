@@ -1,8 +1,8 @@
 const { readFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 
-const CONTRACT_VERSION = '0.8-MVP-07A.v1';
-const WINDOW_PLAN_VERSION = '0.8-MVP-07B.window-r.v1';
+const CONTRACT_VERSION = '0.8-MVP-07A.v2';
+const WINDOW_PLAN_VERSION = '0.8-MVP-07B.window-r.v2';
 const POSTGRES_IMAGE =
   'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const API_IMAGE =
@@ -15,6 +15,8 @@ const RUNTIME_FILES = [
   'docker/recovery/check-status.sh',
   'docker/recovery/common.sh',
   'docker/recovery/install-pinned-tools.sh',
+  'docker/recovery/oauth-evidence-preflight.cjs',
+  'docker/recovery/provision-backup-role.sh',
   'docker/recovery/restore-proof-runner.sh',
   'docker/recovery/retention-runner.sh',
   'docker/recovery/systemd/genesis-backup.service',
@@ -80,6 +82,48 @@ function validateRecoveryContract(root = process.cwd()) {
     failures,
   );
   check(
+    same(contract.database?.backupRole, {
+      name: 'genesis_backup',
+      provisioningScript: 'docker/recovery/provision-backup-role.sh',
+      administrativeIdentity: 'genesis_bootstrap',
+      executionBoundary: 'future-explicitly-authorized-window-r-only',
+      classification: ['absent', 'conformant', 'divergent'],
+      attributes: {
+        login: true,
+        inherit: true,
+        superuser: false,
+        createDatabase: false,
+        createRole: false,
+        replication: false,
+        bypassRls: true,
+        connectionLimit: 1,
+      },
+      memberships: [
+        {
+          role: 'pg_read_all_data',
+          adminOption: false,
+          inheritOption: true,
+          setOption: false,
+        },
+      ],
+      databasePrivileges: ['CONNECT'],
+      forbiddenCapabilities: [
+        'write',
+        'ownership',
+        'server-file-access',
+        'superuser',
+        'create-database',
+        'create-role',
+        'replication',
+      ],
+      secretInput: 'stdin-only-never-logged',
+      secretMaterialization: '/opt/genesis/secrets/recovery-backup-pgpass',
+      rollback: 'provenance-marker-and-exact-created-role-only',
+    }),
+    'dedicated backup role contract mismatch',
+    failures,
+  );
+  check(
     contract.database?.dump?.format === 'custom',
     'pg_dump format must be custom',
     failures,
@@ -130,8 +174,19 @@ function validateRecoveryContract(root = process.cwd()) {
     failures,
   );
   check(
-    contract.transport?.primaryScope === 'drive.file',
+    contract.transport?.primaryScope ===
+      'https://www.googleapis.com/auth/drive.file',
     'primary Drive scope mismatch',
+    failures,
+  );
+  check(
+    contract.transport?.oauth?.userType === 'external' &&
+      contract.transport?.oauth?.requiredPublishingStatus === 'In production' &&
+      contract.transport?.oauth?.testingTokensAccepted === false &&
+      contract.transport?.oauth?.evidenceMustBeNonSecret === true &&
+      contract.transport?.oauth?.unprovableStatusAction ===
+        'stop-before-rclone-configuration',
+    'OAuth production-status evidence contract mismatch',
     failures,
   );
   check(
@@ -232,6 +287,47 @@ function validateRecoveryContract(root = process.cwd()) {
     failures,
   );
   check(
+    [
+      'materialize-backup-pgpass-from-stdin',
+      'classify-dedicated-backup-role',
+      'provision-dedicated-backup-role-if-absent',
+      'verify-dedicated-backup-role',
+      'validate-rclone-oauth-non-secret-evidence',
+    ].every((action) => plan.allowedActions?.includes(action)),
+    'Window R backup-role and OAuth actions are incomplete',
+    failures,
+  );
+  check(
+    plan.futureMutationContract?.authorization?.administrativeIdentity ===
+      'genesis_bootstrap' &&
+      plan.futureMutationContract?.backupRole?.permittedStateTransition ===
+        'absent-to-exact-contract-only' &&
+      plan.futureMutationContract?.backupRole
+        ?.absentStateDatabaseMutationCount === 3 &&
+      plan.futureMutationContract?.backupRole?.conformantStateMutationCount ===
+        0 &&
+      plan.futureMutationContract?.backupRole?.divergentStateMutationCount ===
+        0,
+    'future backup-role mutation budget mismatch',
+    failures,
+  );
+  check(
+    plan.futureMutationContract?.oauth?.validationMutationCount === 0 &&
+      plan.futureMutationContract?.oauth?.requiredAccount ===
+        'admreserva433@gmail.com' &&
+      plan.futureMutationContract?.oauth?.requiredPublishingStatus ===
+        'In production' &&
+      plan.futureMutationContract?.oauth?.primaryScope ===
+        'https://www.googleapis.com/auth/drive.file' &&
+      plan.futureMutationContract?.oauth?.fallbackRequiresNewExplicitGate ===
+        true &&
+      plan.futureMutationContract?.oauth
+        ?.fallbackRequiresDedicatedAccountEmpty === true &&
+      plan.futureMutationContract?.oauth?.secretsAllowedInEvidence === false,
+    'future OAuth preflight contract mismatch',
+    failures,
+  );
+  check(
     plan.docker?.allowedImage === POSTGRES_IMAGE,
     'Window R PostgreSQL digest mismatch',
     failures,
@@ -308,6 +404,14 @@ function validateRecoveryContract(root = process.cwd()) {
     join(cwd, 'docker/recovery/install-pinned-tools.sh'),
     'utf8',
   );
+  const provisioner = readFileSync(
+    join(cwd, 'docker/recovery/provision-backup-role.sh'),
+    'utf8',
+  );
+  const oauthPreflight = readFileSync(
+    join(cwd, 'docker/recovery/oauth-evidence-preflight.cjs'),
+    'utf8',
+  );
   const service = readFileSync(
     join(cwd, 'docker/recovery/systemd/genesis-backup.service'),
     'utf8',
@@ -321,6 +425,28 @@ function validateRecoveryContract(root = process.cwd()) {
       backup.includes('--compress=zstd:6') &&
       backup.includes('--lock-wait-timeout=60s'),
     'backup runner pg_dump arguments mismatch',
+    failures,
+  );
+  check(
+    provisioner.includes('--authorize-production-mutation') &&
+      provisioner.includes('RECOVERY_PRODUCTION_MUTATION_AUTHORIZED') &&
+      provisioner.includes('CREATE ROLE %s LOGIN INHERIT NOSUPERUSER') &&
+      provisioner.includes('BYPASSRLS CONNECTION LIMIT 1') &&
+      provisioner.includes('GRANT pg_read_all_data') &&
+      provisioner.includes('preexisting genesis_backup role is $state') &&
+      provisioner.includes('pg_shdepend') &&
+      provisioner.includes('roleCreated') &&
+      !provisioner.includes('ALTER ROLE genesis_backup'),
+    'backup-role provisioner is not fail-closed and provenance-limited',
+    failures,
+  );
+  check(
+    oauthPreflight.includes("'In production'") &&
+      oauthPreflight.includes("'https://www.googleapis.com/auth/drive.file'") &&
+      oauthPreflight.includes('FORBIDDEN_KEYS') &&
+      oauthPreflight.includes('allowDriveFallback') &&
+      oauthPreflight.includes('dedicatedAccountEmpty'),
+    'OAuth non-secret preflight is incomplete',
     failures,
   );
   check(

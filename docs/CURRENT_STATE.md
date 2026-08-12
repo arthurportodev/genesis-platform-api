@@ -5,10 +5,10 @@
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
 - **Revisão de estado:** GH-01-COMPLETE
-- **Atualização documentada:** 2026-08-12T13:32:38.1112510Z
+- **Atualização documentada:** 2026-08-12T19:00:00Z
 - **Fase:** 0.8-MVP — Primeira produção mínima viável
 - **Último trabalho concluído:** 0.8-MVP-06B — HTTPS público health-only
-- **Trabalho vigente:** in-progress — A 0.8-MVP-07 foi iniciada: a 07A incorporou contrato e tooling de recovery sem operação live; a 07B é o trabalho vigente e exige gates próprios de credencial, produção e merge.
+- **Trabalho vigente:** in-progress — A 0.8-MVP-07 foi iniciada: a 07A incorporou contrato e tooling de recovery sem operação live, incluindo o envelope futuro da role genesis_backup e o preflight OAuth In production; a 07B é o trabalho vigente e exige gates próprios de credencial, produção e merge.
 - **Próxima tarefa:** 0.8-MVP-07B — Window R de backup externo e restore comprovado
 - **Web integrado:** fa4193fc28751d64923be824d293367499d4fba0
 - **Proveniência da API:** containing-commit
@@ -45,7 +45,7 @@ A 0.8-MVP-06B terminou em KEEP com api.agenciagenesismkt.com.br publicada por HT
 - **OPS-VERCEL-LINK** [observed/unknown] — O vínculo de app.agenciagenesismkt.com.br com a Vercel não foi comprovado; a Vercel não foi inspecionada por ausência de sessão read-only autorizada.
 - **OPS-ACME-CONTACT** [observed/present] — O contato aprovado contato@agenciagenesismkt.com.br foi usado na solicitação ACME production única concluída pela Window 2.
 - **OPS-APPROVED-RECOVERY** [documented/present] — Google Drive dedicado foi aprovado com RPO de 24 horas, frequência de 12 horas, RTO lógico sintético de quatro horas, retenção regular/checkpoint de 30/90 dias, duas cópias verificadas e trash-only; operação e restore comprovado seguem para a 07B.
-- **OPS-RECOVERY-TOOLING** [documented/present] — A 07A incorporou contrato versionado, runners, configuração não secreta, systemd, validação, testes e plano Window R; nenhum backup, OAuth, timer ou restore live foi executado.
+- **OPS-RECOVERY-TOOLING** [documented/present] — A 07A incorporou contrato versionado, runners, configuração não secreta, systemd, validação, testes e plano Window R; o tooling futuro classifica e provisiona genesis_backup somente sob autorização explícita, e rejeita OAuth externo que não prove status In production com scope drive.file; nenhum backup, OAuth, role, timer ou restore live foi executado.
 - **OPS-APPROVED-MONITORING** [documented/present] — UptimeRobot sobre /health permanece o destino de monitoramento externo aprovado; política de alertas e implementação seguem pendentes.
 - **OPS-GHCR-VISIBILITY** [unknown/unknown] — Há histórico documentado de package GHCR público; este fato preserva a separação entre o destino privado aprovado e observações live.
 - **OPS-GHCR-PUBLIC-READ-OBSERVED** [observed/present] — O package GHCR da API aceitou leitura anônima no Gate 1; a transição futura para privado permanece separada.
@@ -54,7 +54,7 @@ A 0.8-MVP-06B terminou em KEEP com api.agenciagenesismkt.com.br publicada por HT
 ## Blockers abertos
 
 - **BLOCK-WEB-VERCEL-FUNCTIONAL** — O vínculo app./Vercel precisa ser reconciliado antes da futura exposição funcional /api/v1; não bloqueia o edge health-only da 06B.
-- **BLOCK-RECOVERY** — Contrato e parâmetros de recovery foram aprovados e incorporados pela 07A; credenciais, operação Google Drive, backup externo e restore sintético ainda precisam ser comprovados na 07B antes de dados reais.
+- **BLOCK-RECOVERY** — Contrato e parâmetros de recovery foram aprovados e incorporados pela 07A; a 07B ainda deve autorizar e provar a role genesis_backup, OAuth externo In production, credenciais, operação Google Drive, backup externo e restore sintético antes de dados reais.
 
 ## Decisões humanas pendentes
 

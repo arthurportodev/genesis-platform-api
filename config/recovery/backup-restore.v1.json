@@ -1,5 +1,5 @@
 {
-  "contractVersion": "0.8-MVP-07A.v1",
+  "contractVersion": "0.8-MVP-07A.v2",
   "lifecycle": "incorporated-not-activated",
   "database": {
     "engine": "postgresql",
@@ -7,6 +7,44 @@
     "image": "postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193",
     "platform": "linux/amd64",
     "activeVolumeAccess": "forbidden",
+    "backupRole": {
+      "name": "genesis_backup",
+      "provisioningScript": "docker/recovery/provision-backup-role.sh",
+      "administrativeIdentity": "genesis_bootstrap",
+      "executionBoundary": "future-explicitly-authorized-window-r-only",
+      "classification": ["absent", "conformant", "divergent"],
+      "attributes": {
+        "login": true,
+        "inherit": true,
+        "superuser": false,
+        "createDatabase": false,
+        "createRole": false,
+        "replication": false,
+        "bypassRls": true,
+        "connectionLimit": 1
+      },
+      "memberships": [
+        {
+          "role": "pg_read_all_data",
+          "adminOption": false,
+          "inheritOption": true,
+          "setOption": false
+        }
+      ],
+      "databasePrivileges": ["CONNECT"],
+      "forbiddenCapabilities": [
+        "write",
+        "ownership",
+        "server-file-access",
+        "superuser",
+        "create-database",
+        "create-role",
+        "replication"
+      ],
+      "secretInput": "stdin-only-never-logged",
+      "secretMaterialization": "/opt/genesis/secrets/recovery-backup-pgpass",
+      "rollback": "provenance-marker-and-exact-created-role-only"
+    },
     "dump": {
       "format": "custom",
       "compression": "zstd:6",
@@ -59,10 +97,26 @@
     "type": "rclone-google-drive",
     "account": "admreserva433@gmail.com",
     "accountDedicated": true,
-    "primaryScope": "drive.file",
+    "primaryScope": "https://www.googleapis.com/auth/drive.file",
+    "oauth": {
+      "userType": "external",
+      "requiredPublishingStatus": "In production",
+      "testingTokensAccepted": false,
+      "evidenceSchemaVersion": "0.8-MVP-07B.oauth-evidence.v1",
+      "evidenceMustBeNonSecret": true,
+      "forbiddenEvidenceFields": [
+        "clientSecret",
+        "accessToken",
+        "refreshToken",
+        "authorizationCode",
+        "rcloneConfig"
+      ],
+      "preflightScript": "docker/recovery/oauth-evidence-preflight.cjs",
+      "unprovableStatusAction": "stop-before-rclone-configuration"
+    },
     "rootCreatedBy": "rclone",
     "rootFolderIdBoundary": false,
-    "fallbackScope": "drive",
+    "fallbackScope": "https://www.googleapis.com/auth/drive",
     "fallbackAllowedOnlyOnDedicatedEmptyAccount": true,
     "fallbackRequiresFutureCredentialGate": true,
     "uploadCompletionIsVerification": false,

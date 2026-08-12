@@ -4,7 +4,7 @@
 
 ## Status and boundary
 
-The `0.8-MVP-07A.v1` recovery contract is incorporated tooling, not an active backup service. It prepares the future `0.8-MVP-07B` Window R. This document does not authorize production access, Google OAuth, Drive mutation, definitive age-key generation, systemd activation, real backup/restore, active-volume access, or real data.
+The `0.8-MVP-07A.v2` recovery contract is incorporated tooling, not an active backup service. It prepares the future `0.8-MVP-07B` Window R. This document does not authorize production access, Google OAuth, Drive mutation, PostgreSQL role mutation, password creation, definitive age-key generation, systemd activation, real backup/restore, active-volume access, or real data.
 
 The authoritative machine-readable files are:
 
@@ -16,14 +16,24 @@ Candidate bundles are non-operational. Window R must consume bytes from a commit
 
 ## Required future credential gate
 
-The future gate supplies references, never values, for a root-only PostgreSQL backup pgpass, a public age recipient, a separately custodied age identity, a root-only rclone config, and synthetic restore secrets. The age identity must not be generated before its approved custody procedure. OAuth starts with `drive.file` on the dedicated `admreserva433@gmail.com` account. Fallback to `drive` is allowed only when the account is confirmed dedicated and empty and a new credential gate approves it. `root_folder_id` protects paths operationally; it is not an authorization boundary.
+The future gate supplies references, never values, for the bootstrap pgpass, a root-only PostgreSQL backup pgpass, a public age recipient, a separately custodied age identity, a root-only rclone config, and synthetic restore secrets. The age identity must not be generated before its approved custody procedure.
+
+Before rclone configuration, `oauth-evidence-preflight.cjs` must accept a non-secret evidence file that names the exact dedicated account `admreserva433@gmail.com`, external user type, effective publishing status `In production`, and the single scope `https://www.googleapis.com/auth/drive.file`. `Testing`, an absent/unprovable status, a different account, multiple scopes, and any client secret, authorization code, access token, refresh token, credentials, or rclone config in evidence stop the window. Fallback to `https://www.googleapis.com/auth/drive` requires a new explicit credential gate plus proof that the dedicated account is empty. `root_folder_id` protects paths operationally; it is not an authorization boundary.
+
+## Dedicated backup role provisioning
+
+Only a separately approved Window R production-mutation action may invoke `provision-backup-role.sh`, as root, with `--authorize-production-mutation`, `RECOVERY_PRODUCTION_MUTATION_AUTHORIZED=true`, and the exact 16-hex window run ID. The administrative login must resolve to the `genesis_bootstrap` superuser through its root-only pgpass.
+
+The provisioner classifies `genesis_backup` as absent, conformant, or divergent. Absent permits exactly three database mutations in one transaction: create `LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS CONNECTION LIMIT 1`, grant `pg_read_all_data` with `ADMIN FALSE, INHERIT TRUE, SET FALSE`, and grant database `CONNECT`. Conformant permits zero database mutations. Divergent stops with zero mutations; it is never silently altered. The password is read from stdin, constrained to a pgpass-safe alphabet, never printed or passed in an argument, and materialized only as the root-owned `0600` backup pgpass.
+
+Success requires exact attributes and sole membership, effective `SELECT` on every application table, a complete RLS-bypass login proof, zero write/schema-create privilege, zero owned objects, and no members of the backup role. A local non-secret marker binds the window run ID, cluster system identifier, role OID, and which resources this window created. Rollback refuses a mismatched marker or a preexisting conformant role; it drops only the exact role created by this window after rechecking state, ownership, OID, cluster, and zero active sessions. A transaction failure leaves neither role nor pgpass.
 
 ## Backup pipeline
 
 `genesis-backup.service` invokes `backup-runner.sh` under a non-blocking `flock`; the timer schedules 00:15 and 12:15 UTC with jitter and persistence. The runner:
 
 1. validates exact nonsecret and root-only secret paths;
-2. proves the backup role is superuser or `BYPASSRLS` and has `SELECT` on every application table; a role limited by RLS fails closed;
+2. proves the dedicated `genesis_backup` role is `BYPASSRLS`, not superuser, has effective `SELECT` on every application table, and has none of the forbidden write/ownership capabilities; a role limited by RLS fails closed;
 3. runs PostgreSQL 17 `pg_dump --format=custom --compress=zstd:6 --lock-wait-timeout=60s` without `--enable-row-security`;
 4. fails on nonzero exit, empty archive, or any diagnostic output;
 5. keeps the plaintext dump root-only and temporary;
@@ -60,11 +70,13 @@ On any backup failure, preserve the service journal and status metadata but neve
 Only after the credential/production gate:
 
 1. verify all Window R preconditions and the committed-release source commit;
-2. run `install-pinned-tools.sh`; it downloads only official versioned archives and verifies their fixed public SHA-256 values before installation under `/opt/genesis/recovery/bin`;
-3. install configuration, directories, references, and inactive systemd unit files at exact declared paths;
-4. run synthetic preflight, one checkpoint backup, remote round trip, and isolated restore proof;
-5. inspect machine-readable status and confirm zero published restore ports and no active-volume reference;
-6. only then enable/start the timer once, without restarting API, PostgreSQL, or Traefik;
-7. capture Window R evidence and stop. Gate 3 for 07B remains separate.
+2. validate non-secret OAuth evidence as `In production` with exact account/scope; stop before rclone if it cannot be proved;
+3. classify `genesis_backup`; after the separately recorded production-mutation approval, provision it only if absent and capture its non-secret provenance/least-privilege proof;
+4. run `install-pinned-tools.sh`; it downloads only official versioned archives and verifies their fixed public SHA-256 values before installation under `/opt/genesis/recovery/bin`;
+5. install configuration, directories, references, and inactive systemd unit files at exact declared paths;
+6. run synthetic preflight, one checkpoint backup, remote round trip, and isolated restore proof;
+7. inspect machine-readable status and confirm zero published restore ports and no active-volume reference;
+8. only then enable/start the timer once, without restarting API, PostgreSQL, or Traefik;
+9. capture Window R evidence and stop. Gate 3 for 07B remains separate.
 
 Never use `latest`, `curl | sh`, `docker compose down -v`, Drive purge, a candidate bundle, a mutable binary, or an unverified download.

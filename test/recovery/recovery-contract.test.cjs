@@ -77,6 +77,39 @@ for (const scenario of [
     },
     expected: 'credential classes must contain references only',
   },
+  {
+    name: 'rejects write-capable backup role contract',
+    path: 'config/recovery/backup-restore.v1.json',
+    update: (value) => {
+      value.database.backupRole.forbiddenCapabilities = ['ownership'];
+    },
+    expected: 'dedicated backup role contract mismatch',
+  },
+  {
+    name: 'rejects a mutable divergent-role budget',
+    path: 'config/recovery/window-r-plan.v1.json',
+    update: (value) => {
+      value.futureMutationContract.backupRole.divergentStateMutationCount = 1;
+    },
+    expected: 'future backup-role mutation budget mismatch',
+  },
+  {
+    name: 'rejects OAuth Testing as the required status',
+    path: 'config/recovery/backup-restore.v1.json',
+    update: (value) => {
+      value.transport.oauth.requiredPublishingStatus = 'Testing';
+    },
+    expected: 'OAuth production-status evidence contract mismatch',
+  },
+  {
+    name: 'rejects broad Drive as primary scope',
+    path: 'config/recovery/window-r-plan.v1.json',
+    update: (value) => {
+      value.futureMutationContract.oauth.primaryScope =
+        'https://www.googleapis.com/auth/drive';
+    },
+    expected: 'future OAuth preflight contract mismatch',
+  },
 ]) {
   test(scenario.name, () => {
     const root = fixture();
