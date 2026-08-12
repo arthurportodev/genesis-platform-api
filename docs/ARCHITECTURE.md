@@ -388,3 +388,17 @@ Configurações ACME staging e produção usam HTTP-01 na porta 80, estados
 separados e persistentes e email não secreto renderizado em runtime. O estado
 ACME fica fora do Git. Nada nesta candidata comprova DNS, certificado, HTTPS
 live, binding público, frontend Vercel ou conclusão da `0.8-MVP-06`.
+
+## Recovery tooling 0.8-MVP-07A
+
+Recovery é uma superfície operacional separada da stack ativa. O backup acessa
+o PostgreSQL pela rede privada com credencial exclusiva que prova completude sob
+RLS, produz custom dump PostgreSQL 17, cifra antes do transporte e considera
+verificado apenas o ciphertext baixado novamente e restaurado. Systemd somente
+serializa e agenda o runner; não incorpora segredo nem estado remoto.
+
+O restore cria por run network interna, volume isolado e containers
+PostgreSQL/API fixados por digest. Não há portas publicadas nem referência ao
+volume ativo. O plano Window R é específico, machine-readable e fail-closed;
+não é plataforma genérica de operação remota. Ferramentas e units só podem ser
+ativados na 07B a partir de bundle committed-release incorporado.

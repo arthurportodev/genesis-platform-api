@@ -9,6 +9,9 @@ const {
   POSTGRES_IMAGE,
   TRAEFIK_IMAGE,
 } = require('./validate-production-compose.cjs');
+const {
+  validateRecoveryContract,
+} = require('./validate-recovery-contract.cjs');
 
 const EXPECTED_ARTIFACTS = [
   {
@@ -76,12 +79,72 @@ const EXPECTED_ARTIFACTS = [
     sourcePath: 'docker/traefik/dynamic/api-health-only.yml',
     mode: '0644',
   },
+  {
+    path: 'config/recovery/backup-restore.v1.json',
+    sourcePath: 'config/recovery/backup-restore.v1.json',
+    mode: '0644',
+  },
+  {
+    path: 'config/recovery/recovery.env.example',
+    sourcePath: 'config/recovery/recovery.env.example',
+    mode: '0644',
+  },
+  {
+    path: 'config/recovery/window-r-plan.v1.json',
+    sourcePath: 'config/recovery/window-r-plan.v1.json',
+    mode: '0644',
+  },
+  {
+    path: 'docker/recovery/backup-runner.sh',
+    sourcePath: 'docker/recovery/backup-runner.sh',
+    mode: '0644',
+  },
+  {
+    path: 'docker/recovery/check-status.sh',
+    sourcePath: 'docker/recovery/check-status.sh',
+    mode: '0644',
+  },
+  {
+    path: 'docker/recovery/common.sh',
+    sourcePath: 'docker/recovery/common.sh',
+    mode: '0644',
+  },
+  {
+    path: 'docker/recovery/install-pinned-tools.sh',
+    sourcePath: 'docker/recovery/install-pinned-tools.sh',
+    mode: '0644',
+  },
+  {
+    path: 'docker/recovery/restore-proof-runner.sh',
+    sourcePath: 'docker/recovery/restore-proof-runner.sh',
+    mode: '0644',
+  },
+  {
+    path: 'docker/recovery/retention-runner.sh',
+    sourcePath: 'docker/recovery/retention-runner.sh',
+    mode: '0644',
+  },
+  {
+    path: 'docker/recovery/systemd/genesis-backup.service',
+    sourcePath: 'docker/recovery/systemd/genesis-backup.service',
+    mode: '0644',
+  },
+  {
+    path: 'docker/recovery/systemd/genesis-backup.timer',
+    sourcePath: 'docker/recovery/systemd/genesis-backup.timer',
+    mode: '0644',
+  },
+  {
+    path: 'docs/RECOVERY_RUNBOOK.md',
+    sourcePath: 'docs/RECOVERY_RUNBOOK.md',
+    mode: '0644',
+  },
 ].sort((left, right) => left.path.localeCompare(right.path));
 const EXPECTED_FILES = [
   ...EXPECTED_ARTIFACTS.map((entry) => entry.path),
   'release-manifest.json',
 ].sort();
-const CONTRACT_VERSION = '0.8-MVP-06A.v1';
+const CONTRACT_VERSION = '0.8-MVP-07A.v2';
 const POSTGRES_LINUX_AMD64_MANIFEST =
   'sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a';
 
@@ -314,6 +377,10 @@ function validateProductionBundle(
       failures,
     );
   }
+  const recoveryValidation = validateRecoveryContract(root);
+  for (const failure of recoveryValidation.failures) {
+    failures.push(`recovery contract: ${failure}`);
+  }
 
   let manifest;
   try {
@@ -391,6 +458,15 @@ function validateProductionBundle(
   check(
     manifest.images?.traefik?.digest === TRAEFIK_IMAGE.split('@')[1],
     'Traefik digest mismatch',
+    failures,
+  );
+  check(
+    manifest.recovery?.contractVersion === '0.8-MVP-07A.v1' &&
+      manifest.recovery?.lifecycle === 'incorporated-not-activated' &&
+      manifest.recovery?.windowPlanVersion === '0.8-MVP-07B.window-r.v1' &&
+      manifest.recovery?.productionMutationCount === 0 &&
+      manifest.recovery?.driveMutationCount === 0,
+    'recovery provenance metadata mismatch',
     failures,
   );
   check(

@@ -714,3 +714,24 @@ validators, testes e bundle ampliado. Produção, DNS, firewall, ACME live,
 certificados, GHCR, Vercel, Web, usuários e dados reais não foram alterados.
 HTTPS permanece não observado e a `0.8-MVP-06` não está concluída. O candidato
 aguarda verificação independente e Gate 2.
+
+## 0.8-MVP-07A — Recovery contract and tooling
+
+Em 12 de agosto de 2026, a 07A preparou o contrato versionado, runners
+fail-closed, configuração não secreta, units systemd, validators, testes
+unitários/adversariais e integração sintética isolada. age 1.3.1 e rclone
+1.74.4 usam fontes oficiais linux/amd64 e hashes públicos fixos.
+
+O contrato fixa RPO 24h, frequência 12h, warning/critical 18/24h, RTO lógico
+sintético 4h, retenção regular/checkpoint 30/90 dias, duas cópias verificadas e
+Drive trash-only. O plano Window R nega volume ativo, portas, purge, reinícios e
+candidate bundles. Produção, Drive, OAuth, chave definitiva, timers live, dados
+reais e merge permaneceram sem mutação/autorização; operação real segue à 07B.
+
+O primeiro Gate 2 independente bloqueou três gaps High autônomos: fixtures Linux
+sem ownership root, handoff de retenção dependente de modo executável e restore
+sem convergência de ownership. A correção executa a suíte Linux/root sem skips e
+mantém a rejeição de arquivos não-root, chama a retenção explicitamente por bash
+mesmo no bundle 0644 e restaura/verifica database, schema, tabelas e sequências
+sob `genesis_migration`. O novo candidato exige perfil Critical completo e nova
+verificação independente antes de qualquer entrega Git.

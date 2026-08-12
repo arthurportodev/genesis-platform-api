@@ -1,0 +1,28 @@
+[Unit]
+Description=Genesis encrypted PostgreSQL backup
+Documentation=file:/opt/genesis/release/docs/PRODUCTION.md
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=/opt/genesis/recovery/recovery.env
+ExecStart=/bin/bash /opt/genesis/release/docker/recovery/backup-runner.sh --mode regular
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/genesis/recovery /run/lock
+ReadOnlyPaths=/opt/genesis/release /opt/genesis/recovery /opt/genesis/secrets /var/run/docker.sock
+TimeoutStartSec=4h
+
+[Install]
+WantedBy=multi-user.target

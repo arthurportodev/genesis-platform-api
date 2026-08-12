@@ -243,6 +243,18 @@ jobs:
       - name: Run focused production tests
         run: npm run test:production
 
+      - name: Validate recovery contract
+        run: npm run recovery:validate
+
+      - name: Check recovery formatting
+        run: npm run format:check:recovery
+
+      - name: Run recovery unit and adversarial tests
+        run: sudo env "PATH=$PATH" npm run test:recovery
+
+      - name: Run isolated recovery integration
+        run: npm run test:recovery:integration
+
       - name: Check application formatting
         run: npm run format:check
 

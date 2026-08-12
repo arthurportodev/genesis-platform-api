@@ -482,3 +482,17 @@ email é não secreto, mas é validado e não logado. Os arquivos de estado são
 regulares, persistentes, `0600`, externos ao Git e nunca são lidos para gerar
 evidência. A configuração de produção não é iniciada localmente e nenhum ACME
 live foi executado nesta candidata.
+
+## Recovery boundary 0.8-MVP-07A
+
+Backups lógicos falham se a credencial não provar acesso completo apesar de
+RLS. O runtime da API continua `NOBYPASSRLS`; a credencial separada de backup
+deve ser `BYPASSRLS` ou superuser e ter `SELECT` em todas as tabelas. Plaintext
+existe só como temporário root-only e não recebe hash registrado. Somente o
+ciphertext age é transportado e identificado por SHA-256.
+
+OAuth rclone, identidade privada age, pgpass e secrets sintéticos de restore
+são referências root-only fora de Git, imagem, bundle, logs e evidências. Drive
+usa conta dedicada, `drive.file` primário e lixeira; scope amplo exige novo gate
+e purge permanente é inválido. Restore e cleanup aceitam apenas recursos
+isolados rotulados por run, negam o volume ativo e publicam zero portas.

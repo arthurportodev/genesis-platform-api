@@ -18,7 +18,7 @@ const {
   TRAEFIK_IMAGE,
 } = require('./validate-production-compose.cjs');
 
-const CONTRACT_VERSION = '0.8-MVP-06A.v1';
+const CONTRACT_VERSION = '0.8-MVP-07A.v2';
 const BUNDLE_MODES = new Set(['candidate', 'committed-release']);
 const POSTGRES_LINUX_AMD64_MANIFEST =
   'sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a';
@@ -88,6 +88,66 @@ const ARTIFACTS = [
   {
     source: 'docker/traefik/dynamic/api-health-only.yml',
     path: 'docker/traefik/dynamic/api-health-only.yml',
+    mode: '0644',
+  },
+  {
+    source: 'config/recovery/backup-restore.v1.json',
+    path: 'config/recovery/backup-restore.v1.json',
+    mode: '0644',
+  },
+  {
+    source: 'config/recovery/recovery.env.example',
+    path: 'config/recovery/recovery.env.example',
+    mode: '0644',
+  },
+  {
+    source: 'config/recovery/window-r-plan.v1.json',
+    path: 'config/recovery/window-r-plan.v1.json',
+    mode: '0644',
+  },
+  {
+    source: 'docker/recovery/backup-runner.sh',
+    path: 'docker/recovery/backup-runner.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/recovery/check-status.sh',
+    path: 'docker/recovery/check-status.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/recovery/common.sh',
+    path: 'docker/recovery/common.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/recovery/install-pinned-tools.sh',
+    path: 'docker/recovery/install-pinned-tools.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/recovery/restore-proof-runner.sh',
+    path: 'docker/recovery/restore-proof-runner.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/recovery/retention-runner.sh',
+    path: 'docker/recovery/retention-runner.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/recovery/systemd/genesis-backup.service',
+    path: 'docker/recovery/systemd/genesis-backup.service',
+    mode: '0644',
+  },
+  {
+    source: 'docker/recovery/systemd/genesis-backup.timer',
+    path: 'docker/recovery/systemd/genesis-backup.timer',
+    mode: '0644',
+  },
+  {
+    source: 'docs/RECOVERY_RUNBOOK.md',
+    path: 'docs/RECOVERY_RUNBOOK.md',
     mode: '0644',
   },
 ].sort((left, right) =>
@@ -361,6 +421,13 @@ function buildProductionBundle({
           imageCreatedAt: '2026-07-24T19:31:24.4220685Z',
           selectedAt: '2026-08-10',
         },
+      },
+      recovery: {
+        contractVersion: '0.8-MVP-07A.v1',
+        lifecycle: 'incorporated-not-activated',
+        windowPlanVersion: '0.8-MVP-07B.window-r.v1',
+        productionMutationCount: 0,
+        driveMutationCount: 0,
       },
       artifacts: entries,
     };

@@ -292,6 +292,13 @@ test('validate preserves the complete Critical command surface', () => {
     mutated('npm run ci:contract:validate', 'npm run task:contracts'),
     /ci:contract:validate/u,
   );
+  rejects(
+    mutated(
+      'npm run test:recovery:integration',
+      'sudo env "PATH=$PATH" npm run test:recovery',
+    ),
+    /test:recovery:integration/u,
+  );
 });
 
 test('Compose validation uses only a synthetic runner temp env file', () => {

@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-12T10:47:26.6039363Z",
+  "updatedAt": "2026-08-12T13:32:38.1112510Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -45,12 +45,16 @@
     }
   },
   "currentWork": {
-    "status": "none",
-    "summary": "A 0.8-MVP-06B foi concluída com decisão KEEP: HTTPS público permanece ativo exclusivamente para GET /health, e nenhuma tarefa posterior foi iniciada."
+    "status": "in-progress",
+    "summary": "A 0.8-MVP-07 foi iniciada: a 07A incorporou contrato e tooling de recovery sem operação live; a 07B é o trabalho vigente e exige gates próprios de credencial, produção e merge.",
+    "task": {
+      "id": "0.8-MVP-07B",
+      "title": "Window R de backup externo e restore comprovado"
+    }
   },
   "nextTask": {
-    "id": "0.8-MVP-07",
-    "title": "Backup externo e restore comprovado"
+    "id": "0.8-MVP-07B",
+    "title": "Window R de backup externo e restore comprovado"
   },
   "operationalState": {
     "summary": "A 0.8-MVP-06B terminou em KEEP com api.agenciagenesismkt.com.br publicada por HTTPS exclusivamente para GET /health. TCP/80 redireciona para HTTPS, TCP/443 usa certificado Let's Encrypt production válido e as rotas funcionais permanecem fail-closed; API e PostgreSQL continuam privados e saudáveis.",
@@ -304,10 +308,18 @@
       {
         "id": "OPS-APPROVED-RECOVERY",
         "status": "present",
-        "statement": "Google Drive permanece o destino externo de backup aprovado; RPO, RTO, retenção, implementação e restore comprovado seguem pendentes.",
+        "statement": "Google Drive dedicado foi aprovado com RPO de 24 horas, frequência de 12 horas, RTO lógico sintético de quatro horas, retenção regular/checkpoint de 30/90 dias, duas cópias verificadas e trash-only; operação e restore comprovado seguem para a 07B.",
         "basis": "documented",
-        "documentedAt": "2026-08-10T19:42:11Z",
-        "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
+        "documentedAt": "2026-08-12T13:32:38.1112510Z",
+        "evidenceIds": ["EV-MVP07A-RECOVERY-CONTRACT"]
+      },
+      {
+        "id": "OPS-RECOVERY-TOOLING",
+        "status": "present",
+        "statement": "A 07A incorporou contrato versionado, runners, configuração não secreta, systemd, validação, testes e plano Window R; nenhum backup, OAuth, timer ou restore live foi executado.",
+        "basis": "documented",
+        "documentedAt": "2026-08-12T13:32:38.1112510Z",
+        "evidenceIds": ["EV-MVP07A-RECOVERY-CONTRACT"]
       },
       {
         "id": "OPS-APPROVED-MONITORING",
@@ -418,6 +430,13 @@
       "uri": "artifact://genesis-platform/mvp06-06b-window2-retry-https-health-only/09-FINAL-REPORT.md",
       "sha256": "fb296b9490a3340539a0db3c675d9e15a431ea45a4df0f38b8e165dc9a4a9f09",
       "capturedAt": "2026-08-12T10:17:35.0427409Z"
+    },
+    {
+      "id": "EV-MVP07A-RECOVERY-CONTRACT",
+      "kind": "repository-file",
+      "uri": "repo://arthurportodev/genesis-platform-api/config/recovery/backup-restore.v1.json",
+      "sha256": "05e41299666ef5d404674746e403cd2454ac68636fdae8bf18cbde0d3a6926ba",
+      "capturedAt": "2026-08-12T13:32:38.1112510Z"
     }
   ],
   "blockers": [
@@ -438,9 +457,9 @@
     {
       "id": "BLOCK-RECOVERY",
       "status": "open",
-      "summary": "Google Drive foi aprovado como destino; RPO, RTO, retenção e restore sintético precisam ser aprovados ou comprovados antes de dados reais.",
+      "summary": "Contrato e parâmetros de recovery foram aprovados e incorporados pela 07A; credenciais, operação Google Drive, backup externo e restore sintético ainda precisam ser comprovados na 07B antes de dados reais.",
       "owner": "arthur",
-      "blocksTaskIds": ["0.8-MVP-07", "0.8-MVP-09"]
+      "blocksTaskIds": ["0.8-MVP-07B", "0.8-MVP-09"]
     }
   ],
   "pendingHumanDecisions": [
@@ -449,12 +468,6 @@
       "question": "Como app.agenciagenesismkt.com.br e a Vercel serão reconciliados antes do proxy funcional /api/v1?",
       "whyMaterial": "O vínculo atual não foi comprovado; a decisão não bloqueia o health-only 06B.",
       "blockingTaskIds": ["0.8-MVP-08"]
-    },
-    {
-      "id": "HD-BACKUP",
-      "question": "Quais RPO, RTO e retenção serão aprovados para o backup externo no Google Drive?",
-      "whyMaterial": "Define risco de perda, custo e operação antes de dados reais.",
-      "blockingTaskIds": ["0.8-MVP-07", "0.8-MVP-09"]
     },
     {
       "id": "HD-MONITORING",
@@ -500,7 +513,10 @@
       "id": "RG-TLS",
       "statement": "Traefik, HTTPS e hostname foram comprovados exclusivamente para public HTTPS health-only; o gate não autoriza /api/v1 nem qualquer rota funcional.",
       "status": "passed",
-      "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE", "EV-MVP06B-WINDOW2-CLOSEOUT"]
+      "sourceEvidenceIds": [
+        "EV-API-PRODUCTION-BASE",
+        "EV-MVP06B-WINDOW2-CLOSEOUT"
+      ]
     },
     {
       "id": "RG-RECOVERY",
@@ -558,9 +574,7 @@
       "id": "OR-PUBLIC-HEALTH-ONLY",
       "statement": "A exposição pública permanece limitada a GET /health por HTTPS; /api/v1, demais rotas funcionais, dashboard e métodos não permitidos continuam fail-closed.",
       "reviewTrigger": "Reavaliar somente após vínculo app./Vercel, testes funcionais e cross-tenant, recovery aplicável e autorização humana específica para rota funcional.",
-      "sourceEvidenceIds": [
-        "EV-MVP06B-WINDOW2-CLOSEOUT"
-      ]
+      "sourceEvidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
     }
   ],
   "pointerMetadata": {

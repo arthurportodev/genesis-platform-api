@@ -1,0 +1,124 @@
+{
+  "contractVersion": "0.8-MVP-07A.v1",
+  "lifecycle": "incorporated-not-activated",
+  "database": {
+    "engine": "postgresql",
+    "majorVersion": 17,
+    "image": "postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193",
+    "platform": "linux/amd64",
+    "activeVolumeAccess": "forbidden",
+    "dump": {
+      "format": "custom",
+      "compression": "zstd:6",
+      "lockWaitTimeout": "60s",
+      "enableRowSecurity": false,
+      "requiredRoleAttributes": ["BYPASSRLS_OR_SUPERUSER"],
+      "requiredTablePrivilege": "SELECT"
+    },
+    "restore": {
+      "exitOnError": true,
+      "isolatedNetwork": true,
+      "isolatedVolume": true,
+      "publishedPorts": 0,
+      "apiReadinessPath": "/api/v1/health/ready",
+      "apiLivenessPath": "/api/v1/health/live"
+    }
+  },
+  "object": {
+    "namePattern": "^genesis-(regular|checkpoint)-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}\\.dump\\.age$",
+    "pipeline": [
+      "root-only-plaintext-dump",
+      "age-encryption-to-ciphertext-partial",
+      "ciphertext-sha256",
+      "atomic-rename",
+      "rclone-upload",
+      "remote-object-capture",
+      "recovery-route-download",
+      "downloaded-ciphertext-sha256-compare"
+    ],
+    "plaintextHash": "forbidden",
+    "partialSuffix": ".partial"
+  },
+  "tools": {
+    "age": {
+      "version": "1.3.1",
+      "architecture": "linux-amd64",
+      "source": "https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz",
+      "archiveSha256": "bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377",
+      "binary": "/opt/genesis/recovery/bin/age"
+    },
+    "rclone": {
+      "version": "1.74.4",
+      "architecture": "linux-amd64",
+      "source": "https://downloads.rclone.org/v1.74.4/rclone-v1.74.4-linux-amd64.zip",
+      "archiveSha256": "fe435e0c36228e7c2f116a8701f01127bb1f694005fc11d1f27186c8bca4115d",
+      "binary": "/opt/genesis/recovery/bin/rclone"
+    }
+  },
+  "transport": {
+    "type": "rclone-google-drive",
+    "account": "admreserva433@gmail.com",
+    "accountDedicated": true,
+    "primaryScope": "drive.file",
+    "rootCreatedBy": "rclone",
+    "rootFolderIdBoundary": false,
+    "fallbackScope": "drive",
+    "fallbackAllowedOnlyOnDedicatedEmptyAccount": true,
+    "fallbackRequiresFutureCredentialGate": true,
+    "uploadCompletionIsVerification": false,
+    "remoteVerification": [
+      "capture-object-id-size-and-available-checksum",
+      "download-through-recovery-route",
+      "compare-ciphertext-sha256",
+      "restore-from-downloaded-ciphertext"
+    ],
+    "deleteMode": "trash-only",
+    "permanentPurge": false,
+    "retry": {
+      "attempts": 3,
+      "lowLevelAttempts": 5,
+      "duplicatePolicy": "immutable-unique-object-name"
+    }
+  },
+  "schedule": {
+    "frequencyHours": 12,
+    "businessRpoHours": 24,
+    "staleWarningHours": 18,
+    "staleCriticalHours": 24,
+    "preChangeCheckpoint": true
+  },
+  "retention": {
+    "regularDays": 30,
+    "checkpointDays": 90,
+    "minimumVerifiedCopies": 2,
+    "selection": "age-and-verification-marker",
+    "cleanupIdentity": "exact-path-and-object-id",
+    "deleteMode": "trash-only"
+  },
+  "recoveryObjective": {
+    "logicalRtoHours": 4,
+    "startsWhen": "selected-backup-and-recovery-credential-available",
+    "endsWhen": "isolated-postgresql-health-readiness-and-smoke-pass",
+    "publicServiceRecoveryIncluded": false
+  },
+  "paths": {
+    "environment": "/opt/genesis/recovery/recovery.env",
+    "recipient": "/opt/genesis/recovery/age-recipient.txt",
+    "staging": "/var/lib/genesis/recovery/staging",
+    "status": "/var/lib/genesis/recovery/status",
+    "backupLock": "/run/lock/genesis-backup.lock",
+    "restoreLock": "/run/lock/genesis-restore.lock",
+    "backupPgpass": "/opt/genesis/secrets/recovery-backup-pgpass",
+    "ageIdentity": "/opt/genesis/secrets/recovery-age-identity",
+    "rcloneConfig": "/opt/genesis/secrets/recovery-rclone.conf",
+    "restoreSecretsDirectory": "/opt/genesis/secrets/recovery-synthetic",
+    "containerSecretGid": 70
+  },
+  "status": {
+    "localOnly": true,
+    "format": "json",
+    "backupFile": "backup-status.v1.json",
+    "restoreFile": "restore-status.v1.json",
+    "externalAlerting": "deferred-0.8-MVP-09"
+  }
+}
