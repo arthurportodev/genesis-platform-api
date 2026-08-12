@@ -121,3 +121,37 @@ test('backup invokes bundled retention through bash without executable-mode depe
   );
   assert.doesNotMatch(backup, /^"\$script_dir\/retention-runner\.sh"/mu);
 });
+
+test('restore copies group-readable pgpass into private container tmpfs', () => {
+  const restore = readFileSync(
+    join(process.cwd(), 'docker/recovery/restore-proof-runner.sh'),
+    'utf8',
+  );
+  assert.equal(
+    (
+      restore.match(
+        /--tmpfs \/run\/genesis:rw,noexec,nosuid,nodev,size=1m,mode=0700/gu,
+      ) ?? []
+    ).length,
+    2,
+  );
+  assert.equal(
+    (restore.match(/chmod 0600 \/run\/genesis\/pgpass/gu) ?? []).length,
+    2,
+  );
+  assert.equal(
+    (restore.match(/export PGPASSFILE=\/run\/genesis\/pgpass/gu) ?? []).length,
+    2,
+  );
+  assert.doesNotMatch(restore, /PGPASSFILE=\/run\/secrets/u);
+  assert.match(restore, /inspect --format '\{\{\.State\.Running\}\}'/u);
+  assert.match(restore, /logs --tail 100 "\$api"/u);
+  assert.match(
+    restore,
+    /SET ROLE genesis_migration; GRANT CONNECT ON DATABASE genesis_platform TO genesis_runtime; RESET ROLE/u,
+  );
+  assert.match(
+    restore,
+    /has_database_privilege\('genesis_runtime',current_database\(\),'CONNECT'\)/u,
+  );
+});

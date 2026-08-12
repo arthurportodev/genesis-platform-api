@@ -647,10 +647,6 @@ async function main() {
           sourceCommit,
         })}\n`,
       );
-      copyFileSync(
-        join(root, 'identity'),
-        join(secrets, 'recovery-age-identity'),
-      );
       writeSecret(
         join(secrets, 'database-migration-password'),
         `synthetic-migration-${runId}`,
@@ -687,7 +683,7 @@ async function main() {
         '/bin/sh',
         POSTGRES_IMAGE,
         '-c',
-        'chown 0:0 /work/recovery.env /work/age/age /work/downloaded.dump.age /work/release/release-manifest.json /work/release/docker/postgres/init-runtime-role.sh /work/release/docker/production/api-entrypoint.sh && chmod 0644 /work/recovery.env /work/release/release-manifest.json /work/release/docker/postgres/init-runtime-role.sh /work/release/docker/production/api-entrypoint.sh && chmod 0755 /work/age/age && chmod 0440 /work/downloaded.dump.age && chown 0:70 /work/secrets/* && chmod 0440 /work/secrets/*',
+        'install -m 0440 -o 0 -g 70 /work/identity /work/secrets/recovery-age-identity && chown 0:0 /work/recovery.env /work/age/age /work/downloaded.dump.age /work/release/release-manifest.json /work/release/docker/postgres/init-runtime-role.sh /work/release/docker/production/api-entrypoint.sh && chmod 0644 /work/recovery.env /work/release/release-manifest.json /work/release/docker/postgres/init-runtime-role.sh /work/release/docker/production/api-entrypoint.sh && chmod 0755 /work/age/age && chmod 0440 /work/downloaded.dump.age && chown 0:70 /work/secrets/* && chmod 0440 /work/secrets/*',
       ]);
       const committedRunner = run(
         'sudo',
