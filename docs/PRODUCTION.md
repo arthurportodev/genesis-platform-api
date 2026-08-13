@@ -631,20 +631,22 @@ trash-only e restore sintético em Docker isolado. O RPO é 24 horas, a
 frequência 12 horas, os limiares 18/24 horas, o RTO lógico sintético quatro
 horas e as retenções regular/checkpoint 30/90 dias com duas cópias verificadas.
 
-A 07A não executou operação live. Na 07B, a Window R3 preservou a role de
-backup conforme, concluiu OAuth `drive.file`, checkpoint cifrado e round trip,
-mas o restore isolado revelou que o runner incorporado exigia `SELECT` runtime
-em quatro tabelas onde a ACL de produção o nega intencionalmente. O checkpoint
-foi movido para a lixeira, recursos isolados e secrets sintéticos foram
-removidos, e o timer permaneceu inativo e desabilitado. Não existe backup live
-ativo nem cópia verificada preservada por esse checkpoint.
+A 07A não executou operação live. Na 07B, a Window R3 comprovou OAuth
+`drive.file`, checkpoint cifrado e round trip, mas sofreu rollback trash-only
+quando o restore revelou uma incompatibilidade ACL. A correção foi incorporada
+e a Window R4 instalou atomicamente o committed release corrigido, preservando
+o anterior para rollback e sem reiniciar API, PostgreSQL ou Traefik.
 
-A próxima operação segue [RECOVERY_RUNBOOK.md](RECOVERY_RUNBOOK.md), valida o
-plano Window R e consome somente um novo bundle `committed-release` incorporado
-à `main` com a correção ACL. O volume ativo continua negado, o restore publica
-zero portas e cleanup exige nome e label exatos.
+A R4 validou a credencial por leitura sem novo OAuth, produziu checkpoint
+cifrado, comprovou download e SHA-256, restaurou em PostgreSQL 17 isolado e
+validou ownership, RLS, ACLs positivas e as quatro negações intencionais. O
+timer está habilitado e ativo; seu primeiro disparo real produziu a segunda
+cópia verificada. Há um checkpoint R4 e um regular R4, ambos com ciphertext e
+marcador imutáveis. O volume ativo permaneceu inacessado, o restore publicou
+zero portas e todos os recursos e secrets sintéticos foram removidos.
 
-A futura Window R trata `genesis_backup` como mutação explícita e limitada:
+O procedimento vigente segue [RECOVERY_RUNBOOK.md](RECOVERY_RUNBOOK.md). A role
+`genesis_backup` é tratada como mutação explícita e limitada:
 `genesis_bootstrap` pode criar somente a role ausente com `LOGIN`, `BYPASSRLS`,
 `CONNECTION LIMIT 1` e membership exclusiva em `pg_read_all_data`; role
 conforme é no-op e divergência interrompe sem reconciliação. Senha entra por

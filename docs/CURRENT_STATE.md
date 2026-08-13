@@ -5,17 +5,17 @@
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
 - **Revisão de estado:** GH-01-COMPLETE
-- **Atualização documentada:** 2026-08-13T09:27:02.4167181Z
+- **Atualização documentada:** 2026-08-13T12:21:19.830Z
 - **Fase:** 0.8-MVP — Primeira produção mínima viável
-- **Último trabalho concluído:** 0.8-MVP-06B — HTTPS público health-only
-- **Trabalho vigente:** in-progress — A 07B permanece em andamento. A Window R3 comprovou OAuth drive.file, checkpoint cifrado e round trip, mas o restore isolado revelou que o runner incorporado contradizia quatro negações intencionais de SELECT da role runtime. O checkpoint sofreu rollback trash-only, o timer permaneceu desabilitado e uma correção versionada precisa ser incorporada antes de novo committed release e nova Window.
-- **Próxima tarefa:** 0.8-MVP-07B — Window R de backup externo e restore comprovado
+- **Último trabalho concluído:** 0.8-MVP-07B — Window R de backup externo e restore comprovado
+- **Trabalho vigente:** none — A 07B foi concluída pela Window R4: checkpoint e backup regular cifrados foram verificados no Drive, o restore isolado corrigido passou, o timer está ativo e RG-RECOVERY foi aprovado. Nenhum dado real foi autorizado.
+- **Próxima tarefa:** 0.8-MVP-08 — Vercel, proxy, domínio e integração frontend/backend
 - **Web integrado:** fa4193fc28751d64923be824d293367499d4fba0
 - **Proveniência da API:** containing-commit
 
 ## Estado operacional
 
-API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposição funcional fail-closed. A Window R3 terminou em rollback após falha determinística do verificador ACL do restore; seus objetos de checkpoint foram movidos para a lixeira, recursos isolados e secrets sintéticos foram removidos, e o timer de backup continua inativo e desabilitado.
+API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposição funcional fail-closed. A Window R4 instalou o release corrigido, comprovou checkpoint, round trip e restore isolado, ativou o timer e observou o primeiro backup regular; duas cópias remotas estão verificadas e não há recurso residual.
 
 - **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
 - **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
@@ -44,9 +44,10 @@ API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposi�
 - **OPS-DNS-APP** [observed/present] — app.agenciagenesismkt.com.br apresentou A 185.158.133.1, sem CNAME ou AAAA, no snapshot do Gate 1.
 - **OPS-VERCEL-LINK** [observed/unknown] — O vínculo de app.agenciagenesismkt.com.br com a Vercel não foi comprovado; a Vercel não foi inspecionada por ausência de sessão read-only autorizada.
 - **OPS-ACME-CONTACT** [observed/present] — O contato aprovado contato@agenciagenesismkt.com.br foi usado na solicitação ACME production única concluída pela Window 2.
-- **OPS-APPROVED-RECOVERY** [documented/present] — Google Drive dedicado foi aprovado com RPO de 24 horas, frequência de 12 horas, RTO lógico sintético de quatro horas, retenção regular/checkpoint de 30/90 dias, duas cópias verificadas e trash-only; operação e restore comprovado seguem para a 07B.
+- **OPS-APPROVED-RECOVERY** [documented/present] — Google Drive dedicado opera com RPO de 24 horas, frequência de 12 horas, RTO lógico sintético de quatro horas, retenção regular/checkpoint de 30/90 dias, duas cópias verificadas e trash-only; a Window R4 comprovou a ativação e o restore.
 - **OPS-RECOVERY-TOOLING** [documented/present] — A 07A incorporou contrato versionado, runners, configuração não secreta, systemd, validação, testes e plano Window R; o tooling futuro classifica e provisiona genesis_backup somente sob autorização explícita, e rejeita OAuth externo que não prove status In production com scope drive.file; nenhum backup, OAuth, role, timer ou restore live foi executado.
 - **OPS-RECOVERY-WINDOW-R3** [observed/present] — A Window R3 preservou genesis_backup conforme, identidade age sob custódia dupla e OAuth externo In production com scope drive.file. O checkpoint e o round trip passaram, mas o restore falhou porque o runner exigia SELECT runtime em migrations e três tabelas de idempotência onde produção o nega intencionalmente; o rollback foi trash-only, sem restart, volume ativo, porta publicada ou timer habilitado. A correção candidata torna as quatro negações parte explícita da prova ACL.
+- **OPS-RECOVERY-WINDOW-R4** [observed/present] — A Window R4 instalou atomicamente o committed release corrigido sem restart, validou a credencial Drive sem novo OAuth, manteve genesis_backup conforme com zero mutações, comprovou checkpoint cifrado, round trip e restore PostgreSQL 17 isolado em 17 segundos, ativou o timer e observou o primeiro backup regular. Checkpoint e regular formam duas cópias remotas verificadas; não houve acesso ao volume ativo, porta publicada, untrash, purge ou recurso residual.
 - **OPS-APPROVED-MONITORING** [documented/present] — UptimeRobot sobre /health permanece o destino de monitoramento externo aprovado; política de alertas e implementação seguem pendentes.
 - **OPS-GHCR-VISIBILITY** [unknown/unknown] — Há histórico documentado de package GHCR público; este fato preserva a separação entre o destino privado aprovado e observações live.
 - **OPS-GHCR-PUBLIC-READ-OBSERVED** [observed/present] — O package GHCR da API aceitou leitura anônima no Gate 1; a transição futura para privado permanece separada.
@@ -55,7 +56,6 @@ API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposi�
 ## Blockers abertos
 
 - **BLOCK-WEB-VERCEL-FUNCTIONAL** — O vínculo app./Vercel precisa ser reconciliado antes da futura exposição funcional /api/v1; não bloqueia o edge health-only da 06B.
-- **BLOCK-RECOVERY** — Role genesis_backup, custódia age, OAuth drive.file e round trip foram comprovados, mas o restore incorporado falhou por um predicado ACL incompatível com quatro negações runtime intencionais. A correção precisa passar verifier e CI, ser incorporada à main, gerar novo committed release e receber nova autorização Window antes de repetir checkpoint, restore, timer e segunda cópia.
 
 ## Decisões humanas pendentes
 
@@ -66,7 +66,7 @@ API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposi�
 ## Release gates
 
 - **RG-TLS** [passed] — Traefik, HTTPS e hostname foram comprovados exclusivamente para public HTTPS health-only; o gate não autoriza /api/v1 nem qualquer rota funcional.
-- **RG-RECOVERY** [pending] — Backup recuperável e restore sintético devem passar antes de dados reais.
+- **RG-RECOVERY** [passed] — Backup recuperável e restore sintético devem passar antes de dados reais.
 - **RG-CROSS-TENANT** [pending] — Smoke funcional e teste adversarial cross-tenant devem passar antes dos primeiros usuários.
 
 ## Restrições atuais
