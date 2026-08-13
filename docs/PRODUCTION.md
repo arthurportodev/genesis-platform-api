@@ -623,7 +623,7 @@ Produção, DNS, firewall, GHCR, Vercel, certificados, usuários e dados reais
 continuam inalterados. HTTPS permanece não observado e o gate `RG-TLS` segue
 pendente.
 
-## Recovery incorporado — operação futura
+## Recovery incorporado — estado operacional
 
 O contrato `0.8-MVP-07A.v2` adiciona tooling determinístico para dump lógico
 PostgreSQL 17, cifragem age, transporte rclone, round trip remoto, retenção
@@ -631,11 +631,18 @@ trash-only e restore sintético em Docker isolado. O RPO é 24 horas, a
 frequência 12 horas, os limiares 18/24 horas, o RTO lógico sintético quatro
 horas e as retenções regular/checkpoint 30/90 dias com duas cópias verificadas.
 
-Nenhum OAuth, chave privada definitiva, timer, backup real ou mutação de
-produção é executado pela 07A. A operação futura segue
-[RECOVERY_RUNBOOK.md](RECOVERY_RUNBOOK.md), valida o plano Window R e consome
-somente bundle `committed-release` incorporado à `main`. O volume ativo é
-negado, o restore publica zero portas e cleanup exige nome e label exatos.
+A 07A não executou operação live. Na 07B, a Window R3 preservou a role de
+backup conforme, concluiu OAuth `drive.file`, checkpoint cifrado e round trip,
+mas o restore isolado revelou que o runner incorporado exigia `SELECT` runtime
+em quatro tabelas onde a ACL de produção o nega intencionalmente. O checkpoint
+foi movido para a lixeira, recursos isolados e secrets sintéticos foram
+removidos, e o timer permaneceu inativo e desabilitado. Não existe backup live
+ativo nem cópia verificada preservada por esse checkpoint.
+
+A próxima operação segue [RECOVERY_RUNBOOK.md](RECOVERY_RUNBOOK.md), valida o
+plano Window R e consome somente um novo bundle `committed-release` incorporado
+à `main` com a correção ACL. O volume ativo continua negado, o restore publica
+zero portas e cleanup exige nome e label exatos.
 
 A futura Window R trata `genesis_backup` como mutação explícita e limitada:
 `genesis_bootstrap` pode criar somente a role ausente com `LOGIN`, `BYPASSRLS`,
