@@ -198,4 +198,16 @@ test('restore copies group-readable pgpass into private container tmpfs', () => 
     restore,
     /has_database_privilege\('genesis_runtime',current_database\(\),'CONNECT'\)/u,
   );
+  assert.match(
+    restore,
+    /runtime_select_denylist="'migrations','lead_ingest_idempotency','lead_command_idempotency','lead_follow_up_idempotency'"/u,
+  );
+  assert.match(
+    restore,
+    /c\.relname NOT IN \(\$runtime_select_denylist\) AND NOT has_table_privilege\('genesis_runtime',c\.oid,'SELECT'\)/u,
+  );
+  assert.match(
+    restore,
+    /c\.relname IN \(\$runtime_select_denylist\) AND has_table_privilege\('genesis_runtime',c\.oid,'SELECT'\)/u,
+  );
 });

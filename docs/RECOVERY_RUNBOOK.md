@@ -55,7 +55,7 @@ The production restore proof accepts an exact remote path, object ID and expecte
 - one ephemeral API container;
 - transient one-shot restore and verification containers.
 
-No resource publishes a port. After SHA-256 comparison, age decrypts into a root-only temporary archive. `pg_restore --exit-on-error --no-owner --role genesis_migration` connects through the bootstrap credential but creates restored objects under the production migration role. The runner verifies that `genesis_migration` owns the database, `public` schema, application tables, partitions, and sequences; it also checks the migrations table, application tables, RLS policy coverage, and runtime `SELECT` ACLs. It then starts the pinned API image exclusively on the internal restore network. Both `/api/v1/health/live` and `/api/v1/health/ready` must return `status=ok`. Cleanup inspects the exact resource label before removing only run-owned containers, volume, and network.
+No resource publishes a port. After SHA-256 comparison, age decrypts into a root-only temporary archive. `pg_restore --exit-on-error --no-owner --role genesis_migration` connects through the bootstrap credential but creates restored objects under the production migration role. The runner verifies that `genesis_migration` owns the database, `public` schema, application tables, partitions, and sequences; it also checks the migrations table, application tables and RLS policy coverage. Runtime ACL verification requires direct `SELECT` on every readable application table while requiring direct `SELECT` to remain denied on `migrations`, `lead_ingest_idempotency`, `lead_command_idempotency`, and `lead_follow_up_idempotency`. It then starts the pinned API image exclusively on the internal restore network. Both `/api/v1/health/live` and `/api/v1/health/ready` must return `status=ok`. Cleanup inspects the exact resource label before removing only run-owned containers, volume, and network.
 
 The four-hour logical RTO starts when a backup and recovery credential are available and ends when PostgreSQL health plus API readiness/smoke pass. It is not public-service recovery.
 
@@ -64,6 +64,8 @@ The four-hour logical RTO starts when a backup and recovery credential are avail
 Atomic JSON status files live under `/var/lib/genesis/recovery/status`. `check-status.sh` returns 0 before 18 hours, 1 from 18 hours, and 2 at 24 hours or on failure/missing status. External alerting is deferred to `0.8-MVP-09`.
 
 On any backup failure, preserve the service journal and status metadata but never print a secret, OAuth config, private identity, plaintext dump, or plaintext hash. Do not retry beyond the plan limits. On checksum, RLS, restore, API readiness, release identity, Docker resource, scope, or active-volume failure, stop Window R and apply only the action-specific rollback in the plan.
+
+A committed release whose restore verifier requires direct runtime `SELECT` on all public tables is incompatible with the production ACL contract and must not be retried. Stop, trash only the exact failed-window checkpoint objects after path/ID revalidation, keep the timer disabled, correct and incorporate the verifier, rebuild a committed release, and obtain a new Window authorization.
 
 ## Installation and activation sequence for 07B
 

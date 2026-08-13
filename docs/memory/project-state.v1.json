@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-12T19:00:00Z",
+  "updatedAt": "2026-08-13T09:27:02.4167181Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -46,7 +46,7 @@
   },
   "currentWork": {
     "status": "in-progress",
-    "summary": "A 0.8-MVP-07 foi iniciada: a 07A incorporou contrato e tooling de recovery sem operação live, incluindo o envelope futuro da role genesis_backup e o preflight OAuth In production; a 07B é o trabalho vigente e exige gates próprios de credencial, produção e merge.",
+    "summary": "A 07B permanece em andamento. A Window R3 comprovou OAuth drive.file, checkpoint cifrado e round trip, mas o restore isolado revelou que o runner incorporado contradizia quatro negações intencionais de SELECT da role runtime. O checkpoint sofreu rollback trash-only, o timer permaneceu desabilitado e uma correção versionada precisa ser incorporada antes de novo committed release e nova Window.",
     "task": {
       "id": "0.8-MVP-07B",
       "title": "Window R de backup externo e restore comprovado"
@@ -57,10 +57,10 @@
     "title": "Window R de backup externo e restore comprovado"
   },
   "operationalState": {
-    "summary": "A 0.8-MVP-06B terminou em KEEP com api.agenciagenesismkt.com.br publicada por HTTPS exclusivamente para GET /health. TCP/80 redireciona para HTTPS, TCP/443 usa certificado Let's Encrypt production válido e as rotas funcionais permanecem fail-closed; API e PostgreSQL continuam privados e saudáveis.",
+    "summary": "API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposição funcional fail-closed. A Window R3 terminou em rollback após falha determinística do verificador ACL do restore; seus objetos de checkpoint foram movidos para a lixeira, recursos isolados e secrets sintéticos foram removidos, e o timer de backup continua inativo e desabilitado.",
     "basis": "observed",
-    "documentedAt": "2026-08-12T10:47:26.6039363Z",
-    "observedAt": "2026-08-12T10:17:13.281Z",
+    "documentedAt": "2026-08-13T09:27:02.4167181Z",
+    "observedAt": "2026-08-13T09:20:00Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -322,6 +322,15 @@
         "evidenceIds": ["EV-MVP07A-RECOVERY-CONTRACT"]
       },
       {
+        "id": "OPS-RECOVERY-WINDOW-R3",
+        "status": "present",
+        "statement": "A Window R3 preservou genesis_backup conforme, identidade age sob custódia dupla e OAuth externo In production com scope drive.file. O checkpoint e o round trip passaram, mas o restore falhou porque o runner exigia SELECT runtime em migrations e três tabelas de idempotência onde produção o nega intencionalmente; o rollback foi trash-only, sem restart, volume ativo, porta publicada ou timer habilitado. A correção candidata torna as quatro negações parte explícita da prova ACL.",
+        "basis": "observed",
+        "documentedAt": "2026-08-13T09:27:02.4167181Z",
+        "observedAt": "2026-08-13T09:20:00Z",
+        "evidenceIds": ["EV-MVP07B-RESTORE-RUNNER-CORRECTION"]
+      },
+      {
         "id": "OPS-APPROVED-MONITORING",
         "status": "present",
         "statement": "UptimeRobot sobre /health permanece o destino de monitoramento externo aprovado; política de alertas e implementação seguem pendentes.",
@@ -437,6 +446,13 @@
       "uri": "repo://arthurportodev/genesis-platform-api/config/recovery/backup-restore.v1.json",
       "sha256": "006dc9de827c31c3c93c6371e71c2882bd81a14efef955ae00df6d888d924773",
       "capturedAt": "2026-08-12T19:00:00Z"
+    },
+    {
+      "id": "EV-MVP07B-RESTORE-RUNNER-CORRECTION",
+      "kind": "repository-file",
+      "uri": "repo://arthurportodev/genesis-platform-api/docker/recovery/restore-proof-runner.sh",
+      "sha256": "83464befbe71bc845ea8dd1f0caa83b37f2afc1f54d95f9639783c78a579b9c9",
+      "capturedAt": "2026-08-13T09:27:02.4167181Z"
     }
   ],
   "blockers": [
@@ -457,7 +473,7 @@
     {
       "id": "BLOCK-RECOVERY",
       "status": "open",
-      "summary": "Contrato e parâmetros de recovery foram aprovados e incorporados pela 07A; a 07B ainda deve autorizar e provar a role genesis_backup, OAuth externo In production, credenciais, operação Google Drive, backup externo e restore sintético antes de dados reais.",
+      "summary": "Role genesis_backup, custódia age, OAuth drive.file e round trip foram comprovados, mas o restore incorporado falhou por um predicado ACL incompatível com quatro negações runtime intencionais. A correção precisa passar verifier e CI, ser incorporada à main, gerar novo committed release e receber nova autorização Window antes de repetir checkpoint, restore, timer e segunda cópia.",
       "owner": "arthur",
       "blocksTaskIds": ["0.8-MVP-07B", "0.8-MVP-09"]
     }
@@ -522,7 +538,10 @@
       "id": "RG-RECOVERY",
       "statement": "Backup recuperável e restore sintético devem passar antes de dados reais.",
       "status": "pending",
-      "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE"]
+      "sourceEvidenceIds": [
+        "EV-API-PRODUCTION-BASE",
+        "EV-MVP07B-RESTORE-RUNNER-CORRECTION"
+      ]
     },
     {
       "id": "RG-CROSS-TENANT",

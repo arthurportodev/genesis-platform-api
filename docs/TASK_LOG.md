@@ -742,3 +742,39 @@ mantém a rejeição de arquivos não-root, chama a retenção explicitamente po
 mesmo no bundle 0644 e restaura/verifica database, schema, tabelas e sequências
 sob `genesis_migration`. O novo candidato exige perfil Critical completo e nova
 verificação independente antes de qualquer entrega Git.
+
+## 0.8-MVP-07B — Window R3 rollback e correção do restore
+
+Em 13 de agosto de 2026, a Window R3 revalidou o committed release em 27/27
+artefatos, manteve `genesis_backup` conforme com zero mutações PostgreSQL e
+preservou API, PostgreSQL e Traefik saudáveis com restart count zero. A
+credencial OAuth externa `In production`, restrita a `drive.file`, foi aceita
+sem exposição de segredo. A raiz app-owned foi criada e um único checkpoint
+cifrado passou upload, download pela rota real e comparação SHA-256; o
+plaintext temporário foi removido antes do transporte.
+
+O restore Docker isolado publicou zero portas e não referenciou o volume ativo,
+mas falhou de forma fail-closed no predicado agregado de ACL. A investigação
+read-only mostrou ownership, migrations, schema e RLS conformes e isolou quatro
+negações diretas de `SELECT` da role runtime que são intencionais em produção:
+`migrations`, `lead_ingest_idempotency`, `lead_command_idempotency` e
+`lead_follow_up_idempotency`. O runner incorporado exigia `SELECT` em todas as
+tabelas e, portanto, uma segunda tentativa idêntica falharia
+deterministicamente.
+
+A decisão operacional foi `ROLLBACK`: marcador e ciphertext exatos foram
+revalidados por path, object ID e SHA-256 e movidos somente para a lixeira; a
+cópia cifrada local e os sete secrets sintéticos criados pela janela foram
+removidos. Não houve purge permanente, restart produtivo, acesso ao volume
+ativo, porta publicada ou ativação do timer. Role, identidade age sob custódia
+dupla, ferramentas pinned e configuração OAuth root-only permaneceram
+preservadas para uma futura janela autorizada.
+
+A correção High ajusta o runner para exigir `SELECT` nas tabelas legíveis e
+exigir a negação explícita nas quatro tabelas protegidas. O teste de contrato e
+a integração sintética reproduzem a fronteira real; checks focados e integração
+Docker passaram localmente. O candidato ainda não é release operacional: deve
+passar validação Critical, verifier independente e CI Linux, ser incorporado à
+`main`, gerar novo committed release e receber nova autorização Window antes de
+qualquer repetição de checkpoint, restore ou timer. `RG-RECOVERY` permanece
+pendente e dados reais continuam não autorizados.
