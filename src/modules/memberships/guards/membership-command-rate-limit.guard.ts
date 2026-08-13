@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Request } from 'express';
+import { getTrustedClientIp } from '../../../common/http/trusted-client-ip';
 import { TenantContextPendingRequest } from '../../tenant-context/types/tenant-request.type';
 import { MembershipReadRateLimiter } from '../services/membership-read-rate-limiter.service';
 
@@ -15,7 +16,7 @@ export class MembershipCommandRateLimitGuard implements CanActivate {
       request.tenantContext?.membershipId ?? 'unauthenticated';
     this.limiter.consume(
       'command',
-      request.ip || request.socket.remoteAddress || 'unknown',
+      getTrustedClientIp(request) ?? 'unknown',
       actorMembershipId,
     );
     return true;

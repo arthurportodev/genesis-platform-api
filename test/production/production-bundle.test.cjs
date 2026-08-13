@@ -265,6 +265,7 @@ test('builds a deterministic non-operational candidate with current bindings', (
     'docker/traefik/traefik-acme-staging.yml',
     'docker/traefik/traefik-acme-production.yml',
     'docker/traefik/dynamic/api-health-only.yml',
+    'docker/traefik/dynamic/api-functional.template.yml',
   ]) {
     assert.ok(
       EXPECTED_FILES.includes(path),

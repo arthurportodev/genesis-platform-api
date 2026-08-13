@@ -23,7 +23,7 @@ entryPoints:
 
 providers:
   file:
-    directory: /etc/traefik/dynamic
+    directory: /run/traefik/dynamic
     watch: true
 
 certificatesResolvers:

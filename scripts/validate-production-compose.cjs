@@ -11,6 +11,10 @@ const TRAEFIK_IMAGE =
 const PLATFORM = 'linux/amd64';
 const EXPECTED_SERVICES = ['api', 'migrate', 'postgres', 'traefik'];
 const BASE_COMPOSE = 'compose.production.yml';
+const FUNCTIONAL_COMPOSE = 'compose.production.functional.yml';
+const FUNCTIONAL_SECRET_FILES = {
+  origin_proxy_key: '/opt/genesis/secrets/origin-proxy-key',
+};
 const PUBLIC_HTTP_STATIC_CONFIGS = [
   'traefik-acme-staging.yml',
   'traefik-acme-production.yml',
@@ -115,7 +119,7 @@ const API_HEALTHCHECK = {
     'CMD',
     'node',
     '-e',
-    "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+    "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
   ],
   interval: '10s',
   timeout: '5s',
@@ -133,7 +137,12 @@ const POSTGRES_HEALTHCHECK = {
 function validateProductionCompose(
   config,
   rawConfig,
-  { mode = 'base', cwd = process.cwd(), selectedStaticConfig } = {},
+  {
+    mode = 'base',
+    cwd = process.cwd(),
+    selectedStaticConfig,
+    functional = false,
+  } = {},
 ) {
   const failures = [];
   const modeContract = MODE_CONTRACTS[mode];
@@ -168,7 +177,10 @@ function validateProductionCompose(
   checkRequiredBindings(rawServices, failures);
   checkNoSecretEnvironment(rawServices, failures);
   checkNoSecretEnvironment(services, failures);
-  checkTopLevelSecrets(config, rawConfig, failures);
+  const expectedSecretFiles = functional
+    ? { ...SECRET_FILES, ...FUNCTIONAL_SECRET_FILES }
+    : SECRET_FILES;
+  checkTopLevelSecrets(config, rawConfig, failures, expectedSecretFiles);
 
   const postgres = services.postgres ?? {};
   const migrate = services.migrate ?? {};
@@ -378,7 +390,10 @@ function validateProductionCompose(
     'postgres must use POSTGRES_PASSWORD_FILE',
     failures,
   );
-  checkServiceSecrets(services, failures);
+  const expectedServiceSecrets = functional
+    ? { ...SERVICE_SECRETS, traefik: ['origin_proxy_key'] }
+    : SERVICE_SECRETS;
+  checkServiceSecrets(services, failures, expectedServiceSecrets);
   checkGroup(api, 'api', failures);
   checkGroup(migrate, 'migrate', failures);
   check(
@@ -398,10 +413,36 @@ function validateProductionCompose(
     failures,
   );
   check(
-    api.environment?.FRONTEND_URL === 'https://genesis.invalid',
-    'frontend origin must remain fail-closed',
+    api.environment?.FRONTEND_URL === 'https://app.agenciagenesismkt.com.br',
+    'frontend origin must match the single approved production origin',
     failures,
   );
+  check(
+    String(api.environment?.WEB_PROXY_ATTESTATION_ENABLED) ===
+      String(functional),
+    `functional API attestation must be ${functional ? 'enabled' : 'disabled'}`,
+    failures,
+  );
+  if (functional) {
+    checkGroup(traefik, 'traefik', failures);
+    check(
+      traefik.environment?.ORIGIN_PROXY_KEY_FILE ===
+        '/run/secrets/origin_proxy_key',
+      'traefik origin key must use its mounted secret file',
+      failures,
+    );
+  } else {
+    check(
+      !Array.isArray(traefik.group_add) || traefik.group_add.length === 0,
+      'base traefik must not receive an extra host group',
+      failures,
+    );
+    check(
+      traefik.environment?.ORIGIN_PROXY_KEY_FILE === undefined,
+      'base traefik must not receive the functional origin key path',
+      failures,
+    );
+  }
   check(
     String(api.environment?.TRUST_PROXY_HOPS) === '1',
     'API must trust exactly one Traefik proxy hop',
@@ -726,7 +767,15 @@ function validateComposeFileSelection(composePaths) {
     failures,
   );
   check(
-    names.length === 1 + selectedOverrides.length,
+    names.filter((name) => name === FUNCTIONAL_COMPOSE).length <= 1,
+    'Compose selection must not repeat the functional proxy extension',
+    failures,
+  );
+  const functionalExtensions = names.filter(
+    (name) => name === FUNCTIONAL_COMPOSE,
+  );
+  check(
+    names.length === 1 + selectedOverrides.length + functionalExtensions.length,
     'Compose selection contains an unexpected file',
     failures,
   );
@@ -751,9 +800,11 @@ function validateStaticConfigSelection(mode, selectedStaticConfig) {
 
 function checkRequiredBindings(services, failures) {
   for (const [serviceName, key, variable] of REQUIRED_BINDINGS) {
+    const environment = Object.fromEntries(
+      environmentEntries(services[serviceName]?.environment),
+    );
     check(
-      services[serviceName]?.environment?.[key] ===
-        requiredExpression(variable),
+      environment[key] === requiredExpression(variable),
       `${serviceName}.${key} must require ${variable}`,
       failures,
     );
@@ -762,8 +813,7 @@ function checkRequiredBindings(services, failures) {
 
 function checkNoSecretEnvironment(services, failures) {
   for (const [serviceName, service] of Object.entries(services)) {
-    if (!isPlainObject(service?.environment)) continue;
-    for (const [key, value] of Object.entries(service.environment)) {
+    for (const [key, value] of environmentEntries(service?.environment)) {
       check(
         !FORBIDDEN_SECRET_ENV.has(key),
         `${serviceName}.${key} must be file-backed, not environment metadata`,
@@ -782,15 +832,32 @@ function checkNoSecretEnvironment(services, failures) {
   }
 }
 
-function checkTopLevelSecrets(config, rawConfig, failures) {
+function environmentEntries(environment) {
+  if (isPlainObject(environment)) return Object.entries(environment);
+  if (!Array.isArray(environment)) return [];
+  return environment.map((entry) => {
+    const text = String(entry);
+    const separator = text.indexOf('=');
+    return separator === -1
+      ? [text, '']
+      : [text.slice(0, separator), text.slice(separator + 1)];
+  });
+}
+
+function checkTopLevelSecrets(
+  config,
+  rawConfig,
+  failures,
+  expectedSecretFiles = SECRET_FILES,
+) {
   const actual = Object.keys(config?.secrets ?? {}).sort();
-  const expected = Object.keys(SECRET_FILES).sort();
+  const expected = Object.keys(expectedSecretFiles).sort();
   check(
     JSON.stringify(actual) === JSON.stringify(expected),
     'top-level secret allowlist is invalid',
     failures,
   );
-  for (const [name, path] of Object.entries(SECRET_FILES)) {
+  for (const [name, path] of Object.entries(expectedSecretFiles)) {
     check(
       config?.secrets?.[name]?.file === path,
       `${name} must use fixed host path ${path}`,
@@ -804,8 +871,14 @@ function checkTopLevelSecrets(config, rawConfig, failures) {
   }
 }
 
-function checkServiceSecrets(services, failures) {
-  for (const [serviceName, expected] of Object.entries(SERVICE_SECRETS)) {
+function checkServiceSecrets(
+  services,
+  failures,
+  expectedServiceSecrets = SERVICE_SECRETS,
+) {
+  for (const [serviceName, expected] of Object.entries(
+    expectedServiceSecrets,
+  )) {
     const actual = (services[serviceName]?.secrets ?? [])
       .map((entry) => entry.source)
       .sort();
@@ -1085,40 +1158,44 @@ function main() {
     return;
   }
   const validations = [];
-  for (const [mode, contract] of Object.entries(MODE_CONTRACTS)) {
-    const composePaths = [resolve(cwd, BASE_COMPOSE)];
-    if (contract.override) composePaths.push(resolve(cwd, contract.override));
-    const selections =
-      mode === 'public-http' ? PUBLIC_HTTP_STATIC_CONFIGS : [undefined];
-    for (const selectedStaticConfig of selections) {
-      const validationMode = selectedStaticConfig
-        ? `${mode}+${selectedStaticConfig}`
-        : mode;
-      const loaded = loadProductionCompose({
-        cwd,
-        composePaths,
-        envFile: resolve(cwd, envFile),
-        environment:
-          selectedStaticConfig === undefined
-            ? {}
-            : { TRAEFIK_PUBLIC_HTTP_CONFIG: selectedStaticConfig },
-      });
-      if (loaded.status !== 'passed') {
+  for (const functional of [false, true]) {
+    for (const [mode, contract] of Object.entries(MODE_CONTRACTS)) {
+      const composePaths = [resolve(cwd, BASE_COMPOSE)];
+      if (functional) composePaths.push(resolve(cwd, FUNCTIONAL_COMPOSE));
+      if (contract.override) composePaths.push(resolve(cwd, contract.override));
+      const selections =
+        mode === 'public-http' ? PUBLIC_HTTP_STATIC_CONFIGS : [undefined];
+      for (const selectedStaticConfig of selections) {
+        const validationMode = selectedStaticConfig
+          ? `${functional ? 'functional+' : ''}${mode}+${selectedStaticConfig}`
+          : `${functional ? 'functional+' : ''}${mode}`;
+        const loaded = loadProductionCompose({
+          cwd,
+          composePaths,
+          envFile: resolve(cwd, envFile),
+          environment:
+            selectedStaticConfig === undefined
+              ? {}
+              : { TRAEFIK_PUBLIC_HTTP_CONFIG: selectedStaticConfig },
+        });
+        if (loaded.status !== 'passed') {
+          validations.push({
+            mode: validationMode,
+            status: 'failed',
+            failures: loaded.failures,
+          });
+          continue;
+        }
         validations.push({
           mode: validationMode,
-          status: 'failed',
-          failures: loaded.failures,
+          ...validateProductionCompose(loaded.config, loaded.rawConfig, {
+            mode,
+            cwd,
+            selectedStaticConfig,
+            functional,
+          }),
         });
-        continue;
       }
-      validations.push({
-        mode: validationMode,
-        ...validateProductionCompose(loaded.config, loaded.rawConfig, {
-          mode,
-          cwd,
-          selectedStaticConfig,
-        }),
-      });
     }
   }
   const failures = validations.flatMap((entry) =>
@@ -1141,6 +1218,7 @@ if (require.main === module) main();
 module.exports = {
   API_IMAGE,
   BASE_COMPOSE,
+  FUNCTIONAL_COMPOSE,
   MODE_CONTRACTS,
   PLATFORM,
   POSTGRES_IMAGE,

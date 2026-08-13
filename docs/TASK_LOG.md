@@ -808,3 +808,15 @@ marcador, e preservou os objetos da R3 na lixeira sem untrash ou purge. API,
 PostgreSQL e Traefik terminaram saudáveis com restart count zero. A retenção
 permanece trash-only, `RG-RECOVERY` passou e dados reais continuam dependentes
 dos gates restantes e de autorização humana específica.
+
+## 0.8-MVP-08 — Candidato API/Web para Gate de merge
+
+Em 13 de agosto de 2026, Gate 1 autorizou somente o candidato local e a CI não
+produtiva. A API candidata mantém o Compose base health-only, fixa a origem Web
+única, adiciona um override funcional opt-in, renderização da chave apenas em
+tmpfs e proveniência canônica do IP para rate limits/auditoria. Nenhum secret,
+router live, VPS, DNS, Vercel, dado real ou migration foi criado ou alterado.
+
+O contrato detalhado está no ADR-017. O resultado de verificação, os SHAs dos
+commits/PRs e a recomendação de merge pertencem ao checkpoint VERIFY e não são
+antecipados por este registro de candidato.

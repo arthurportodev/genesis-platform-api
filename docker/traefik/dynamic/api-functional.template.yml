@@ -1,0 +1,17 @@
+http:
+  routers:
+    api-functional:
+      entryPoints:
+        - websecure
+      rule: 'Host(`api.agenciagenesismkt.com.br`) && (Path(`/api/v1`) || PathPrefix(`/api/v1/`)) && Header(`X-Genesis-Origin-Key`, `__ORIGIN_PROXY_KEY__`)'
+      priority: 200
+      middlewares:
+        - attest-web-proxy
+      service: api-health
+
+  middlewares:
+    attest-web-proxy:
+      headers:
+        customRequestHeaders:
+          X-Genesis-Origin-Key: ''
+          X-Genesis-Proxy-Attested: v1

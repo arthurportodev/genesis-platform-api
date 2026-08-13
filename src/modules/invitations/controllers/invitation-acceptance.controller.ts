@@ -11,6 +11,7 @@ import {
 import { AccessTokenGuard } from '../../auth/guards/access-token.guard';
 import { AuthenticatedRequest } from '../../auth/types/auth-request.type';
 import { Request } from 'express';
+import { getTrustedClientIp } from '../../../common/http/trusted-client-ip';
 import { InvitationTokenDto } from '../dto/invitation-token.dto';
 import {
   InvitationAcceptIpRateLimitGuard,
@@ -49,7 +50,7 @@ export class InvitationAcceptanceController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.acceptance.accept(dto.token, request.user.userId, {
-      ipAddress: request.ip || request.socket.remoteAddress || null,
+      ipAddress: getTrustedClientIp(request),
       userAgent: request.get('user-agent')?.slice(0, 512) ?? null,
     });
   }
@@ -59,7 +60,7 @@ export class InvitationAcceptanceController {
   @UseGuards(InvitationActivateIpRateLimitGuard)
   activate(@Body() body: unknown, @Req() request: Request) {
     return this.activation.activate(body, {
-      ipAddress: request.ip || request.socket.remoteAddress || null,
+      ipAddress: getTrustedClientIp(request),
       userAgent: request.get('user-agent')?.slice(0, 512) ?? null,
     });
   }

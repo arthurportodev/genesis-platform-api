@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { getTrustedClientIp } from '../../common/http/trusted-client-ip';
 import {
   AuthBootstrapResponse,
   AuthService,
@@ -133,7 +134,7 @@ export class AuthController {
 
   private getContext(request: Request): AuthRequestContext {
     return {
-      ipAddress: request.ip || request.socket.remoteAddress || null,
+      ipAddress: getTrustedClientIp(request),
       userAgent: request.get('user-agent')?.slice(0, 512) ?? null,
     };
   }

@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { getTrustedClientIp } from '../../../common/http/trusted-client-ip';
 import { AccessTokenGuard } from '../../auth/guards/access-token.guard';
 import { Roles } from '../../authorization/decorators/roles.decorator';
 import { RoleGuard } from '../../authorization/guards/role.guard';
@@ -189,7 +190,7 @@ export class MembershipsController {
 
   private requestContext(request: Request): MembershipRequestContext {
     return {
-      ipAddress: request.ip || request.socket.remoteAddress || null,
+      ipAddress: getTrustedClientIp(request),
       userAgent: request.get('user-agent')?.slice(0, 512) ?? null,
     };
   }
