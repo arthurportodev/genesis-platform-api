@@ -778,3 +778,33 @@ passar validação Critical, verifier independente e CI Linux, ser incorporado �
 `main`, gerar novo committed release e receber nova autorização Window antes de
 qualquer repetição de checkpoint, restore ou timer. `RG-RECOVERY` permanece
 pendente e dados reais continuam não autorizados.
+
+## 0.8-MVP-07B — Window R4 concluída
+
+Em 13 de agosto de 2026, a Window R4 instalou atomicamente o novo
+`committed-release` de 28 arquivos vinculado ao squash
+`06f469f91e3ce01893678b511f80880501e6a44d`, com manifesto
+`2424a2f7fd9fb1674360ef3c59714bab30e04090fe9beec2950039839c59c103`. O
+release anterior foi preservado para rollback e nenhum serviço de produção foi
+reiniciado.
+
+A evidência OAuth não secreta confirmou a conta dedicada
+`admreserva433@gmail.com`, aplicação externa `In production` e escopo único
+`drive.file`; a validação da credencial foi somente leitura e não iniciou novo
+OAuth. `genesis_backup` permaneceu conforme com zero mutações PostgreSQL. Um
+checkpoint novo foi cifrado antes do transporte, enviado com nome imutável,
+baixado pela rota real e validado por SHA-256.
+
+O restore corrigido passou em PostgreSQL 17 isolado em 17 segundos. A prova
+confirmou ownership e RLS, `SELECT` runtime nas tabelas ordinárias, negação em
+`migrations` e nos três ledgers de idempotência, API efêmera live/ready, zero
+portas publicadas e nenhuma referência ao volume ativo. Todos os containers,
+rede, volume e secrets sintéticos da execução foram removidos por procedência.
+
+O timer foi habilitado sem restart e seu primeiro disparo real produziu um
+backup regular verificado. O closeout comprovou duas cópias remotas válidas —
+checkpoint e regular —, quatro objetos vivos vinculados por path, object ID e
+marcador, e preservou os objetos da R3 na lixeira sem untrash ou purge. API,
+PostgreSQL e Traefik terminaram saudáveis com restart count zero. A retenção
+permanece trash-only, `RG-RECOVERY` passou e dados reais continuam dependentes
+dos gates restantes e de autorização humana específica.

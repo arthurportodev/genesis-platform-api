@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-13T09:27:02.4167181Z",
+  "updatedAt": "2026-08-13T12:21:19.830Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -38,29 +38,25 @@
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-06B",
-      "title": "HTTPS público health-only",
-      "completedAt": "2026-08-12T10:17:13.281Z",
-      "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
+      "id": "0.8-MVP-07B",
+      "title": "Window R de backup externo e restore comprovado",
+      "completedAt": "2026-08-13T12:16:20Z",
+      "evidenceIds": ["EV-MVP07B-WINDOW-R4-CLOSEOUT"]
     }
   },
   "currentWork": {
-    "status": "in-progress",
-    "summary": "A 07B permanece em andamento. A Window R3 comprovou OAuth drive.file, checkpoint cifrado e round trip, mas o restore isolado revelou que o runner incorporado contradizia quatro negações intencionais de SELECT da role runtime. O checkpoint sofreu rollback trash-only, o timer permaneceu desabilitado e uma correção versionada precisa ser incorporada antes de novo committed release e nova Window.",
-    "task": {
-      "id": "0.8-MVP-07B",
-      "title": "Window R de backup externo e restore comprovado"
-    }
+    "status": "none",
+    "summary": "A 07B foi concluída pela Window R4: checkpoint e backup regular cifrados foram verificados no Drive, o restore isolado corrigido passou, o timer está ativo e RG-RECOVERY foi aprovado. Nenhum dado real foi autorizado."
   },
   "nextTask": {
-    "id": "0.8-MVP-07B",
-    "title": "Window R de backup externo e restore comprovado"
+    "id": "0.8-MVP-08",
+    "title": "Vercel, proxy, domínio e integração frontend/backend"
   },
   "operationalState": {
-    "summary": "API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposição funcional fail-closed. A Window R3 terminou em rollback após falha determinística do verificador ACL do restore; seus objetos de checkpoint foram movidos para a lixeira, recursos isolados e secrets sintéticos foram removidos, e o timer de backup continua inativo e desabilitado.",
+    "summary": "API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposição funcional fail-closed. A Window R4 instalou o release corrigido, comprovou checkpoint, round trip e restore isolado, ativou o timer e observou o primeiro backup regular; duas cópias remotas estão verificadas e não há recurso residual.",
     "basis": "observed",
-    "documentedAt": "2026-08-13T09:27:02.4167181Z",
-    "observedAt": "2026-08-13T09:20:00Z",
+    "documentedAt": "2026-08-13T12:21:19.830Z",
+    "observedAt": "2026-08-13T12:16:20Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -308,10 +304,13 @@
       {
         "id": "OPS-APPROVED-RECOVERY",
         "status": "present",
-        "statement": "Google Drive dedicado foi aprovado com RPO de 24 horas, frequência de 12 horas, RTO lógico sintético de quatro horas, retenção regular/checkpoint de 30/90 dias, duas cópias verificadas e trash-only; operação e restore comprovado seguem para a 07B.",
+        "statement": "Google Drive dedicado opera com RPO de 24 horas, frequência de 12 horas, RTO lógico sintético de quatro horas, retenção regular/checkpoint de 30/90 dias, duas cópias verificadas e trash-only; a Window R4 comprovou a ativação e o restore.",
         "basis": "documented",
         "documentedAt": "2026-08-12T13:32:38.1112510Z",
-        "evidenceIds": ["EV-MVP07A-RECOVERY-CONTRACT"]
+        "evidenceIds": [
+          "EV-MVP07A-RECOVERY-CONTRACT",
+          "EV-MVP07B-WINDOW-R4-CLOSEOUT"
+        ]
       },
       {
         "id": "OPS-RECOVERY-TOOLING",
@@ -329,6 +328,15 @@
         "documentedAt": "2026-08-13T09:27:02.4167181Z",
         "observedAt": "2026-08-13T09:20:00Z",
         "evidenceIds": ["EV-MVP07B-RESTORE-RUNNER-CORRECTION"]
+      },
+      {
+        "id": "OPS-RECOVERY-WINDOW-R4",
+        "status": "present",
+        "statement": "A Window R4 instalou atomicamente o committed release corrigido sem restart, validou a credencial Drive sem novo OAuth, manteve genesis_backup conforme com zero mutações, comprovou checkpoint cifrado, round trip e restore PostgreSQL 17 isolado em 17 segundos, ativou o timer e observou o primeiro backup regular. Checkpoint e regular formam duas cópias remotas verificadas; não houve acesso ao volume ativo, porta publicada, untrash, purge ou recurso residual.",
+        "basis": "observed",
+        "documentedAt": "2026-08-13T12:21:19.830Z",
+        "observedAt": "2026-08-13T12:16:20Z",
+        "evidenceIds": ["EV-MVP07B-WINDOW-R4-CLOSEOUT"]
       },
       {
         "id": "OPS-APPROVED-MONITORING",
@@ -453,6 +461,12 @@
       "uri": "repo://arthurportodev/genesis-platform-api/docker/recovery/restore-proof-runner.sh",
       "sha256": "83464befbe71bc845ea8dd1f0caa83b37f2afc1f54d95f9639783c78a579b9c9",
       "capturedAt": "2026-08-13T09:27:02.4167181Z"
+    },
+    {
+      "id": "EV-MVP07B-WINDOW-R4-CLOSEOUT",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-07B-R4/window-r4-closeout-envelope",
+      "capturedAt": "2026-08-13T12:21:19.830Z"
     }
   ],
   "blockers": [
@@ -472,10 +486,10 @@
     },
     {
       "id": "BLOCK-RECOVERY",
-      "status": "open",
-      "summary": "Role genesis_backup, custódia age, OAuth drive.file e round trip foram comprovados, mas o restore incorporado falhou por um predicado ACL incompatível com quatro negações runtime intencionais. A correção precisa passar verifier e CI, ser incorporada à main, gerar novo committed release e receber nova autorização Window antes de repetir checkpoint, restore, timer e segunda cópia.",
+      "status": "resolved",
+      "summary": "A Window R4 resolveu o blocker: o runner corrigido passou restore isolado com as ACLs intencionais, checkpoint e backup regular foram verificados no Drive, o timer foi ativado e RG-RECOVERY passou.",
       "owner": "arthur",
-      "blocksTaskIds": ["0.8-MVP-07B", "0.8-MVP-09"]
+      "blocksTaskIds": []
     }
   ],
   "pendingHumanDecisions": [
@@ -537,10 +551,11 @@
     {
       "id": "RG-RECOVERY",
       "statement": "Backup recuperável e restore sintético devem passar antes de dados reais.",
-      "status": "pending",
+      "status": "passed",
       "sourceEvidenceIds": [
         "EV-API-PRODUCTION-BASE",
-        "EV-MVP07B-RESTORE-RUNNER-CORRECTION"
+        "EV-MVP07B-RESTORE-RUNNER-CORRECTION",
+        "EV-MVP07B-WINDOW-R4-CLOSEOUT"
       ]
     },
     {

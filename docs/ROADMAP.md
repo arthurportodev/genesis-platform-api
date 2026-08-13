@@ -121,10 +121,15 @@ experimento é promovido automaticamente para o MVP.
   - nenhuma porta da aplicação foi exposta, não há proxy reverso ou TLS e
     nenhum dado real foi autorizado.
 
+### Continuidade concluída
+
+- ✅ `0.8-MVP-06` — Traefik e HTTPS health-only comprovados.
+- ✅ `0.8-MVP-07A` — Contrato e tooling versionado de recovery.
+- ✅ `0.8-MVP-07B` — Backup externo, round trip, restore isolado e timer
+  comprovados pela Window R4, com duas cópias remotas verificadas.
+
 ### Próximos deltas planejados
 
-- ⬜ `0.8-MVP-06` — Traefik, HTTPS e exposição controlada da API.
-- ⬜ `0.8-MVP-07` — Backup, restore, logs, monitoramento e rollback.
 - ⬜ `0.8-MVP-08` — Vercel, proxy, domínio e integração frontend/backend.
 - ⬜ `0.8-MVP-09` — Smoke, isolamento cross-tenant e primeiros usuários.
 

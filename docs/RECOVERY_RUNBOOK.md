@@ -4,7 +4,7 @@
 
 ## Status and boundary
 
-The `0.8-MVP-07A.v2` recovery contract is incorporated tooling, not an active backup service. It prepares the future `0.8-MVP-07B` Window R. This document does not authorize production access, Google OAuth, Drive mutation, PostgreSQL role mutation, password creation, definitive age-key generation, systemd activation, real backup/restore, active-volume access, or real data.
+The `0.8-MVP-07A.v2` recovery contract is active after the authorized `0.8-MVP-07B` Window R4. The timer runs twice daily, and the activation proof established one verified checkpoint, one verified scheduled regular backup, and a corrected isolated restore. This document remains a procedure and does not itself authorize production access, OAuth, Drive mutation, PostgreSQL role mutation, secret changes, active-volume access, or real data.
 
 The authoritative machine-readable files are:
 
@@ -14,9 +14,9 @@ The authoritative machine-readable files are:
 
 Candidate bundles are non-operational. Window R must consume bytes from a commit incorporated into `main` and revalidate its committed-release bundle before any host change.
 
-## Required future credential gate
+## Credential gate
 
-The future gate supplies references, never values, for the bootstrap pgpass, a root-only PostgreSQL backup pgpass, a public age recipient, a separately custodied age identity, a root-only rclone config, and synthetic restore secrets. The age identity must not be generated before its approved custody procedure.
+Any future recovery window supplies references, never values, for the bootstrap pgpass, a root-only PostgreSQL backup pgpass, a public age recipient, a separately custodied age identity, a root-only rclone config, and synthetic restore secrets. The active identity remains subject to its approved dual-custody procedure.
 
 Before rclone configuration, `oauth-evidence-preflight.cjs` must accept a non-secret evidence file that names the exact dedicated account `admreserva433@gmail.com`, external user type, effective publishing status `In production`, and the single scope `https://www.googleapis.com/auth/drive.file`. `Testing`, an absent/unprovable status, a different account, multiple scopes, and any client secret, authorization code, access token, refresh token, credentials, or rclone config in evidence stop the window. Fallback to `https://www.googleapis.com/auth/drive` requires a new explicit credential gate plus proof that the dedicated account is empty. `root_folder_id` protects paths operationally; it is not an authorization boundary.
 
@@ -67,9 +67,9 @@ On any backup failure, preserve the service journal and status metadata but neve
 
 A committed release whose restore verifier requires direct runtime `SELECT` on all public tables is incompatible with the production ACL contract and must not be retried. Stop, trash only the exact failed-window checkpoint objects after path/ID revalidation, keep the timer disabled, correct and incorporate the verifier, rebuild a committed release, and obtain a new Window authorization.
 
-## Installation and activation sequence for 07B
+## Installation and activation sequence
 
-Only after the credential/production gate:
+Only after a credential/production gate:
 
 1. verify all Window R preconditions and the committed-release source commit;
 2. validate non-secret OAuth evidence as `In production` with exact account/scope; stop before rclone if it cannot be proved;
@@ -79,6 +79,6 @@ Only after the credential/production gate:
 6. run synthetic preflight, one checkpoint backup, remote round trip, and isolated restore proof;
 7. inspect machine-readable status and confirm zero published restore ports and no active-volume reference;
 8. only then enable/start the timer once, without restarting API, PostgreSQL, or Traefik;
-9. capture Window R evidence and stop. Gate 3 for 07B remains separate.
+9. capture Window R evidence and stop for the applicable closeout gate.
 
 Never use `latest`, `curl | sh`, `docker compose down -v`, Drive purge, a candidate bundle, a mutable binary, or an unverified download.
