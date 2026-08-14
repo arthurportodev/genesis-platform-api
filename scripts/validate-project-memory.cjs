@@ -13,7 +13,7 @@ const PROJECTION_PATH = 'docs/CURRENT_STATE.md';
 const WEB_POINTER_PATH = 'docs/memory/project-state.pointer.v1.json';
 const WEB_POINTER_SCHEMA_PATH =
   'schemas/genesis-harness/project-state.pointer.v1.schema.json';
-const WEB_SHA = 'fa4193fc28751d64923be824d293367499d4fba0';
+const WEB_SHA = 'b6aa5af91d78a998aceacbe963ef45649dd00149';
 const API_REPOSITORY = 'arthurportodev/genesis-platform-api';
 const WEB_REPOSITORY = 'arthurportodev/genesis-platform-web';
 const MAX_BYTES = 512 * 1024;
@@ -667,7 +667,7 @@ function validateState(state, { allowFixture = false } = {}) {
   ) {
     fail(
       'MEMORY_WEB_REVISION_MISMATCH',
-      'Web memoryRevision is not the integrated pointer commit.',
+      'Web memoryRevision is not the integrated Web commit.',
       '$.repositories[web].memoryRevision',
       `Use ${WEB_SHA}.`,
     );
@@ -1059,19 +1059,15 @@ function validateCrossRepo(
           [
             '-c',
             `safe.directory=${root.replaceAll('\\', '/')}`,
-            'log',
-            '-1',
-            '--format=%H',
+            'rev-parse',
             'origin/main',
-            '--',
-            WEB_POINTER_PATH,
           ],
           { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
         ).trim();
   } catch {
     fail(
       'AUTHORITY_UNAVAILABLE',
-      'The Web pointer containing commit could not be resolved.',
+      'The integrated Web origin/main commit could not be resolved.',
       '--web-source',
       'Fetch and provide the integrated Web origin/main checkout.',
     );
@@ -1083,7 +1079,7 @@ function validateCrossRepo(
   ) {
     fail(
       'MEMORY_WEB_REVISION_MISMATCH',
-      'Web pointer containing commit differs from the API authority.',
+      'Integrated Web main differs from the API authority.',
       '--web-source',
       `Use the exact integrated commit ${WEB_SHA}.`,
     );
