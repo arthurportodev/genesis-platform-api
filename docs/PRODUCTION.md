@@ -167,13 +167,18 @@ argumentos, logs, manifestos ou Git. O bootstrap usa
 versão corrente não secreta permanece `1`. Invitations e Lead Form continuam
 fail-closed.
 
-Até a `0.8-MVP-08`, `FRONTEND_URL=https://genesis.invalid` é uma origem
-deliberadamente não resolvível e não representa o domínio final.
+O candidato `0.8-MVP-08` fixa
+`FRONTEND_URL=https://app.agenciagenesismkt.com.br`, origem única e sem
+wildcard. O Compose base continua health-only e define
+`WEB_PROXY_ATTESTATION_ENABLED=false`; o override funcional versionado é
+aditivo, futuro e não pode ser aplicado sem Gate operacional.
 
-A rede `edge` conecta somente a API e reserva a interface futura para o
-Traefik; nenhuma porta, label ou configuração de Traefik pertence a esta
-tarefa. O `invitation-worker` permanece implementado no produto, mas não faz
-parte da stack base de produção.
+A rede `edge` conecta API e Traefik sem publicar a porta 3000. O provider de
+arquivos observa apenas `/run/traefik/dynamic`: sempre recebe o router
+health-only e só recebe o router `/api/v1` renderizado em tmpfs quando o
+override funcional e seu secret file-backed forem explicitamente aplicados.
+O `invitation-worker` permanece implementado no produto, mas não faz parte da
+stack base de produção.
 
 Os defaults provisórios limitam API e migration a 0,75 CPU/1 GB e PostgreSQL a
 1 CPU/2 GB, com `pids_limit`, heap Node conservador e rotação de logs `10m`/`5`.

@@ -17,6 +17,7 @@ import {
 import { configureTrustProxy } from './config/trust-proxy';
 import { HealthResponse, HealthService } from './health/health.service';
 import { RuntimeHealthStateService } from './health/runtime-health-state.service';
+import { createTrustedWebProxyMiddleware } from './common/http/trusted-client-ip';
 
 const SHUTDOWN_SIGNALS = ['SIGTERM', 'SIGINT'] as const;
 export const SHUTDOWN_TIMEOUT_MS = 12_000;
@@ -106,6 +107,7 @@ async function bootstrap(): Promise<void> {
 
   configureTrustProxy(app, config.trustProxyHops);
   configurePublicHealthEndpoint(app, healthService);
+  app.use(createTrustedWebProxyMiddleware(config.trustedWebProxyEnabled));
   app.setGlobalPrefix('api/v1');
   app.enableCors(buildWebCorsOptions(config.frontendUrl));
   app.use((request: Request, response: Response, next: NextFunction) => {

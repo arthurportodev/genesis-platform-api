@@ -73,9 +73,9 @@ identidades PostgreSQL: bootstrap/admin, migration owner do database/schema e
 runtime sem ownership. API/migration usam wrappers POSIX para secrets
 file-backed seletivos; imagens são fixadas por digest em `linux/amd64`; o
 projeto é `genesis` e a persistência é o volume externo
-`genesis-postgres-data`. A origem `https://genesis.invalid` é o default
-fail-closed do contrato até substituição por configuração de produção
-explicitamente validada.
+`genesis-postgres-data`. Historicamente, a origem `https://genesis.invalid` era
+o default fail-closed do contrato; o estado vigente do MVP-08 a substitui pela
+origem única explicitamente validada no ADR-017.
 
 As correções integrantes da entrega fecharam três fronteiras do contrato: a
 `CORR-01` completou a matriz sintética da CI com secrets temporários e cleanup
@@ -380,7 +380,8 @@ exclusivos: `internal` publica somente `127.0.0.1:18080→80` e
 O único router é
 `Host(api.agenciagenesismkt.com.br) && Path(/health) && Method(GET)` e seu
 único upstream é `http://api:3000`. Rotas funcionais, outros hosts e métodos
-falham no edge. `FRONTEND_URL=https://genesis.invalid` continua fail-closed e
+falham no edge. Nesse marco histórico, `FRONTEND_URL=https://genesis.invalid`
+mantinha o fail-closed; o MVP-08/ADR-017 o substitui pela origem final aprovada.
 `TRUST_PROXY_HOPS=1` representa exatamente o salto Traefik→API; remover o
 Traefik exige voltar a zero e recriar somente a API.
 

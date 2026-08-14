@@ -52,6 +52,7 @@ export interface AppConfig {
   port: number;
   frontendUrl: string;
   trustProxyHops: number;
+  trustedWebProxyEnabled: boolean;
   publicReplicaCount: number;
 }
 
@@ -73,5 +74,6 @@ export default registerAs('app', (): AppConfig => ({
   port: Number(process.env.PORT ?? 3000),
   frontendUrl: process.env.FRONTEND_URL as string,
   trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 0),
+  trustedWebProxyEnabled: process.env.WEB_PROXY_ATTESTATION_ENABLED === 'true',
   publicReplicaCount: resolveApiPublicReplicaCount(),
 }));

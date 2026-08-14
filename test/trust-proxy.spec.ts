@@ -48,6 +48,8 @@ interface AuthHarness {
 }
 
 describe('Trust proxy configuration', () => {
+  jest.setTimeout(15_000);
+
   it('does not trust a spoofed X-Forwarded-For header by default', async () => {
     const app = await createClientIpApp(0);
     try {

@@ -20,6 +20,11 @@ const EXPECTED_ARTIFACTS = [
     mode: '0644',
   },
   {
+    path: 'compose.production.functional.yml',
+    sourcePath: 'compose.production.functional.yml',
+    mode: '0644',
+  },
+  {
     path: 'config/production.env.example',
     sourcePath: '.env.production.example',
     mode: '0644',
@@ -77,6 +82,11 @@ const EXPECTED_ARTIFACTS = [
   {
     path: 'docker/traefik/dynamic/api-health-only.yml',
     sourcePath: 'docker/traefik/dynamic/api-health-only.yml',
+    mode: '0644',
+  },
+  {
+    path: 'docker/traefik/dynamic/api-functional.template.yml',
+    sourcePath: 'docker/traefik/dynamic/api-functional.template.yml',
     mode: '0644',
   },
   {
@@ -154,7 +164,7 @@ const EXPECTED_FILES = [
   ...EXPECTED_ARTIFACTS.map((entry) => entry.path),
   'release-manifest.json',
 ].sort();
-const CONTRACT_VERSION = '0.8-MVP-07A.v2';
+const CONTRACT_VERSION = '0.8-MVP-08.v1';
 const POSTGRES_LINUX_AMD64_MANIFEST =
   'sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a';
 

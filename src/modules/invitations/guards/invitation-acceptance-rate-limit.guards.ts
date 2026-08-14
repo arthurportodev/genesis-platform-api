@@ -5,12 +5,13 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { getTrustedClientIp } from '../../../common/http/trusted-client-ip';
 import { AuthenticatedRequest } from '../../auth/types/auth-request.type';
 import { InvitationAcceptanceRateLimiter } from '../services/invitation-acceptance-rate-limiter.service';
 import { InvitationActivationObservability } from '../services/invitation-activation-observability.service';
 
 function clientIp(request: Request): string {
-  return request.ip || request.socket.remoteAddress || 'unknown';
+  return getTrustedClientIp(request) ?? 'unknown';
 }
 
 function noStore(context: ExecutionContext): void {

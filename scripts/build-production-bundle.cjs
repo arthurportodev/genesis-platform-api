@@ -18,7 +18,7 @@ const {
   TRAEFIK_IMAGE,
 } = require('./validate-production-compose.cjs');
 
-const CONTRACT_VERSION = '0.8-MVP-07A.v2';
+const CONTRACT_VERSION = '0.8-MVP-08.v1';
 const BUNDLE_MODES = new Set(['candidate', 'committed-release']);
 const POSTGRES_LINUX_AMD64_MANIFEST =
   'sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a';
@@ -28,6 +28,11 @@ const ARTIFACTS = [
   {
     source: 'compose.production.yml',
     path: 'compose.production.yml',
+    mode: '0644',
+  },
+  {
+    source: 'compose.production.functional.yml',
+    path: 'compose.production.functional.yml',
     mode: '0644',
   },
   {
@@ -88,6 +93,11 @@ const ARTIFACTS = [
   {
     source: 'docker/traefik/dynamic/api-health-only.yml',
     path: 'docker/traefik/dynamic/api-health-only.yml',
+    mode: '0644',
+  },
+  {
+    source: 'docker/traefik/dynamic/api-functional.template.yml',
+    path: 'docker/traefik/dynamic/api-functional.template.yml',
     mode: '0644',
   },
   {

@@ -1,0 +1,15 @@
+services:
+  traefik:
+    environment:
+      ORIGIN_PROXY_KEY_FILE: /run/secrets/origin_proxy_key
+    group_add: ['70']
+    secrets:
+      - origin_proxy_key
+
+  api:
+    environment:
+      WEB_PROXY_ATTESTATION_ENABLED: 'true'
+
+secrets:
+  origin_proxy_key:
+    file: /opt/genesis/secrets/origin-proxy-key

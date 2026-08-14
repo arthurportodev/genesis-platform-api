@@ -531,7 +531,7 @@ test('projection is derived only from the authority object', () => {
   assert.match(projection, /containing-commit/u);
 });
 
-test('cross-repo contract accepts the integrated pointer containing commit', () => {
+test('cross-repo contract accepts the integrated Web origin/main revision', () => {
   const web = mkdtempSync(join(tmpdir(), 'genesis-web-pointer-'));
   FIXTURES.push(web);
   const pointerPath = target(web, 'docs/memory/project-state.pointer.v1.json');

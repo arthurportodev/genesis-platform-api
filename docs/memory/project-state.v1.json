@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-13T12:21:19.830Z",
+  "updatedAt": "2026-08-14T01:52:49.891Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -30,7 +30,7 @@
       "status": "integrated",
       "memoryRevision": {
         "kind": "commit",
-        "sha": "fa4193fc28751d64923be824d293367499d4fba0"
+        "sha": "b6aa5af91d78a998aceacbe963ef45649dd00149"
       }
     }
   ],

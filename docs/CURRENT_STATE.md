@@ -5,12 +5,12 @@
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
 - **Revisão de estado:** GH-01-COMPLETE
-- **Atualização documentada:** 2026-08-13T12:21:19.830Z
+- **Atualização documentada:** 2026-08-14T01:52:49.891Z
 - **Fase:** 0.8-MVP — Primeira produção mínima viável
 - **Último trabalho concluído:** 0.8-MVP-07B — Window R de backup externo e restore comprovado
 - **Trabalho vigente:** none — A 07B foi concluída pela Window R4: checkpoint e backup regular cifrados foram verificados no Drive, o restore isolado corrigido passou, o timer está ativo e RG-RECOVERY foi aprovado. Nenhum dado real foi autorizado.
 - **Próxima tarefa:** 0.8-MVP-08 — Vercel, proxy, domínio e integração frontend/backend
-- **Web integrado:** fa4193fc28751d64923be824d293367499d4fba0
+- **Web integrado:** b6aa5af91d78a998aceacbe963ef45649dd00149
 - **Proveniência da API:** containing-commit
 
 ## Estado operacional

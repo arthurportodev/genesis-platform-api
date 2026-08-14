@@ -133,8 +133,9 @@ services:
       DATABASE_NAME: ${DATABASE_NAME:?DATABASE_NAME is required}
       DATABASE_USER: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
       DATABASE_RUNTIME_ROLE: ${DATABASE_RUNTIME_ROLE:?DATABASE_RUNTIME_ROLE is required}
-      FRONTEND_URL: https://genesis.invalid
+      FRONTEND_URL: https://app.agenciagenesismkt.com.br
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      WEB_PROXY_ATTESTATION_ENABLED: 'false'
       JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-30}
       API_PUBLIC_REPLICA_COUNT: 1
@@ -163,7 +164,7 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+          "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
         ]
       interval: 10s
       timeout: 5s

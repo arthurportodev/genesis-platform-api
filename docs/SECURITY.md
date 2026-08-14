@@ -91,6 +91,14 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Buckets expiram, o total é limitado e o limitador falha fechado com `429` ao atingir capacidade.
 - A implementação é em memória, por instância e perde estado ao reiniciar.
 - `TRUST_PROXY_HOPS` é limitado de 0 a 5; o padrão 0 não confia em `X-Forwarded-For`.
+- No modo funcional versionado, a API não usa `request.ip` para rate limit ou
+  auditoria. Ela exige a atestação criada pelo Traefik e um único
+  `X-Genesis-Client-IP` canônico criado pela Function, redige headers internos e
+  forwarded antes dos controllers e guarda o IP aprovado em estado privado da
+  request.
+- O router funcional exige chave de origem, remove essa chave antes da API e
+  sobrescreve a atestação. O Compose base permanece health-only; segredo,
+  ativação e exposição pertencem a Gate operacional posterior.
 
 ## Segredos, seed e CI
 

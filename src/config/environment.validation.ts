@@ -25,6 +25,9 @@ export const environmentValidationSchema = Joi.object({
     })
     .required(),
   TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(5).default(0),
+  WEB_PROXY_ATTESTATION_ENABLED: Joi.string()
+    .valid('true', 'false')
+    .default('false'),
   JWT_ACCESS_SECRET: Joi.string()
     .min(32)
     .invalid('replace-with-a-long-random-secret')
