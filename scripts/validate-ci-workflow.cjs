@@ -573,7 +573,7 @@ function syntheticProductionFailures(validate) {
     'config --format json > "$PRODUCTION_CI_RENDER_FILE"',
     SYNTHETIC_API_IMAGE,
     SYNTHETIC_POSTGRES_IMAGE,
-    "FRONTEND_URL !== 'https://genesis.invalid'",
+    "FRONTEND_URL !== 'https://app.agenciagenesismkt.com.br'",
     "LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) !== '1'",
     'new Set(roles).size !== 3',
     '(statSync(expected).mode & 0o777) !== 0o600',

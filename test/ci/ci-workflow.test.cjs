@@ -533,7 +533,7 @@ test('requires immutable synthetic refs, fail-closed frontend and Lead version',
   );
   rejects(
     mutated(
-      "FRONTEND_URL !== 'https://genesis.invalid'",
+      "FRONTEND_URL !== 'https://app.agenciagenesismkt.com.br'",
       "FRONTEND_URL !== 'https://app.example.invalid'",
     ),
     /render validation is incomplete or mutable/u,

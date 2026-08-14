@@ -189,7 +189,7 @@ jobs:
           const postgresImage = 'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
           if (config.services.api.image !== apiImage || config.services.migrate.image !== apiImage) throw new Error('synthetic API image mismatch');
           if (config.services.postgres.image !== postgresImage) throw new Error('synthetic PostgreSQL image mismatch');
-          if (config.services.api.environment.FRONTEND_URL !== 'https://genesis.invalid') throw new Error('synthetic frontend mismatch');
+          if (config.services.api.environment.FRONTEND_URL !== 'https://app.agenciagenesismkt.com.br') throw new Error('synthetic frontend mismatch');
           if (String(config.services.api.environment.LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) !== '1') throw new Error('synthetic Lead key version mismatch');
           const roles = [
             config.services.postgres.environment.POSTGRES_USER,
