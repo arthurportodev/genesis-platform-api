@@ -683,6 +683,19 @@ function validateState(state, { allowFixture = false } = {}) {
   const expectedReleaseBindings = {
     apiApplicationRevision: API_APPLICATION_REVISION,
     apiReleaseManifestRevision: { kind: 'containing-commit' },
+    apiReleaseTreeContractRevision: { kind: 'containing-commit' },
+    apiReleaseBundleFingerprint: {
+      kind: 'derived-from-containing-commit',
+      algorithm: 'sha256',
+      artifact: 'release-manifest.json',
+      releaseRole: 'current',
+    },
+    apiRollbackReleaseBundleFingerprint: {
+      kind: 'derived-from-containing-commit',
+      algorithm: 'sha256',
+      artifact: 'release-manifest.json',
+      releaseRole: 'rollback',
+    },
     authorizedApiImage: AUTHORIZED_API_IMAGE,
     authorizedApiImageConfigDigest: AUTHORIZED_API_IMAGE_CONFIG_DIGEST,
     rollbackApiImage: ROLLBACK_API_IMAGE,
@@ -696,7 +709,7 @@ function validateState(state, { allowFixture = false } = {}) {
       'MEMORY_RELEASE_BINDING_MISMATCH',
       'Versioned release bindings are invalid or ambiguous.',
       '$.releaseBindings',
-      'Restore the exact application, containing release-manifest, authorized image, rollback image and integrated Web bindings.',
+      'Restore the exact application, containing release-manifest/tree-contract, role-specific current/rollback bundle fingerprints, authorized images and integrated Web bindings.',
     );
   }
   if (
@@ -828,7 +841,7 @@ function renderProjection(state) {
     state.releaseGates,
     (entry) => `- **${entry.id}** [${entry.status}] — ${entry.statement}`,
   );
-  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web integrado:** ${WEB_SHA}\n- **Revisão da aplicação API:** ${state.releaseBindings.apiApplicationRevision}\n- **Revisão do manifesto de release API:** containing-commit\n- **Imagem API autorizada:** ${state.releaseBindings.authorizedApiImage}\n- **Imagem API de rollback:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
+  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web integrado:** ${WEB_SHA}\n- **Revisão da aplicação API:** ${state.releaseBindings.apiApplicationRevision}\n- **Revisão do manifesto de release API:** containing-commit\n- **Revisão do contrato da árvore de release:** containing-commit\n- **Fingerprint do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API autorizada:** ${state.releaseBindings.authorizedApiImage}\n- **Imagem API de rollback:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
 }
 
 function stripHistoricalRegions(text, path) {

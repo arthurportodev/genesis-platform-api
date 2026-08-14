@@ -12,6 +12,12 @@ const {
 const { dirname, isAbsolute, join, relative, resolve } = require('node:path');
 const { calculateFingerprint } = require('./task-fingerprint.cjs');
 const {
+  BUNDLE_CONTRACT_VERSION,
+  RELEASE_DIRECTORIES,
+  RELEASE_MANIFEST_ENTRY,
+  RELEASE_TREE,
+} = require('./lib/release-tree-contract.cjs');
+const {
   API_APPLICATION_REVISION,
   API_IMAGE,
   API_IMAGE_CONFIG_DIGEST,
@@ -21,8 +27,9 @@ const {
   TRAEFIK_IMAGE,
 } = require('./validate-production-compose.cjs');
 
-const CONTRACT_VERSION = '0.8-MVP-08.v1';
+const CONTRACT_VERSION = BUNDLE_CONTRACT_VERSION;
 const BUNDLE_MODES = new Set(['candidate', 'committed-release']);
+const RELEASE_ROLES = new Set(['current', 'rollback']);
 const POSTGRES_LINUX_AMD64_MANIFEST =
   'sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a';
 const POSTGRES_VERSION = '17.10-alpine3.24';
@@ -71,6 +78,11 @@ const ARTIFACTS = [
   {
     source: 'docker/production/migrate-entrypoint.sh',
     path: 'docker/production/migrate-entrypoint.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/production/release-tree-manager.py',
+    path: 'docker/production/release-tree-manager.py',
     mode: '0644',
   },
   {
@@ -348,17 +360,53 @@ function candidateProvenance(cwd) {
   };
 }
 
+function materializeArtifact(content, artifact, releaseRole) {
+  if (
+    releaseRole !== 'rollback' ||
+    artifact.path !== 'compose.production.yml'
+  ) {
+    return { content, derivation: undefined };
+  }
+  const source = content.toString('utf8');
+  const occurrences = source.split(API_IMAGE).length - 1;
+  if (occurrences !== 2 || source.includes(ROLLBACK_API_IMAGE)) {
+    throw new Error(
+      'rollback Compose derivation requires exactly two current API image bindings and no pre-existing rollback binding.',
+    );
+  }
+  const derived = Buffer.from(source.replaceAll(API_IMAGE, ROLLBACK_API_IMAGE));
+  return {
+    content: derived,
+    derivation: {
+      kind: 'exact-api-image-replacement',
+      sourceSha256: sha256(content),
+      from: API_IMAGE,
+      to: ROLLBACK_API_IMAGE,
+      replacements: 2,
+    },
+  };
+}
+
 function buildProductionBundle({
   cwd = process.cwd(),
   output,
   mode = 'candidate',
+  releaseRole = 'current',
   sourceCommit = null,
   env = process.env,
 } = {}) {
   if (!output) throw new Error('bundle output is required.');
   if (!BUNDLE_MODES.has(mode)) throw new Error('bundle mode is invalid.');
+  if (!RELEASE_ROLES.has(releaseRole)) {
+    throw new Error('release role is invalid.');
+  }
   if (mode === 'candidate' && sourceCommit !== null) {
     throw new Error('candidate bundles cannot declare a source commit.');
+  }
+  if (mode === 'candidate' && releaseRole !== 'current') {
+    throw new Error(
+      'candidate bundles can describe only the current release role.',
+    );
   }
   const absoluteOutput = assertOutputBoundary(output, cwd);
   const identity =
@@ -398,6 +446,8 @@ function buildProductionBundle({
       if (content.includes(0)) {
         throw new Error(`bundle source must be text: ${artifact.source}`);
       }
+      const materialized = materializeArtifact(content, artifact, releaseRole);
+      content = materialized.content;
       const secretFailure = obviousSecretFailure(
         artifact.path,
         content.toString('utf8'),
@@ -410,26 +460,41 @@ function buildProductionBundle({
       entries.push({
         path: artifact.path,
         sourcePath: artifact.source,
+        type: 'file',
+        owner: 0,
+        group: 0,
         mode: artifact.mode,
         sha256: sha256(content),
+        ...(materialized.derivation
+          ? { derivation: materialized.derivation }
+          : {}),
       });
     }
+
+    const selectedApiImage =
+      releaseRole === 'rollback' ? ROLLBACK_API_IMAGE : API_IMAGE;
+    const apiMetadata = {
+      reference: selectedApiImage,
+      digest: selectedApiImage.split('@')[1],
+      platform: PLATFORM,
+      ...(releaseRole === 'current'
+        ? {
+            configDigest: API_IMAGE_CONFIG_DIGEST,
+            applicationRevision: API_APPLICATION_REVISION,
+          }
+        : { relation: 'previous-approved' }),
+    };
 
     const manifest = {
       contractVersion: CONTRACT_VERSION,
       bundleMode: mode,
+      releaseRole,
       operational: mode === 'committed-release',
       ...identity,
       ...generation,
       platform: PLATFORM,
       images: {
-        api: {
-          reference: API_IMAGE,
-          digest: API_IMAGE.split('@')[1],
-          configDigest: API_IMAGE_CONFIG_DIGEST,
-          applicationRevision: API_APPLICATION_REVISION,
-          platform: PLATFORM,
-        },
+        api: apiMetadata,
         postgres: {
           reference: POSTGRES_IMAGE,
           indexDigest: POSTGRES_IMAGE.split('@')[1],
@@ -463,6 +528,9 @@ function buildProductionBundle({
         productionMutationCount: 0,
         driveMutationCount: 0,
       },
+      releaseTree: RELEASE_TREE,
+      directories: RELEASE_DIRECTORIES,
+      manifestEntry: RELEASE_MANIFEST_ENTRY,
       artifacts: entries,
     };
     writeFileSync(
@@ -501,6 +569,7 @@ function parseArguments(argv) {
     const argument = argv[index];
     if (argument === '--output') result.output = argv[++index];
     else if (argument === '--mode') result.mode = argv[++index];
+    else if (argument === '--release-role') result.releaseRole = argv[++index];
     else if (argument === '--source-commit')
       result.sourceCommit = argv[++index];
     else throw new Error(`unknown argument: ${argument}`);
@@ -517,6 +586,7 @@ function main() {
         status: result.status,
         output: result.output,
         bundleMode: result.manifest.bundleMode,
+        releaseRole: result.manifest.releaseRole,
         operational: result.manifest.operational,
         sourceCommit: result.manifest.sourceCommit ?? null,
         baseSha: result.manifest.baseSha ?? null,
@@ -538,12 +608,14 @@ if (require.main === module) main();
 module.exports = {
   ARTIFACTS,
   BUNDLE_MODES,
+  RELEASE_ROLES,
   CONTRACT_VERSION,
   POSTGRES_LINUX_AMD64_MANIFEST,
   POSTGRES_SOURCE_REVISION,
   POSTGRES_VERSION,
   buildProductionBundle,
   candidateProvenance,
+  materializeArtifact,
   obviousSecretFailure,
   readCommittedArtifact,
   resolveGenerationTime,

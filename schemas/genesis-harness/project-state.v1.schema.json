@@ -63,6 +63,9 @@
       "required": [
         "apiApplicationRevision",
         "apiReleaseManifestRevision",
+        "apiReleaseTreeContractRevision",
+        "apiReleaseBundleFingerprint",
+        "apiRollbackReleaseBundleFingerprint",
         "authorizedApiImage",
         "authorizedApiImageConfigDigest",
         "rollbackApiImage",
@@ -75,6 +78,34 @@
           "additionalProperties": false,
           "required": ["kind"],
           "properties": { "kind": { "const": "containing-commit" } }
+        },
+        "apiReleaseTreeContractRevision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "containing-commit" } }
+        },
+        "apiReleaseBundleFingerprint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "algorithm", "artifact", "releaseRole"],
+          "properties": {
+            "kind": { "const": "derived-from-containing-commit" },
+            "algorithm": { "const": "sha256" },
+            "artifact": { "const": "release-manifest.json" },
+            "releaseRole": { "const": "current" }
+          }
+        },
+        "apiRollbackReleaseBundleFingerprint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "algorithm", "artifact", "releaseRole"],
+          "properties": {
+            "kind": { "const": "derived-from-containing-commit" },
+            "algorithm": { "const": "sha256" },
+            "artifact": { "const": "release-manifest.json" },
+            "releaseRole": { "const": "rollback" }
+          }
         },
         "authorizedApiImage": { "$ref": "#/$defs/ociDigestReference" },
         "authorizedApiImageConfigDigest": {
