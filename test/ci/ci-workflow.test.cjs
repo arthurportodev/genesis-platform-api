@@ -519,8 +519,15 @@ test('binds synthetic secret files to RUNNER_TEMP, mode 0600 and exact cleanup',
 test('requires immutable synthetic refs, fail-closed frontend and Lead version', () => {
   rejects(
     mutated(
-      "const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';",
+      "const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';",
       "const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api:latest';",
+    ),
+    /render validation is incomplete or mutable/u,
+  );
+  rejects(
+    mutated(
+      "const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';",
+      "const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';",
     ),
     /render validation is incomplete or mutable/u,
   );

@@ -118,7 +118,7 @@ const SYNTHETIC_PATH_INITIALIZATION = [
   '} >> "$GITHUB_ENV"',
 ].join('\n');
 const SYNTHETIC_API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';
+  'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';
 const SYNTHETIC_POSTGRES_IMAGE =
   'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 

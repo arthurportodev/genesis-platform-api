@@ -3,6 +3,11 @@ const { existsSync, readFileSync } = require('node:fs');
 const { basename, resolve } = require('node:path');
 
 const API_IMAGE =
+  'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';
+const API_APPLICATION_REVISION = '9402d067897ab727fb369d7e696a11ba3b9cf68f';
+const API_IMAGE_CONFIG_DIGEST =
+  'sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9';
+const ROLLBACK_API_IMAGE =
   'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';
 const POSTGRES_IMAGE =
   'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
@@ -1216,13 +1221,16 @@ function main() {
 if (require.main === module) main();
 
 module.exports = {
+  API_APPLICATION_REVISION,
   API_IMAGE,
+  API_IMAGE_CONFIG_DIGEST,
   BASE_COMPOSE,
   FUNCTIONAL_COMPOSE,
   MODE_CONTRACTS,
   PLATFORM,
   POSTGRES_IMAGE,
   PUBLIC_HTTP_STATIC_CONFIGS,
+  ROLLBACK_API_IMAGE,
   TRAEFIK_IMAGE,
   SECRET_FILES,
   SERVICE_SECRETS,

@@ -12,9 +12,12 @@ const {
 const { dirname, isAbsolute, join, relative, resolve } = require('node:path');
 const { calculateFingerprint } = require('./task-fingerprint.cjs');
 const {
+  API_APPLICATION_REVISION,
   API_IMAGE,
+  API_IMAGE_CONFIG_DIGEST,
   PLATFORM,
   POSTGRES_IMAGE,
+  ROLLBACK_API_IMAGE,
   TRAEFIK_IMAGE,
 } = require('./validate-production-compose.cjs');
 
@@ -423,6 +426,9 @@ function buildProductionBundle({
         api: {
           reference: API_IMAGE,
           digest: API_IMAGE.split('@')[1],
+          configDigest: API_IMAGE_CONFIG_DIGEST,
+          applicationRevision: API_APPLICATION_REVISION,
+          platform: PLATFORM,
         },
         postgres: {
           reference: POSTGRES_IMAGE,
@@ -440,6 +446,14 @@ function buildProductionBundle({
           source: 'https://github.com/traefik/traefik',
           imageCreatedAt: '2026-07-24T19:31:24.4220685Z',
           selectedAt: '2026-08-10',
+        },
+      },
+      rollback: {
+        api: {
+          reference: ROLLBACK_API_IMAGE,
+          digest: ROLLBACK_API_IMAGE.split('@')[1],
+          relation: 'previous-approved',
+          platform: PLATFORM,
         },
       },
       recovery: {

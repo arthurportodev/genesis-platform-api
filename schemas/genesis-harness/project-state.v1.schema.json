@@ -12,6 +12,7 @@
     "updatedAt",
     "authority",
     "repositories",
+    "releaseBindings",
     "phase",
     "currentWork",
     "nextTask",
@@ -55,6 +56,34 @@
       "minItems": 2,
       "maxItems": 2,
       "items": { "$ref": "#/$defs/repositoryState" }
+    },
+    "releaseBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "apiApplicationRevision",
+        "apiReleaseManifestRevision",
+        "authorizedApiImage",
+        "authorizedApiImageConfigDigest",
+        "rollbackApiImage",
+        "webIntegratedRevision"
+      ],
+      "properties": {
+        "apiApplicationRevision": { "$ref": "#/$defs/gitSha" },
+        "apiReleaseManifestRevision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "containing-commit" } }
+        },
+        "authorizedApiImage": { "$ref": "#/$defs/ociDigestReference" },
+        "authorizedApiImageConfigDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "rollbackApiImage": { "$ref": "#/$defs/ociDigestReference" },
+        "webIntegratedRevision": { "$ref": "#/$defs/gitSha" }
+      }
     },
     "phase": {
       "type": "object",
@@ -151,6 +180,10 @@
     "text": { "type": "string", "minLength": 1, "maxLength": 500 },
     "gitSha": { "type": "string", "pattern": "^(?!0{40}$)[a-f0-9]{40}$" },
     "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "ociDigestReference": {
+      "type": "string",
+      "pattern": "^ghcr\\.io/arthurportodev/genesis-platform-api@sha256:[a-f0-9]{64}$"
+    },
     "basis": { "enum": ["documented", "observed", "unknown"] },
     "idList": {
       "type": "array",
