@@ -13,7 +13,7 @@ const PROJECTION_PATH = 'docs/CURRENT_STATE.md';
 const WEB_POINTER_PATH = 'docs/memory/project-state.pointer.v1.json';
 const WEB_POINTER_SCHEMA_PATH =
   'schemas/genesis-harness/project-state.pointer.v1.schema.json';
-const WEB_SHA = 'b6aa5af91d78a998aceacbe963ef45649dd00149';
+const WEB_SHA = '33e99bfcfb87375a801ac49343c28a9fe76e2bb2';
 const API_REPOSITORY = 'arthurportodev/genesis-platform-api';
 const WEB_REPOSITORY = 'arthurportodev/genesis-platform-web';
 const API_APPLICATION_REVISION = '9402d067897ab727fb369d7e696a11ba3b9cf68f';
@@ -767,6 +767,22 @@ function validateState(state, { allowFixture = false } = {}) {
         `$.operationalState.facts[${index}].observedAt`,
         'Remove observedAt or set basis observed with direct evidence.',
       );
+  }
+  const remoteTreeBinding = state.operationalState.facts.find(
+    (fact) => fact.id === 'OPS-MVP08-VPS-INTEGRITY-AUDIT',
+  );
+  if (
+    remoteTreeBinding?.status !== 'present' ||
+    !remoteTreeBinding.statement.startsWith(
+      'remoteTreeBinding=REBIND_REQUIRED.',
+    )
+  ) {
+    fail(
+      'MEMORY_RELEASE_TREE_BINDING_INVALID',
+      'The remote release-tree binding is not machine-readable.',
+      '$.operationalState.facts',
+      'Record remoteTreeBinding=REBIND_REQUIRED in OPS-MVP08-VPS-INTEGRITY-AUDIT.',
+    );
   }
   for (const [path, list, prefix] of [
     ['$.permanentInvariants', state.permanentInvariants, 'PI-'],

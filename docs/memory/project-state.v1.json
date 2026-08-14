@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-14T11:33:53.957Z",
+  "updatedAt": "2026-08-14T17:22:04Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -30,7 +30,7 @@
       "status": "integrated",
       "memoryRevision": {
         "kind": "commit",
-        "sha": "b6aa5af91d78a998aceacbe963ef45649dd00149"
+        "sha": "33e99bfcfb87375a801ac49343c28a9fe76e2bb2"
       }
     }
   ],
@@ -57,38 +57,39 @@
     "authorizedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a",
     "authorizedApiImageConfigDigest": "sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9",
     "rollbackApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659",
-    "webIntegratedRevision": "b6aa5af91d78a998aceacbe963ef45649dd00149"
+    "webIntegratedRevision": "33e99bfcfb87375a801ac49343c28a9fe76e2bb2"
   },
   "phase": {
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-08B-R2",
-      "title": "Contrato versionado e atômico da árvore de release",
-      "completedAt": "2026-08-14T11:33:53.957Z",
+      "id": "0.8-MVP-08-WEB-RUNTIME-REMEDIATION",
+      "title": "Correção do runtime Web e Preview controlado",
+      "completedAt": "2026-08-14T17:22:04Z",
       "evidenceIds": [
-        "EV-MVP08-VPS-INTEGRITY-AUDIT",
-        "EV-MVP08-R2-RELEASE-TREE-CONTRACT"
+        "EV-MVP08-WEB-RUNTIME-PR",
+        "EV-MVP08-WEB-RUNTIME-POSTMERGE-CI",
+        "EV-MVP08-WEB-PREVIEW-CLOSEOUT"
       ]
     }
   },
   "currentWork": {
     "status": "blocked",
-    "summary": "A 08B permanece bloqueada: o contrato versionado define rebuild e troca atômica da árvore de release, mas a integridade remota segue UNPROVEN, o rebuild não foi executado, inventários Hostinger/Vercel e 2FA/recuperação continuam pendentes e o Operational Gate permanece fechado.",
+    "summary": "A correção Web foi integrada e o Preview controlado foi aprovado e removido, mas a produção continua no rollback declarado. A nova memória containing-commit altera os fingerprints dos bundles, portanto a árvore remota precisa de rebind antes de qualquer novo Gate operacional ou retry de produção.",
     "task": {
       "id": "0.8-MVP-08",
       "title": "Vercel, proxy, domínio e integração frontend/backend"
     }
   },
   "nextTask": {
-    "id": "0.8-MVP-08B-ATOMIC-REBUILD-GATE",
-    "title": "Gate humano de segurança e atomic rebuild da árvore de release"
+    "id": "0.8-MVP-08B-RELEASE-TREE-REBIND-AND-OPERATIONAL-RETRY-GATE",
+    "title": "Rebind da árvore de release e novo Gate de retry operacional"
   },
   "operationalState": {
-    "summary": "A aplicação API incorporada em 9402d067 permanece vinculada à imagem imutável a4daf, enquanto 56ada é o rollback anterior. O contrato da árvore e o fingerprint do bundle são derivados do containing commit, mas a VPS continua no release 07B health-only com integridade UNPROVEN; nenhum rebuild, deploy ou outra mutação de produção foi executado.",
+    "summary": "Production A permanece current; B foi rejeitado por falha ESM e o Web corrigido foi validado em Preview e integrado sem promoção. A operação funcional foi revertida: a VPS executa 56ada com FRONTEND_URL=https://genesis.invalid, router health-only e origin key ausente. A árvore remota é íntegra para os bundles de 6930b2e7, mas não corresponde aos novos fingerprints containing-commit; produção não foi retomada.",
     "basis": "observed",
-    "documentedAt": "2026-08-14T11:33:53.957Z",
-    "observedAt": "2026-08-14T11:33:53.957Z",
+    "documentedAt": "2026-08-14T17:22:04Z",
+    "observedAt": "2026-08-14T17:22:04Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -317,12 +318,12 @@
       },
       {
         "id": "OPS-VERCEL-LINK",
-        "status": "unknown",
-        "statement": "O vínculo de app.agenciagenesismkt.com.br com a Vercel não foi comprovado; a Vercel não foi inspecionada por ausência de sessão read-only autorizada.",
+        "status": "partial",
+        "statement": "O projeto Vercel e seus deployments foram inspecionados em sessão autenticada: Production A permanece current, B está rejeitado e o Preview corretivo foi removido. Nenhum custom domain ou alias app.agenciagenesismkt.com.br foi associado; o vínculo funcional continua pendente.",
         "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:24:00Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
+        "documentedAt": "2026-08-14T17:22:04Z",
+        "observedAt": "2026-08-14T17:22:04Z",
+        "evidenceIds": ["EV-MVP08-WEB-PREVIEW-CLOSEOUT"]
       },
       {
         "id": "OPS-ACME-CONTACT",
@@ -423,38 +424,40 @@
       {
         "id": "OPS-MVP08-WEB-INTEGRATED",
         "status": "present",
-        "statement": "A revisão Web integrada e autoritativa para a 08 permanece b6aa5af91d78a998aceacbe963ef45649dd00149.",
+        "statement": "A revisão Web integrada e autoritativa para a 08 é 33e99bfcfb87375a801ac49343c28a9fe76e2bb2, resultado do squash do PR #13 após CI e verificação independentes.",
         "basis": "observed",
-        "documentedAt": "2026-08-14T07:58:01.159Z",
-        "observedAt": "2026-08-14T07:58:01.159Z",
-        "evidenceIds": ["EV-MVP08-READONLY-PREFLIGHT"]
+        "documentedAt": "2026-08-14T17:22:04Z",
+        "observedAt": "2026-08-14T17:22:04Z",
+        "evidenceIds": [
+          "EV-MVP08-WEB-RUNTIME-PR",
+          "EV-MVP08-WEB-RUNTIME-POSTMERGE-CI"
+        ]
       },
       {
         "id": "OPS-MVP08-PREFLIGHT-BLOCKED",
         "status": "partial",
-        "statement": "A 08B permanece fail-closed: VPS, Vercel, Hostinger, secrets, router funcional, domínio e DNS não foram modificados; atomic rebuild, inventários externos e 2FA/recuperação bloqueiam o Gate operacional.",
+        "statement": "A 08B permanece fail-closed após rollback: Production A está current, a VPS executa 56ada com FRONTEND_URL=https://genesis.invalid, router health-only e origin key ausente. Rebind dos novos bundles, configuração de origem/domínio/DNS e novo Gate operacional ainda são necessários antes de qualquer retry.",
         "basis": "observed",
-        "documentedAt": "2026-08-14T11:33:53.957Z",
-        "observedAt": "2026-08-14T11:33:53.957Z",
+        "documentedAt": "2026-08-14T17:22:04Z",
+        "observedAt": "2026-08-14T17:22:04Z",
         "evidenceIds": [
-          "EV-MVP08-READONLY-PREFLIGHT",
-          "EV-MVP08-VPS-INTEGRITY-AUDIT",
-          "EV-MVP08-R2-RELEASE-TREE-CONTRACT"
+          "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
+          "EV-MVP08-WEB-PREVIEW-CLOSEOUT"
         ]
       },
       {
         "id": "OPS-MVP08-VPS-INTEGRITY-AUDIT",
-        "status": "partial",
-        "statement": "A auditoria read-only classificou a árvore remota como UNPROVEN: onze diretórios root:root 0777, dois arquivos atuais ausentes e oito hashes divergentes, sem symlink, hardlink, ACL ou mount inesperado. Remover apenas permissões não recupera confiança retroativa.",
+        "status": "present",
+        "statement": "remoteTreeBinding=REBIND_REQUIRED. A árvore remota foi reconstruída atomicamente e verificada para o par committed-release derivado de 6930b2e7; o rollback operacional subsequente preservou o runtime 56ada. Como esta reconciliação muda o containing commit, a árvore continua íntegra para o bundle anterior, mas exige rebind para os novos fingerprints.",
         "basis": "observed",
-        "documentedAt": "2026-08-14T11:33:53.957Z",
-        "observedAt": "2026-08-14T11:33:53.957Z",
-        "evidenceIds": ["EV-MVP08-VPS-INTEGRITY-AUDIT"]
+        "documentedAt": "2026-08-14T17:22:04Z",
+        "observedAt": "2026-08-14T17:22:04Z",
+        "evidenceIds": ["EV-MVP08-ATOMIC-REBUILD-ROLLBACK"]
       },
       {
         "id": "OPS-MVP08-RELEASE-TREE-CONTRACT",
         "status": "present",
-        "statement": "O bundle v2 define onze diretórios, staging root-only, papéis current/rollback, quarentena e renameat2(RENAME_EXCHANGE). O rollback deriva do mesmo containing commit por duas substituições fechadas para a imagem previous-approved. O par exige papéis, imagens e fingerprints distintos, sourceCommit idêntico e todos os demais artefatos iguais. Os fingerprints são SHA-256 dos manifestos; nada foi aplicado à VPS.",
+        "statement": "O bundle v2 define onze diretórios, staging root-only, papéis current/rollback, quarentena e renameat2(RENAME_EXCHANGE). O rollback deriva do mesmo containing commit por duas substituições fechadas para a imagem previous-approved. O par exige papéis, imagens e fingerprints distintos, sourceCommit idêntico e todos os demais artefatos iguais; o contrato foi usado no rebuild atômico autorizado e permanece inalterado por esta reconciliação.",
         "basis": "documented",
         "documentedAt": "2026-08-14T11:33:53.957Z",
         "evidenceIds": ["EV-MVP08-R2-RELEASE-TREE-CONTRACT"]
@@ -462,10 +465,40 @@
       {
         "id": "OPS-MVP08-HUMAN-SECURITY",
         "status": "partial",
-        "statement": "2FA, recuperação e sessões autenticadas de Vercel, Hostinger, GitHub e Bitwarden permanecem ações humanas pendentes antes do Gate operacional.",
+        "statement": "2FA e recuperação foram confirmados para Vercel, GitHub e Bitwarden. O 2FA da Hostinger permanece pendente por decisão de risco humana explícita; a sessão autenticada foi usada somente dentro das janelas autorizadas e nova autenticação continua fail-closed.",
         "basis": "documented",
-        "documentedAt": "2026-08-14T11:33:53.957Z",
-        "evidenceIds": ["EV-MVP08-READONLY-PREFLIGHT"]
+        "documentedAt": "2026-08-14T17:22:04Z",
+        "evidenceIds": ["EV-MVP08-ATOMIC-REBUILD-ROLLBACK"]
+      },
+      {
+        "id": "OPS-MVP08-WEB-RUNTIME-INCIDENT",
+        "status": "present",
+        "statement": "O deployment B dpl_7rm5gaRDfvmVEDHjiJb9wFCF8jh9 foi rejeitado e não é elegível: o bundle Node 24 preservava o import ESM sem extensão ../src/server/api-proxy, causando ERR_MODULE_NOT_FOUND em /var/task. O PR #13 corrigiu o specifier para ../src/server/api-proxy.js e adicionou regressão sobre o artefato empacotado.",
+        "basis": "observed",
+        "documentedAt": "2026-08-14T17:22:04Z",
+        "observedAt": "2026-08-14T17:22:04Z",
+        "evidenceIds": ["EV-MVP08-WEB-RUNTIME-PR"]
+      },
+      {
+        "id": "OPS-MVP08-WEB-PREVIEW",
+        "status": "present",
+        "statement": "O único Preview autorizado dpl_8jxNbftLPyS3BJ9XtZwJ9A3mk36K, ligado ao commit 5c631fb8c577b0310668204b41f5ace61cfc5cdc, inicializou a Function sem erro de módulo, permaneceu fail-closed e não contatou upstream. Após aprovação técnica, foi excluído e seus aliases passaram a DEPLOYMENT_NOT_FOUND.",
+        "basis": "observed",
+        "documentedAt": "2026-08-14T17:22:04Z",
+        "observedAt": "2026-08-14T17:22:04Z",
+        "evidenceIds": ["EV-MVP08-WEB-PREVIEW-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-MVP08-OPERATIONAL-ROLLBACK",
+        "status": "present",
+        "statement": "Production A dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr no commit fa4193fc permanece current e inalterada; B foi retido apenas para diagnóstico. A VPS continua na imagem 56ada, FRONTEND_URL=https://genesis.invalid, router health-only e origin key ausente; nenhuma retomada de produção, alteração DNS, segredo ou dado real ocorreu nesta correção.",
+        "basis": "observed",
+        "documentedAt": "2026-08-14T17:22:04Z",
+        "observedAt": "2026-08-14T17:22:04Z",
+        "evidenceIds": [
+          "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
+          "EV-MVP08-WEB-PREVIEW-CLOSEOUT"
+        ]
       }
     ]
   },
@@ -595,6 +628,30 @@
       "uri": "repo://arthurportodev/genesis-platform-api/docker/production/release-tree-manager.py",
       "sha256": "ce2c9ac1d1c0a429db343e5594344c64c4b599aa330b003e0b069f2f13353867",
       "capturedAt": "2026-08-14T11:33:53.957Z"
+    },
+    {
+      "id": "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-08/atomic-release-tree-and-operational-rollback-closeout",
+      "capturedAt": "2026-08-14T17:22:04Z"
+    },
+    {
+      "id": "EV-MVP08-WEB-RUNTIME-PR",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/13",
+      "capturedAt": "2026-08-14T17:07:48Z"
+    },
+    {
+      "id": "EV-MVP08-WEB-RUNTIME-POSTMERGE-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/actions/runs/31822566382",
+      "capturedAt": "2026-08-14T17:22:04Z"
+    },
+    {
+      "id": "EV-MVP08-WEB-PREVIEW-CLOSEOUT",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-08/web-runtime-preview-closeout",
+      "capturedAt": "2026-08-14T17:22:04Z"
     }
   ],
   "blockers": [
@@ -608,7 +665,7 @@
     {
       "id": "BLOCK-WEB-VERCEL-FUNCTIONAL",
       "status": "open",
-      "summary": "A integração Web foi incorporada, mas inventário remoto Vercel/Hostinger, 2FA/recuperação, baseline B, candidato C, domínio e smoke ainda precisam ser fechados antes da exposição funcional /api/v1.",
+      "summary": "O runtime Web corrigido foi integrado e o Preview controlado foi removido, mas Production A continua sem custom domain funcional. Origin key, vínculo de domínio, DNS, smoke operacional e autorização de retry ainda precisam ser fechados antes da exposição /api/v1.",
       "owner": "arthur",
       "blocksTaskIds": ["0.8-MVP-08"]
     },
@@ -629,22 +686,16 @@
     {
       "id": "BLOCK-VPS-RELEASE-TREE-INTEGRITY",
       "status": "open",
-      "summary": "A árvore /opt/genesis/release permanece UNPROVEN; o contrato atômico está versionado, mas o rebuild com bundle atual e rollback regenerado ainda exige segurança humana e HD-08B-02 explícito.",
-      "owner": "arthur",
+      "summary": "A árvore /opt/genesis/release é íntegra para o par de bundles derivado do API main 6930b2e7, mas os novos fingerprints containing-commit desta reconciliação exigem bundles committed-release novos e rebind antes de qualquer retry operacional.",
+      "owner": "agent",
       "blocksTaskIds": ["0.8-MVP-08"]
     }
   ],
   "pendingHumanDecisions": [
     {
-      "id": "HD-VPS-RELEASE-TREE-INTEGRITY",
-      "question": "Conceder HD-08B-02 para aplicar o atomic rebuild versionado somente após fechar 2FA/recuperação, bundles current/rollback e allowlist operacional exata?",
-      "whyMaterial": "A operação substituirá a árvore usada por Compose, Traefik e recovery; requer lock, renameat2 comprovado, rollback canônico e autorização de mutação VPS separada.",
-      "blockingTaskIds": ["0.8-MVP-08"]
-    },
-    {
       "id": "HD-MVP08-OPERATIONAL-GATE",
-      "question": "Conceder o Gate operacional somente após integridade da VPS, inventários externos, 2FA/recuperação e allowlist exata estarem fechados?",
-      "whyMaterial": "O Gate autorizará mutações coordenadas de release, Vercel, secret store, domínio e DNS.",
+      "question": "Conceder um novo Gate operacional somente após rebind dos bundles, revalidação da árvore remota, inventários externos e allowlist exata do retry estarem fechados?",
+      "whyMaterial": "O Gate poderá autorizar uma nova tentativa coordenada de release, Vercel, secret store, domínio e DNS; a tentativa anterior foi revertida e não transfere autorização.",
       "blockingTaskIds": ["0.8-MVP-08"]
     },
     {
@@ -766,12 +817,14 @@
     },
     {
       "id": "OR-MVP08-NO-PRODUCTION-MUTATION",
-      "statement": "A 08B permanece bloqueada e nenhuma mutação de VPS, Vercel, Hostinger, secret, domínio, router funcional ou DNS está autorizada.",
-      "reviewTrigger": "Reavaliar somente após fechamento de 2FA/recuperação, bundles current/rollback verificados, HD-08B-02 e Operational Gate explícitos.",
+      "statement": "Após o rollback operacional e a correção Web, nenhuma nova mutação de VPS, Vercel, Hostinger, secret, domínio, router funcional ou DNS está autorizada; Production A e o runtime 56ada devem permanecer inalterados.",
+      "reviewTrigger": "Reavaliar somente após bundles current/rollback do novo containing commit, rebind verificado e novo Operational Retry Gate explícito.",
       "sourceEvidenceIds": [
         "EV-MVP08-READONLY-PREFLIGHT",
         "EV-MVP08-VPS-INTEGRITY-AUDIT",
-        "EV-MVP08-R2-RELEASE-TREE-CONTRACT"
+        "EV-MVP08-R2-RELEASE-TREE-CONTRACT",
+        "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
+        "EV-MVP08-WEB-PREVIEW-CLOSEOUT"
       ]
     }
   ],
