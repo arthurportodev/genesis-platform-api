@@ -20,6 +20,9 @@ const {
 } = require('../../scripts/build-production-bundle.cjs');
 const {
   EXPECTED_FILES,
+  RELEASE_DIRECTORIES,
+  RELEASE_MANIFEST_ENTRY,
+  RELEASE_TREE,
   validateProductionBundle,
 } = require('../../scripts/validate-production-bundle.cjs');
 const { calculateFingerprint } = require('../../scripts/task-fingerprint.cjs');
@@ -222,6 +225,7 @@ test('builds a deterministic non-operational candidate with current bindings', (
   assert.equal(builtFirst.status, 'passed');
   assert.deepEqual(builtFirst.files, EXPECTED_FILES);
   assert.equal(builtFirst.manifest.bundleMode, 'candidate');
+  assert.equal(builtFirst.manifest.releaseRole, 'current');
   assert.equal(builtFirst.manifest.operational, false);
   assert.equal(builtFirst.manifest.sourceCommit, undefined);
   assert.equal(builtFirst.manifest.baseSha, fixture.baseSha);
@@ -263,6 +267,17 @@ test('builds a deterministic non-operational candidate with current bindings', (
     relation: 'previous-approved',
     platform: 'linux/amd64',
   });
+  assert.equal(builtFirst.manifest.contractVersion, '0.8-MVP-08.v2');
+  assert.deepEqual(builtFirst.manifest.releaseTree, RELEASE_TREE);
+  assert.deepEqual(builtFirst.manifest.directories, RELEASE_DIRECTORIES);
+  assert.deepEqual(builtFirst.manifest.manifestEntry, RELEASE_MANIFEST_ENTRY);
+  assert.equal(builtFirst.manifest.directories.length, 11);
+  assert.ok(
+    builtFirst.manifest.artifacts.every(
+      (entry) =>
+        entry.type === 'file' && entry.owner === 0 && entry.group === 0,
+    ),
+  );
   assert.deepEqual(builtFirst.manifest.images.traefik, {
     reference:
       'traefik@sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8',
@@ -397,6 +412,7 @@ test('builds and validates a committed release only from a matching Git snapshot
     env: {},
   });
   assert.equal(built.manifest.bundleMode, 'committed-release');
+  assert.equal(built.manifest.releaseRole, 'current');
   assert.equal(built.manifest.operational, true);
   assert.equal(built.manifest.sourceCommit, fixture.sourceCommit);
   assert.equal(built.manifest.baseSha, undefined);
@@ -412,6 +428,121 @@ test('builds and validates a committed release only from a matching Git snapshot
       requiredMode: 'committed-release',
     }).status,
     'passed',
+  );
+});
+
+test('builds a real rollback committed release accepted by validator and manager', (t) => {
+  const root = tempRoot();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const fixture = committedFixture(root);
+  const currentOutput = join(root, 'current-release');
+  const rollbackOutput = join(root, 'rollback-release');
+  const current = buildProductionBundle({
+    cwd: fixture.repository,
+    output: currentOutput,
+    mode: 'committed-release',
+    releaseRole: 'current',
+    sourceCommit: fixture.sourceCommit,
+    env: {},
+  });
+  const rollback = buildProductionBundle({
+    cwd: fixture.repository,
+    output: rollbackOutput,
+    mode: 'committed-release',
+    releaseRole: 'rollback',
+    sourceCommit: fixture.sourceCommit,
+    env: {},
+  });
+  assert.equal(current.manifest.releaseRole, 'current');
+  assert.equal(rollback.manifest.releaseRole, 'rollback');
+  assert.equal(
+    rollback.manifest.images.api.reference,
+    rollback.manifest.rollback.api.reference,
+  );
+  assert.equal(rollback.manifest.images.api.relation, 'previous-approved');
+  assert.equal(rollback.manifest.images.api.configDigest, undefined);
+  assert.equal(rollback.manifest.images.api.applicationRevision, undefined);
+  const rollbackCompose = readFileSync(
+    join(rollbackOutput, 'compose.production.yml'),
+    'utf8',
+  );
+  assert.equal(
+    rollbackCompose.includes(current.manifest.images.api.reference),
+    false,
+  );
+  assert.equal(
+    rollbackCompose.split(rollback.manifest.images.api.reference).length - 1,
+    2,
+  );
+  const composeEntry = rollback.manifest.artifacts.find(
+    (entry) => entry.path === 'compose.production.yml',
+  );
+  assert.deepEqual(composeEntry.derivation, {
+    kind: 'exact-api-image-replacement',
+    sourceSha256: sha256(
+      readFileSync(join(fixture.repository, 'compose.production.yml')),
+    ),
+    from: current.manifest.images.api.reference,
+    to: rollback.manifest.images.api.reference,
+    replacements: 2,
+  });
+  assert.notEqual(
+    sha256(readFileSync(join(currentOutput, 'release-manifest.json'))),
+    sha256(readFileSync(join(rollbackOutput, 'release-manifest.json'))),
+  );
+  assert.equal(
+    validateProductionBundle(rollbackOutput, {
+      cwd: fixture.repository,
+      requiredMode: 'committed-release',
+    }).status,
+    'passed',
+  );
+  if (process.platform === 'linux') {
+    const currentManifest = readFileSync(
+      join(currentOutput, 'release-manifest.json'),
+    );
+    const rollbackManifest = readFileSync(
+      join(rollbackOutput, 'release-manifest.json'),
+    );
+    const output = execFileSync(
+      'python3',
+      [
+        join(process.cwd(), 'docker', 'production', 'release-tree-manager.py'),
+        'verify-pair',
+        '--current-bundle',
+        currentOutput,
+        '--current-fingerprint',
+        `sha256:${sha256(currentManifest)}`,
+        '--current-image',
+        current.manifest.images.api.reference,
+        '--rollback-bundle',
+        rollbackOutput,
+        '--rollback-fingerprint',
+        `sha256:${sha256(rollbackManifest)}`,
+        '--rollback-image',
+        rollback.manifest.images.api.reference,
+      ],
+      { encoding: 'utf8', windowsHide: true },
+    );
+    assert.deepEqual(JSON.parse(output), {
+      command: 'verify-pair',
+      currentRole: 'current',
+      rollbackRole: 'rollback',
+      status: 'passed',
+    });
+  }
+  const rollbackManifestPath = join(rollbackOutput, 'release-manifest.json');
+  const mutated = JSON.parse(readFileSync(rollbackManifestPath, 'utf8'));
+  mutated.artifacts.find(
+    (entry) => entry.path === 'compose.production.yml',
+  ).derivation.replacements = 1;
+  writeFileSync(rollbackManifestPath, `${JSON.stringify(mutated, null, 2)}\n`);
+  assert.match(
+    validateProductionBundle(rollbackOutput, {
+      cwd: fixture.repository,
+      requiredMode: 'committed-release',
+    }).failures.join('\n'),
+    /derivation metadata mismatch/u,
   );
 });
 
@@ -533,6 +664,45 @@ test('rejects release blob and manifest mode divergence even with self-consisten
   );
 });
 
+test('rejects release-tree metadata drift and a non-atomic activation policy', (t) => {
+  const fixture = candidateFixture(t);
+  const directoryDrift = join(fixture.root, 'directory-drift');
+  buildProductionBundle({ cwd: fixture.repository, output: directoryDrift });
+  const directoryManifestPath = join(directoryDrift, 'release-manifest.json');
+  const directoryManifest = JSON.parse(
+    readFileSync(directoryManifestPath, 'utf8'),
+  );
+  directoryManifest.directories.find((entry) => entry.path === '.').mode =
+    '0777';
+  writeFileSync(
+    directoryManifestPath,
+    `${JSON.stringify(directoryManifest, null, 2)}\n`,
+  );
+  assert.match(
+    validateProductionBundle(directoryDrift, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
+    /release directory allowlist or metadata mismatch/u,
+  );
+
+  const atomicDrift = join(fixture.root, 'atomic-drift');
+  buildProductionBundle({ cwd: fixture.repository, output: atomicDrift });
+  const atomicManifestPath = join(atomicDrift, 'release-manifest.json');
+  const atomicManifest = JSON.parse(readFileSync(atomicManifestPath, 'utf8'));
+  atomicManifest.releaseTree.activation.primitive = 'mv';
+  atomicManifest.releaseTree.activation.nonAtomicFallback = 'allowed';
+  writeFileSync(
+    atomicManifestPath,
+    `${JSON.stringify(atomicManifest, null, 2)}\n`,
+  );
+  assert.match(
+    validateProductionBundle(atomicDrift, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
+    /release-tree policy mismatch/u,
+  );
+});
+
 test('rejects executable Git mode for scripts whose contract is 0644', (t) => {
   const root = tempRoot();
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -561,6 +731,16 @@ test('rejects executable Git mode for scripts whose contract is 0644', (t) => {
 
 test('rejects divergent candidate bindings and candidate-as-release use', (t) => {
   const fixture = candidateFixture(t);
+
+  assert.throws(
+    () =>
+      buildProductionBundle({
+        cwd: fixture.repository,
+        output: join(fixture.root, 'rollback-candidate'),
+        releaseRole: 'rollback',
+      }),
+    /candidate bundles can describe only the current release role/u,
+  );
 
   const drift = join(fixture.root, 'binding-drift');
   buildProductionBundle({ cwd: fixture.repository, output: drift });

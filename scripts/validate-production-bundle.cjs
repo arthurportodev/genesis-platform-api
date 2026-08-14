@@ -4,6 +4,12 @@ const { lstatSync, readFileSync, readdirSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { calculateFingerprint } = require('./task-fingerprint.cjs');
 const {
+  BUNDLE_CONTRACT_VERSION,
+  RELEASE_DIRECTORIES,
+  RELEASE_MANIFEST_ENTRY,
+  RELEASE_TREE,
+} = require('./lib/release-tree-contract.cjs');
+const {
   API_APPLICATION_REVISION,
   API_IMAGE,
   API_IMAGE_CONFIG_DIGEST,
@@ -60,6 +66,11 @@ const EXPECTED_ARTIFACTS = [
   {
     path: 'docker/production/migrate-entrypoint.sh',
     sourcePath: 'docker/production/migrate-entrypoint.sh',
+    mode: '0644',
+  },
+  {
+    path: 'docker/production/release-tree-manager.py',
+    sourcePath: 'docker/production/release-tree-manager.py',
     mode: '0644',
   },
   {
@@ -167,7 +178,8 @@ const EXPECTED_FILES = [
   ...EXPECTED_ARTIFACTS.map((entry) => entry.path),
   'release-manifest.json',
 ].sort();
-const CONTRACT_VERSION = '0.8-MVP-08.v1';
+const CONTRACT_VERSION = BUNDLE_CONTRACT_VERSION;
+const RELEASE_ROLES = new Set(['current', 'rollback']);
 const POSTGRES_LINUX_AMD64_MANIFEST =
   'sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a';
 
@@ -265,6 +277,11 @@ function validateCandidateIdentity(manifest, cwd, failures) {
     failures,
   );
   check(
+    manifest.releaseRole === 'current',
+    'candidate must describe the current release role',
+    failures,
+  );
+  check(
     /^[a-f0-9]{40}$/u.test(manifest.baseSha ?? ''),
     'candidate base SHA is invalid',
     failures,
@@ -344,14 +361,45 @@ function validateReleaseIdentity(manifest, artifactsByPath, cwd, failures) {
     }
     const artifact = artifactsByPath.get(expected.path);
     if (artifact) {
+      let expectedContent = snapshot.content;
+      let expectedDerivation;
+      if (
+        manifest.releaseRole === 'rollback' &&
+        expected.path === 'compose.production.yml'
+      ) {
+        const source = snapshot.content.toString('utf8');
+        const replacements = source.split(API_IMAGE).length - 1;
+        if (replacements !== 2 || source.includes(ROLLBACK_API_IMAGE)) {
+          failures.push(
+            'rollback Compose source does not have the exact derivation shape',
+          );
+        } else {
+          expectedContent = Buffer.from(
+            source.replaceAll(API_IMAGE, ROLLBACK_API_IMAGE),
+          );
+          expectedDerivation = {
+            kind: 'exact-api-image-replacement',
+            sourceSha256: sha256(snapshot.content),
+            from: API_IMAGE,
+            to: ROLLBACK_API_IMAGE,
+            replacements: 2,
+          };
+        }
+      }
       check(
         snapshot.mode === artifact.mode,
         `${expected.path} mode diverges from source commit`,
         failures,
       );
       check(
-        sha256(snapshot.content) === artifact.sha256,
+        sha256(expectedContent) === artifact.sha256,
         `${expected.path} blob diverges from source commit`,
+        failures,
+      );
+      check(
+        JSON.stringify(artifact.derivation) ===
+          JSON.stringify(expectedDerivation),
+        `${expected.path} derivation metadata mismatch`,
         failures,
       );
     }
@@ -424,6 +472,11 @@ function validateProductionBundle(
     'bundle mode is invalid',
     failures,
   );
+  check(
+    RELEASE_ROLES.has(manifest.releaseRole),
+    'release role is invalid',
+    failures,
+  );
   if (requiredMode !== null) {
     check(
       manifest.bundleMode === requiredMode,
@@ -447,26 +500,43 @@ function validateProductionBundle(
     failures,
   );
   check(manifest.platform === PLATFORM, 'bundle platform mismatch', failures);
+  const selectedApiImage =
+    manifest.releaseRole === 'rollback' ? ROLLBACK_API_IMAGE : API_IMAGE;
   check(
-    manifest.images?.api?.reference === API_IMAGE,
-    'API reference mismatch',
+    manifest.images?.api?.reference === selectedApiImage,
+    'API reference mismatch for release role',
     failures,
   );
   check(
-    manifest.images?.api?.digest === API_IMAGE.split('@')[1],
-    'API digest mismatch',
+    manifest.images?.api?.digest === selectedApiImage.split('@')[1],
+    'API digest mismatch for release role',
     failures,
   );
-  check(
-    manifest.images?.api?.configDigest === API_IMAGE_CONFIG_DIGEST,
-    'API config digest mismatch',
-    failures,
-  );
-  check(
-    manifest.images?.api?.applicationRevision === API_APPLICATION_REVISION,
-    'API application revision mismatch',
-    failures,
-  );
+  if (manifest.releaseRole === 'current') {
+    check(
+      manifest.images?.api?.configDigest === API_IMAGE_CONFIG_DIGEST,
+      'API config digest mismatch',
+      failures,
+    );
+    check(
+      manifest.images?.api?.applicationRevision === API_APPLICATION_REVISION,
+      'API application revision mismatch',
+      failures,
+    );
+    check(
+      manifest.images?.api?.relation === undefined,
+      'current API must not declare rollback relation',
+      failures,
+    );
+  } else if (manifest.releaseRole === 'rollback') {
+    check(
+      manifest.images?.api?.configDigest === undefined &&
+        manifest.images?.api?.applicationRevision === undefined &&
+        manifest.images?.api?.relation === 'previous-approved',
+      'rollback API provenance metadata mismatch',
+      failures,
+    );
+  }
   check(
     manifest.images?.api?.platform === PLATFORM,
     'API platform mismatch',
@@ -489,11 +559,23 @@ function validateProductionBundle(
     failures,
   );
   check(
-    API_IMAGE !== ROLLBACK_API_IMAGE &&
-      manifest.images?.api?.reference !== manifest.rollback?.api?.reference,
-    'promoted and rollback API images must remain distinct',
+    API_IMAGE !== ROLLBACK_API_IMAGE,
+    'API image bindings must be distinct',
     failures,
   );
+  if (manifest.releaseRole === 'current') {
+    check(
+      manifest.images?.api?.reference !== manifest.rollback?.api?.reference,
+      'promoted and rollback API images must remain distinct',
+      failures,
+    );
+  } else if (manifest.releaseRole === 'rollback') {
+    check(
+      manifest.images?.api?.reference === manifest.rollback?.api?.reference,
+      'rollback release must bind the previous approved API image',
+      failures,
+    );
+  }
   check(
     manifest.images?.postgres?.reference === POSTGRES_IMAGE,
     'PostgreSQL reference mismatch',
@@ -527,6 +609,23 @@ function validateProductionBundle(
       manifest.recovery?.productionMutationCount === 0 &&
       manifest.recovery?.driveMutationCount === 0,
     'recovery provenance metadata mismatch',
+    failures,
+  );
+  check(
+    JSON.stringify(manifest.releaseTree) === JSON.stringify(RELEASE_TREE),
+    'release-tree policy mismatch',
+    failures,
+  );
+  check(
+    JSON.stringify(manifest.directories) ===
+      JSON.stringify(RELEASE_DIRECTORIES),
+    'release directory allowlist or metadata mismatch',
+    failures,
+  );
+  check(
+    JSON.stringify(manifest.manifestEntry) ===
+      JSON.stringify(RELEASE_MANIFEST_ENTRY),
+    'release manifest target metadata mismatch',
     failures,
   );
   check(
@@ -574,10 +673,25 @@ function validateProductionBundle(
       failures,
     );
     check(
+      artifact.type === 'file' && artifact.owner === 0 && artifact.group === 0,
+      `${artifact.path} type or ownership metadata mismatch`,
+      failures,
+    );
+    check(
       artifact.mode === expected.mode,
       `${artifact.path} mode mismatch`,
       failures,
     );
+    if (
+      manifest.releaseRole !== 'rollback' ||
+      artifact.path !== 'compose.production.yml'
+    ) {
+      check(
+        artifact.derivation === undefined,
+        `${artifact.path} must not declare derivation metadata`,
+        failures,
+      );
+    }
     const absolute = join(root, ...artifact.path.split('/'));
     let content;
     try {
@@ -615,6 +729,7 @@ function validateProductionBundle(
     files,
     failures: [...new Set(failures)].sort(),
     bundleMode: manifest.bundleMode,
+    releaseRole: manifest.releaseRole,
     operational: manifest.operational,
     sourceCommit: manifest.sourceCommit ?? null,
     baseSha: manifest.baseSha ?? null,
@@ -661,6 +776,9 @@ if (require.main === module) main();
 module.exports = {
   CONTRACT_VERSION,
   EXPECTED_ARTIFACTS,
+  RELEASE_DIRECTORIES,
+  RELEASE_MANIFEST_ENTRY,
+  RELEASE_TREE,
   EXPECTED_FILES,
   listFiles,
   obviousSecretFailure,

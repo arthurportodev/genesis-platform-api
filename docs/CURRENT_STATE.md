@@ -5,21 +5,24 @@
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
 - **Revisão de estado:** GH-01-COMPLETE
-- **Atualização documentada:** 2026-08-14T07:58:01.159Z
+- **Atualização documentada:** 2026-08-14T11:33:53.957Z
 - **Fase:** 0.8-MVP — Primeira produção mínima viável
-- **Último trabalho concluído:** 0.8-MVP-08B-R1 — Binding versionado da release API reconciliado
-- **Trabalho vigente:** blocked — A 08B permanece bloqueada após reconciliar o binding versionado da imagem API: integridade e permissões da árvore de release da VPS, inventário Hostinger/Vercel e 2FA/recuperação ainda precisam de Gates próprios. Nenhuma mutação de produção foi autorizada ou executada.
-- **Próxima tarefa:** 0.8-MVP-08B-VPS-INTEGRITY — Gate estreito de integridade e permissões da árvore de release
+- **Último trabalho concluído:** 0.8-MVP-08B-R2 — Contrato versionado e atômico da árvore de release
+- **Trabalho vigente:** blocked — A 08B permanece bloqueada: o contrato versionado define rebuild e troca atômica da árvore de release, mas a integridade remota segue UNPROVEN, o rebuild não foi executado, inventários Hostinger/Vercel e 2FA/recuperação continuam pendentes e o Operational Gate permanece fechado.
+- **Próxima tarefa:** 0.8-MVP-08B-ATOMIC-REBUILD-GATE — Gate humano de segurança e atomic rebuild da árvore de release
 - **Web integrado:** b6aa5af91d78a998aceacbe963ef45649dd00149
 - **Revisão da aplicação API:** 9402d067897ab727fb369d7e696a11ba3b9cf68f
 - **Revisão do manifesto de release API:** containing-commit
+- **Revisão do contrato da árvore de release:** containing-commit
+- **Fingerprint do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit
+- **Fingerprint do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit
 - **Imagem API autorizada:** ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a
 - **Imagem API de rollback:** ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659
 - **Proveniência da memória API:** containing-commit
 
 ## Estado operacional
 
-A aplicação API incorporada em 9402d067 permanece vinculada à imagem imutável a4daf para a próxima release, enquanto 56ada é preservada como rollback anterior. Produção continua no release 07B health-only e não foi modificada; a 08B está bloqueada pela árvore de release 0777, inventários externos incompletos e 2FA/recuperação pendentes.
+A aplicação API incorporada em 9402d067 permanece vinculada à imagem imutável a4daf, enquanto 56ada é o rollback anterior. O contrato da árvore e o fingerprint do bundle são derivados do containing commit, mas a VPS continua no release 07B health-only com integridade UNPROVEN; nenhum rebuild, deploy ou outra mutação de produção foi executado.
 
 - **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
 - **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
@@ -59,16 +62,19 @@ A aplicação API incorporada em 9402d067 permanece vinculada à imagem imutáve
 - **OPS-MVP08-API-RELEASE-BINDING** [documented/present] — O caminho normal de promoção e o manifesto do bundle selecionam exclusivamente a imagem a4daf em linux/amd64, com config ba67 e application revision 9402d067; a release-manifest revision é resolvida pelo containing commit corretivo.
 - **OPS-MVP08-API-ROLLBACK-BINDING** [documented/present] — A imagem 56ada permanece registrada como rollback anterior e recovery binding; validators rejeitam sua seleção pelo caminho normal de promoção.
 - **OPS-MVP08-WEB-INTEGRATED** [observed/present] — A revisão Web integrada e autoritativa para a 08 permanece b6aa5af91d78a998aceacbe963ef45649dd00149.
-- **OPS-MVP08-PREFLIGHT-BLOCKED** [observed/partial] — A 08B permanece fail-closed: VPS, Vercel, Hostinger, secrets, router funcional, domínio e DNS não foram modificados; a árvore /opt/genesis/release 0777, inventários externos incompletos e 2FA/recuperação bloqueiam o Gate operacional.
+- **OPS-MVP08-PREFLIGHT-BLOCKED** [observed/partial] — A 08B permanece fail-closed: VPS, Vercel, Hostinger, secrets, router funcional, domínio e DNS não foram modificados; atomic rebuild, inventários externos e 2FA/recuperação bloqueiam o Gate operacional.
+- **OPS-MVP08-VPS-INTEGRITY-AUDIT** [observed/partial] — A auditoria read-only classificou a árvore remota como UNPROVEN: onze diretórios root:root 0777, dois arquivos atuais ausentes e oito hashes divergentes, sem symlink, hardlink, ACL ou mount inesperado. Remover apenas permissões não recupera confiança retroativa.
+- **OPS-MVP08-RELEASE-TREE-CONTRACT** [documented/present] — O bundle v2 define onze diretórios, staging root-only, papéis current/rollback, quarentena e renameat2(RENAME_EXCHANGE). O rollback deriva do mesmo containing commit por duas substituições fechadas para a imagem previous-approved. O par exige papéis, imagens e fingerprints distintos, sourceCommit idêntico e todos os demais artefatos iguais. Os fingerprints são SHA-256 dos manifestos; nada foi aplicado à VPS.
+- **OPS-MVP08-HUMAN-SECURITY** [documented/partial] — 2FA, recuperação e sessões autenticadas de Vercel, Hostinger, GitHub e Bitwarden permanecem ações humanas pendentes antes do Gate operacional.
 
 ## Blockers abertos
 
 - **BLOCK-WEB-VERCEL-FUNCTIONAL** — A integração Web foi incorporada, mas inventário remoto Vercel/Hostinger, 2FA/recuperação, baseline B, candidato C, domínio e smoke ainda precisam ser fechados antes da exposição funcional /api/v1.
-- **BLOCK-VPS-RELEASE-TREE-INTEGRITY** — A árvore /opt/genesis/release e subdiretórios observados estão root:root 0777; inventário e comparação com o bundle canônico devem preceder qualquer correção de owner/mode.
+- **BLOCK-VPS-RELEASE-TREE-INTEGRITY** — A árvore /opt/genesis/release permanece UNPROVEN; o contrato atômico está versionado, mas o rebuild com bundle atual e rollback regenerado ainda exige segurança humana e HD-08B-02 explícito.
 
 ## Decisões humanas pendentes
 
-- **HD-VPS-RELEASE-TREE-INTEGRITY** — Autorizar o Gate estreito de inventário, comparação canônica e eventual correção de owner/modes da árvore de release da VPS?
+- **HD-VPS-RELEASE-TREE-INTEGRITY** — Conceder HD-08B-02 para aplicar o atomic rebuild versionado somente após fechar 2FA/recuperação, bundles current/rollback e allowlist operacional exata?
 - **HD-MVP08-OPERATIONAL-GATE** — Conceder o Gate operacional somente após integridade da VPS, inventários externos, 2FA/recuperação e allowlist exata estarem fechados?
 - **HD-MVP08-KEEP-ROLLBACK** — Após o smoke sintético dividido, manter a release ou executar rollback independente de Web, API e DNS?
 - **HD-MONITORING** — Qual política de alertas, destinatários e escalonamento será aprovada para o UptimeRobot e os sinais internos?

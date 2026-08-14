@@ -820,3 +820,43 @@ router live, VPS, DNS, Vercel, dado real ou migration foi criado ou alterado.
 O contrato detalhado está no ADR-017. O resultado de verificação, os SHAs dos
 commits/PRs e a recomendação de merge pertencem ao checkpoint VERIFY e não são
 antecipados por este registro de candidato.
+
+## 0.8-MVP-08B — Auditoria de integridade e contrato R2
+
+Em 14 de agosto de 2026, a auditoria estritamente read-only reproduziu duas
+cópias byte-idênticas do committed release R1 e confirmou seu fingerprint
+`280a8ddd56cc0670cc58ff9dddae1e712c33c9fb7cacca8f8f217cebdbf02b51`.
+Na VPS, os onze diretórios da árvore de release estavam `root:root 0777`; dois
+arquivos do bundle corrente não estavam presentes e oito hashes divergiam. Não
+foram encontrados symlink, hardlink, ACL, mount boundary, tipo especial ou
+entrada inesperada. A árvore foi classificada `UNPROVEN`: o estado observado é
+compatível com o release R4 anterior, mas parents graváveis impedem prova
+retroativa de integridade. Nenhuma mutação remota foi executada.
+
+A R2 versionou o contrato completo da árvore no manifesto do bundle. Os onze
+diretórios ativos são `root:root 0755`; staging começa `0700`; rollback vem
+somente de um committed release v2 derivado para a imagem `previous-approved`; a árvore antiga é
+quarentenada `0700` e marcada `UNTRUSTED`. A ativação e o rollback usam apenas
+`renameat2(RENAME_EXCHANGE)` no mesmo filesystem, sem fallback por `mv`.
+Secrets, recovery state, ACME, volumes, PostgreSQL e destinos remotos ficam fora
+de toda travessia e troca.
+
+A matriz Linux descartável cobriu metadata, conteúdo, ACL, links, tipo
+especial, lock concorrente, staging incompleto, falhas antes e depois da troca,
+rollback, quarentena, ausência da primitiva e preservação de estado externo.
+Ela não acessou a VPS nem executou backup, Compose, migration ou restart. O
+contrato incorporado ainda não corrige a árvore remota: atomic rebuild,
+HD-08B-02, 2FA/recuperação e Operational Gate continuam separados.
+
+Na primeira revisão Critical, o verificador independente bloqueou um finding
+High: o manager exigia bundle rollback v2, mas o builder só emitia a imagem
+corrente e o teste Python fabricava o manifesto rollback. A correção tornou o
+papel `current|rollback` explícito em builder, validator e manager. O rollback
+real agora é gerado do mesmo containing commit por uma derivação fechada que
+substitui exatamente duas referências de imagem no Compose, registra a
+proveniência no manifesto e exige imagem/fingerprint distintos e relação
+`previous-approved`. Um teste ponta a ponta entrega o artefato real do builder
+ao validator e, em Linux, ao manager; o candidato e seus fingerprints anteriores
+foram invalidados. A comparação do par também exige o mesmo `sourceCommit` e
+igualdade integral dos demais artefatos; drift não-Compose é rejeitado mesmo
+quando o manifesto divergente se auto-recalcula de forma consistente.

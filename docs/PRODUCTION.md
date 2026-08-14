@@ -361,8 +361,8 @@ Ele não recompila a aplicação, não depende do Nest CLI e não executa seed.
 ## Bundle de produção
 
 `scripts/build-production-bundle.cjs` gera um diretório novo com allowlist
-fechada: Compose, configuração não secreta renomeada, init PostgreSQL, dois
-wrappers e `release-manifest.json`. Existem exatamente dois modos:
+fechada de Compose, configuração não secreta, wrappers, Traefik, recovery,
+gerenciador da árvore e `release-manifest.json`. Existem exatamente dois modos:
 
 - `candidate` é não operacional, copia a worktree somente para validação local
   e registra `baseSha`, `candidateId` e `contentFingerprint`. Ele não declara
@@ -372,24 +372,71 @@ wrappers e `release-manifest.json`. Existem exatamente dois modos:
   da worktree divergirem. Somente esse modo pode ser transferido em uma tarefa
   futura.
 
-O manifesto também registra hashes, modes, digests, `linux/amd64`, versão do
-contrato e timestamp reproduzível derivado do commit de referência ou de
-`SOURCE_DATE_EPOCH`; ele não representa o relógio real do deploy.
+Todo bundle também declara `releaseRole`. `candidate` aceita apenas `current`.
+Após o merge, `committed-release --release-role current` produz o release a
+promover; `--release-role rollback` produz um segundo release operacional
+ligado exclusivamente à imagem `previous-approved`. Nesse segundo papel, o
+builder deriva somente `compose.production.yml` do mesmo snapshot contendo o
+contrato: exige exatamente duas referências da imagem corrente, substitui ambas
+pela imagem de rollback e registra no manifesto o hash fonte, `from`, `to` e a
+contagem. Não existe override de imagem livre. Antes de qualquer ativação,
+`release-tree-manager.py verify-pair` revalida os dois bundles e prova que o
+Compose rollback é exatamente o Compose current com essas duas substituições,
+que ambos declaram o mesmo `sourceCommit` e que todos os demais bytes e
+metadados são idênticos.
+
+O manifesto v2 também registra hashes, type/owner/group/mode de arquivos,
+metadata dos onze diretórios, digests, `linux/amd64`, versão do contrato e
+timestamp reproduzível derivado do commit de referência ou de
+`SOURCE_DATE_EPOCH`; ele não representa o relógio real do deploy. Todos os
+diretórios ativos são `root:root 0755`; staging é criado `root:root 0700` e só
+recebe `0755` depois de completo, sincronizado e validado.
 `scripts/validate-production-bundle.cjs` rejeita arquivo extra, artefato
 irregular, binding divergente, candidate usado como release, proveniência Git
-incompleta, tag, path `.env` e conteúdo secret-like. A validação operacional
-deve usar `--require-mode committed-release`.
+incompleta, metadata de árvore divergente, tag, path `.env` e conteúdo
+secret-like. A validação operacional deve usar
+`--require-mode committed-release`.
 
-Os cinco artefatos do bundle usam mode Git/manifest `0644`. Os wrappers de API
-e migration não dependem de execute bit porque o Compose os chama
+Os arquivos do bundle usam mode Git/manifest `0644`. Os wrappers de API e
+migration não dependem de execute bit porque o Compose os chama
 explicitamente por `/bin/sh`. O init PostgreSQL também não depende de execute
 bit: o
 [`docker-entrypoint.sh` oficial congelado](https://github.com/docker-library/postgres/blob/4f9ced003ba58a854656ba150d146243d27ae3ac/docker-entrypoint.sh#L158-L188)
 faz `source` de todo `.sh` não executável encontrado em
 `/docker-entrypoint-initdb.d`. Mode `0755` ou qualquer outro mode diverge do
-contrato e bloqueia `committed-release`.
+contrato e bloqueia `committed-release`. O gerenciador da árvore é chamado
+explicitamente por `python3`, portanto também permanece `0644`.
 
-Nenhum bundle pré-merge foi transferido à VPS. A operação 05B usou somente um
+### Instalação íntegra e troca atômica
+
+`docker/production/release-tree-manager.py` é fail-closed e só opera como root.
+Ele valida o fingerprint e a imagem esperados, recusa bundle que não seja
+`committed-release`, e rejeita ausência, entrada extra, tipo especial, hash,
+owner/group/mode, escrita por group/other, ACL, symlink, hardlink, mount
+boundary e path de secret/runtime. Hashes são calculados somente nos arquivos
+regulares da allowlist do manifesto.
+
+Uma operação futura, sob Gate próprio, deve:
+
+1. adquirir `/run/lock/genesis-release-tree.lock` exclusivamente;
+2. regenerar e validar separadamente os papéis `current` e `rollback` a partir
+   do containing commit aprovado, com fingerprints distintos e derivação
+   fechada da imagem `previous-approved`;
+3. construir siblings no mesmo filesystem sem usar a árvore ativa como fonte;
+4. aplicar e validar toda a metadata antes da ativação;
+5. provar `renameat2(RENAME_EXCHANGE)` trocando os siblings duas vezes;
+6. trocar staging e `/opt/genesis/release` atomicamente e sincronizar o parent;
+7. restringir a árvore antiga a `root:root 0700`, marcá-la `UNTRUSTED` e
+   preservá-la sem torná-la rollback;
+8. em falha pós-troca, ativar atomicamente o rollback já verificado.
+
+`ATOMIC_PRIMITIVE_UNAVAILABLE` encerra a ação. Dois `mv` sequenciais, cópia da
+árvore ativa e restauração da árvore antiga `0777` são proibidos. Secrets,
+recovery state, `/opt/genesis/traefik-state`, Docker/volumes e PostgreSQL ficam
+fora da travessia e da troca; o procedimento não reinicia serviços nem executa
+backup, migration ou Compose.
+
+Nenhum bundle pré-merge pode ser transferido à VPS. A operação 05B usou somente um
 `committed-release` reconstruído a partir do commit aprovado
 `38baf1e8898194b618cfee787a3bea753677eb93`; qualquer nova transferência exige
 tarefa e autorização operacional próprias.

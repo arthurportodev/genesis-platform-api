@@ -304,11 +304,24 @@ test('rejects observedAt on documented or unknown facts', () => {
   );
 });
 
-test('binds application, containing release manifest, images and Web exactly', () => {
+test('binds application, containing release contracts, derived bundle, images and Web exactly', () => {
   const state = readJson(ROOT);
   assert.deepEqual(state.releaseBindings, {
     apiApplicationRevision: '9402d067897ab727fb369d7e696a11ba3b9cf68f',
     apiReleaseManifestRevision: { kind: 'containing-commit' },
+    apiReleaseTreeContractRevision: { kind: 'containing-commit' },
+    apiReleaseBundleFingerprint: {
+      kind: 'derived-from-containing-commit',
+      algorithm: 'sha256',
+      artifact: 'release-manifest.json',
+      releaseRole: 'current',
+    },
+    apiRollbackReleaseBundleFingerprint: {
+      kind: 'derived-from-containing-commit',
+      algorithm: 'sha256',
+      artifact: 'release-manifest.json',
+      releaseRole: 'rollback',
+    },
     authorizedApiImage:
       'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a',
     authorizedApiImageConfigDigest:
@@ -328,6 +341,23 @@ test('binds application, containing release manifest, images and Web exactly', (
         kind: 'commit',
         sha: '2222222222222222222222222222222222222222',
       };
+    },
+    (candidate) => {
+      candidate.releaseBindings.apiReleaseTreeContractRevision = {
+        kind: 'commit',
+      };
+    },
+    (candidate) => {
+      candidate.releaseBindings.apiReleaseBundleFingerprint.algorithm =
+        'sha512';
+    },
+    (candidate) => {
+      candidate.releaseBindings.apiReleaseBundleFingerprint.releaseRole =
+        'rollback';
+    },
+    (candidate) => {
+      candidate.releaseBindings.apiRollbackReleaseBundleFingerprint.releaseRole =
+        'current';
     },
     (candidate) => {
       candidate.releaseBindings.authorizedApiImage =
