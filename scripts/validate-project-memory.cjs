@@ -522,4 +522,840 @@ function validateJsonSchema(
           code,
           `${path} must be an absolute URI.`,
           path,
-          'Use a valid absolute U„m˘∂âûÀk∫wµÁEQ!Lπ°ÖÃ°¡Ö—†§§(ÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄù55=Ie}!%MQ=Ie}5I-I}%9Y1%ú∞(ÄÄÄÄÄÄÄÅÄëÌ¡Ö—°ÙÅçÖππΩ–Åë•ÕÖâ±îÅ—ïµ¡Ω…Ö∞Å±•π–ÅôΩ»Å—°îÅ›°Ω±îÅëΩç’µïπ–πÄ∞(ÄÄÄÄÄÄÄÅ¡Ö—†∞(ÄÄÄÄÄÄÄÅÅUÕîÅâΩ’πëïêÄëÌ!%MQ=Ie}MQIQÙÅÖπêÄëÌ!%MQ=Ie}9ÙÅ…ïù•ΩπÃÅ•πÕ—ïÖêπÄ∞(ÄÄÄÄÄÄ§Ï(ÄÄÄÅ…ï—’…∏ÄúúÏ(ÄÅÙ((ÄÅçΩπÕ–ÅµÖ…≠ï»ÄÙÄºÑ¥¥ÅùïπïÕ•ÃµµïµΩ…‰µ°•Õ—Ω…‰Ë°Õ—Ö…—Òïπê§Ä¥¥¯Ωù‘Ï(ÄÅ±ï–Å°•Õ—Ω…•çÖ∞ÄÙÅôÖ±ÕîÏ(ÄÅ±ï–Åç’…ÕΩ»ÄÙÄ¿Ï(ÄÅ±ï–ÅŸ•Õ•â±îÄÙÄúúÏ(ÄÅôΩ»Ä°çΩπÕ–ÅµÖ—ç†ÅΩòÅ—ï·–πµÖ—ç°±∞°µÖ…≠ï»§§ÅÏ(ÄÄÄÅ•òÄ°µÖ—ç°l≈tÄÙÙÙÄùÕ—Ö…–ú§ÅÏ(ÄÄÄÄÄÅ•òÄ°°•Õ—Ω…•çÖ∞§(ÄÄÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄÄÄù55=Ie}!%MQ=Ie}5I-I}%9Y1%ú∞(ÄÄÄÄÄÄÄÄÄÅÄëÌ¡Ö—°ÙÅ°ÖÃÅπïÕ—ïêÅ°•Õ—Ω…•çÖ∞Å…ïù•ΩπÃπÄ∞(ÄÄÄÄÄÄÄÄÄÅ¡Ö—†∞(ÄÄÄÄÄÄÄÄÄÄùUÕîÅπΩ∏µΩŸï…±Ö¡¡•πú∞Åï·¡±•ç•—±‰ÅâΩ’πëïêÅ°•Õ—Ω…•çÖ∞Å…ïù•ΩπÃ∏ú∞(ÄÄÄÄÄÄÄÄ§Ï(ÄÄÄÄÄÅçΩπÕ–ÅôΩ±±Ω›•πúÄÙÅ—ï·–πÕ±•çî°µÖ—ç†π•πëï‡Ä¨ÅµÖ—ç°l¡tπ±ïπù—†§Ï(ÄÄÄÄÄÅ•òÄ†ÑΩyqÃ®çÏ»∞ŸıqÃ¨∏®†¸ÈÕπÖ¡Õ°Ω—Ò°•Õ”Õ…•å§Ω•‘π—ïÕ–°ôΩ±±Ω›•πú§§(ÄÄÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄÄÄù55=Ie}!%MQ=Ie}5I-I}%9Y1%ú∞(ÄÄÄÄÄÄÄÄÄÅÄëÌ¡Ö—°ÙÅΩ¡ïπÃÅÑÅ°•Õ—Ω…•çÖ∞Å…ïù•Ω∏Å›•—°Ω’–ÅÖ∏Åï·¡±•ç•–Å°•Õ—Ω…•çÖ∞Å°ïÖë•πúπÄ∞(ÄÄÄÄÄÄÄÄÄÅ¡Ö—†∞(ÄÄÄÄÄÄÄÄÄÄùA±ÖçîÅ—°îÅÕ—Ö…–ÅµÖ…≠ï»Å•µµïë•Ö—ï±‰ÅâïôΩ…îÅÑÅMπÖ¡Õ°Ω–Å°•Õ”Õ…•çºÅ°ïÖë•πú∏ú∞(ÄÄÄÄÄÄÄÄ§Ï(ÄÄÄÄÄÅŸ•Õ•â±îÄ¨ÙÅ—ï·–πÕ±•çî°ç’…ÕΩ»∞ÅµÖ—ç†π•πëï‡§Ï(ÄÄÄÄÄÅ°•Õ—Ω…•çÖ∞ÄÙÅ—…’îÏ(ÄÄÄÅÙÅï±ÕîÅÏ(ÄÄÄÄÄÅ•òÄ†Ö°•Õ—Ω…•çÖ∞§(ÄÄÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄÄÄù55=Ie}!%MQ=Ie}5I-I}%9Y1%ú∞(ÄÄÄÄÄÄÄÄÄÅÄëÌ¡Ö—°ÙÅç±ΩÕïÃÅÑÅ°•Õ—Ω…•çÖ∞Å…ïù•Ω∏Å—°Ö–Å›ÖÃÅπΩ–ÅΩ¡ïπïêπÄ∞(ÄÄÄÄÄÄÄÄÄÅ¡Ö—†∞(ÄÄÄÄÄÄÄÄÄÅÅëêÄëÌ!%MQ=Ie}MQIQÙÅâïôΩ…îÅ—°•ÃÅµÖ…≠ï»πÄ∞(ÄÄÄÄÄÄÄÄ§Ï(ÄÄÄÄÄÅ°•Õ—Ω…•çÖ∞ÄÙÅôÖ±ÕîÏ(ÄÄÄÅÙ(ÄÄÄÅç’…ÕΩ»ÄÙÅµÖ—ç†π•πëï‡Ä¨ÅµÖ—ç°l¡tπ±ïπù—†Ï(ÄÅÙ(ÄÅ•òÄ°°•Õ—Ω…•çÖ∞§(ÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄù55=Ie}!%MQ=Ie}5I-I}%9Y1%ú∞(ÄÄÄÄÄÅÄëÌ¡Ö—°ÙÅ°ÖÃÅÖ∏Å’πç±ΩÕïêÅ°•Õ—Ω…•çÖ∞Å…ïù•Ω∏πÄ∞(ÄÄÄÄÄÅ¡Ö—†∞(ÄÄÄÄÄÅÅ±ΩÕîÅ•–Å›•—†ÄëÌ!%MQ=Ie}9ÙπÄ∞(ÄÄÄÄ§Ï(ÄÅŸ•Õ•â±îÄ¨ÙÅ—ï·–πÕ±•çî°ç’…ÕΩ»§Ï(ÄÅ…ï—’…∏ÅŸ•Õ•â±îÏ)Ù()ô’πç—•Ω∏Åëï±ïùÖ—ïÕQïµ¡Ω…Ö±’—°Ω…•—‰°â±Ωç¨§ÅÏ(ÄÅ…ï—’…∏Ä†(ÄÄÄÅâ±Ωç¨π•πç±’ëïÃ°UQ!=I%Qe}AQ §Äòò(ÄÄÄÄº†¸ÈÖ’—Ω…•ëÖëïÒ…ïÕΩ±ŸïÒ¡ï…—ïπçïÒï·ç±’Õ•ŸÒªçºÅëïô•πïÒªçºÅÕ’âÕ—•—‘§Ω•‘π—ïÕ–†(ÄÄÄÄÄÅâ±Ωç¨∞(ÄÄÄÄ§(ÄÄ§Ï)Ù()ô’πç—•Ω∏Å±•π—Qïµ¡Ω…Ö±ÕÕï…—•ΩπÃ°—ï·–∞Å¡Ö—†§ÅÏ(ÄÅçΩπÕ–ÅŸ•Õ•â±îÄÙÅÕ—…•¡!•Õ—Ω…•çÖ±Iïù•ΩπÃ°—ï·–∞Å¡Ö—†§Ï(ÄÅôΩ»Ä°çΩπÕ–Åâ±Ωç¨ÅΩòÅŸ•Õ•â±îπÕ¡±•–†Ωq»˝qπqÃ©q»˝q∏Ωù‘§§ÅÏ(ÄÄÄÅ•òÄ°ëï±ïùÖ—ïÕQïµ¡Ω…Ö±’—°Ω…•—‰°â±Ωç¨§§ÅçΩπ—•π’îÏ(ÄÄÄÅôΩ»Ä°çΩπÕ–Å…’±îÅΩòÅQ5A=I1}MMIQ%=9}IU1L§ÅÏ(ÄÄÄÄÄÅ•òÄ°…’±îπ¡Ö——ï…∏π—ïÕ–°â±Ωç¨§§(ÄÄÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄÄÄù55=Ie}Q5A=I1}MMIQ%=9}=I	%8ú∞(ÄÄÄÄÄÄÄÄÄÅÄëÌ¡Ö—°ÙÅçΩπ—Ö•πÃÅÑÅôΩ…â•ëëï∏ÄëÌ…’±îπ±Öâï±ÙπÄ∞(ÄÄÄÄÄÄÄÄÄÅ¡Ö—†∞(ÄÄÄÄÄÄÄÄÄÅÅ5ΩŸîÅ—ïµ¡Ω…Ö∞ÅÕ—Ö—îÅ—ºÄëÌUQ!=I%Qe}AQ!ÙÅΩ»ÅâΩ’πêÅÖ∏ÅÖç—’Ö∞ÅÕπÖ¡Õ°Ω–Å›•—†ÄëÌ!%MQ=Ie}MQIQÙÅÖπêÄëÌ!%MQ=Ie}9ÙπÄ∞(ÄÄÄÄÄÄÄÄ§Ï(ÄÄÄÅÙ(ÄÅÙ)Ù()ô’πç—•Ω∏ÅŸÖ±•ëÖ—ïIï¡ΩÕ•—Ω…ÂŸ•ëïπçî°…ΩΩ–∞ÅÕ—Ö—î§ÅÏ(ÄÅôΩ»Ä°çΩπÕ–ÅïŸ•ëïπçîÅΩòÅÕ—Ö—îπïŸ•ëïπçî§ÅÏ(ÄÄÄÅ•òÄ†ÖïŸ•ëïπçîπ’…§πÕ—Ö…—Õ]•—†°IA=M%Q=Ie}Y%9}AI%`§§ÅçΩπ—•π’îÏ(ÄÄÄÅçΩπÕ–Å…ï±Ö—•ŸîÄÙÅïŸ•ëïπçîπ’…§πÕ±•çî°IA=M%Q=Ie}Y%9}AI%`π±ïπù—†§Ï(ÄÄÄÅ•òÄ†(ÄÄÄÄÄÅ…ï±Ö—•Ÿîπ±ïπù—†ÄÙÙÙÄ¿ÅÒ(ÄÄÄÄÄÅ…ï±Ö—•Ÿîπ•πç±’ëïÃ†ùqpú§ÅÒ(ÄÄÄÄÄÅ…ï±Ö—•ŸîπÕ—Ö…—Õ]•—††úºú§ÅÒ(ÄÄÄÄÄÅ…ï±Ö—•ŸîπÕ¡±•–†úºú§π•πç±’ëïÃ†ú∏∏ú§(ÄÄÄÄ§(ÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄù55=Ie}Y%9}AQ!}%9Y1%ú∞(ÄÄÄÄÄÄÄÅÄëÌïŸ•ëïπçîπ•ëÙÅ°ÖÃÅÖ∏Å’πÕÖôîÅ…ï¡ΩÕ•—Ω…‰ÅïŸ•ëïπçîÅ¡Ö—†πÄ∞(ÄÄÄÄÄÄÄÅÄêπïŸ•ëïπçî∏ëÌïŸ•ëïπçîπ•ëÙπ’…•Ä∞(ÄÄÄÄÄÄÄÄùUÕîÅÑÅπΩ…µÖ±•ÈïêÅ…ï¡ΩÕ•—Ω…‰µ…ï±Ö—•ŸîÅ¡Ö—†∏ú∞(ÄÄÄÄÄÄ§Ï(ÄÄÄÅ•òÄ†ÖïŸ•ëïπçîπÕ°Ñ»‘ÿ§(ÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄù55=Ie}Y%9}!M!}IEU%Iú∞(ÄÄÄÄÄÄÄÅÄëÌïŸ•ëïπçîπ•ëÙÅµ’Õ–Å•πç±’ëîÅÕ°Ñ»‘ÿπÄ∞(ÄÄÄÄÄÄÄÅÄêπïŸ•ëïπçî∏ëÌïŸ•ëïπçîπ•ëÙπÕ°Ñ»‘ŸÄ∞(ÄÄÄÄÄÄÄÄùIïçΩ…êÅ—°îÅM!¥»‘ÿÅΩòÅ—°îÅ…ïôï…ïπçïêÅ…ï¡ΩÕ•—Ω…‰Åô•±î∏ú∞(ÄÄÄÄÄÄ§Ï(ÄÄÄÅçΩπÕ–ÅçΩπ—ïπ–ÄÙÅÕÖôïIïÖê°©Ω•∏°…ΩΩ–∞Ä∏∏π…ï±Ö—•ŸîπÕ¡±•–†úºú§§§Ï(ÄÄÄÅçΩπÕ–ÅÖç—’Ö∞ÄÙÅç…ïÖ—ï!ÖÕ††ùÕ°Ñ»‘ÿú§π’¡ëÖ—î°çΩπ—ïπ–∞Äù’—ò‡ú§πë•ùïÕ–†ù°ï‡ú§Ï(ÄÄÄÅ•òÄ°Öç—’Ö∞ÄÑÙÙÅïŸ•ëïπçîπÕ°Ñ»‘ÿ§(ÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄù55=Ie}Y%9}!M!}5%M5Q ú∞(ÄÄÄÄÄÄÄÅÄëÌïŸ•ëïπçîπ•ëÙÅëΩïÃÅπΩ–ÅµÖ—ç†ÄëÌ…ï±Ö—•ŸïÙπÄ∞(ÄÄÄÄÄÄÄÅÄêπïŸ•ëïπçî∏ëÌïŸ•ëïπçîπ•ëÙπÕ°Ñ»‘ŸÄ∞(ÄÄÄÄÄÄÄÄùIïùïπï…Ö—îÅ—°îÅïŸ•ëïπçîÅ°ÖÕ†Åô…Ω¥Å—°îÅô•πÖ∞Å…ïôï…ïπçïêÅëΩç’µïπ–∏ú∞(ÄÄÄÄÄÄ§Ï(ÄÅÙ)Ù()ô’πç—•Ω∏ÅŸÖ±•ëÖ—ïM—Öâ±ïMΩ’…çïÃ°…ΩΩ–§ÅÏ(ÄÅôΩ»Ä°çΩπÕ–Å¡Ö—†ÅΩòÅMQ	1}M=UIL§ÅÏ(ÄÄÄÅçΩπÕ–Å—ï·–ÄÙÅÕÖôïIïÖê°©Ω•∏°…ΩΩ–∞Ä∏∏π¡Ö—†πÕ¡±•–†úºú§§§Ï(ÄÄÄÅ•òÄ†(ÄÄÄÄÄÄÖ—ï·–π•πç±’ëïÃ†ùùïπïÕ•ÃµµïµΩ…‰µÖ’—°Ω…•—‰Èÿƒú§ÅÒ(ÄÄÄÄÄÄÖ—ï·–π•πç±’ëïÃ°UQ!=I%Qe}AQ §(ÄÄÄÄ§ÅÏ(ÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄù55=Ie}MQ	1}M=UI}!M}MQQú∞(ÄÄÄÄÄÄÄÅÄëÌ¡Ö—°ÙÅëΩïÃÅπΩ–Åëï±ïùÖ—îÅ—ïµ¡Ω…Ö∞ÅÖ’—°Ω…•—‰πÄ∞(ÄÄÄÄÄÄÄÅ¡Ö—†∞(ÄÄÄÄÄÄÄÅÅëêÅ—°îÅùïπïÕ•ÃµµïµΩ…‰µÖ’—°Ω…•—‰ÈÿƒÅµÖ…≠ï»ÅÖπêÅ…ïÕΩ±ŸîÅç’……ïπ–ÅôÖç—ÃÅô…Ω¥ÄëÌUQ!=I%Qe}AQ!ÙπÄ∞(ÄÄÄÄÄÄ§Ï(ÄÄÄÅÙ(ÄÄÄÅ•òÄ†(ÄÄÄÄÄÅM=UI}UQ!=I%Qe}AQ!Lπ•πç±’ëïÃ°¡Ö—†§Äòò(ÄÄÄÄÄÄÖ—ï·–π•πç±’ëïÃ°M=UI}UQ!=I%Qe}5I-H§(ÄÄÄÄ§(ÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄù55=Ie}M=UI}UQ!=I%Qe}%9Y1%ú∞(ÄÄÄÄÄÄÄÅÄëÌ¡Ö—°ÙÅëΩïÃÅπΩ–Åëïç±Ö…îÅÖ’—°Ω…•—•ïÃÅâ‰ÅëΩµÖ•∏πÄ∞(ÄÄÄÄÄÄÄÅ¡Ö—†∞(ÄÄÄÄÄÄÄÄùIïÕ—Ω…îÅ—°îÅçÖπΩπ•çÖ∞ÅÕΩ’…çîµÖ’—°Ω…•—•ïÃÅµÖ…≠ï»ÅÖπêÅëΩµÖ•∏ÅçΩπ—…Öç–∏ú∞(ÄÄÄÄÄÄ§Ï(ÄÄÄÅ±•π—Qïµ¡Ω…Ö±ÕÕï…—•ΩπÃ°—ï·–∞Å¡Ö—†§Ï(ÄÅÙ(ÄÅçΩπÕ–Å—ÖÕ≠1ΩúÄÙÅÕÖôïIïÖê°©Ω•∏°…ΩΩ–∞ÄùëΩçÃú∞ÄùQM-}1=πµêú§§Ï(ÄÅ•òÄ†Ö—ÖÕ≠1Ωúπ•πç±’ëïÃ°]!=1}=U59Q}!%MQ=Ie}5I-H§§(ÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄù55=Ie}!%MQ=Ie}5I-I}IEU%Iú∞(ÄÄÄÄÄÄùQM-}1=Åµ’Õ–ÅâîÅï·¡±•ç•—±‰Å°•Õ—Ω…•çÖ∞∏ú∞(ÄÄÄÄÄÄùëΩçÃΩQM-}1=πµêú∞(ÄÄÄÄÄÄùëêÅ—°îÅ›°Ω±îµëΩç’µïπ–Å°•Õ—Ω…‰ÅµÖ…≠ï»∏ú∞(ÄÄÄÄ§Ï)Ù()ô’πç—•Ω∏ÅŸÖ±•ëÖ—ï1ΩçÖ∞°…ΩΩ–ÄÙÅ¡…ΩçïÕÃπç›ê†§∞ÅÏÅç°ïç≠A…Ω©ïç—•Ω∏ÄÙÅ—…’îÅÙÄÙÅÌÙ§ÅÏ(ÄÅçΩπÕ–ÅÕç°ïµÑÄÙÅ¡Ö…Õï)ÕΩ∏°©Ω•∏°…ΩΩ–∞Ä∏∏πM!5}AQ πÕ¡±•–†úºú§§§Ï(ÄÅŸÖ±•ëÖ—ïMç°ïµÖΩπ—…Öç–°Õç°ïµÑ§Ï(ÄÅçΩπÕ–Å•πÕ—ÖπçîÄÙÅ¡Ö…Õï)ÕΩ∏°©Ω•∏°…ΩΩ–∞Ä∏∏πUQ!=I%Qe}AQ πÕ¡±•–†úºú§§§Ï(ÄÅ•òÄ°•πÕ—ÖπçîπÕç°ïµÖYï…Õ•Ω∏ÄÑÙÙÄúƒ∏¿∏¿ú§ÅÏ(ÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄù55=Ie}M!5}U9MUAA=IQú∞(ÄÄÄÄÄÄù=π±‰ÅÕç°ïµÑÄƒ∏¿∏¿Å•ÃÅÕ’¡¡Ω…—ïê∏ú∞(ÄÄÄÄÄÄúêπÕç°ïµÖYï…Õ•Ω∏ú∞(ÄÄÄÄÄÄùUÕîÅÕç°ïµÖYï…Õ•Ω∏Äƒ∏¿∏¿∏ú∞(ÄÄÄÄ§Ï(ÄÅÙ(ÄÅŸÖ±•ëÖ—ï)ÕΩπMç°ïµÑ°•πÕ—Öπçî∞ÅÕç°ïµÑ§Ï(ÄÅçΩπÕ–ÅÕ—Ö—îÄÙÅŸÖ±•ëÖ—ïM—Ö—î°•πÕ—Öπçî§Ï(ÄÅŸÖ±•ëÖ—ïIï¡ΩÕ•—Ω…ÂŸ•ëïπçî°…ΩΩ–∞ÅÕ—Ö—î§Ï(ÄÅŸÖ±•ëÖ—ïM—Öâ±ïMΩ’…çïÃ°…ΩΩ–§Ï(ÄÅçΩπÕ–Åï·¡ïç—ïêÄÙÅ…ïπëï…A…Ω©ïç—•Ω∏°Õ—Ö—î§Ï(ÄÅ•òÄ†(ÄÄÄÅç°ïç≠A…Ω©ïç—•Ω∏Äòò(ÄÄÄÅÕÖôïIïÖê°©Ω•∏°…ΩΩ–∞Ä∏∏πAI=)Q%=9}AQ πÕ¡±•–†úºú§§§ÄÑÙÙÅï·¡ïç—ïê(ÄÄ§ÅÏ(ÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄù55=Ie}AI=)Q%=9}MQ1ú∞(ÄÄÄÄÄÄùUII9Q}MQQπµêÅë•ôôï…ÃÅô…Ω¥Å—°îÅëï—ï…µ•π•Õ—•åÅ¡…Ω©ïç—•Ω∏∏ú∞(ÄÄÄÄÄÅAI=)Q%=9}AQ ∞(ÄÄÄÄÄÄùI’∏Ä¥µµΩëîÅ…ïπëï»ÅÖπêÅ…ïŸ•ï‹Å—°îÅùïπï…Ö—ïêÅ¡…Ω©ïç—•Ω∏∏ú∞(ÄÄÄÄ§Ï(ÄÅÙ(ÄÅ…ï—’…∏ÅÏÅÕ—Ö—î∞Åï·¡ïç—ïêÅÙÏ)Ù()ô’πç—•Ω∏Å±ΩÖë]ïâAΩ•π—ï»°ÕΩ’…çî§ÅÏ(ÄÅçΩπÕ–ÅÖâÕΩ±’—îÄÙÅ…ïÕΩ±Ÿî°ÕΩ’…çî§Ï(ÄÅ±ï–Å…ΩΩ–ÄÙÅÖâÕΩ±’—îÏ(ÄÅ—…‰ÅÏ(ÄÄÄÅ•òÄ†ÖÕ—Ö—MÂπå°ÖâÕΩ±’—î§π•Õ•…ïç—Ω…‰†§§(ÄÄÄÄÄÅ…ΩΩ–ÄÙÅ…ïÕΩ±Ÿî°ÖâÕΩ±’—î∞Äú∏∏ú∞Äú∏∏ú∞Äú∏∏ú§Ï(ÄÅÙÅçÖ—ç†ÅÏ(ÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄùUQ!=I%Qe}U9Y%1	1ú∞(ÄÄÄÄÄÄù]ïàÅÕΩ’…çîÅ•ÃÅ’πÖŸÖ•±Öâ±î∏ú∞(ÄÄÄÄÄÄú¥µ›ïàµÕΩ’…çîú∞(ÄÄÄÄÄÄùA…ΩŸ•ëîÅ—°îÅ•π—ïù…Ö—ïêÅ]ïàÅç°ïç≠Ω’–ÅΩ»Å¡Ω•π—ï»Åô•±î∏ú∞(ÄÄÄÄ§Ï(ÄÅÙ(ÄÅçΩπÕ–Å¡Ω•π—ï…AÖ—†ÄÙÅÕ—Ö—MÂπå°ÖâÕΩ±’—î§π•Õ•…ïç—Ω…‰†§(ÄÄÄÄ¸Å©Ω•∏°ÖâÕΩ±’—î∞Ä∏∏π]	}A=%9QI}AQ πÕ¡±•–†úºú§§(ÄÄÄÄËÅÖâÕΩ±’—îÏ(ÄÅ…ï—’…∏ÅÏÅ¡Ω•π—ï»ËÅ¡Ö…Õï)ÕΩ∏°¡Ω•π—ï…AÖ—†§∞Å…ΩΩ–ÅÙÏ)Ù()ô’πç—•Ω∏ÅŸÖ±•ëÖ—ï…ΩÕÕIï¡º†(ÄÅÕ—Ö—î∞(ÄÅÕΩ’…çî∞(ÄÅÏÅ…ïÕΩ±ŸïΩµµ•–∞Å¡Ω•π—ï…Mç°ïµÑÅÙÄÙÅÌÙ∞(§ÅÏ(ÄÅçΩπÕ–ÅÏÅ¡Ω•π—ï»∞Å…ΩΩ–ÅÙÄÙÅ±ΩÖë]ïâAΩ•π—ï»°ÕΩ’…çî§Ï(ÄÅçΩπÕ–ÅÕç°ïµÑÄÙ(ÄÄÄÅ¡Ω•π—ï…Mç°ïµÑÄ¸¸(ÄÄÄÅ¡Ö…Õï)ÕΩ∏°©Ω•∏°…ΩΩ–∞Ä∏∏π]	}A=%9QI}M!5}AQ πÕ¡±•–†úºú§§§Ï(ÄÅÕçÖπMïç…ï—Ã°¡Ω•π—ï»∞Äúë›ïàú§Ï(ÄÅŸÖ±•ëÖ—ï)ÕΩπMç°ïµÑ°¡Ω•π—ï»∞ÅÕç°ïµÑ∞ÅÏ(ÄÄÄÅ…ΩΩ—Mç°ïµÑËÅÕç°ïµÑ∞(ÄÄÄÅ¡Ö—†ËÄúë›ïàú∞(ÄÄÄÅçΩëîËÄù55=Ie}A=%9QI}5%M5Q ú∞(ÄÅÙ§Ï(ÄÅ•òÄ†(ÄÄÄÅ¡Ω•π—ï»πÕç°ïµÖYï…Õ•Ω∏ÄÑÙÙÄúƒ∏¿∏¿úÅÒ(ÄÄÄÅ¡Ω•π—ï»π•πÕ—Öπçï-•πêÄÑÙÙÄùç’……ïπ–úÅÒ(ÄÄÄÅ¡Ω•π—ï»πµΩëîÄÑÙÙÄù¡Ω•π—ï»µΩπ±‰úÅÒ(ÄÄÄÅ¡Ω•π—ï»πÖ’—°Ω…•—‰¸π…ï¡ΩÕ•—Ω…‰ÄÑÙÙÅA%}IA=M%Q=IdÅÒ(ÄÄÄÅ¡Ω•π—ï»πÖ’—°Ω…•—‰¸π¡Ö—†ÄÑÙÙÅUQ!=I%Qe}AQ ÅÒ(ÄÄÄÅ¡Ω•π—ï»πÖ’—°Ω…•—‰¸πÖççï¡—ïëMç°ïµÖ5Ö©Ω»ÄÑÙÙÄƒ(ÄÄ§ÅÏ(ÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄù55=Ie}A=%9QI}5%M5Q ú∞(ÄÄÄÄÄÄù]ïàÅ¡Ω•π—ï»Å•ëïπ—•—‰ÅΩ»ÅÖ’—°Ω…•—‰Å•ÃÅ•πçΩµ¡Ö—•â±î∏ú∞(ÄÄÄÄÄÄú¥µ›ïàµÕΩ’…çîú∞(ÄÄÄÄÄÄùUÕîÅ—°îÅ•π—ïù…Ö—ïêÅÿƒÅ¡Ω•π—ï»µΩπ±‰Å]ïàÅç°ïç≠Ω’–∏ú∞(ÄÄÄÄ§Ï(ÄÅÙ(ÄÅ•òÄ†(ÄÄÄÅ¡Ω•π—ï»π…ïçï•¡–¸π—Ö…ùï—M—Ö—ïIïŸ•Õ•Ω∏ÄÑÙÙÅÕ—Ö—îπÕ—Ö—ïIïŸ•Õ•Ω∏ÅÒ(ÄÄÄÅ¡Ω•π—ï»π…ïçï•¡–¸π—…ÖπÕ•—•Ωπ%êÄÑÙÙÅÕ—Ö—îπ¡Ω•π—ï…5ï—ÖëÖ—Ñπ—…ÖπÕ•—•Ωπ%ê(ÄÄ§ÅÏ(ÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄù55=Ie}QI9M%Q%=9}A9%9ú∞(ÄÄÄÄÄÄù]ïàÅ…ïçï•¡–Å—Ö…ùï–ÅëΩïÃÅπΩ–ÅµÖ—ç†Å—°îÅA$ÅÕ—Ö—îÅ…ïŸ•Õ•Ω∏∏ú∞(ÄÄÄÄÄÄúë›ïàπ…ïçï•¡–ú∞(ÄÄÄÄÄÄùΩµ¡±ï—îÅ—°îÅÖ¡¡…ΩŸïêÅç…ΩÕÃµ…ï¡ΩÕ•—Ω…‰Å—…ÖπÕ•—•Ω∏ÅçΩπ—…Öç–∏ú∞(ÄÄÄÄ§Ï(ÄÅÙ(ÄÅ±ï–ÅçΩµµ•–Ï(ÄÅ—…‰ÅÏ(ÄÄÄÅçΩµµ•–ÄÙÅ…ïÕΩ±ŸïΩµµ•–(ÄÄÄÄÄÄ¸Å…ïÕΩ±ŸïΩµµ•–°…ΩΩ–§(ÄÄÄÄÄÄËÅï·ïç•±ïMÂπå†(ÄÄÄÄÄÄÄÄÄÄùù•–ú∞(ÄÄÄÄÄÄÄÄÄÅl(ÄÄÄÄÄÄÄÄÄÄÄÄúµåú∞(ÄÄÄÄÄÄÄÄÄÄÄÅÅÕÖôîπë•…ïç—Ω…‰ÙëÌ…ΩΩ–π…ï¡±Öçï±∞†ùqpú∞Äúºú•ıÄ∞(ÄÄÄÄÄÄÄÄÄÄÄÄù…ïÿµ¡Ö…Õîú∞(ÄÄÄÄÄÄÄÄÄÄÄÄùΩ…•ù•∏ΩµÖ•∏ú∞(ÄÄÄÄÄÄÄÄÄÅt∞(ÄÄÄÄÄÄÄÄÄÅÏÅç›êËÅ…ΩΩ–∞ÅïπçΩë•πúËÄù’—ò‡ú∞ÅÕ—ë•ºËÅlù•ùπΩ…îú∞Äù¡•¡îú∞Äù•ùπΩ…îùtÅÙ∞(ÄÄÄÄÄÄÄÄ§π—…•¥†§Ï(ÄÅÙÅçÖ—ç†ÅÏ(ÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄùUQ!=I%Qe}U9Y%1	1ú∞(ÄÄÄÄÄÄùQ°îÅ•π—ïù…Ö—ïêÅ]ïàÅΩ…•ù•∏ΩµÖ•∏ÅçΩµµ•–ÅçΩ’±êÅπΩ–ÅâîÅ…ïÕΩ±Ÿïê∏ú∞(ÄÄÄÄÄÄú¥µ›ïàµÕΩ’…çîú∞(ÄÄÄÄÄÄùï—ç†ÅÖπêÅ¡…ΩŸ•ëîÅ—°îÅ•π—ïù…Ö—ïêÅ]ïàÅΩ…•ù•∏ΩµÖ•∏Åç°ïç≠Ω’–∏ú∞(ÄÄÄÄ§Ï(ÄÅÙ(ÄÅ•òÄ†(ÄÄÄÅçΩµµ•–ÄÑÙÙÅ]	}M!ÅÒ(ÄÄÄÅÕ—Ö—îπ…ï¡ΩÕ•—Ω…•ïÃπô•πê†°ïπ—…‰§ÄÙ¯Åïπ—…‰π•êÄÙÙÙÄù›ïàú§¸πµïµΩ…ÂIïŸ•Õ•Ω∏(ÄÄÄÄÄÄ¸πÕ°ÑÄÑÙÙÅçΩµµ•–(ÄÄ§ÅÏ(ÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄù55=Ie}]	}IY%M%=9}5%M5Q ú∞(ÄÄÄÄÄÄù%π—ïù…Ö—ïêÅ]ïàÅµÖ•∏Åë•ôôï…ÃÅô…Ω¥Å—°îÅA$ÅÖ’—°Ω…•—‰∏ú∞(ÄÄÄÄÄÄú¥µ›ïàµÕΩ’…çîú∞(ÄÄÄÄÄÅÅUÕîÅ—°îÅï·Öç–Å•π—ïù…Ö—ïêÅçΩµµ•–ÄëÌ]	}M!ÙπÄ∞(ÄÄÄÄ§Ï(ÄÅÙ(ÄÅ…ï—’…∏ÅÏÅçΩµµ•–∞Å¡Ω•π—ï»ÅÙÏ)Ù()ô’πç—•Ω∏ÅŸÖ±•ëÖ—ï=πâΩÖ…ë•πùIïÕ¡ΩπÕî°Õ—Ö—î∞Å…ïÕ¡ΩπÕî§ÅÏ(ÄÅçΩπÕ–Åï·¡ïç—ïëÖç—ÃÄÙÅ=â©ïç–πô…Ωµπ—…•ïÃ†(ÄÄÄÅÕ—Ö—îπΩ¡ï…Ö—•ΩπÖ±M—Ö—îπôÖç—ÃπµÖ¿†°ôÖç–§ÄÙ¯ÅmôÖç–π•ê∞ÅôÖç–πâÖÕ•Õt§∞(ÄÄ§Ï(ÄÅçΩπÕ–Åï·¡ïç—ïêÄÙÅÏ(ÄÄÄÅÕ—Ö—ïIïŸ•Õ•Ω∏ËÅÕ—Ö—îπÕ—Ö—ïIïŸ•Õ•Ω∏∞(ÄÄÄÅ¡°ÖÕï%êËÅÕ—Ö—îπ¡°ÖÕîπ•ê∞(ÄÄÄÅ±ÖÕ—Ωµ¡±ï—ïë%êËÅÕ—Ö—îπ¡°ÖÕîπ±ÖÕ—Ωµ¡±ï—ïêπ•ê∞(ÄÄÄÅç’……ïπ—]Ω…≠M—Ö—’ÃËÅÕ—Ö—îπç’……ïπ—]Ω…¨πÕ—Ö—’Ã∞(ÄÄÄÅπï·—QÖÕ≠%êËÅÕ—Ö—îππï·—QÖÕ¨π•ê∞(ÄÄÄÅ›ïâ5ïµΩ…ÂIïŸ•Õ•Ω∏ËÅ]	}M!∞(ÄÄÄÅΩ¡ï…Ö—•ΩπÖ±Öç—ÃËÅï·¡ïç—ïëÖç—Ã∞(ÄÄÄÅâ±Ωç≠ï…%ëÃËÅÕ—Ö—îπâ±Ωç≠ï…Ã(ÄÄÄÄÄÄπô•±—ï»†°ïπ—…‰§ÄÙ¯Åïπ—…‰πÕ—Ö—’ÃÄÙÙÙÄùΩ¡ï∏ú§(ÄÄÄÄÄÄπµÖ¿†°ïπ—…‰§ÄÙ¯Åïπ—…‰π•ê§(ÄÄÄÄÄÄπÕΩ…–†§∞(ÄÄÄÅ¡ïπë•πùïç•Õ•Ωπ%ëÃËÅÕ—Ö—îπ¡ïπë•πù!’µÖπïç•Õ•ΩπÃ(ÄÄÄÄÄÄπµÖ¿†°ïπ—…‰§ÄÙ¯Åïπ—…‰π•ê§(ÄÄÄÄÄÄπÕΩ…–†§∞(ÄÄÄÅ…ïÕ—…•ç—•Ωπ%ëÃËÅÕ—Ö—îπç’……ïπ—IïÕ—…•ç—•ΩπÃπµÖ¿†°ïπ—…‰§ÄÙ¯Åïπ—…‰π•ê§πÕΩ…–†§∞(ÄÄÄÅÕ’¡ï…ÕïëïëA±Öπ%ëÃËÅÕ—Ö—îπÕ’¡ï…ÕïëïëA±ÖπÃπµÖ¿†°ïπ—…‰§ÄÙ¯Åïπ—…‰π•ê§πÕΩ…–†§∞(ÄÅÙÏ(ÄÅçΩπÕ–ÅπΩ…µÖ±•ÈïêÄÙÅÏ(ÄÄÄÄ∏∏π…ïÕ¡ΩπÕî∞(ÄÄÄÅâ±Ωç≠ï…%ëÃËÅl∏∏∏°…ïÕ¡ΩπÕîπâ±Ωç≠ï…%ëÃÄ¸¸Åmt•tπÕΩ…–†§∞(ÄÄÄÅ¡ïπë•πùïç•Õ•Ωπ%ëÃËÅl∏∏∏°…ïÕ¡ΩπÕîπ¡ïπë•πùïç•Õ•Ωπ%ëÃÄ¸¸Åmt•tπÕΩ…–†§∞(ÄÄÄÅ…ïÕ—…•ç—•Ωπ%ëÃËÅl∏∏∏°…ïÕ¡ΩπÕîπ…ïÕ—…•ç—•Ωπ%ëÃÄ¸¸Åmt•tπÕΩ…–†§∞(ÄÄÄÅÕ’¡ï…ÕïëïëA±Öπ%ëÃËÅl∏∏∏°…ïÕ¡ΩπÕîπÕ’¡ï…ÕïëïëA±Öπ%ëÃÄ¸¸Åmt•tπÕΩ…–†§∞(ÄÅÙÏ(ÄÅçΩπÕ–Åô•ï±ëÃÄÙÅ=â©ïç–π≠ïÂÃ°ï·¡ïç—ïê§Ï(ÄÅçΩπÕ–Åµ•ÕµÖ—ç°ïÃÄÙÅô•ï±ëÃπô•±—ï»†(ÄÄÄÄ°ô•ï±ê§ÄÙ¯(ÄÄÄÄÄÅ)M=8πÕ—…•πù•ô‰°πΩ…µÖ±•Èïëmô•ï±ët§ÄÑÙÙÅ)M=8πÕ—…•πù•ô‰°ï·¡ïç—ïëmô•ï±ët§∞(ÄÄ§Ï(ÄÅçΩπÕ–Å°Ö…ëÖ•±’…îÄÙ(ÄÄÄÅµ•ÕµÖ—ç°ïÃπ±ïπù—†Ä¯Ä¿ÅÒ(ÄÄÄÅ…ïÕ¡ΩπÕîπÕ’¡ï…ÕïëïëUÕïëÕ’……ïπ–ÄÙÙÙÅ—…’îÅÒ(ÄÄÄÅ…ïÕ¡ΩπÕîπµ’—Ö—•ΩπÃÄÑÙÙÄ¿ÅÒ(ÄÄÄÅ…ïÕ¡ΩπÕîπÕïç…ï—Õ·¡ΩÕïêÄÑÙÙÄ¿ÅÒ(ÄÄÄÅ…ïÕ¡ΩπÕîπÕ—Ö…—ïë9ï·—QÖÕ¨ÄÙÙÙÅ—…’îÅÒ(ÄÄÄÅ…ïÕ¡ΩπÕîπ°’µÖπE’ïÕ—•ΩπÃÄ¯Ä¿Ï(ÄÅçΩπÕ–ÅŸï…•ô•ïë=’—çΩµïÃÄÙÅ°Ö…ëÖ•±’…îÄ¸Ä¿ÄËÄƒÏ(ÄÅçΩπÕ–Å•π—ï…Ÿïπ—•ΩπÃÄÙÅ9’µâï»°…ïÕ¡ΩπÕîπ°’µÖπ%π—ï…Ÿïπ—•ΩπÃÄ¸¸Ä¿§Ï(ÄÅ…ï—’…∏ÅÏ(ÄÄÄÅΩ¨ËÄÖ°Ö…ëÖ•±’…î∞(ÄÄÄÅçΩëîËÅ°Ö…ëÖ•±’…îÄ¸Äù=9	=I%9}=I1}%1úÄËÄù=9	=I%9}=I1}AMMú∞(ÄÄÄÅµ•ÕµÖ—ç°ïÃ∞(ÄÄÄÅ…Ö‹ËÅÏ(ÄÄÄÄÄÅÕΩ’…çïΩ’π–ËÅ9’µâï»°…ïÕ¡ΩπÕîπÕΩ’…çïΩ’π–Ä¸¸Ä¿§∞(ÄÄÄÄÄÅë’…Ö—•ΩπMïçΩπëÃËÅ9’µâï»°…ïÕ¡ΩπÕîπë’…Ö—•ΩπMïçΩπëÃÄ¸¸Ä¿§∞(ÄÄÄÄÄÅ°’µÖπE’ïÕ—•ΩπÃËÅ9’µâï»°…ïÕ¡ΩπÕîπ°’µÖπE’ïÕ—•ΩπÃÄ¸¸Ä¿§∞(ÄÄÄÄÄÅ°’µÖπ%π—ï…Ÿïπ—•ΩπÃËÅ•π—ï…Ÿïπ—•ΩπÃ∞(ÄÄÄÄÄÅçΩ……ïç—πÕ›ï…ÃËÅô•ï±ëÃπ±ïπù—†Ä¥Åµ•ÕµÖ—ç°ïÃπ±ïπù—†∞(ÄÄÄÄÄÅ•πçΩ……ïç—πÕ›ï…ÃËÅµ•ÕµÖ—ç°ïÃπ±ïπù—†∞(ÄÄÄÄÄÅ•πëï—ï…µ•πÖ—ïπÕ›ï…ÃËÅ9’µâï»°…ïÕ¡ΩπÕîπ•πëï—ï…µ•πÖ—ïπÕ›ï…ÃÄ¸¸Ä¿§∞(ÄÄÄÄÄÅŸï…•ô•ïë=’—çΩµïÃ∞(ÄÄÄÅÙ∞(ÄÄÄÅ°’µÖπ%π—ï…Ÿïπ—•ΩπIÖ—îË(ÄÄÄÄÄÅŸï…•ô•ïë=’—çΩµïÃÄÙÙÙÄ¿Ä¸Åπ’±∞ÄËÅ•π—ï…Ÿïπ—•ΩπÃÄºÅŸï…•ô•ïë=’—çΩµïÃ∞(ÄÅÙÏ)Ù()ô’πç—•Ω∏Å¡Ö…Õï…ù’µïπ—Ã°Ö…ùÿ§ÅÏ(ÄÅçΩπÕ–ÅÖ…ùÃÄÙÅÏÅç°ïç¨ËÅôÖ±ÕîÅÙÏ(ÄÅôΩ»Ä°±ï–Å•πëï‡ÄÙÄ¿ÏÅ•πëï‡ÄÅÖ…ùÿπ±ïπù—†ÏÅ•πëï‡Ä¨ÙÄƒ§ÅÏ(ÄÄÄÅçΩπÕ–ÅπÖµîÄÙÅÖ…ùŸm•πëï·tÏ(ÄÄÄÅ•òÄ°πÖµîÄÙÙÙÄú¥µç°ïç¨ú§ÅÏ(ÄÄÄÄÄÅÖ…ùÃπç°ïç¨ÄÙÅ—…’îÏ(ÄÄÄÄÄÅçΩπ—•π’îÏ(ÄÄÄÅÙ(ÄÄÄÅçΩπÕ–ÅŸÖ±’îÄÙÅÖ…ùŸm•πëï‡Ä¨Ä≈tÏ(ÄÄÄÅ•òÄ†(ÄÄÄÄÄÄÖπÖµî¸πÕ—Ö…—Õ]•—††ú¥¥ú§ÅÒ(ÄÄÄÄÄÅŸÖ±’îÄÙÙÙÅ’πëïô•πïêÅÒ(ÄÄÄÄÄÅŸÖ±’îπÕ—Ö…—Õ]•—††ú¥¥ú§(ÄÄÄÄ§(ÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄùUM}II=Hú∞(ÄÄÄÄÄÄÄÄù…ù’µïπ—ÃÅµ’Õ–ÅâîÅπÖµïêÅΩ¡—•ΩπÃ∏ú∞(ÄÄÄÄÄÄÄÄùÖ…ùÿú∞(ÄÄÄÄÄÄÄÄùUÕîÄ¥µµΩëîÅ±ΩçÖ±Ò…ïπëï…Òç…ΩÕÃµ…ï¡ΩÒΩπâΩÖ…ë•πúµΩ…Öç±î∏ú∞(ÄÄÄÄÄÄ§Ï(ÄÄÄÅÖ…ùÕl(ÄÄÄÄÄÅπÖµîπÕ±•çî†»§π…ï¡±Öçî†º¥°mÑµÈt§Ωù‘∞Ä°|∞Å±ï——ï»§ÄÙ¯Å±ï——ï»π—ΩU¡¡ï…ÖÕî†§§(ÄÄÄÅtÄÙÅŸÖ±’îÏ(ÄÄÄÅ•πëï‡Ä¨ÙÄƒÏ(ÄÅÙ(ÄÅ•òÄ†(ÄÄÄÄÖlù±ΩçÖ∞ú∞Äù…ïπëï»ú∞Äùç…ΩÕÃµ…ï¡ºú∞ÄùΩπâΩÖ…ë•πúµΩ…Öç±îùtπ•πç±’ëïÃ°Ö…ùÃπµΩëî§(ÄÄ§(ÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄùUM}II=Hú∞(ÄÄÄÄÄÄùUπÕ’¡¡Ω…—ïêÅµΩëî∏ú∞(ÄÄÄÄÄÄùÖ…ùÿú∞(ÄÄÄÄÄÄùUÕîÄ¥µµΩëîÅ±ΩçÖ±Ò…ïπëï…Òç…ΩÕÃµ…ï¡ΩÒΩπâΩÖ…ë•πúµΩ…Öç±î∏ú∞(ÄÄÄÄ§Ï(ÄÅ…ï—’…∏ÅÖ…ùÃÏ)Ù()ô’πç—•Ω∏ÅΩ’—¡’–°…ïÕ’±–§ÅÏ(ÄÅ¡…ΩçïÕÃπÕ—ëΩ’–π›…•—î°ÄëÌ)M=8πÕ—…•πù•ô‰°…ïÕ’±–•ıqπÄ§Ï)Ù()ô’πç—•Ω∏ÅµÖ•∏†§ÅÏ(ÄÅ—…‰ÅÏ(ÄÄÄÅçΩπÕ–ÅÖ…ùÃÄÙÅ¡Ö…Õï…ù’µïπ—Ã°¡…ΩçïÕÃπÖ…ùÿπÕ±•çî†»§§Ï(ÄÄÄÅ•òÄ°Ö…ùÃπµΩëîÄÙÙÙÄù…ïπëï»ú§ÅÏ(ÄÄÄÄÄÅçΩπÕ–ÅÏÅï·¡ïç—ïêÅÙÄÙÅŸÖ±•ëÖ—ï1ΩçÖ∞°¡…ΩçïÕÃπç›ê†§∞ÅÏ(ÄÄÄÄÄÄÄÅç°ïç≠A…Ω©ïç—•Ω∏ËÅôÖ±Õî∞(ÄÄÄÄÄÅÙ§Ï(ÄÄÄÄÄÅ•òÄ°Ö…ùÃπç°ïç¨§ÅÏ(ÄÄÄÄÄÄÄÅ•òÄ°ÕÖôïIïÖê°AI=)Q%=9}AQ §ÄÑÙÙÅï·¡ïç—ïê§(ÄÄÄÄÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄÄÄÄÄù55=Ie}AI=)Q%=9}MQ1ú∞(ÄÄÄÄÄÄÄÄÄÄÄÄùA…Ω©ïç—•Ω∏Å•ÃÅÕ—Ö±î∏ú∞(ÄÄÄÄÄÄÄÄÄÄÄÅAI=)Q%=9}AQ ∞(ÄÄÄÄÄÄÄÄÄÄÄÄùI’∏Ä¥µµΩëîÅ…ïπëï»Å›•—°Ω’–Ä¥µç°ïç¨∏ú∞(ÄÄÄÄÄÄÄÄÄÄ§Ï(ÄÄÄÄÄÅÙÅï±ÕîÅÏ(ÄÄÄÄÄÄÄÅ›…•—ï•±ïMÂπå°AI=)Q%=9}AQ ∞Åï·¡ïç—ïê∞Äù’—ò‡ú§Ï(ÄÄÄÄÄÅÙ(ÄÄÄÄÄÅΩ’—¡’–°Ï(ÄÄÄÄÄÄÄÅΩ¨ËÅ—…’î∞(ÄÄÄÄÄÄÄÅçΩëîËÅÖ…ùÃπç°ïç¨(ÄÄÄÄÄÄÄÄÄÄ¸Äù55=Ie}AI=)Q%=9}UII9Pú(ÄÄÄÄÄÄÄÄÄÄËÄù55=Ie}AI=)Q%=9}I9Iú∞(ÄÄÄÄÄÄÄÅ¡Ö—†ËÅAI=)Q%=9}AQ ∞(ÄÄÄÄÄÅÙ§Ï(ÄÄÄÄÄÅ…ï—’…∏Ï(ÄÄÄÅÙ(ÄÄÄÅçΩπÕ–ÅÏÅÕ—Ö—îÅÙÄÙÅŸÖ±•ëÖ—ï1ΩçÖ∞†§Ï(ÄÄÄÅ•òÄ°Ö…ùÃπµΩëîÄÙÙÙÄùç…ΩÕÃµ…ï¡ºú§ÅÏ(ÄÄÄÄÄÅ•òÄ†ÖÖ…ùÃπ›ïâMΩ’…çî§(ÄÄÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄÄÄùUM}II=Hú∞(ÄÄÄÄÄÄÄÄÄÄú¥µ›ïàµÕΩ’…çîÅ•ÃÅ…ï≈’•…ïê∏ú∞(ÄÄÄÄÄÄÄÄÄÄùÖ…ùÿú∞(ÄÄÄÄÄÄÄÄÄÄùA…ΩŸ•ëîÅ—°îÅ•π—ïù…Ö—ïêÅ]ïàÅç°ïç≠Ω’–∏ú∞(ÄÄÄÄÄÄÄÄ§Ï(ÄÄÄÄÄÅçΩπÕ–Åç…ΩÕÃÄÙÅŸÖ±•ëÖ—ï…ΩÕÕIï¡º°Õ—Ö—î∞ÅÖ…ùÃπ›ïâMΩ’…çî§Ï(ÄÄÄÄÄÅΩ’—¡’–°Ï(ÄÄÄÄÄÄÄÅΩ¨ËÅ—…’î∞(ÄÄÄÄÄÄÄÅçΩëîËÄù55=Ie}I=MM}IA=}Y1%ú∞(ÄÄÄÄÄÄÄÅÕ—Ö—ïIïŸ•Õ•Ω∏ËÅÕ—Ö—îπÕ—Ö—ïIïŸ•Õ•Ω∏∞(ÄÄÄÄÄÄÄÅ›ïâ5ïµΩ…ÂIïŸ•Õ•Ω∏ËÅç…ΩÕÃπçΩµµ•–∞(ÄÄÄÄÄÄÄÅ¡Ω•π—ï…=π±‰ËÅ—…’î∞(ÄÄÄÄÄÅÙ§Ï(ÄÄÄÄÄÅ…ï—’…∏Ï(ÄÄÄÅÙ(ÄÄÄÅ•òÄ°Ö…ùÃπµΩëîÄÙÙÙÄùΩπâΩÖ…ë•πúµΩ…Öç±îú§ÅÏ(ÄÄÄÄÄÅ•òÄ†ÖÖ…ùÃπ…ïÕ¡ΩπÕî§(ÄÄÄÄÄÄÄÅôÖ•∞†(ÄÄÄÄÄÄÄÄÄÄùUM}II=Hú∞(ÄÄÄÄÄÄÄÄÄÄú¥µ…ïÕ¡ΩπÕîÅ•ÃÅ…ï≈’•…ïê∏ú∞(ÄÄÄÄÄÄÄÄÄÄùÖ…ùÿú∞(ÄÄÄÄÄÄÄÄÄÄùA…ΩŸ•ëîÅ—°îÅÕ—…’ç—’…ïêÅΩπâΩÖ…ë•πúÅ…ïÕ¡ΩπÕîÅ)M=8∏ú∞(ÄÄÄÄÄÄÄÄ§Ï(ÄÄÄÄÄÅçΩπÕ–Å…ïÕ’±–ÄÙÅŸÖ±•ëÖ—ï=πâΩÖ…ë•πùIïÕ¡ΩπÕî†(ÄÄÄÄÄÄÄÅÕ—Ö—î∞(ÄÄÄÄÄÄÄÅ¡Ö…Õï)ÕΩ∏°…ïÕΩ±Ÿî°Ö…ùÃπ…ïÕ¡ΩπÕî§§∞(ÄÄÄÄÄÄ§Ï(ÄÄÄÄÄÅΩ’—¡’–°…ïÕ’±–§Ï(ÄÄÄÄÄÅ•òÄ†Ö…ïÕ’±–πΩ¨§Å¡…ΩçïÕÃπï·•—ΩëîÄÙÄƒÏ(ÄÄÄÄÄÅ…ï—’…∏Ï(ÄÄÄÅÙ(ÄÄÄÅΩ’—¡’–°Ï(ÄÄÄÄÄÅΩ¨ËÅ—…’î∞(ÄÄÄÄÄÅçΩëîËÄù55=Ie}Y1%ú∞(ÄÄÄÄÄÅÕ—Ö—ïIïŸ•Õ•Ω∏ËÅÕ—Ö—îπÕ—Ö—ïIïŸ•Õ•Ω∏∞(ÄÄÄÄÄÅÕç°ïµÖYÖ±•ëÖ—ïêËÅ—…’î∞(ÄÄÄÄÄÅÕïµÖπ—•çI’±ïÕYÖ±•ëÖ—ïêËÅ—…’î∞(ÄÄÄÄÄÅ¡…Ω©ïç—•Ωπ’……ïπ–ËÅ—…’î∞(ÄÄÄÄÄÅÕ—Öâ±ïMΩ’…çïÕYÖ±•ëÖ—ïêËÅ—…’î∞(ÄÄÄÅÙ§Ï(ÄÅÙÅçÖ—ç†Ä°ï……Ω»§ÅÏ(ÄÄÄÅçΩπÕ–ÅôÖ•±’…îÄÙ(ÄÄÄÄÄÅï……Ω»Å•πÕ—ÖπçïΩòÅ5ïµΩ…Â……Ω»(ÄÄÄÄÄÄÄÄ¸Åï……Ω»(ÄÄÄÄÄÄÄÄËÅπï‹Å5ïµΩ…Â……Ω»†(ÄÄÄÄÄÄÄÄÄÄÄÄù55=Ie}Y1%Q%=9}%1ú∞(ÄÄÄÄÄÄÄÄÄÄÄÅï……Ω»πµïÕÕÖùî∞(ÄÄÄÄÄÄÄÄÄÄÄÄù…’π—•µîú∞(ÄÄÄÄÄÄÄÄÄÄÄÄù%πÕ¡ïç–Å—°îÅŸÖ±•ëÖ—Ω»Å•π¡’—Ã∏ú∞(ÄÄÄÄÄÄÄÄÄÄ§Ï(ÄÄÄÅΩ’—¡’–°Ï(ÄÄÄÄÄÅΩ¨ËÅôÖ±Õî∞(ÄÄÄÄÄÅçΩëîËÅôÖ•±’…îπçΩëî∞(ÄÄÄÄÄÅçΩëïÃËÅmôÖ•±’…îπçΩëït∞(ÄÄÄÄÄÅ¡Ö—†ËÅôÖ•±’…îπ¡Ö—†∞(ÄÄÄÄÄÅπï·—ç—•Ω∏ËÅôÖ•±’…îππï·—ç—•Ω∏∞(ÄÄÄÅÙ§Ï(ÄÄÄÅ¡…ΩçïÕÃπÕ—ëï…»π›…•—î°ÄëÌôÖ•±’…îπµïÕÕÖùïıqπÄ§Ï(ÄÄÄÅ¡…ΩçïÕÃπï·•—ΩëîÄÙÅôÖ•±’…îπçΩëîÄÙÙÙÄùUM}II=HúÄ¸Ä»ÄËÄƒÏ(ÄÅÙ)Ù()•òÄ°…ï≈’•…îπµÖ•∏ÄÙÙÙÅµΩë’±î§ÅµÖ•∏†§Ï()µΩë’±îπï·¡Ω…—ÃÄÙÅÏ(ÄÅUQ!=I%Qe}AQ ∞(ÄÅAI=)Q%=9}AQ ∞(ÄÅM!5}AQ ∞(ÄÅ]	}M!∞(ÄÅ5ïµΩ…Â……Ω»∞(ÄÅ¡Ö…Õï…ù’µïπ—Ã∞(ÄÅ…ïπëï…A…Ω©ïç—•Ω∏∞(ÄÅ±•π—Qïµ¡Ω…Ö±ÕÕï…—•ΩπÃ∞(ÄÅŸÖ±•ëÖ—ï…ΩÕÕIï¡º∞(ÄÅŸÖ±•ëÖ—ï1ΩçÖ∞∞(ÄÅŸÖ±•ëÖ—ï=πâΩÖ…ë•πùIïÕ¡ΩπÕî∞(ÄÅŸÖ±•ëÖ—ïIï¡ΩÕ•—Ω…ÂŸ•ëïπçî∞(ÄÅŸÖ±•ëÖ—ïMç°ïµÖΩπ—…Öç–∞(ÄÅŸÖ±•ëÖ—ïM—Öâ±ïMΩ’…çïÃ∞(ÄÅŸÖ±•ëÖ—ï)ÕΩπMç°ïµÑ∞(ÄÅŸÖ±•ëÖ—ïM—Ö—î∞)ÙÏ
+          'Use a valid absolute URI.',
+        );
+      }
+    }
+  } else if (schema.type === 'integer') {
+    if (!Number.isInteger(value))
+      fail(code, `${path} must be an integer.`, path, 'Use an integer value.');
+  } else if (schema.type === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value))
+      fail(
+        code,
+        `${path} must be a finite number.`,
+        path,
+        'Use a finite number.',
+      );
+  } else if (schema.type === 'boolean' && typeof value !== 'boolean') {
+    fail(code, `${path} must be boolean.`, path, 'Use true or false.');
+  }
+}
+
+function validateReferenceIds(state) {
+  const evidenceIds = uniqueIds(state.evidence, '$.evidence');
+  const lists = [
+    [
+      '$.phase.lastCompleted.evidenceIds',
+      state.phase.lastCompleted.evidenceIds,
+    ],
+    ...state.operationalState.facts.map((entry, index) => [
+      `$.operationalState.facts[${index}].evidenceIds`,
+      entry.evidenceIds,
+    ]),
+    ...state.supersededPlans.map((entry, index) => [
+      `$.supersededPlans[${index}].sourceEvidenceIds`,
+      entry.sourceEvidenceIds,
+    ]),
+    ...state.permanentInvariants.map((entry, index) => [
+      `$.permanentInvariants[${index}].sourceEvidenceIds`,
+      entry.sourceEvidenceIds,
+    ]),
+    ...state.releaseGates.map((entry, index) => [
+      `$.releaseGates[${index}].sourceEvidenceIds`,
+      entry.sourceEvidenceIds,
+    ]),
+    ...state.currentRestrictions.map((entry, index) => [
+      `$.currentRestrictions[${index}].sourceEvidenceIds`,
+      entry.sourceEvidenceIds,
+    ]),
+  ];
+  for (const [path, ids] of lists) {
+    if (!Array.isArray(ids) || ids.some((id) => !evidenceIds.has(id))) {
+      fail(
+        'MEMORY_EVIDENCE_UNRESOLVED',
+        'An evidence reference does not resolve.',
+        path,
+        'Reference an evidence id declared by this authority.',
+      );
+    }
+  }
+}
+
+function validateState(state, { allowFixture = false } = {}) {
+  exactKeys(state, TOP_LEVEL_KEYS, '$');
+  scanSecrets(state);
+  if (state.schemaVersion !== '1.0.0')
+    fail(
+      'MEMORY_SCHEMA_UNSUPPORTED',
+      'Only schema 1.0.0 is supported.',
+      '$.schemaVersion',
+      'Use schemaVersion 1.0.0.',
+    );
+  if (state.instanceKind === 'historical-fixture' && !allowFixture)
+    fail(
+      'MEMORY_HISTORICAL_FIXTURE',
+      'Historical fixtures cannot be current authority.',
+      '$.instanceKind',
+      'Use the current authority instance.',
+    );
+  if (state.instanceKind !== 'current' && !allowFixture)
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      'Authority instanceKind must be current.',
+      '$.instanceKind',
+      'Use instanceKind current.',
+    );
+  if (
+    !IDENTIFIER.test(state.stateRevision ?? '') ||
+    state.project?.id !== 'genesis-platform' ||
+    state.project?.name !== 'Genesis Platform'
+  ) {
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      'Project identity or state revision is invalid.',
+      '$',
+      'Restore the canonical Genesis project identity.',
+    );
+  }
+  validateTimestamp(state.updatedAt, '$.updatedAt');
+  if (
+    JSON.stringify(state.authority) !==
+    JSON.stringify({
+      repository: API_REPOSITORY,
+      branch: 'main',
+      path: AUTHORITY_PATH,
+      revisionSource: 'containing-commit',
+    })
+  ) {
+    fail(
+      'MEMORY_AUTHORITY_NOT_UNIQUE',
+      'The API main authority contract is invalid.',
+      '$.authority',
+      'Use the single API containing-commit authority.',
+    );
+  }
+  if (!Array.isArray(state.repositories) || state.repositories.length !== 2)
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      'Exactly two repository records are required.',
+      '$.repositories',
+      'Declare API authority and Web satellite exactly once.',
+    );
+  const api = state.repositories.find((entry) => entry.id === 'api');
+  const web = state.repositories.find((entry) => entry.id === 'web');
+  if (
+    !api ||
+    !web ||
+    api.repository !== API_REPOSITORY ||
+    api.role !== 'authority' ||
+    api.memoryRevision?.kind !== 'containing-commit' ||
+    Object.hasOwn(api.memoryRevision ?? {}, 'sha')
+  ) {
+    fail(
+      'MEMORY_AUTHORITY_NOT_UNIQUE',
+      'API repository authority metadata is invalid.',
+      '$.repositories',
+      'Use one API authority with containing-commit provenance and no future SHA.',
+    );
+  }
+  if (web.role !== 'satellite') {
+    fail(
+      'MEMORY_AUTHORITY_NOT_UNIQUE',
+      'Web must remain a pointer-only satellite.',
+      '$.repositories[web].role',
+      'Keep exactly one authority in the API repository.',
+    );
+  }
+  if (
+    web.repository !== WEB_REPOSITORY ||
+    web.memoryRevision?.kind !== 'commit' ||
+    web.memoryRevision?.sha !== WEB_SHA ||
+    !FULL_SHA.test(web.memoryRevision.sha)
+  ) {
+    fail(
+      'MEMORY_WEB_REVISION_MISMATCH',
+      'Web memoryRevision is not the integrated Web commit.',
+      '$.repositories[web].memoryRevision',
+      `Use ${WEB_SHA}.`,
+    );
+  }
+  const expectedReleaseBindings = {
+    apiApplicationRevision: API_APPLICATION_REVISION,
+    apiReleaseManifestRevision: { kind: 'containing-commit' },
+    apiReleaseTreeContractRevision: { kind: 'containing-commit' },
+    apiReleaseBundleFingerprint: {
+      kind: 'derived-from-containing-commit',
+      algorithm: 'sha256',
+      artifact: 'release-manifest.json',
+      releaseRole: 'current',
+    },
+    apiRollbackReleaseBundleFingerprint: {
+      kind: 'derived-from-containing-commit',
+      algorithm: 'sha256',
+      artifact: 'release-manifest.json',
+      releaseRole: 'rollback',
+    },
+    authorizedApiImage: AUTHORIZED_API_IMAGE,
+    authorizedApiImageConfigDigest: AUTHORIZED_API_IMAGE_CONFIG_DIGEST,
+    rollbackApiImage: ROLLBACK_API_IMAGE,
+    webIntegratedRevision: WEB_SHA,
+  };
+  if (
+    JSON.stringify(state.releaseBindings) !==
+    JSON.stringify(expectedReleaseBindings)
+  ) {
+    fail(
+      'MEMORY_RELEASE_BINDING_MISMATCH',
+      'Versioned release bindings are invalid or ambiguous.',
+      '$.releaseBindings',
+      'Restore the exact application, containing release-manifest/tree-contract, role-specific current/rollback bundle fingerprints, authorized images and integrated Web bindings.',
+    );
+  }
+  if (
+    state.currentWork?.status === 'none' &&
+    Object.hasOwn(state.currentWork, 'task')
+  )
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      'currentWork none cannot include a task.',
+      '$.currentWork',
+      'Remove the task or select a non-none status.',
+    );
+  if (
+    state.currentWork?.status !== 'none' &&
+    !isObject(state.currentWork?.task)
+  )
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      'Active currentWork requires task identity.',
+      '$.currentWork.task',
+      'Declare the active task.',
+    );
+  validateTimestamp(
+    state.phase?.lastCompleted?.completedAt,
+    '$.phase.lastCompleted.completedAt',
+  );
+  validateTimestamp(
+    state.operationalState?.documentedAt,
+    '$.operationalState.documentedAt',
+  );
+  uniqueIds(state.operationalState?.facts, '$.operationalState.facts');
+  for (const [index, fact] of state.operationalState.facts.entries()) {
+    if (!BASIS.has(fact.basis))
+      fail(
+        'MEMORY_OBSERVATION_INCOMPLETE',
+        'Operational fact basis is invalid.',
+        `$.operationalState.facts[${index}].basis`,
+        'Use documented, observed, or unknown.',
+      );
+    validateTimestamp(
+      fact.documentedAt,
+      `$.operationalState.facts[${index}].documentedAt`,
+    );
+    if (fact.basis === 'observed' && !fact.observedAt)
+      fail(
+        'MEMORY_OBSERVATION_INCOMPLETE',
+        'Observed facts require observedAt.',
+        `$.operationalState.facts[${index}]`,
+        'Record direct observation time or use documented/unknown.',
+      );
+    if (fact.basis !== 'observed' && Object.hasOwn(fact, 'observedAt'))
+      fail(
+        'MEMORY_OBSERVATION_INCOMPLETE',
+        'Only observed facts may include observedAt.',
+        `$.operationalState.facts[${index}].observedAt`,
+        'Remove observedAt or set basis observed with direct evidence.',
+      );
+  }
+  const remoteTreeBinding = state.operationalState.facts.find(
+    (fact) => fact.id === 'OPS-MVP08-VPS-INTEGRITY-AUDIT',
+  );
+  if (
+    remoteTreeBinding?.status !== 'present' ||
+    !remoteTreeBinding.statement.startsWith(
+      'remoteTreeBinding=REBIND_REQUIRED.',
+    )
+  ) {
+    fail(
+      'MEMORY_RELEASE_TREE_BINDING_INVALID',
+      'The remote release-tree binding is not machine-readable.',
+      '$.operationalState.facts',
+      'Record remoteTreeBinding=REBIND_REQUIRED in OPS-MVP08-VPS-INTEGRITY-AUDIT.',
+    );
+  }
+  for (const [path, list, prefix] of [
+    ['$.permanentInvariants', state.permanentInvariants, 'PI-'],
+    ['$.releaseGates', state.releaseGates, 'RG-'],
+    ['$.currentRestrictions', state.currentRestrictions, 'OR-'],
+  ]) {
+    const ids = uniqueIds(list, path);
+    if (ids.size === 0 || [...ids].some((id) => !id.startsWith(prefix)))
+      fail(
+        'MEMORY_CONTROL_CLASSIFICATION_INVALID',
+        `${path} is empty or misclassified.`,
+        path,
+        `Use non-empty ${prefix} controls only in this category.`,
+      );
+  }
+  uniqueIds(state.blockers, '$.blockers');
+  uniqueIds(state.pendingHumanDecisions, '$.pendingHumanDecisions');
+  uniqueIds(state.supersededPlans, '$.supersededPlans');
+  if (
+    !state.supersededPlans.some(
+      (plan) =>
+        plan.id === 'PLAN-0.8.2-0.8.11' && plan.replacedBy === '0.8-MVP',
+    )
+  ) {
+    fail(
+      'MEMORY_SUPERSESSION_INCOMPLETE',
+      'The previous production sequence is not explicitly superseded.',
+      '$.supersededPlans',
+      'Record PLAN-0.8.2-0.8.11 as replaced by 0.8-MVP.',
+    );
+  }
+  if (
+    state.pointerMetadata?.repository !== WEB_REPOSITORY ||
+    state.pointerMetadata?.path !== WEB_POINTER_PATH ||
+    state.pointerMetadata?.mode !== 'pointer-only' ||
+    state.pointerMetadata?.targetStateRevision !== state.stateRevision
+  ) {
+    fail(
+      'MEMORY_POINTER_MISMATCH',
+      'Pointer metadata does not match this authority.',
+      '$.pointerMetadata',
+      'Restore the Web pointer-only receipt metadata.',
+    );
+  }
+  validateReferenceIds(state);
+  return state;
+}
+
+function renderList(items, line) {
+  return items.length === 0 ? '- Nenhum.' : items.map(line).join('\n');
+}
+
+function renderProjection(state) {
+  const facts = renderList(
+    state.operationalState.facts,
+    (fact) =>
+      `- **${fact.id}** [${fact.basis}/${fact.status}] ‚Äî ${fact.statement}`,
+  );
+  const blockers = renderList(
+    state.blockers.filter((entry) => entry.status === 'open'),
+    (entry) => `- **${entry.id}** ‚Äî ${entry.summary}`,
+  );
+  const decisions = renderList(
+    state.pendingHumanDecisions,
+    (entry) => `- **${entry.id}** ‚Äî ${entry.question}`,
+  );
+  const restrictions = renderList(
+    state.currentRestrictions,
+    (entry) => `- **${entry.id}** ‚Äî ${entry.statement}`,
+  );
+  const gates = renderList(
+    state.releaseGates,
+    (entry) => `- **${entry.id}** [${entry.status}] ‚Äî ${entry.statement}`,
+  );
+  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta proje√ß√£o √© gerada deterministicamente. N√£o edite manualmente; a autoridade temporal √∫nica √© [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revis√£o de estado:** ${state.stateRevision}\n- **Atualiza√ß√£o documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} ‚Äî ${state.phase.title}\n- **√öltimo trabalho conclu√≠do:** ${state.phase.lastCompleted.id} ‚Äî ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} ‚Äî ${state.currentWork.summary}\n- **Pr√≥xima tarefa:** ${state.nextTask.id} ‚Äî ${state.nextTask.title}\n- **Web integrado:** ${WEB_SHA}\n- **Revis√£o da aplica√ß√£o API:** ${state.releaseBindings.apiApplicationRevision}\n- **Revis√£o do manifesto de release API:** containing-commit\n- **Revis√£o do contrato da √°rvore de release:** containing-commit\n- **Fingerprint do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API autorizada:** ${state.releaseBindings.authorizedApiImage}\n- **Imagem API de rollback:** ${state.releaseBindings.rollbackApiImage}\n- **Proveni√™ncia da mem√≥ria API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decis√µes humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restri√ß√µes atuais\n\n${restrictions}\n`;
+}
+
+function stripHistoricalRegions(text, path) {
+  if (text.includes(WHOLE_DOCUMENT_HISTORY_MARKER)) {
+    if (!WHOLE_DOCUMENT_HISTORY_PATHS.has(path))
+      fail(
+        'MEMORY_HISTORY_MARKER_INVALID',
+        `${path} cannot disable temporal lint for the whole document.`,
+        path,
+        `Use bounded ${HISTORY_START} and ${HISTORY_END} regions instead.`,
+      );
+    return '';
+  }
+
+  const marker = /<!-- genesis-memory-history:(start|end) -->/gu;
+  let historical = false;
+  let cursor = 0;
+  let visible = '';
+  for (const match of text.matchAll(marker)) {
+    if (match[1] === 'start') {
+      if (historical)
+        fail(
+          'MEMORY_HISTORY_MARKER_INVALID',
+          `${path} has nested historical regions.`,
+          path,
+          'Use non-overlapping, explicitly bounded historical regions.',
+        );
+      const following = text.slice(match.index + match[0].length);
+      if (!/^\s*#{2,6}\s+.*(?:snapshot|hist√≥ric)/iu.test(following))
+        fail(
+          'MEMORY_HISTORY_MARKER_INVALID',
+          `${path} opens a historical region without an explicit historical heading.`,
+          path,
+          'Place the start marker immediately before a Snapshot hist√≥rico heading.',
+        );
+      visible += text.slice(cursor, match.index);
+      historical = true;
+    } else {
+      if (!historical)
+        fail(
+          'MEMORY_HISTORY_MARKER_INVALID',
+          `${path} closes a historical region that was not opened.`,
+          path,
+          `Add ${HISTORY_START} before this marker.`,
+        );
+      historical = false;
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (historical)
+    fail(
+      'MEMORY_HISTORY_MARKER_INVALID',
+      `${path} has an unclosed historical region.`,
+      path,
+      `Close it with ${HISTORY_END}.`,
+    );
+  visible += text.slice(cursor);
+  return visible;
+}
+
+function delegatesTemporalAuthority(block) {
+  return (
+    block.includes(AUTHORITY_PATH) &&
+    /(?:autoridade|resolve|pertence|exclusiv|n√£o define|n√£o substitu)/iu.test(
+      block,
+    )
+  );
+}
+
+function lintTemporalAssertions(text, path) {
+  const visible = stripHistoricalRegions(text, path);
+  for (const block of visible.split(/\r?\n\s*\r?\n/gu)) {
+    if (delegatesTemporalAuthority(block)) continue;
+    for (const rule of TEMPORAL_ASSERTION_RULES) {
+      if (rule.pattern.test(block))
+        fail(
+          'MEMORY_TEMPORAL_ASSERTION_FORBIDDEN',
+          `${path} contains a forbidden ${rule.label}.`,
+          path,
+          `Move temporal state to ${AUTHORITY_PATH} or bound an actual snapshot with ${HISTORY_START} and ${HISTORY_END}.`,
+        );
+    }
+  }
+}
+
+function validateRepositoryEvidence(root, state) {
+  for (const evidence of state.evidence) {
+    if (!evidence.uri.startsWith(REPOSITORY_EVIDENCE_PREFIX)) continue;
+    const relative = evidence.uri.slice(REPOSITORY_EVIDENCE_PREFIX.length);
+    if (
+      relative.length === 0 ||
+      relative.includes('\\') ||
+      relative.startsWith('/') ||
+      relative.split('/').includes('..')
+    )
+      fail(
+        'MEMORY_EVIDENCE_PATH_INVALID',
+        `${evidence.id} has an unsafe repository evidence path.`,
+        `$.evidence.${evidence.id}.uri`,
+        'Use a normalized repository-relative path.',
+      );
+    if (!evidence.sha256)
+      fail(
+        'MEMORY_EVIDENCE_HASH_REQUIRED',
+        `${evidence.id} must include sha256.`,
+        `$.evidence.${evidence.id}.sha256`,
+        'Record the SHA-256 of the referenced repository file.',
+      );
+    const content = safeRead(join(root, ...relative.split('/')));
+    const actual = createHash('sha256').update(content, 'utf8').digest('hex');
+    if (actual !== evidence.sha256)
+      fail(
+        'MEMORY_EVIDENCE_HASH_MISMATCH',
+        `${evidence.id} does not match ${relative}.`,
+        `$.evidence.${evidence.id}.sha256`,
+        'Regenerate the evidence hash from the final referenced document.',
+      );
+  }
+}
+
+function validateStableSources(root) {
+  for (const path of STABLE_SOURCES) {
+    const text = safeRead(join(root, ...path.split('/')));
+    if (
+      !text.includes('genesis-memory-authority:v1') ||
+      !text.includes(AUTHORITY_PATH)
+    ) {
+      fail(
+        'MEMORY_STABLE_SOURCE_HAS_STATE',
+        `${path} does not delegate temporal authority.`,
+        path,
+        `Add the genesis-memory-authority:v1 marker and resolve current facts from ${AUTHORITY_PATH}.`,
+      );
+    }
+    if (
+      SOURCE_AUTHORITY_PATHS.includes(path) &&
+      !text.includes(SOURCE_AUTHORITY_MARKER)
+    )
+      fail(
+        'MEMORY_SOURCE_AUTHORITY_INVALID',
+        `${path} does not declare authorities by domain.`,
+        path,
+        'Restore the canonical source-authorities marker and domain contract.',
+      );
+    lintTemporalAssertions(text, path);
+  }
+  const taskLog = safeRead(join(root, 'docs', 'TASK_LOG.md'));
+  if (!taskLog.includes(WHOLE_DOCUMENT_HISTORY_MARKER))
+    fail(
+      'MEMORY_HISTORY_MARKER_REQUIRED',
+      'TASK_LOG must be explicitly historical.',
+      'docs/TASK_LOG.md',
+      'Add the whole-document history marker.',
+    );
+}
+
+function validateLocal(root = process.cwd(), { checkProjection = true } = {}) {
+  const schema = parseJson(join(root, ...SCHEMA_PATH.split('/')));
+  validateSchemaContract(schema);
+  const instance = parseJson(join(root, ...AUTHORITY_PATH.split('/')));
+  if (instance.schemaVersion !== '1.0.0') {
+    fail(
+      'MEMORY_SCHEMA_UNSUPPORTED',
+      'Only schema 1.0.0 is supported.',
+      '$.schemaVersion',
+      'Use schemaVersion 1.0.0.',
+    );
+  }
+  validateJsonSchema(instance, schema);
+  const state = validateState(instance);
+  validateRepositoryEvidence(root, state);
+  validateStableSources(root);
+  const expected = renderProjection(state);
+  if (
+    checkProjection &&
+    safeRead(join(root, ...PROJECTION_PATH.split('/'))) !== expected
+  ) {
+    fail(
+      'MEMORY_PROJECTION_STALE',
+      'CURRENT_STATE.md differs from the deterministic projection.',
+      PROJECTION_PATH,
+      'Run --mode render and review the generated projection.',
+    );
+  }
+  return { state, expected };
+}
+
+function loadWebPointer(source) {
+  const absolute = resolve(source);
+  let root = absolute;
+  try {
+    if (!statSync(absolute).isDirectory())
+      root = resolve(absolute, '..', '..', '..');
+  } catch {
+    fail(
+      'AUTHORITY_UNAVAILABLE',
+      'Web source is unavailable.',
+      '--web-source',
+      'Provide the integrated Web checkout or pointer file.',
+    );
+  }
+  const pointerPath = statSync(absolute).isDirectory()
+    ? join(absolute, ...WEB_POINTER_PATH.split('/'))
+    : absolute;
+  return { pointer: parseJson(pointerPath), root };
+}
+
+function validateCrossRepo(
+  state,
+  source,
+  { resolveCommit, pointerSchema } = {},
+) {
+  const { pointer, root } = loadWebPointer(source);
+  const schema =
+    pointerSchema ??
+    parseJson(join(root, ...WEB_POINTER_SCHEMA_PATH.split('/')));
+  scanSecrets(pointer, '$web');
+  validateJsonSchema(pointer, schema, {
+    rootSchema: schema,
+    path: '$web',
+    code: 'MEMORY_POINTER_MISMATCH',
+  });
+  if (
+    pointer.schemaVersion !== '1.0.0' ||
+    pointer.instanceKind !== 'current' ||
+    pointer.mode !== 'pointer-only' ||
+    pointer.authority?.repository !== API_REPOSITORY ||
+    pointer.authority?.path !== AUTHORITY_PATH ||
+    pointer.authority?.acceptedSchemaMajor !== 1
+  ) {
+    fail(
+      'MEMORY_POINTER_MISMATCH',
+      'Web pointer identity or authority is incompatible.',
+      '--web-source',
+      'Use the integrated v1 pointer-only Web checkout.',
+    );
+  }
+  if (
+    pointer.receipt?.targetStateRevision !== state.stateRevision ||
+    pointer.receipt?.transitionId !== state.pointerMetadata.transitionId
+  ) {
+    fail(
+      'MEMORY_TRANSITION_PENDING',
+      'Web receipt target does not match the API state revision.',
+      '$web.receipt',
+      'Complete the approved cross-repository transition contract.',
+    );
+  }
+  let commit;
+  try {
+    commit = resolveCommit
+      ? resolveCommit(root)
+      : execFileSync(
+          'git',
+          [
+            '-c',
+            `safe.directory=${root.replaceAll('\\', '/')}`,
+            'rev-parse',
+            'origin/main',
+          ],
+          { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+        ).trim();
+  } catch {
+    fail(
+      'AUTHORITY_UNAVAILABLE',
+      'The integrated Web origin/main commit could not be resolved.',
+      '--web-source',
+      'Fetch and provide the integrated Web origin/main checkout.',
+    );
+  }
+  if (
+    commit !== WEB_SHA ||
+    state.repositories.find((entry) => entry.id === 'web')?.memoryRevision
+      ?.sha !== commit
+  ) {
+    fail(
+      'MEMORY_WEB_REVISION_MISMATCH',
+      'Integrated Web main differs from the API authority.',
+      '--web-source',
+      `Use the exact integrated commit ${WEB_SHA}.`,
+    );
+  }
+  return { commit, pointer };
+}
+
+function validateOnboardingResponse(state, response) {
+  const expectedFacts = Object.fromEntries(
+    state.operationalState.facts.map((fact) => [fact.id, fact.basis]),
+  );
+  const expected = {
+    stateRevision: state.stateRevision,
+    phaseId: state.phase.id,
+    lastCompletedId: state.phase.lastCompleted.id,
+    currentWorkStatus: state.currentWork.status,
+    nextTaskId: state.nextTask.id,
+    webMemoryRevision: WEB_SHA,
+    operationalFacts: expectedFacts,
+    blockerIds: state.blockers
+      .filter((entry) => entry.status === 'open')
+      .map((entry) => entry.id)
+      .sort(),
+    pendingDecisionIds: state.pendingHumanDecisions
+      .map((entry) => entry.id)
+      .sort(),
+    restrictionIds: state.currentRestrictions.map((entry) => entry.id).sort(),
+    supersededPlanIds: state.supersededPlans.map((entry) => entry.id).sort(),
+  };
+  const normalized = {
+    ...response,
+    blockerIds: [...(response.blockerIds ?? [])].sort(),
+    pendingDecisionIds: [...(response.pendingDecisionIds ?? [])].sort(),
+    restrictionIds: [...(response.restrictionIds ?? [])].sort(),
+    supersededPlanIds: [...(response.supersededPlanIds ?? [])].sort(),
+  };
+  const fields = Object.keys(expected);
+  const mismatches = fields.filter(
+    (field) =>
+      JSON.stringify(normalized[field]) !== JSON.stringify(expected[field]),
+  );
+  const hardFailure =
+    mismatches.length > 0 ||
+    response.supersededUsedAsCurrent === true ||
+    response.mutations !== 0 ||
+    response.secretsExposed !== 0 ||
+    response.startedNextTask === true ||
+    response.humanQuestions > 0;
+  const verifiedOutcomes = hardFailure ? 0 : 1;
+  const interventions = Number(response.humanInterventions ?? 0);
+  return {
+    ok: !hardFailure,
+    code: hardFailure ? 'ONBOARDING_ORACLE_FAILED' : 'ONBOARDING_ORACLE_PASSED',
+    mismatches,
+    raw: {
+      sourceCount: Number(response.sourceCount ?? 0),
+      durationSeconds: Number(response.durationSeconds ?? 0),
+      humanQuestions: Number(response.humanQuestions ?? 0),
+      humanInterventions: interventions,
+      correctAnswers: fields.length - mismatches.length,
+      incorrectAnswers: mismatches.length,
+      indeterminateAnswers: Number(response.indeterminateAnswers ?? 0),
+      verifiedOutcomes,
+    },
+    humanInterventionRate:
+      verifiedOutcomes === 0 ? null : interventions / verifiedOutcomes,
+  };
+}
+
+function parseArguments(argv) {
+  const args = { check: false };
+  for (let index = 0; index < argv.length; index += 1) {
+    const name = argv[index];
+    if (name === '--check') {
+      args.check = true;
+      continue;
+    }
+    const value = argv[index + 1];
+    if (
+      !name?.startsWith('--') ||
+      value === undefined ||
+      value.startsWith('--')
+    )
+      fail(
+        'USAGE_ERROR',
+        'Arguments must be named options.',
+        'argv',
+        'Use --mode local|render|cross-repo|onboarding-oracle.',
+      );
+    args[
+      name.slice(2).replace(/-([a-z])/gu, (_, letter) => letter.toUpperCase())
+    ] = value;
+    index += 1;
+  }
+  if (
+    !['local', 'render', 'cross-repo', 'onboarding-oracle'].includes(args.mode)
+  )
+    fail(
+      'USAGE_ERROR',
+      'Unsupported mode.',
+      'argv',
+      'Use --mode local|render|cross-repo|onboarding-oracle.',
+    );
+  return args;
+}
+
+function output(result) {
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+}
+
+function main() {
+  try {
+    const args = parseArguments(process.argv.slice(2));
+    if (args.mode === 'render') {
+      const { expected } = validateLocal(process.cwd(), {
+        checkProjection: false,
+      });
+      if (args.check) {
+        if (safeRead(PROJECTION_PATH) !== expected)
+          fail(
+            'MEMORY_PROJECTION_STALE',
+            'Projection is stale.',
+            PROJECTION_PATH,
+            'Run --mode render without --check.',
+          );
+      } else {
+        writeFileSync(PROJECTION_PATH, expected, 'utf8');
+      }
+      output({
+        ok: true,
+        code: args.check
+          ? 'MEMORY_PROJECTION_CURRENT'
+          : 'MEMORY_PROJECTION_RENDERED',
+        path: PROJECTION_PATH,
+      });
+      return;
+    }
+    const { state } = validateLocal();
+    if (args.mode === 'cross-repo') {
+      if (!args.webSource)
+        fail(
+          'USAGE_ERROR',
+          '--web-source is required.',
+          'argv',
+          'Provide the integrated Web checkout.',
+        );
+      const cross = validateCrossRepo(state, args.webSource);
+      output({
+        ok: true,
+        code: 'MEMORY_CROSS_REPO_VALID',
+        stateRevision: state.stateRevision,
+        webMemoryRevision: cross.commit,
+        pointerOnly: true,
+      });
+      return;
+    }
+    if (args.mode === 'onboarding-oracle') {
+      if (!args.response)
+        fail(
+          'USAGE_ERROR',
+          '--response is required.',
+          'argv',
+          'Provide the structured onboarding response JSON.',
+        );
+      const result = validateOnboardingResponse(
+        state,
+        parseJson(resolve(args.response)),
+      );
+      output(result);
+      if (!result.ok) process.exitCode = 1;
+      return;
+    }
+    output({
+      ok: true,
+      code: 'MEMORY_VALID',
+      stateRevision: state.stateRevision,
+      schemaValidated: true,
+      semanticRulesValidated: true,
+      projectionCurrent: true,
+      stableSourcesValidated: true,
+    });
+  } catch (error) {
+    const failure =
+      error instanceof MemoryError
+        ? error
+        : new MemoryError(
+            'MEMORY_VALIDATION_FAILED',
+            error.message,
+            'runtime',
+            'Inspect the validator inputs.',
+          );
+    output({
+      ok: false,
+      code: failure.code,
+      codes: [failure.code],
+      path: failure.path,
+      nextAction: failure.nextAction,
+    });
+    process.stderr.write(`${failure.message}\n`);
+    process.exitCode = failure.code === 'USAGE_ERROR' ? 2 : 1;
+  }
+}
+
+if (require.main === module) main();
+
+module.exports = {
+  AUTHORITY_PATH,
+  PROJECTION_PATH,
+  SCHEMA_PATH,
+  WEB_SHA,
+  MemoryError,
+  parseArguments,
+  renderProjection,
+  lintTemporalAssertions,
+  validateCrossRepo,
+  validateLocal,
+  validateOnboardingResponse,
+  validateRepositoryEvidence,
+  validateSchemaContract,
+  validateStableSources,
+  validateJsonSchema,
+  validateState,
+};
