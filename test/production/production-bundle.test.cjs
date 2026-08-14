@@ -245,6 +245,24 @@ test('builds a deterministic non-operational candidate with current bindings', (
   }
   assert.equal(builtFirst.manifest.generatedAt, '2023-11-14T22:13:20.000Z');
   assert.equal(builtFirst.manifest.generatedAtSemantics, 'source-date-epoch');
+  assert.deepEqual(builtFirst.manifest.images.api, {
+    reference:
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a',
+    digest:
+      'sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a',
+    configDigest:
+      'sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9',
+    applicationRevision: '9402d067897ab727fb369d7e696a11ba3b9cf68f',
+    platform: 'linux/amd64',
+  });
+  assert.deepEqual(builtFirst.manifest.rollback.api, {
+    reference:
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659',
+    digest:
+      'sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659',
+    relation: 'previous-approved',
+    platform: 'linux/amd64',
+  });
   assert.deepEqual(builtFirst.manifest.images.traefik, {
     reference:
       'traefik@sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8',
@@ -272,6 +290,19 @@ test('builds a deterministic non-operational candidate with current bindings', (
       `${path} is absent from the bundle`,
     );
   }
+});
+
+test('bundle generation cannot execute migration, database or container operations', () => {
+  const source = readFileSync(
+    join(process.cwd(), 'scripts', 'build-production-bundle.cjs'),
+    'utf8',
+  );
+  assert.doesNotMatch(
+    source,
+    /execFileSync\(\s*['"](?:docker(?:\.exe)?|psql)['"]/iu,
+  );
+  assert.doesNotMatch(source, /\bmigration:run\b/iu);
+  assert.doesNotMatch(source, /\bGENESIS_ORIGIN_KEY\b/u);
 });
 
 test('derives candidate time from the base commit without claiming artifact provenance', (t) => {
@@ -587,6 +618,82 @@ test('rejects unexpected files, hash drift and mutable image references', (t) =>
       cwd: fixture.repository,
     }).failures.join('\n'),
     /API reference mismatch|API image is not immutable/u,
+  );
+
+  const rollbackSelected = join(fixture.root, 'rollback-selected');
+  buildProductionBundle({ cwd: fixture.repository, output: rollbackSelected });
+  const rollbackSelectedManifestPath = join(
+    rollbackSelected,
+    'release-manifest.json',
+  );
+  const rollbackSelectedManifest = JSON.parse(
+    readFileSync(rollbackSelectedManifestPath, 'utf8'),
+  );
+  rollbackSelectedManifest.images.api.reference =
+    rollbackSelectedManifest.rollback.api.reference;
+  rollbackSelectedManifest.images.api.digest =
+    rollbackSelectedManifest.rollback.api.digest;
+  writeFileSync(
+    rollbackSelectedManifestPath,
+    `${JSON.stringify(rollbackSelectedManifest, null, 2)}\n`,
+  );
+  assert.match(
+    validateProductionBundle(rollbackSelected, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
+    /API reference mismatch|API digest mismatch|must remain distinct/u,
+  );
+
+  const provenanceDrift = join(fixture.root, 'provenance-drift');
+  buildProductionBundle({ cwd: fixture.repository, output: provenanceDrift });
+  const provenanceManifestPath = join(provenanceDrift, 'release-manifest.json');
+  const provenanceManifest = JSON.parse(
+    readFileSync(provenanceManifestPath, 'utf8'),
+  );
+  provenanceManifest.images.api.applicationRevision =
+    '1111111111111111111111111111111111111111';
+  provenanceManifest.images.api.configDigest = `sha256:${'2'.repeat(64)}`;
+  provenanceManifest.images.api.platform = 'linux/arm64';
+  writeFileSync(
+    provenanceManifestPath,
+    `${JSON.stringify(provenanceManifest, null, 2)}\n`,
+  );
+  assert.match(
+    validateProductionBundle(provenanceDrift, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
+    /API config digest mismatch/u,
+  );
+  assert.match(
+    validateProductionBundle(provenanceDrift, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
+    /API application revision mismatch/u,
+  );
+  assert.match(
+    validateProductionBundle(provenanceDrift, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
+    /API platform mismatch/u,
+  );
+
+  const rollbackTag = join(fixture.root, 'rollback-tag');
+  buildProductionBundle({ cwd: fixture.repository, output: rollbackTag });
+  const rollbackManifestPath = join(rollbackTag, 'release-manifest.json');
+  const rollbackManifest = JSON.parse(
+    readFileSync(rollbackManifestPath, 'utf8'),
+  );
+  rollbackManifest.rollback.api.reference =
+    'ghcr.io/arthurportodev/genesis-platform-api:rollback';
+  writeFileSync(
+    rollbackManifestPath,
+    `${JSON.stringify(rollbackManifest, null, 2)}\n`,
+  );
+  assert.match(
+    validateProductionBundle(rollbackTag, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
+    /rollback API reference mismatch|rollback API image is not immutable/u,
   );
 
   const traefikTag = join(fixture.root, 'traefik-tag');

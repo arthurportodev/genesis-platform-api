@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-14T01:52:49.891Z",
+  "updatedAt": "2026-08-14T07:58:01.159Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -34,29 +34,46 @@
       }
     }
   ],
+  "releaseBindings": {
+    "apiApplicationRevision": "9402d067897ab727fb369d7e696a11ba3b9cf68f",
+    "apiReleaseManifestRevision": {
+      "kind": "containing-commit"
+    },
+    "authorizedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a",
+    "authorizedApiImageConfigDigest": "sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9",
+    "rollbackApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659",
+    "webIntegratedRevision": "b6aa5af91d78a998aceacbe963ef45649dd00149"
+  },
   "phase": {
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-07B",
-      "title": "Window R de backup externo e restore comprovado",
-      "completedAt": "2026-08-13T12:16:20Z",
-      "evidenceIds": ["EV-MVP07B-WINDOW-R4-CLOSEOUT"]
+      "id": "0.8-MVP-08B-R1",
+      "title": "Binding versionado da release API reconciliado",
+      "completedAt": "2026-08-14T07:58:01.159Z",
+      "evidenceIds": [
+        "EV-MVP08-API-POSTMERGE-CI",
+        "EV-MVP08-R1-RELEASE-BINDING"
+      ]
     }
   },
   "currentWork": {
-    "status": "none",
-    "summary": "A 07B foi concluída pela Window R4: checkpoint e backup regular cifrados foram verificados no Drive, o restore isolado corrigido passou, o timer está ativo e RG-RECOVERY foi aprovado. Nenhum dado real foi autorizado."
+    "status": "blocked",
+    "summary": "A 08B permanece bloqueada após reconciliar o binding versionado da imagem API: integridade e permissões da árvore de release da VPS, inventário Hostinger/Vercel e 2FA/recuperação ainda precisam de Gates próprios. Nenhuma mutação de produção foi autorizada ou executada.",
+    "task": {
+      "id": "0.8-MVP-08",
+      "title": "Vercel, proxy, domínio e integração frontend/backend"
+    }
   },
   "nextTask": {
-    "id": "0.8-MVP-08",
-    "title": "Vercel, proxy, domínio e integração frontend/backend"
+    "id": "0.8-MVP-08B-VPS-INTEGRITY",
+    "title": "Gate estreito de integridade e permissões da árvore de release"
   },
   "operationalState": {
-    "summary": "API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposição funcional fail-closed. A Window R4 instalou o release corrigido, comprovou checkpoint, round trip e restore isolado, ativou o timer e observou o primeiro backup regular; duas cópias remotas estão verificadas e não há recurso residual.",
+    "summary": "A aplicação API incorporada em 9402d067 permanece vinculada à imagem imutável a4daf para a próxima release, enquanto 56ada é preservada como rollback anterior. Produção continua no release 07B health-only e não foi modificada; a 08B está bloqueada pela árvore de release 0777, inventários externos incompletos e 2FA/recuperação pendentes.",
     "basis": "observed",
-    "documentedAt": "2026-08-13T12:21:19.830Z",
-    "observedAt": "2026-08-13T12:16:20Z",
+    "documentedAt": "2026-08-14T07:58:01.159Z",
+    "observedAt": "2026-08-14T07:58:01.159Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -348,11 +365,12 @@
       },
       {
         "id": "OPS-GHCR-VISIBILITY",
-        "status": "unknown",
-        "statement": "Há histórico documentado de package GHCR público; este fato preserva a separação entre o destino privado aprovado e observações live.",
-        "basis": "unknown",
-        "documentedAt": "2026-08-10T19:42:11Z",
-        "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
+        "status": "present",
+        "statement": "O package GHCR da API está publicamente legível; digest a4daf, config ba67, plataforma linux/amd64 e provenance da application revision 9402d067 foram revalidados sem autenticação.",
+        "basis": "observed",
+        "documentedAt": "2026-08-14T07:58:01.159Z",
+        "observedAt": "2026-08-14T07:58:01.159Z",
+        "evidenceIds": ["EV-MVP08-API-POSTMERGE-CI"]
       },
       {
         "id": "OPS-GHCR-PUBLIC-READ-OBSERVED",
@@ -370,6 +388,40 @@
         "basis": "documented",
         "documentedAt": "2026-08-11T16:50:44Z",
         "evidenceIds": ["EV-API-ADR013-BASE"]
+      },
+      {
+        "id": "OPS-MVP08-API-RELEASE-BINDING",
+        "status": "present",
+        "statement": "O caminho normal de promoção e o manifesto do bundle selecionam exclusivamente a imagem a4daf em linux/amd64, com config ba67 e application revision 9402d067; a release-manifest revision é resolvida pelo containing commit corretivo.",
+        "basis": "documented",
+        "documentedAt": "2026-08-14T07:58:01.159Z",
+        "evidenceIds": ["EV-MVP08-R1-RELEASE-BINDING"]
+      },
+      {
+        "id": "OPS-MVP08-API-ROLLBACK-BINDING",
+        "status": "present",
+        "statement": "A imagem 56ada permanece registrada como rollback anterior e recovery binding; validators rejeitam sua seleção pelo caminho normal de promoção.",
+        "basis": "documented",
+        "documentedAt": "2026-08-14T07:58:01.159Z",
+        "evidenceIds": ["EV-MVP08-R1-RELEASE-BINDING"]
+      },
+      {
+        "id": "OPS-MVP08-WEB-INTEGRATED",
+        "status": "present",
+        "statement": "A revisão Web integrada e autoritativa para a 08 permanece b6aa5af91d78a998aceacbe963ef45649dd00149.",
+        "basis": "observed",
+        "documentedAt": "2026-08-14T07:58:01.159Z",
+        "observedAt": "2026-08-14T07:58:01.159Z",
+        "evidenceIds": ["EV-MVP08-READONLY-PREFLIGHT"]
+      },
+      {
+        "id": "OPS-MVP08-PREFLIGHT-BLOCKED",
+        "status": "partial",
+        "statement": "A 08B permanece fail-closed: VPS, Vercel, Hostinger, secrets, router funcional, domínio e DNS não foram modificados; a árvore /opt/genesis/release 0777, inventários externos incompletos e 2FA/recuperação bloqueiam o Gate operacional.",
+        "basis": "observed",
+        "documentedAt": "2026-08-14T07:58:01.159Z",
+        "observedAt": "2026-08-14T07:58:01.159Z",
+        "evidenceIds": ["EV-MVP08-READONLY-PREFLIGHT"]
       }
     ]
   },
@@ -467,6 +519,25 @@
       "kind": "artifact",
       "uri": "artifact://genesis-platform/0.8-MVP-07B-R4/window-r4-closeout-envelope",
       "capturedAt": "2026-08-13T12:21:19.830Z"
+    },
+    {
+      "id": "EV-MVP08-API-POSTMERGE-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/actions/runs/31762817192",
+      "capturedAt": "2026-08-14T02:13:23Z"
+    },
+    {
+      "id": "EV-MVP08-R1-RELEASE-BINDING",
+      "kind": "repository-file",
+      "uri": "repo://arthurportodev/genesis-platform-api/compose.production.yml",
+      "sha256": "09ee24584afecef641cb075c6e0488f86bdb0e771abf5ad168357715f3b0e4f4",
+      "capturedAt": "2026-08-14T07:58:01.159Z"
+    },
+    {
+      "id": "EV-MVP08-READONLY-PREFLIGHT",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-08/08B-readonly-preflight",
+      "capturedAt": "2026-08-14T07:58:01.159Z"
     }
   ],
   "blockers": [
@@ -480,7 +551,7 @@
     {
       "id": "BLOCK-WEB-VERCEL-FUNCTIONAL",
       "status": "open",
-      "summary": "O vínculo app./Vercel precisa ser reconciliado antes da futura exposição funcional /api/v1; não bloqueia o edge health-only da 06B.",
+      "summary": "A integração Web foi incorporada, mas inventário remoto Vercel/Hostinger, 2FA/recuperação, baseline B, candidato C, domínio e smoke ainda precisam ser fechados antes da exposição funcional /api/v1.",
       "owner": "arthur",
       "blocksTaskIds": ["0.8-MVP-08"]
     },
@@ -490,13 +561,39 @@
       "summary": "A Window R4 resolveu o blocker: o runner corrigido passou restore isolado com as ACLs intencionais, checkpoint e backup regular foram verificados no Drive, o timer foi ativado e RG-RECOVERY passou.",
       "owner": "arthur",
       "blocksTaskIds": []
+    },
+    {
+      "id": "BLOCK-API-RELEASE-BINDING",
+      "status": "resolved",
+      "summary": "O binding versionado foi corrigido: promoção usa a4daf e 56ada permanece somente como rollback/recovery anterior.",
+      "owner": "agent",
+      "blocksTaskIds": []
+    },
+    {
+      "id": "BLOCK-VPS-RELEASE-TREE-INTEGRITY",
+      "status": "open",
+      "summary": "A árvore /opt/genesis/release e subdiretórios observados estão root:root 0777; inventário e comparação com o bundle canônico devem preceder qualquer correção de owner/mode.",
+      "owner": "arthur",
+      "blocksTaskIds": ["0.8-MVP-08"]
     }
   ],
   "pendingHumanDecisions": [
     {
-      "id": "HD-WEB-VERCEL-RECONCILIATION",
-      "question": "Como app.agenciagenesismkt.com.br e a Vercel serão reconciliados antes do proxy funcional /api/v1?",
-      "whyMaterial": "O vínculo atual não foi comprovado; a decisão não bloqueia o health-only 06B.",
+      "id": "HD-VPS-RELEASE-TREE-INTEGRITY",
+      "question": "Autorizar o Gate estreito de inventário, comparação canônica e eventual correção de owner/modes da árvore de release da VPS?",
+      "whyMaterial": "A árvore 0777 permite substituição de conteúdo por usuário não-root; qualquer correção é mutação operacional e exige autorização específica.",
+      "blockingTaskIds": ["0.8-MVP-08"]
+    },
+    {
+      "id": "HD-MVP08-OPERATIONAL-GATE",
+      "question": "Conceder o Gate operacional somente após integridade da VPS, inventários externos, 2FA/recuperação e allowlist exata estarem fechados?",
+      "whyMaterial": "O Gate autorizará mutações coordenadas de release, Vercel, secret store, domínio e DNS.",
+      "blockingTaskIds": ["0.8-MVP-08"]
+    },
+    {
+      "id": "HD-MVP08-KEEP-ROLLBACK",
+      "question": "Após o smoke sintético dividido, manter a release ou executar rollback independente de Web, API e DNS?",
+      "whyMaterial": "A decisão final controla exposição funcional e closeout da missão sem dados ou usuários reais.",
       "blockingTaskIds": ["0.8-MVP-08"]
     },
     {
@@ -609,6 +706,12 @@
       "statement": "A exposição pública permanece limitada a GET /health por HTTPS; /api/v1, demais rotas funcionais, dashboard e métodos não permitidos continuam fail-closed.",
       "reviewTrigger": "Reavaliar somente após vínculo app./Vercel, testes funcionais e cross-tenant, recovery aplicável e autorização humana específica para rota funcional.",
       "sourceEvidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
+    },
+    {
+      "id": "OR-MVP08-NO-PRODUCTION-MUTATION",
+      "statement": "A 08B permanece bloqueada e nenhuma mutação de VPS, Vercel, Hostinger, secret, domínio, router funcional ou DNS está autorizada.",
+      "reviewTrigger": "Reavaliar somente após o Gate estreito da VPS, fechamento de 2FA/recuperação e Operational Gate explícito.",
+      "sourceEvidenceIds": ["EV-MVP08-READONLY-PREFLIGHT"]
     }
   ],
   "pointerMetadata": {

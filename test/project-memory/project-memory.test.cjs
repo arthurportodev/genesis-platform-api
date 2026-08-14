@@ -304,6 +304,58 @@ test('rejects observedAt on documented or unknown facts', () => {
   );
 });
 
+test('binds application, containing release manifest, images and Web exactly', () => {
+  const state = readJson(ROOT);
+  assert.deepEqual(state.releaseBindings, {
+    apiApplicationRevision: '9402d067897ab727fb369d7e696a11ba3b9cf68f',
+    apiReleaseManifestRevision: { kind: 'containing-commit' },
+    authorizedApiImage:
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a',
+    authorizedApiImageConfigDigest:
+      'sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9',
+    rollbackApiImage:
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659',
+    webIntegratedRevision: WEB_SHA,
+  });
+
+  for (const mutate of [
+    (candidate) => {
+      candidate.releaseBindings.apiApplicationRevision =
+        '1111111111111111111111111111111111111111';
+    },
+    (candidate) => {
+      candidate.releaseBindings.apiReleaseManifestRevision = {
+        kind: 'commit',
+        sha: '2222222222222222222222222222222222222222',
+      };
+    },
+    (candidate) => {
+      candidate.releaseBindings.authorizedApiImage =
+        candidate.releaseBindings.rollbackApiImage;
+    },
+    (candidate) => {
+      candidate.releaseBindings.authorizedApiImageConfigDigest = `sha256:${'3'.repeat(64)}`;
+    },
+    (candidate) => {
+      candidate.releaseBindings.rollbackApiImage =
+        'ghcr.io/arthurportodev/genesis-platform-api:rollback';
+    },
+    (candidate) => {
+      candidate.releaseBindings.webIntegratedRevision =
+        '4444444444444444444444444444444444444444';
+    },
+  ]) {
+    const candidate = structuredClone(state);
+    mutate(candidate);
+    assert.throws(
+      () => validateState(candidate),
+      (error) =>
+        error.code === 'MEMORY_SCHEMA_INVALID' ||
+        error.code === 'MEMORY_RELEASE_BINDING_MISMATCH',
+    );
+  }
+});
+
 test('rejects missing or misclassified control categories', () => {
   for (const mutate of [
     (state) => {
@@ -511,7 +563,9 @@ test('records approved destinations as documented without reopening resolved cho
     facts['OPS-RECOVERY-TOOLING'].statement,
     /genesis_backup somente sob autorização explícita.*OAuth externo.*status In production.*scope drive\.file.*nenhum backup, OAuth, role, timer ou restore live foi executado/u,
   );
-  assert.equal(facts['OPS-GHCR-VISIBILITY'].basis, 'unknown');
+  assert.equal(facts['OPS-GHCR-VISIBILITY'].basis, 'observed');
+  assert.equal(facts['OPS-GHCR-VISIBILITY'].status, 'present');
+  assert.ok(facts['OPS-GHCR-VISIBILITY'].observedAt);
 });
 
 test('requires TASK_LOG to remain explicitly historical', () => {
@@ -529,6 +583,9 @@ test('projection is derived only from the authority object', () => {
     new RegExp(state.nextTask.id.replaceAll('.', '\\.')),
   );
   assert.match(projection, /containing-commit/u);
+  assert.match(projection, /9402d067897ab727fb369d7e696a11ba3b9cf68f/u);
+  assert.match(projection, /sha256:a4dafefab191093/u);
+  assert.match(projection, /sha256:56ada3e6bea3/u);
 });
 
 test('cross-repo contract accepts the integrated Web origin/main revision', () => {

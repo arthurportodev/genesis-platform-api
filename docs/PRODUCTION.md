@@ -135,13 +135,24 @@ uma réplica da API enquanto rate limits e semáforos forem process-local.
 
 A stack base possui somente `postgres`, `migrate` e `api`, sob o projeto fixo
 `genesis`. API e migration usam exatamente a imagem
-`ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`;
+`ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a`;
 PostgreSQL usa o índice oficial
 `postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193`,
 cuja variante `linux/amd64` é
 `sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a`.
 Tags e `build:` são proibidos. A API e o PostgreSQL não publicam portas; a API
 declara apenas exposição interna na porta 3000.
+
+Esse binding distingue três identidades. A application revision da imagem é
+`9402d067897ab727fb369d7e696a11ba3b9cf68f`; seu config digest é
+`sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9`;
+e a release-manifest revision é o containing commit que incorpora o contrato
+versionado. O commit corretivo não é apresentado como origem da imagem.
+`ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
+permanece somente como rollback/recovery anterior e é rejeitada pelo caminho
+normal de promoção. O rollback representa o release operacional anterior;
+incorporar esta correção versionada não faz deploy, não executa migration, não
+acessa o banco e não cria ou lê secret.
 
 O PostgreSQL usa o volume externo `genesis-postgres-data`, que deve existir
 antes do `up` e não é removido por `docker compose down -v`. Bootstrap/admin,

@@ -5,17 +5,21 @@
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
 - **Revisão de estado:** GH-01-COMPLETE
-- **Atualização documentada:** 2026-08-14T01:52:49.891Z
+- **Atualização documentada:** 2026-08-14T07:58:01.159Z
 - **Fase:** 0.8-MVP — Primeira produção mínima viável
-- **Último trabalho concluído:** 0.8-MVP-07B — Window R de backup externo e restore comprovado
-- **Trabalho vigente:** none — A 07B foi concluída pela Window R4: checkpoint e backup regular cifrados foram verificados no Drive, o restore isolado corrigido passou, o timer está ativo e RG-RECOVERY foi aprovado. Nenhum dado real foi autorizado.
-- **Próxima tarefa:** 0.8-MVP-08 — Vercel, proxy, domínio e integração frontend/backend
+- **Último trabalho concluído:** 0.8-MVP-08B-R1 — Binding versionado da release API reconciliado
+- **Trabalho vigente:** blocked — A 08B permanece bloqueada após reconciliar o binding versionado da imagem API: integridade e permissões da árvore de release da VPS, inventário Hostinger/Vercel e 2FA/recuperação ainda precisam de Gates próprios. Nenhuma mutação de produção foi autorizada ou executada.
+- **Próxima tarefa:** 0.8-MVP-08B-VPS-INTEGRITY — Gate estreito de integridade e permissões da árvore de release
 - **Web integrado:** b6aa5af91d78a998aceacbe963ef45649dd00149
-- **Proveniência da API:** containing-commit
+- **Revisão da aplicação API:** 9402d067897ab727fb369d7e696a11ba3b9cf68f
+- **Revisão do manifesto de release API:** containing-commit
+- **Imagem API autorizada:** ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a
+- **Imagem API de rollback:** ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659
+- **Proveniência da memória API:** containing-commit
 
 ## Estado operacional
 
-API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposição funcional fail-closed. A Window R4 instalou o release corrigido, comprovou checkpoint, round trip e restore isolado, ativou o timer e observou o primeiro backup regular; duas cópias remotas estão verificadas e não há recurso residual.
+A aplicação API incorporada em 9402d067 permanece vinculada à imagem imutável a4daf para a próxima release, enquanto 56ada é preservada como rollback anterior. Produção continua no release 07B health-only e não foi modificada; a 08B está bloqueada pela árvore de release 0777, inventários externos incompletos e 2FA/recuperação pendentes.
 
 - **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
 - **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
@@ -49,17 +53,24 @@ API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposi�
 - **OPS-RECOVERY-WINDOW-R3** [observed/present] — A Window R3 preservou genesis_backup conforme, identidade age sob custódia dupla e OAuth externo In production com scope drive.file. O checkpoint e o round trip passaram, mas o restore falhou porque o runner exigia SELECT runtime em migrations e três tabelas de idempotência onde produção o nega intencionalmente; o rollback foi trash-only, sem restart, volume ativo, porta publicada ou timer habilitado. A correção candidata torna as quatro negações parte explícita da prova ACL.
 - **OPS-RECOVERY-WINDOW-R4** [observed/present] — A Window R4 instalou atomicamente o committed release corrigido sem restart, validou a credencial Drive sem novo OAuth, manteve genesis_backup conforme com zero mutações, comprovou checkpoint cifrado, round trip e restore PostgreSQL 17 isolado em 17 segundos, ativou o timer e observou o primeiro backup regular. Checkpoint e regular formam duas cópias remotas verificadas; não houve acesso ao volume ativo, porta publicada, untrash, purge ou recurso residual.
 - **OPS-APPROVED-MONITORING** [documented/present] — UptimeRobot sobre /health permanece o destino de monitoramento externo aprovado; política de alertas e implementação seguem pendentes.
-- **OPS-GHCR-VISIBILITY** [unknown/unknown] — Há histórico documentado de package GHCR público; este fato preserva a separação entre o destino privado aprovado e observações live.
+- **OPS-GHCR-VISIBILITY** [observed/present] — O package GHCR da API está publicamente legível; digest a4daf, config ba67, plataforma linux/amd64 e provenance da application revision 9402d067 foram revalidados sem autenticação.
 - **OPS-GHCR-PUBLIC-READ-OBSERVED** [observed/present] — O package GHCR da API aceitou leitura anônima no Gate 1; a transição futura para privado permanece separada.
 - **OPS-REAL-DATA** [documented/not-authorized] — Dados reais não estão autorizados.
+- **OPS-MVP08-API-RELEASE-BINDING** [documented/present] — O caminho normal de promoção e o manifesto do bundle selecionam exclusivamente a imagem a4daf em linux/amd64, com config ba67 e application revision 9402d067; a release-manifest revision é resolvida pelo containing commit corretivo.
+- **OPS-MVP08-API-ROLLBACK-BINDING** [documented/present] — A imagem 56ada permanece registrada como rollback anterior e recovery binding; validators rejeitam sua seleção pelo caminho normal de promoção.
+- **OPS-MVP08-WEB-INTEGRATED** [observed/present] — A revisão Web integrada e autoritativa para a 08 permanece b6aa5af91d78a998aceacbe963ef45649dd00149.
+- **OPS-MVP08-PREFLIGHT-BLOCKED** [observed/partial] — A 08B permanece fail-closed: VPS, Vercel, Hostinger, secrets, router funcional, domínio e DNS não foram modificados; a árvore /opt/genesis/release 0777, inventários externos incompletos e 2FA/recuperação bloqueiam o Gate operacional.
 
 ## Blockers abertos
 
-- **BLOCK-WEB-VERCEL-FUNCTIONAL** — O vínculo app./Vercel precisa ser reconciliado antes da futura exposição funcional /api/v1; não bloqueia o edge health-only da 06B.
+- **BLOCK-WEB-VERCEL-FUNCTIONAL** — A integração Web foi incorporada, mas inventário remoto Vercel/Hostinger, 2FA/recuperação, baseline B, candidato C, domínio e smoke ainda precisam ser fechados antes da exposição funcional /api/v1.
+- **BLOCK-VPS-RELEASE-TREE-INTEGRITY** — A árvore /opt/genesis/release e subdiretórios observados estão root:root 0777; inventário e comparação com o bundle canônico devem preceder qualquer correção de owner/mode.
 
 ## Decisões humanas pendentes
 
-- **HD-WEB-VERCEL-RECONCILIATION** — Como app.agenciagenesismkt.com.br e a Vercel serão reconciliados antes do proxy funcional /api/v1?
+- **HD-VPS-RELEASE-TREE-INTEGRITY** — Autorizar o Gate estreito de inventário, comparação canônica e eventual correção de owner/modes da árvore de release da VPS?
+- **HD-MVP08-OPERATIONAL-GATE** — Conceder o Gate operacional somente após integridade da VPS, inventários externos, 2FA/recuperação e allowlist exata estarem fechados?
+- **HD-MVP08-KEEP-ROLLBACK** — Após o smoke sintético dividido, manter a release ou executar rollback independente de Web, API e DNS?
 - **HD-MONITORING** — Qual política de alertas, destinatários e escalonamento será aprovada para o UptimeRobot e os sinais internos?
 - **HD-REAL-DATA** — Quais primeiros usuários e dados reais poderão ser autorizados, e em qual momento?
 
@@ -77,3 +88,4 @@ API, PostgreSQL e Traefik continuam saudáveis, com restart count zero e exposi�
 - **OR-POSTGRES-PRIVATE** — O PostgreSQL deve permanecer privado, sem binding de porta no host ou exposição direta à Internet.
 - **OR-FUNCTIONAL-API-FAIL-CLOSED** — A API funcional /api/v1 permanece fail-closed; a 06B limita a exposição pública ao health-only.
 - **OR-PUBLIC-HEALTH-ONLY** — A exposição pública permanece limitada a GET /health por HTTPS; /api/v1, demais rotas funcionais, dashboard e métodos não permitidos continuam fail-closed.
+- **OR-MVP08-NO-PRODUCTION-MUTATION** — A 08B permanece bloqueada e nenhuma mutação de VPS, Vercel, Hostinger, secret, domínio, router funcional ou DNS está autorizada.

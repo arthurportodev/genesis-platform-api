@@ -4,9 +4,12 @@ const { lstatSync, readFileSync, readdirSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { calculateFingerprint } = require('./task-fingerprint.cjs');
 const {
+  API_APPLICATION_REVISION,
   API_IMAGE,
+  API_IMAGE_CONFIG_DIGEST,
   PLATFORM,
   POSTGRES_IMAGE,
+  ROLLBACK_API_IMAGE,
   TRAEFIK_IMAGE,
 } = require('./validate-production-compose.cjs');
 const {
@@ -455,6 +458,43 @@ function validateProductionBundle(
     failures,
   );
   check(
+    manifest.images?.api?.configDigest === API_IMAGE_CONFIG_DIGEST,
+    'API config digest mismatch',
+    failures,
+  );
+  check(
+    manifest.images?.api?.applicationRevision === API_APPLICATION_REVISION,
+    'API application revision mismatch',
+    failures,
+  );
+  check(
+    manifest.images?.api?.platform === PLATFORM,
+    'API platform mismatch',
+    failures,
+  );
+  check(
+    manifest.rollback?.api?.reference === ROLLBACK_API_IMAGE,
+    'rollback API reference mismatch',
+    failures,
+  );
+  check(
+    manifest.rollback?.api?.digest === ROLLBACK_API_IMAGE.split('@')[1],
+    'rollback API digest mismatch',
+    failures,
+  );
+  check(
+    manifest.rollback?.api?.relation === 'previous-approved' &&
+      manifest.rollback?.api?.platform === PLATFORM,
+    'rollback API metadata mismatch',
+    failures,
+  );
+  check(
+    API_IMAGE !== ROLLBACK_API_IMAGE &&
+      manifest.images?.api?.reference !== manifest.rollback?.api?.reference,
+    'promoted and rollback API images must remain distinct',
+    failures,
+  );
+  check(
     manifest.images?.postgres?.reference === POSTGRES_IMAGE,
     'PostgreSQL reference mismatch',
     failures,
@@ -503,6 +543,7 @@ function validateProductionBundle(
   );
   for (const [name, image] of [
     ['API', manifest.images?.api?.reference],
+    ['rollback API', manifest.rollback?.api?.reference],
     ['PostgreSQL', manifest.images?.postgres?.reference],
     ['Traefik', manifest.images?.traefik?.reference],
   ]) {

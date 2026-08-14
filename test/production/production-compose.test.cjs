@@ -8,6 +8,7 @@ const {
   MODE_CONTRACTS,
   POSTGRES_IMAGE,
   PUBLIC_HTTP_STATIC_CONFIGS,
+  ROLLBACK_API_IMAGE,
   SECRET_FILES,
   SERVICE_SECRETS,
   TRAEFIK_IMAGE,
@@ -49,6 +50,7 @@ test('renders and validates the complete production Compose contract', () => {
 test('pins every image by approved digest for linux/amd64', () => {
   assert.equal(loaded.config.services.api.image, API_IMAGE);
   assert.equal(loaded.config.services.migrate.image, API_IMAGE);
+  assert.notEqual(API_IMAGE, ROLLBACK_API_IMAGE);
   assert.equal(loaded.config.services.postgres.image, POSTGRES_IMAGE);
   assert.equal(loaded.config.services.traefik.image, TRAEFIK_IMAGE);
   for (const service of Object.values(loaded.config.services)) {
@@ -245,6 +247,10 @@ test('stabilizes project and protects the external data volume', () => {
 
 test('rejects security and persistence regressions', () => {
   const mutations = [
+    (config) => {
+      config.services.api.image = ROLLBACK_API_IMAGE;
+      config.services.migrate.image = ROLLBACK_API_IMAGE;
+    },
     (config) => {
       config.services.api.image =
         'ghcr.io/arthurportodev/genesis-platform-api:latest';
