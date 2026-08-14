@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-14T11:33:53.957Z",
+  "updatedAt": "2026-08-14T17:22:04Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -30,7 +30,7 @@
       "status": "integrated",
       "memoryRevision": {
         "kind": "commit",
-        "sha": "b6aa5af91d78a998aceacbe963ef45649dd00149"
+        "sha": "33e99bfcfb87375a801ac49343c28a9fe76e2bb2"
       }
     }
   ],
@@ -57,38 +57,39 @@
     "authorizedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a",
     "authorizedApiImageConfigDigest": "sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9",
     "rollbackApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659",
-    "webIntegratedRevision": "b6aa5af91d78a998aceacbe963ef45649dd00149"
+    "webIntegratedRevision": "33e99bfcfb87375a801ac49343c28a9fe76e2bb2"
   },
   "phase": {
     "id": "0.8-MVP",
     "title": "Primeira produÃ§Ã£o mÃ­nima viÃ¡vel",
     "lastCompleted": {
-      "id": "0.8-MVP-08B-R2",
-      "title": "Contrato versionado e atÃ´mico da Ã¡rvore de release",
-      "completedAt": "2026-08-14T11:33:53.957Z",
+      "id": "0.8-MVP-08-WEB-RUNTIME-REMEDIATION",
+      "title": "CorreÃ§Ã£o do runtime Web e Preview controlado",
+      "completedAt": "2026-08-14T17:22:04Z",
       "evidenceIds": [
-        "EV-MVP08-VPS-INTEGRITY-AUDIT",
-        "EV-MVP08-R2-RELEASE-TREE-CONTRACT"
+        "EV-MVP08-WEB-RUNTIME-PR",
+        "EV-MVP08-WEB-RUNTIME-POSTMERGE-CI",
+        "EV-MVP08-WEB-PREVIEW-CLOSEOUT"
       ]
     }
   },
   "currentWork": {
     "status": "blocked",
-    "summary": "A 08B permanece bloqueada: o contrato versionado define rebuild e troca atÃ´mica da Ã¡rvore de release, mas a integridade remota segue UNPROVEN, o rebuild nÃ£o foi executado, inventÃ¡rios Hostinger/Vercel e 2FA/recuperaÃ§Ã£o continuam pendentes e o Operational Gate permanece fechado.",
+    "summary": "A correÃ§Ã£o Web foi integrada e o Preview controlado foi aprovado e removido, mas a produÃ§Ã£o continua no rollback declarado. A nova memÃ³ria containing-commit altera os fingerprints dos bundles, portanto a Ã¡rvore remota precisa de rebind antes de qualquer novo Gate operacional ou retry de produÃ§Ã£o.",
     "task": {
       "id": "0.8-MVP-08",
       "title": "Vercel, proxy, domÃ­nio e integraÃ§Ã£o frontend/backend"
     }
   },
   "nextTask": {
-    "id": "0.8-MVP-08B-ATOMIC-REBUILD-GATE",
-    "title": "Gate humano de seguranÃ§a e atomic rebuild da Ã¡rvore de release"
+    "id": "0.8-MVP-08B-RELEASE-TREE-REBIND-AND-OPERATIONAL-RETRY-GATE",
+    "title": "Rebind da Ã¡rvore de release e novo Gate de retry operacional"
   },
   "operationalState": {
-    "summary": "A aplicaÃ§Ã£o API incorporada em 9402d067 permanece vinculada Ã  imagem imutÃ¡vel a4daf, enquanto 56ada Ã© o rollback anterior. O contrato da Ã¡rvore e o fingerprint do bundle sÃ£o derivados do containing commit, mas a VPS continua no release 07B health-only com integridade UNPROVEN; nenhum rebuild, deploy ou outra mutaÃ§Ã£o de produÃ§Ã£o foi executado.",
+    "summary": "Production A permanece current; B foi rejeitado por falha ESM e o Web corrigido foi validado em Preview e integrado sem promoÃ§Ã£o. A operaÃ§Ã£o funcional foi revertida: a VPS executa 56ada com FRONTEND_URL=https://genesis.invalid, router health-only e origin key ausente. A Ã¡rvore remota Ã© Ã­ntegra para os bundles de 6930b2e7, mas nÃ£o corresponde aos novos fingerprints containing-commit; produÃ§Ã£o nÃ£o foi retomada.",
     "basis": "observed",
-    "documentedAt": "2026-08-14T11:33:53.957Z",
-    "observedAt": "2026-08-14T11:33:53.957Z",
+    "documentedAt": "2026-08-14T17:22:04Z",
+    "observedAt": "2026-08-14T17:22:04Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -313,474 +314,4 @@
         "basis": "observed",
         "documentedAt": "2026-08-11T16:50:44Z",
         "observedAt": "2026-08-11T16:21:31.506Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
-      },
-      {
-        "id": "OPS-VERCEL-LINK",
-        "status": "unknown",
-        "statement": "O vÃ­nculo de app.agenciagenesismkt.com.br com a Vercel nÃ£o foi comprovado; a Vercel nÃ£o foi inspecionada por ausÃªncia de sessÃ£o read-only autorizada.",
-        "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:24:00Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
-      },
-      {
-        "id": "OPS-ACME-CONTACT",
-        "status": "present",
-        "statement": "O contato aprovado contato@agenciagenesismkt.com.br foi usado na solicitaÃ§Ã£o ACME production Ãºnica concluÃ­da pela Window 2.",
-        "basis": "observed",
-        "documentedAt": "2026-08-12T10:47:26.6039363Z",
-        "observedAt": "2026-08-12T10:17:13.281Z",
-        "evidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
-      },
-      {
-        "id": "OPS-APPROVED-RECOVERY",
-        "status": "present",
-        "statement": "Google Drive dedicado opera com RPO de 24 horas, frequÃªncia de 12 horas, RTO lÃ³gico sintÃ©tico de quatro horas, retenÃ§Ã£o regular/checkpoint de 30/90 dias, duas cÃ³pias verificadas e trash-only; a Window R4 comprovou a ativaÃ§Ã£o e o restore.",
-        "basis": "documented",
-        "documentedAt": "2026-08-12T13:32:38.1112510Z",
-        "evidenceIds": [
-          "EV-MVP07A-RECOVERY-CONTRACT",
-          "EV-MVP07B-WINDOW-R4-CLOSEOUT"
-        ]
-      },
-      {
-        "id": "OPS-RECOVERY-TOOLING",
-        "status": "present",
-        "statement": "A 07A incorporou contrato versionado, runners, configuraÃ§Ã£o nÃ£o secreta, systemd, validaÃ§Ã£o, testes e plano Window R; o tooling futuro classifica e provisiona genesis_backup somente sob autorizaÃ§Ã£o explÃ­cita, e rejeita OAuth externo que nÃ£o prove status In production com scope drive.file; nenhum backup, OAuth, role, timer ou restore live foi executado.",
-        "basis": "documented",
-        "documentedAt": "2026-08-12T13:32:38.1112510Z",
-        "evidenceIds": ["EV-MVP07A-RECOVERY-CONTRACT"]
-      },
-      {
-        "id": "OPS-RECOVERY-WINDOW-R3",
-        "status": "present",
-        "statement": "A Window R3 preservou genesis_backup conforme, identidade age sob custÃ³dia dupla e OAuth externo In production com scope drive.file. O checkpoint e o round trip passaram, mas o restore falhou porque o runner exigia SELECT runtime em migrations e trÃªs tabelas de idempotÃªncia onde produÃ§Ã£o o nega intencionalmente; o rollback foi trash-only, sem restart, volume ativo, porta publicada ou timer habilitado. A correÃ§Ã£o candidata torna as quatro negaÃ§Ãµes parte explÃ­cita da prova ACL.",
-        "basis": "observed",
-        "documentedAt": "2026-08-13T09:27:02.4167181Z",
-        "observedAt": "2026-08-13T09:20:00Z",
-        "evidenceIds": ["EV-MVP07B-RESTORE-RUNNER-CORRECTION"]
-      },
-      {
-        "id": "OPS-RECOVERY-WINDOW-R4",
-        "status": "present",
-        "statement": "A Window R4 instalou atomicamente o committed release corrigido sem restart, validou a credencial Drive sem novo OAuth, manteve genesis_backup conforme com zero mutaÃ§Ãµes, comprovou checkpoint cifrado, round trip e restore PostgreSQL 17 isolado em 17 segundos, ativou o timer e observou o primeiro backup regular. Checkpoint e regular formam duas cÃ³pias remotas verificadas; nÃ£o houve acesso ao volume ativo, porta publicada, untrash, purge ou recurso residual.",
-        "basis": "observed",
-        "documentedAt": "2026-08-13T12:21:19.830Z",
-        "observedAt": "2026-08-13T12:16:20Z",
-        "evidenceIds": ["EV-MVP07B-WINDOW-R4-CLOSEOUT"]
-      },
-      {
-        "id": "OPS-APPROVED-MONITORING",
-        "status": "present",
-        "statement": "UptimeRobot sobre /health permanece o destino de monitoramento externo aprovado; polÃ­tica de alertas e implementaÃ§Ã£o seguem pendentes.",
-        "basis": "documented",
-        "documentedAt": "2026-08-10T19:42:11Z",
-        "evidenceIds": ["EV-API-ADR013-CANDIDATE"]
-      },
-      {
-        "id": "OPS-GHCR-VISIBILITY",
-        "status": "present",
-        "statement": "O package GHCR da API estÃ¡ publicamente legÃ­vel; digest a4daf, config ba67, plataforma linux/amd64 e provenance da application revision 9402d067 foram revalidados sem autenticaÃ§Ã£o.",
-        "basis": "observed",
-        "documentedAt": "2026-08-14T07:58:01.159Z",
-        "observedAt": "2026-08-14T07:58:01.159Z",
-        "evidenceIds": ["EV-MVP08-API-POSTMERGE-CI"]
-      },
-      {
-        "id": "OPS-GHCR-PUBLIC-READ-OBSERVED",
-        "status": "present",
-        "statement": "O package GHCR da API aceitou leitura anÃ´nima no Gate 1; a transiÃ§Ã£o futura para privado permanece separada.",
-        "basis": "observed",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "observedAt": "2026-08-11T16:26:00Z",
-        "evidenceIds": ["EV-MVP06B-GATE1-REPORT"]
-      },
-      {
-        "id": "OPS-REAL-DATA",
-        "status": "not-authorized",
-        "statement": "Dados reais nÃ£o estÃ£o autorizados.",
-        "basis": "documented",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "evidenceIds": ["EV-API-ADR013-BASE"]
-      },
-      {
-        "id": "OPS-MVP08-API-RELEASE-BINDING",
-        "status": "present",
-        "statement": "O caminho normal de promoÃ§Ã£o e o manifesto do bundle selecionam exclusivamente a imagem a4daf em linux/amd64, com config ba67 e application revision 9402d067; a release-manifest revision Ã© resolvida pelo containing commit corretivo.",
-        "basis": "documented",
-        "documentedAt": "2026-08-14T07:58:01.159Z",
-        "evidenceIds": ["EV-MVP08-R1-RELEASE-BINDING"]
-      },
-      {
-        "id": "OPS-MVP08-API-ROLLBACK-BINDING",
-        "status": "present",
-        "statement": "A imagem 56ada permanece registrada como rollback anterior e recovery binding; validators rejeitam sua seleÃ§Ã£o pelo caminho normal de promoÃ§Ã£o.",
-        "basis": "documented",
-        "documentedAt": "2026-08-14T07:58:01.159Z",
-        "evidenceIds": ["EV-MVP08-R1-RELEASE-BINDING"]
-      },
-      {
-        "id": "OPS-MVP08-WEB-INTEGRATED",
-        "status": "present",
-        "statement": "A revisÃ£o Web integrada e autoritativa para a 08 permanece b6aa5af91d78a998aceacbe963ef45649dd00149.",
-        "basis": "observed",
-        "documentedAt": "2026-08-14T07:58:01.159Z",
-        "observedAt": "2026-08-14T07:58:01.159Z",
-        "evidenceIds": ["EV-MVP08-READONLY-PREFLIGHT"]
-      },
-      {
-        "id": "OPS-MVP08-PREFLIGHT-BLOCKED",
-        "status": "partial",
-        "statement": "A 08B permanece fail-closed: VPS, Vercel, Hostinger, secrets, router funcional, domÃ­nio e DNS nÃ£o foram modificados; atomic rebuild, inventÃ¡rios externos e 2FA/recuperaÃ§Ã£o bloqueiam o Gate operacional.",
-        "basis": "observed",
-        "documentedAt": "2026-08-14T11:33:53.957Z",
-        "observedAt": "2026-08-14T11:33:53.957Z",
-        "evidenceIds": [
-          "EV-MVP08-READONLY-PREFLIGHT",
-          "EV-MVP08-VPS-INTEGRITY-AUDIT",
-          "EV-MVP08-R2-RELEASE-TREE-CONTRACT"
-        ]
-      },
-      {
-        "id": "OPS-MVP08-VPS-INTEGRITY-AUDIT",
-        "status": "partial",
-        "statement": "A auditoria read-only classificou a Ã¡rvore remota como UNPROVEN: onze diretÃ³rios root:root 0777, dois arquivos atuais ausentes e oito hashes divergentes, sem symlink, hardlink, ACL ou mount inesperado. Remover apenas permissÃµes nÃ£o recupera confianÃ§a retroativa.",
-        "basis": "observed",
-        "documentedAt": "2026-08-14T11:33:53.957Z",
-        "observedAt": "2026-08-14T11:33:53.957Z",
-        "evidenceIds": ["EV-MVP08-VPS-INTEGRITY-AUDIT"]
-      },
-      {
-        "id": "OPS-MVP08-RELEASE-TREE-CONTRACT",
-        "status": "present",
-        "statement": "O bundle v2 define onze diretÃ³rios, staging root-only, papÃ©is current/rollback, quarentena e renameat2(RENAME_EXCHANGE). O rollback deriva do mesmo containing commit por duas substituiÃ§Ãµes fechadas para a imagem previous-approved. O par exige papÃ©is, imagens e fingerprints distintos, sourceCommit idÃªntico e todos os demais artefatos iguais. Os fingerprints sÃ£o SHA-256 dos manifestos; nada foi aplicado Ã  VPS.",
-        "basis": "documented",
-        "documentedAt": "2026-08-14T11:33:53.957Z",
-        "evidenceIds": ["EV-MVP08-R2-RELEASE-TREE-CONTRACT"]
-      },
-      {
-        "id": "OPS-MVP08-HUMAN-SECURITY",
-        "status": "partial",
-        "statement": "2FA, recuperaÃ§Ã£o e sessÃµes autenticadas de Vercel, Hostinger, GitHub e Bitwarden permanecem aÃ§Ãµes humanas pendentes antes do Gate operacional.",
-        "basis": "documented",
-        "documentedAt": "2026-08-14T11:33:53.957Z",
-        "evidenceIds": ["EV-MVP08-READONLY-PREFLIGHT"]
-      }
-    ]
-  },
-  "evidence": [
-    {
-      "id": "EV-API-CURRENT-BASE",
-      "kind": "repository-file",
-      "uri": "https://github.com/arthurportodev/genesis-platform-api/blob/6c4bbb9b909dcd243f3e3d5165bf9368c3e16264/docs/CURRENT_STATE.md",
-      "sha256": "c0d86cbfbb96a2c8d422f1e5bc3e81ea3ca54ed9b54503a6aa5a0af4cbfacca0",
-      "capturedAt": "2026-08-10T12:00:00Z"
-    },
-    {
-      "id": "EV-API-PRODUCTION-BASE",
-      "kind": "repository-file",
-      "uri": "https://github.com/arthurportodev/genesis-platform-api/blob/6c4bbb9b909dcd243f3e3d5165bf9368c3e16264/docs/PRODUCTION.md",
-      "sha256": "924df18c30e695cff398fa1323ff152f64bc1692383c6f631050e5f40ce6da8e",
-      "capturedAt": "2026-08-10T12:00:00Z"
-    },
-    {
-      "id": "EV-API-ADR013-BASE",
-      "kind": "repository-file",
-      "uri": "https://github.com/arthurportodev/genesis-platform-api/blob/6c4bbb9b909dcd243f3e3d5165bf9368c3e16264/docs/decisions/ADR-013-mvp-production-baseline.md",
-      "sha256": "55549d880b0cbdf0e11711fcedb849c2fa3406e4a213383e621a0daf7cfb1f1f",
-      "capturedAt": "2026-08-10T12:00:00Z"
-    },
-    {
-      "id": "EV-API-ADR013-CANDIDATE",
-      "kind": "repository-file",
-      "uri": "repo://arthurportodev/genesis-platform-api/docs/decisions/ADR-013-mvp-production-baseline.md",
-      "sha256": "dd895aa5eed22ebe48a6774bad3e14bf0e9a9d1462c5e464395bdd54a4faed7c",
-      "capturedAt": "2026-08-10T19:42:11Z"
-    },
-    {
-      "id": "EV-WEB-PR11",
-      "kind": "github-pr",
-      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/11",
-      "capturedAt": "2026-08-10T15:00:00Z"
-    },
-    {
-      "id": "EV-MVP06A-PR41",
-      "kind": "github-pr",
-      "uri": "https://github.com/arthurportodev/genesis-platform-api/pull/41",
-      "capturedAt": "2026-08-11T15:48:01Z"
-    },
-    {
-      "id": "EV-MVP06A-POSTMERGE-CI",
-      "kind": "github-run",
-      "uri": "https://github.com/arthurportodev/genesis-platform-api/actions/runs/31503834501",
-      "capturedAt": "2026-08-11T16:26:00Z"
-    },
-    {
-      "id": "EV-MVP06B-GATE1-REPORT",
-      "kind": "artifact",
-      "uri": "artifact://genesis-platform/mvp06-06b-gate1-operational-readiness/18-FINAL-REPORT.md",
-      "sha256": "6b90a11dd86cb656a263b69fef2e11bf3872ed666a354ca95a0de53935009d62",
-      "capturedAt": "2026-08-11T16:50:44Z"
-    },
-    {
-      "id": "EV-MVP06B-WINDOW1-CLOSEOUT",
-      "kind": "artifact",
-      "uri": "artifact://genesis-platform/mvp06-06b-window1-private-edge/24-FINAL-REPORT.md",
-      "sha256": "9fd6353db2a7d82cd4018c2a1b5378ebf2e03c1d3f9ac2fae0e23c52e3f3a605",
-      "capturedAt": "2026-08-11T20:40:48.3754942Z"
-    },
-    {
-      "id": "EV-MVP06B-WINDOW2A-REVERT-CLOSEOUT",
-      "kind": "artifact",
-      "uri": "artifact://genesis-platform/mvp06-06b-window2a-dns-http80-acme-staging/10-FINAL-REPORT.md",
-      "sha256": "3c098d936a74bf0594e7f9daa1b5659fefbe4df66cee709f9821b69887056580",
-      "capturedAt": "2026-08-12T00:57:08.2421663Z"
-    },
-    {
-      "id": "EV-MVP06B-WINDOW2-CLOSEOUT",
-      "kind": "artifact",
-      "uri": "artifact://genesis-platform/mvp06-06b-window2-retry-https-health-only/09-FINAL-REPORT.md",
-      "sha256": "fb296b9490a3340539a0db3c675d9e15a431ea45a4df0f38b8e165dc9a4a9f09",
-      "capturedAt": "2026-08-12T10:17:35.0427409Z"
-    },
-    {
-      "id": "EV-MVP07A-RECOVERY-CONTRACT",
-      "kind": "repository-file",
-      "uri": "repo://arthurportodev/genesis-platform-api/config/recovery/backup-restore.v1.json",
-      "sha256": "006dc9de827c31c3c93c6371e71c2882bd81a14efef955ae00df6d888d924773",
-      "capturedAt": "2026-08-12T19:00:00Z"
-    },
-    {
-      "id": "EV-MVP07B-RESTORE-RUNNER-CORRECTION",
-      "kind": "repository-file",
-      "uri": "repo://arthurportodev/genesis-platform-api/docker/recovery/restore-proof-runner.sh",
-      "sha256": "83464befbe71bc845ea8dd1f0caa83b37f2afc1f54d95f9639783c78a579b9c9",
-      "capturedAt": "2026-08-13T09:27:02.4167181Z"
-    },
-    {
-      "id": "EV-MVP07B-WINDOW-R4-CLOSEOUT",
-      "kind": "artifact",
-      "uri": "artifact://genesis-platform/0.8-MVP-07B-R4/window-r4-closeout-envelope",
-      "capturedAt": "2026-08-13T12:21:19.830Z"
-    },
-    {
-      "id": "EV-MVP08-API-POSTMERGE-CI",
-      "kind": "github-run",
-      "uri": "https://github.com/arthurportodev/genesis-platform-api/actions/runs/31762817192",
-      "capturedAt": "2026-08-14T02:13:23Z"
-    },
-    {
-      "id": "EV-MVP08-R1-RELEASE-BINDING",
-      "kind": "repository-file",
-      "uri": "repo://arthurportodev/genesis-platform-api/compose.production.yml",
-      "sha256": "09ee24584afecef641cb075c6e0488f86bdb0e771abf5ad168357715f3b0e4f4",
-      "capturedAt": "2026-08-14T07:58:01.159Z"
-    },
-    {
-      "id": "EV-MVP08-READONLY-PREFLIGHT",
-      "kind": "artifact",
-      "uri": "artifact://genesis-platform/0.8-MVP-08/08B-readonly-preflight",
-      "capturedAt": "2026-08-14T07:58:01.159Z"
-    },
-    {
-      "id": "EV-MVP08-VPS-INTEGRITY-AUDIT",
-      "kind": "artifact",
-      "uri": "artifact://genesis-platform/0.8-MVP-08/vps-release-tree-integrity-audit",
-      "capturedAt": "2026-08-14T11:33:53.957Z"
-    },
-    {
-      "id": "EV-MVP08-R2-RELEASE-TREE-CONTRACT",
-      "kind": "repository-file",
-      "uri": "repo://arthurportodev/genesis-platform-api/docker/production/release-tree-manager.py",
-      "sha256": "ce2c9ac1d1c0a429db343e5594344c64c4b599aa330b003e0b069f2f13353867",
-      "capturedAt": "2026-08-14T11:33:53.957Z"
-    }
-  ],
-  "blockers": [
-    {
-      "id": "BLOCK-PUBLIC-ORIGIN",
-      "status": "resolved",
-      "summary": "O blocker de DNS, TLS e HTTPS health-only foi resolvido pela Window 2 com decisÃ£o KEEP; esta resoluÃ§Ã£o nÃ£o autoriza /api/v1 nem qualquer rota funcional.",
-      "owner": "arthur",
-      "blocksTaskIds": []
-    },
-    {
-      "id": "BLOCK-WEB-VERCEL-FUNCTIONAL",
-      "status": "open",
-      "summary": "A integraÃ§Ã£o Web foi incorporada, mas inventÃ¡rio remoto Vercel/Hostinger, 2FA/recuperaÃ§Ã£o, baseline B, candidato C, domÃ­nio e smoke ainda precisam ser fechados antes da exposiÃ§Ã£o funcional /api/v1.",
-      "owner": "arthur",
-      "blocksTaskIds": ["0.8-MVP-08"]
-    },
-    {
-      "id": "BLOCK-RECOVERY",
-      "status": "resolved",
-      "summary": "A Window R4 resolveu o blocker: o runner corrigido passou restore isolado com as ACLs intencionais, checkpoint e backup regular foram verificados no Drive, o timer foi ativado e RG-RECOVERY passou.",
-      "owner": "arthur",
-      "blocksTaskIds": []
-    },
-    {
-      "id": "BLOCK-API-RELEASE-BINDING",
-      "status": "resolved",
-      "summary": "O binding versionado foi corrigido: promoÃ§Ã£o usa a4daf e 56ada permanece somente como rollback/recovery anterior.",
-      "owner": "agent",
-      "blocksTaskIds": []
-    },
-    {
-      "id": "BLOCK-VPS-RELEASE-TREE-INTEGRITY",
-      "status": "open",
-      "summary": "A Ã¡rvore /opt/genesis/release permanece UNPROVEN; o contrato atÃ´mico estÃ¡ versionado, mas o rebuild com bundle atual e rollback regenerado ainda exige seguranÃ§a humana e HD-08B-02 explÃ­cito.",
-      "owner": "arthur",
-      "blocksTaskIds": ["0.8-MVP-08"]
-    }
-  ],
-  "pendingHumanDecisions": [
-    {
-      "id": "HD-VPS-RELEASE-TREE-INTEGRITY",
-      "question": "Conceder HD-08B-02 para aplicar o atomic rebuild versionado somente apÃ³s fechar 2FA/recuperaÃ§Ã£o, bundles current/rollback e allowlist operacional exata?",
-      "whyMaterial": "A operaÃ§Ã£o substituirÃ¡ a Ã¡rvore usada por Compose, Traefik e recovery; requer lock, renameat2 comprovado, rollback canÃ´nico e autorizaÃ§Ã£o de mutaÃ§Ã£o VPS separada.",
-      "blockingTaskIds": ["0.8-MVP-08"]
-    },
-    {
-      "id": "HD-MVP08-OPERATIONAL-GATE",
-      "question": "Conceder o Gate operacional somente apÃ³s integridade da VPS, inventÃ¡rios externos, 2FA/recuperaÃ§Ã£o e allowlist exata estarem fechados?",
-      "whyMaterial": "O Gate autorizarÃ¡ mutaÃ§Ãµes coordenadas de release, Vercel, secret store, domÃ­nio e DNS.",
-      "blockingTaskIds": ["0.8-MVP-08"]
-    },
-    {
-      "id": "HD-MVP08-KEEP-ROLLBACK",
-      "question": "ApÃ³s o smoke sintÃ©tico dividido, manter a release ou executar rollback independente de Web, API e DNS?",
-      "whyMaterial": "A decisÃ£o final controla exposiÃ§Ã£o funcional e closeout da missÃ£o sem dados ou usuÃ¡rios reais.",
-      "blockingTaskIds": ["0.8-MVP-08"]
-    },
-    {
-      "id": "HD-MONITORING",
-      "question": "Qual polÃ­tica de alertas, destinatÃ¡rios e escalonamento serÃ¡ aprovada para o UptimeRobot e os sinais internos?",
-      "whyMaterial": "A abertura controlada exige detecÃ§Ã£o e resposta operacional.",
-      "blockingTaskIds": ["0.8-MVP-07", "0.8-MVP-09"]
-    },
-    {
-      "id": "HD-REAL-DATA",
-      "question": "Quais primeiros usuÃ¡rios e dados reais poderÃ£o ser autorizados, e em qual momento?",
-      "whyMaterial": "Dados reais exigem release gates e autorizaÃ§Ã£o humana especÃ­fica.",
-      "blockingTaskIds": ["0.8-MVP-09"]
-    }
-  ],
-  "supersededPlans": [
-    {
-      "id": "PLAN-0.8.2-0.8.11",
-      "title": "SequÃªncia anterior de produÃ§Ã£o 0.8.2 a 0.8.11",
-      "supersededAt": "2026-08-03T12:00:00Z",
-      "replacedBy": "0.8-MVP",
-      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
-    }
-  ],
-  "permanentInvariants": [
-    {
-      "id": "PI-API-AUTHORITY",
-      "statement": "A API Ã© a autoridade de seguranÃ§a, tenant, regras de negÃ³cio e estado temporal do projeto.",
-      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
-    },
-    {
-      "id": "PI-SECRETS",
-      "statement": "Segredos nÃ£o entram em Git, frontend, imagem, logs ou evidÃªncias.",
-      "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE"]
-    },
-    {
-      "id": "PI-NO-DIRECT-EXPOSURE",
-      "statement": "API e PostgreSQL nÃ£o podem ser expostos diretamente Ã  Internet.",
-      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
-    }
-  ],
-  "releaseGates": [
-    {
-      "id": "RG-TLS",
-      "statement": "Traefik, HTTPS e hostname foram comprovados exclusivamente para public HTTPS health-only; o gate nÃ£o autoriza /api/v1 nem qualquer rota funcional.",
-      "status": "passed",
-      "sourceEvidenceIds": [
-        "EV-API-PRODUCTION-BASE",
-        "EV-MVP06B-WINDOW2-CLOSEOUT"
-      ]
-    },
-    {
-      "id": "RG-RECOVERY",
-      "statement": "Backup recuperÃ¡vel e restore sintÃ©tico devem passar antes de dados reais.",
-      "status": "passed",
-      "sourceEvidenceIds": [
-        "EV-API-PRODUCTION-BASE",
-        "EV-MVP07B-RESTORE-RUNNER-CORRECTION",
-        "EV-MVP07B-WINDOW-R4-CLOSEOUT"
-      ]
-    },
-    {
-      "id": "RG-CROSS-TENANT",
-      "statement": "Smoke funcional e teste adversarial cross-tenant devem passar antes dos primeiros usuÃ¡rios.",
-      "status": "pending",
-      "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE"]
-    }
-  ],
-  "currentRestrictions": [
-    {
-      "id": "OR-SINGLE-VPS",
-      "statement": "A baseline documentada usa uma Ãºnica VPS e um Ãºnico failure domain.",
-      "reviewTrigger": "Reavaliar com adoÃ§Ã£o, receita, SLO ou necessidade de alta disponibilidade.",
-      "sourceEvidenceIds": ["EV-API-ADR013-BASE", "EV-API-PRODUCTION-BASE"]
-    },
-    {
-      "id": "OR-SINGLE-REPLICA",
-      "statement": "A API pÃºblica permanece limitada a uma rÃ©plica enquanto controles forem process-local.",
-      "reviewTrigger": "Reavaliar antes de escalar horizontalmente.",
-      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
-    },
-    {
-      "id": "OR-NO-REAL-DATA",
-      "statement": "Dados reais permanecem nÃ£o autorizados.",
-      "reviewTrigger": "Reavaliar somente apÃ³s release gates e decisÃ£o humana explÃ­cita.",
-      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
-    },
-    {
-      "id": "OR-POSTGRES-PRIVATE",
-      "statement": "O PostgreSQL deve permanecer privado, sem binding de porta no host ou exposiÃ§Ã£o direta Ã  Internet.",
-      "reviewTrigger": "Interromper antes de qualquer alteraÃ§Ã£o que publique ou contorne a rede privada do banco.",
-      "sourceEvidenceIds": [
-        "EV-API-ADR013-BASE",
-        "EV-MVP06B-GATE1-REPORT",
-        "EV-MVP06B-WINDOW1-CLOSEOUT"
-      ]
-    },
-    {
-      "id": "OR-FUNCTIONAL-API-FAIL-CLOSED",
-      "statement": "A API funcional /api/v1 permanece fail-closed; a 06B limita a exposiÃ§Ã£o pÃºblica ao health-only.",
-      "reviewTrigger": "Reavaliar somente apÃ³s reconciliaÃ§Ã£o app./Vercel, testes funcionais, RG-CROSS-TENANT e autorizaÃ§Ã£o especÃ­fica.",
-      "sourceEvidenceIds": [
-        "EV-MVP06B-GATE1-REPORT",
-        "EV-MVP06B-WINDOW1-CLOSEOUT",
-        "EV-MVP06B-WINDOW2-CLOSEOUT"
-      ]
-    },
-    {
-      "id": "OR-PUBLIC-HEALTH-ONLY",
-      "statement": "A exposiÃ§Ã£o pÃºblica permanece limitada a GET /health por HTTPS; /api/v1, demais rotas funcionais, dashboard e mÃ©todos nÃ£o permitidos continuam fail-closed.",
-      "reviewTrigger": "Reavaliar somente apÃ³s vÃ­nculo app./Vercel, testes funcionais e cross-tenant, recovery aplicÃ¡vel e autorizaÃ§Ã£o humana especÃ­fica para rota funcional.",
-      "sourceEvidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
-    },
-    {
-      "id": "OR-MVP08-NO-PRODUCTION-MUTATION",
-      "statement": "A 08B permanece bloqueada e nenhuma mutaÃ§Ã£o de VPS, Vercel, Hostinger, secret, domÃ­nio, router funcional ou DNS estÃ¡ autorizada.",
-      "reviewTrigger": "Reavaliar somente apÃ³s fechamento de 2FA/recuperaÃ§Ã£o, bundles current/rollback verificados, HD-08B-02 e Operational Gate explÃ­citos.",
-      "sourceEvidenceIds": [
-        "EV-MVP08-READONLY-PREFLIGHT",
-        "EV-MVP08-VPS-INTEGRITY-AUDIT",
-        "EV-MVP08-R2-RELEASE-TREE-CONTRACT"
-      ]
-    }
-  ],
-  "pointerMetadata": {
-    "repository": "arthurportodev/genesis-platform-web",
-    "path": "docs/memory/project-state.pointer.v1.json",
-    "schemaVersion": "1.0.0",
-    "mode": "pointer-only",
-    "transitionId": "GH-01-CROSS-REPO",
-    "targetStateRevision": "GH-01-COMPLETE"
-  }
-}
+        "evßŸ6¶‰ËkºwµçU9}UI0õ¡ÑÑÁÌè¼½•¹•Í¥Ì¹¥¹Ù…±¥°É½ÕÑ•È¡•…±Ñ µ½¹±ä”½É¥¥¸­•ä…ÕÍ•¹Ñ”ì¹•¹¡Õµ„É•Ñ½µ…‘„‘”ÁÉ½‘×Ÿ¼°…±Ñ•É‡Ÿ¼9L°Í•É•‘¼½Ô‘…‘¼É•…°½½ÉÉ•Ô¹•ÍÑ„½ÉÉ—Ÿ¼¸ˆ°(€€€€€€€€‰‰…Í¥Ìˆè€‰½‰Í•ÉÙ•ˆ°(€€€€€€€€‰‘½Õµ•¹Ñ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÄÜèÈÈèÀÑhˆ°(€€€€€€€€‰½‰Í•ÉÙ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÄÜèÈÈèÀÑhˆ°(€€€€€€€€‰•Ù¥‘•¹•%‘Ìˆèl(€€€€€€€€€€‰Xµ5Y@ÀàµQ=5%µI	U%1µI=11	,ˆ°(€€€€€€€€€€‰Xµ5Y@Ààµ]µAIY%\µ1=M=UPˆ(€€€€€€€t(€€€€€ô(€€€t(€ô°(€€‰•Ù¥‘•¹”ˆèl(€€€ì(€€€€€€‰¥ˆè€‰XµA$µUII9Pµ	Mˆ°(€€€€€€‰­¥¹ˆè€‰É•Á½Í¥Ñ½Éäµ™¥±”ˆ°(€€€€€€‰ÕÉ¤ˆè€‰¡ÑÑÁÌè¼½¥Ñ¡Õˆ¹½´½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½‰±½ˆ¼ÙŒÑ‰‰ˆåˆäÀå‘ÈĞÍ˜Í”ÍÔÄØÕ‰˜äÌØáŒÍ”ÄØÈØĞ½‘½Ì½UII9Q}MQQ¹µˆ°(€€€€€€‰Í¡„ÈÔØˆè€‰ŒÁàÙ‰™‰ˆäÙ„ÉŒáĞÈÉ˜Å”Õ‰ŒÍ”àÅ•„Í„ÔÑ•åˆÔĞÔÀÍ„Ù…„Õ„Á…˜Ñ‰™…„Àˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÁPÄÈèÀÀèÀÁhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰XµA$µAI=UQ%=8µ	Mˆ°(€€€€€€‰­¥¹ˆè€‰É•Á½Í¥Ñ½Éäµ™¥±”ˆ°(€€€€€€‰ÕÉ¤ˆè€‰¡ÑÑÁÌè¼½¥Ñ¡Õˆ¹½´½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½‰±½ˆ¼ÙŒÑ‰‰ˆåˆäÀå‘ÈĞÍ˜Í”ÍÔÄØÕ‰˜äÌØáŒÍ”ÄØÈØĞ½‘½Ì½AI=UQ%=8¹µˆ°(€€€€€€‰Í¡„ÈÔØˆè€ˆäÈÑ‘˜ÄáŒÌÁ”ØäÕ™˜Ìäá™„ÄÌÈÍ™˜ÄÔÉ˜ØÑ‰ŒÄØäÈÌàÍŒÙ˜ØÌÄÀÔÁ”Õ˜ĞÁ”Ù‘„á”ˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÁPÄÈèÀÀèÀÁhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰XµA$µHÀÄÌµ	Mˆ°(€€€€€€‰­¥¹ˆè€‰É•Á½Í¥Ñ½Éäµ™¥±”ˆ°(€€€€€€‰ÕÉ¤ˆè€‰¡ÑÑÁÌè¼½¥Ñ¡Õˆ¹½´½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½‰±½ˆ¼ÙŒÑ‰‰ˆåˆäÀå‘ÈĞÍ˜Í”ÍÔÄØÕ‰˜äÌØáŒÍ”ÄØÈØĞ½‘½Ì½‘•¥Í¥½¹Ì½H´ÀÄÌµµÙÀµÁÉ½‘ÕÑ¥½¸µ‰…Í•±¥¹”¹µˆ°(€€€€€€‰Í¡„ÈÔØˆè€ˆÔÔÔĞåààÁˆÁ‰‘˜Á”ÄÄÜÄÅ™•‘ˆàĞåŒÉ™„ÌĞÀÙ”Ñ„ÈÄÌÌàÍ”ØÈÅ„Á‘…˜İ™ˆÅ˜Å˜ˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÁPÄÈèÀÀèÀÁhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰XµA$µHÀÄÌµ9%Qˆ°(€€€€€€‰­¥¹ˆè€‰É•Á½Í¥Ñ½Éäµ™¥±”ˆ°(€€€€€€‰ÕÉ¤ˆè€‰É•Á¼è¼½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½‘½Ì½‘•¥Í¥½¹Ì½H´ÀÄÌµµÙÀµÁÉ½‘ÕÑ¥½¸µ‰…Í•±¥¹”¹µˆ°(€€€€€€‰Í¡„ÈÔØˆè€‰‘àäÕ…„Õ••ÈÉ•‰”Ğá„ØÜÜÑ‰…Í”ÄÑ‰˜Á”å„åÄĞØÉŒÕ”ĞØĞÌäÕ‰‘ÔÑ„Ñ™…•İŒˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÁPÄäèĞÈèÄÅhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ]µAHÄÄˆ°(€€€€€€‰­¥¹ˆè€‰¥Ñ¡ÕˆµÁÈˆ°(€€€€€€‰ÕÉ¤ˆè€‰¡ÑÑÁÌè¼½¥Ñ¡Õˆ¹½´½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µİ•ˆ½ÁÕ±°¼ÄÄˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÁPÄÔèÀÀèÀÁhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀÙµAHĞÄˆ°(€€€€€€‰­¥¹ˆè€‰¥Ñ¡ÕˆµÁÈˆ°(€€€€€€‰ÕÉ¤ˆè€‰¡ÑÑÁÌè¼½¥Ñ¡Õˆ¹½´½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½ÁÕ±°¼ĞÄˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÅPÄÔèĞàèÀÅhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀÙµA=MQ5Iµ$ˆ°(€€€€€€‰­¥¹ˆè€‰¥Ñ¡ÕˆµÉÕ¸ˆ°(€€€€€€‰ÕÉ¤ˆè€‰¡ÑÑÁÌè¼½¥Ñ¡Õˆ¹½´½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½…Ñ¥½¹Ì½ÉÕ¹Ì¼ÌÄÔÀÌàÌĞÔÀÄˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÅPÄØèÈØèÀÁhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀÙµQÄµIA=IPˆ°(€€€€€€‰­¥¹ˆè€‰…ÉÑ¥™…Ğˆ°(€€€€€€‰ÕÉ¤ˆè€‰…ÉÑ¥™…Ğè¼½•¹•Í¥ÌµÁ±…Ñ™½É´½µÙÀÀØ´ÀÙˆµ…Ñ”Äµ½Á•É…Ñ¥½¹…°µÉ•…‘¥¹•ÍÌ¼Äàµ%90µIA=IP¹µˆ°(€€€€€€‰Í¡„ÈÔØˆè€ˆÙˆäÁ„ÄÅ‘àÙˆØÔÙ„ÈØÍˆØå™•˜É”ÄÅ‰˜ÌàÜÉ•ØØÙ„ÌÔÑ„äÕ„Á‘”ÔÌäÌÔÀÀåØÈˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÅPÄØèÔÀèĞÑhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀÙµ]%9=\Äµ1=M=UPˆ°(€€€€€€‰­¥¹ˆè€‰…ÉÑ¥™…Ğˆ°(€€€€€€‰ÕÉ¤ˆè€‰…ÉÑ¥™…Ğè¼½•¹•Í¥ÌµÁ±…Ñ™½É´½µÙÀÀØ´ÀÙˆµİ¥¹‘½ÜÄµÁÉ¥Ù…Ñ”µ•‘”¼ÈĞµ%90µIA=IP¹µˆ°(€€€€€€‰Í¡„ÈÔØˆè€ˆå™ØÌÔÍ‘ˆÉ„İàÉĞÀÄáŒÉ„ÅˆÔÌÜá•‰˜É”ÀÍŒÅÍ˜å…ŒÉ™…”Á”ÈÍŒÔÉ”Í˜Í„ØÀÔˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÅPÈÀèĞÀèĞà¸ÌÜÔĞäĞÉhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀÙµ]%9=\ÉµIYIPµ1=M=UPˆ°(€€€€€€‰­¥¹ˆè€‰…ÉÑ¥™…Ğˆ°(€€€€€€‰ÕÉ¤ˆè€‰…ÉÑ¥™…Ğè¼½•¹•Í¥ÌµÁ±…Ñ™½É´½µÙÀÀØ´ÀÙˆµİ¥¹‘½ÜÉ„µ‘¹Ìµ¡ÑÑÀàÀµ…µ”µÍÑ…¥¹œ¼ÄÀµ%90µIA=IP¹µˆ°(€€€€€€‰Í¡„ÈÔØˆè€ˆÍŒÀäáäÌÙ„ÜÑ‰˜ÀÔäÑ”İ˜å‘…„ÅˆÔØÔå™•™‰”Ñ‘˜ØÙ•”ÜÀå˜äàÈÅˆØäààÜÀÔØÔàÀˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÉPÀÀèÔÜèÀà¸ÈĞÈÄØØÍhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀÙµ]%9=\Èµ1=M=UPˆ°(€€€€€€‰­¥¹ˆè€‰…ÉÑ¥™…Ğˆ°(€€€€€€‰ÕÉ¤ˆè€‰…ÉÑ¥™…Ğè¼½•¹•Í¥ÌµÁ±…Ñ™½É´½µÙÀÀØ´ÀÙˆµİ¥¹‘½ÜÈµÉ•ÑÉäµ¡ÑÑÁÌµ¡•…±Ñ µ½¹±ä¼Àäµ%90µIA=IP¹µˆ°(€€€€€€‰Í¡„ÈÔØˆè€‰™ˆÈäÙˆäĞäÁ„ÌÌĞÀÔÌå„Á‘ˆÍŒØÜÕå”ÄÕ„ĞÌÅ•„ĞÕ„Ñ‘˜Á˜Ìáˆá”ÄØÕ‘Œå„Ñ„å˜Àäˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÉPÄÀèÄÜèÌÔ¸ÀĞÈÜĞÀåhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀİµI=YIdµ=9QIPˆ°(€€€€€€‰­¥¹ˆè€‰É•Á½Í¥Ñ½Éäµ™¥±”ˆ°(€€€€€€‰ÕÉ¤ˆè€‰É•Á¼è¼½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½½¹™¥œ½É•½Ù•Éä½‰…­ÕÀµÉ•ÍÑ½É”¹ØÄ¹©Í½¸ˆ°(€€€€€€‰Í¡„ÈÔØˆè€ˆÀÀÙ‘Œå‘”àÈİŒÌÅŒÍŒäÍŒØÌÜÅ”ÜÅŒÈààÉ‰àÅ„ÄÑ•™•˜äÔÕ…”ÀÁ‘˜ÙààáäÈĞÜÜÌˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÉPÄäèÀÀèÀÁhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀİµIMQ=IµIU99Hµ=IIQ%=8ˆ°(€€€€€€‰­¥¹ˆè€‰É•Á½Í¥Ñ½Éäµ™¥±”ˆ°(€€€€€€‰ÕÉ¤ˆè€‰É•Á¼è¼½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½‘½­•È½É•½Ù•Éä½É•ÍÑ½É”µÁÉ½½˜µÉÕ¹¹•È¹Í ˆ°(€€€€€€‰Í¡„ÈÔØˆè€ˆàÌĞØÑ‰•™‰”ÜÅ‰ŒàĞÕ•„á‘Å˜Á…„àÍˆÌİ˜É…™ŒÅ˜ÔÑäÕ˜äØÌäÜàÍŒÜá„ÔÜåˆåŒäˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÍPÀäèÈÜèÀÈ¸ĞÄØÜÄàÅhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@Àİµ]%9=\µHĞµ1=M=UPˆ°(€€€€€€‰­¥¹ˆè€‰…ÉÑ¥™…Ğˆ°(€€€€€€‰ÕÉ¤ˆè€‰…ÉÑ¥™…Ğè¼½•¹•Í¥ÌµÁ±…Ñ™½É´¼À¸àµ5Y@´ÀİµHĞ½İ¥¹‘½ÜµÈĞµ±½Í•½ÕĞµ•¹Ù•±½Á”ˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÍPÄÈèÈÄèÄä¸àÌÁhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀàµA$µA=MQ5Iµ$ˆ°(€€€€€€‰­¥¹ˆè€‰¥Ñ¡ÕˆµÉÕ¸ˆ°(€€€€€€‰ÕÉ¤ˆè€‰¡ÑÑÁÌè¼½¥Ñ¡Õˆ¹½´½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½…Ñ¥½¹Ì½ÉÕ¹Ì¼ÌÄÜØÈàÄÜÄäÈˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÀÈèÄÌèÈÍhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀàµHÄµI1Mµ	%9%9ˆ°(€€€€€€‰­¥¹ˆè€‰É•Á½Í¥Ñ½Éäµ™¥±”ˆ°(€€€€€€‰ÕÉ¤ˆè€‰É•Á¼è¼½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½½µÁ½Í”¹ÁÉ½‘ÕÑ¥½¸¹åµ°ˆ°(€€€€€€‰Í¡„ÈÔØˆè€ˆÀå•”ÈĞÔàÑ…™••˜ØĞÅˆÀÜÕŒÙ”ÀĞàá˜àÙ‰‘ˆÁ”ÜÜÅ…‰˜Õ…ÄØàÌÔÜÜÄÕ˜ÍˆÁ”Ñ˜Ğˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÀÜèÔàèÀÄ¸ÄÔåhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀàµI=91dµAI1%!Pˆ°(€€€€€€‰­¥¹ˆè€‰…ÉÑ¥™…Ğˆ°(€€€€€€‰ÕÉ¤ˆè€‰…ÉÑ¥™…Ğè¼½•¹•Í¥ÌµÁ±…Ñ™½É´¼À¸àµ5Y@´Àà¼ÀáµÉ•…‘½¹±äµÁÉ•™±¥¡Ğˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÀÜèÔàèÀÄ¸ÄÔåhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀàµYALµ%9QI%QdµU%Pˆ°(€€€€€€‰­¥¹ˆè€‰…ÉÑ¥™…Ğˆ°(€€€€€€‰ÕÉ¤ˆè€‰…ÉÑ¥™…Ğè¼½•¹•Í¥ÌµÁ±…Ñ™½É´¼À¸àµ5Y@´Àà½ÙÁÌµÉ•±•…Í”µÑÉ•”µ¥¹Ñ•É¥Ñäµ…Õ‘¥Ğˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÄÄèÌÌèÔÌ¸äÔİhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀàµHÈµI1MµQIµ=9QIPˆ°(€€€€€€‰­¥¹ˆè€‰É•Á½Í¥Ñ½Éäµ™¥±”ˆ°(€€€€€€‰ÕÉ¤ˆè€‰É•Á¼è¼½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µ…Á¤½‘½­•È½ÁÉ½‘ÕÑ¥½¸½É•±•…Í”µÑÉ•”µµ…¹…•È¹Áäˆ°(€€€€€€‰Í¡„ÈÔØˆè€‰”ÉŒå…ŒÅÅŒÁ„ĞÈå‘ˆÌĞÍ”ÔÔäĞÌĞÑŒØÑŒÑˆÔäå…„ÌÌÁˆÀÀÍ”ÁˆÀØå˜É˜ÄÌÌÔÌàØÜˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÄÄèÌÌèÔÌ¸äÔİhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@ÀàµQ=5%µI	U%1µI=11	,ˆ°(€€€€€€‰­¥¹ˆè€‰…ÉÑ¥™…Ğˆ°(€€€€€€‰ÕÉ¤ˆè€‰…ÉÑ¥™…Ğè¼½•¹•Í¥ÌµÁ±…Ñ™½É´¼À¸àµ5Y@´Àà½…Ñ½µ¥ŒµÉ•±•…Í”µÑÉ•”µ…¹µ½Á•É…Ñ¥½¹…°µÉ½±±‰…¬µ±½Í•½ÕĞˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÄÜèÈÈèÀÑhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@Ààµ]µIU9Q%5µAHˆ°(€€€€€€‰­¥¹ˆè€‰¥Ñ¡ÕˆµÁÈˆ°(€€€€€€‰ÕÉ¤ˆè€‰¡ÑÑÁÌè¼½¥Ñ¡Õˆ¹½´½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µİ•ˆ½ÁÕ±°¼ÄÌˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÄÜèÀÜèĞáhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@Ààµ]µIU9Q%5µA=MQ5Iµ$ˆ°(€€€€€€‰­¥¹ˆè€‰¥Ñ¡ÕˆµÉÕ¸ˆ°(€€€€€€‰ÕÉ¤ˆè€‰¡ÑÑÁÌè¼½¥Ñ¡Õˆ¹½´½…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µİ•ˆ½…Ñ¥½¹Ì½ÉÕ¹Ì¼ÌÄàÈÈÔØØÌàÈˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÄÜèÈÈèÀÑhˆ(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰Xµ5Y@Ààµ]µAIY%\µ1=M=UPˆ°(€€€€€€‰­¥¹ˆè€‰…ÉÑ¥™…Ğˆ°(€€€€€€‰ÕÉ¤ˆè€‰…ÉÑ¥™…Ğè¼½•¹•Í¥ÌµÁ±…Ñ™½É´¼À¸àµ5Y@´Àà½İ•ˆµÉÕ¹Ñ¥µ”µÁÉ•Ù¥•Üµ±½Í•½ÕĞˆ°(€€€€€€‰…ÁÑÕÉ•‘Ğˆè€ˆÈÀÈØ´Àà´ÄÑPÄÜèÈÈèÀÑhˆ(€€€ô(€t°(€€‰‰±½­•ÉÌˆèl(€€€ì(€€€€€€‰¥ˆè€‰	1=,µAU	1%µ=I%%8ˆ°(€€€€€€‰ÍÑ…ÑÕÌˆè€‰É•Í½±Ù•ˆ°(€€€€€€‰ÍÕµµ…Éäˆè€‰<‰±½­•È‘”9L°Q1L”!QQAL¡•…±Ñ µ½¹±ä™½¤É•Í½±Ù¥‘¼Á•±„]¥¹‘½Ü€È½´‘•¥Ï¼-@ì•ÍÑ„É•Í½±×Ÿ¼»¼…ÕÑ½É¥é„€½…Á¤½ØÄ¹•´ÅÕ…±ÅÕ•ÈÉ½Ñ„™Õ¹¥½¹…°¸ˆ°(€€€€€€‰½İ¹•Èˆè€‰…ÉÑ¡ÕÈˆ°(€€€€€€‰‰±½­ÍQ…Í­%‘Ìˆèmt(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰	1=,µ]µYI0µU9Q%=90ˆ°(€€€€€€‰ÍÑ…ÑÕÌˆè€‰½Á•¸ˆ°(€€€€€€‰ÍÕµµ…Éäˆè€‰<ÉÕ¹Ñ¥µ”]•ˆ½ÉÉ¥¥‘¼™½¤¥¹Ñ•É…‘¼”¼AÉ•Ù¥•Ü½¹ÑÉ½±…‘¼™½¤É•µ½Ù¥‘¼°µ…ÌAÉ½‘ÕÑ¥½¸½¹Ñ¥¹Õ„Í•´ÕÍÑ½´‘½µ…¥¸™Õ¹¥½¹…°¸=É¥¥¸­•ä°Ûµ¹Õ±¼‘”‘½·µ¹¥¼°9L°Íµ½­”½Á•É…¥½¹…°”…ÕÑ½É¥é‡Ÿ¼‘”É•ÑÉä…¥¹‘„ÁÉ•¥Í…´Í•È™•¡…‘½Ì…¹Ñ•Ì‘„•áÁ½Í§Ÿ¼€½…Á¤½ØÄ¸ˆ°(€€€€€€‰½İ¹•Èˆè€‰…ÉÑ¡ÕÈˆ°(€€€€€€‰‰±½­ÍQ…Í­%‘ÌˆèlˆÀ¸àµ5Y@´Àà‰t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰	1=,µI=YIdˆ°(€€€€€€‰ÍÑ…ÑÕÌˆè€‰É•Í½±Ù•ˆ°(€€€€€€‰ÍÕµµ…Éäˆè€‰]¥¹‘½ÜHĞÉ•Í½±Ù•Ô¼‰±½­•Èè¼ÉÕ¹¹•È½ÉÉ¥¥‘¼Á…ÍÍ½ÔÉ•ÍÑ½É”¥Í½±…‘¼½´…Ì1Ì¥¹Ñ•¹¥½¹…¥Ì°¡•­Á½¥¹Ğ”‰…­ÕÀÉ•Õ±…È™½É…´Ù•É¥™¥…‘½Ì¹¼É¥Ù”°¼Ñ¥µ•È™½¤…Ñ¥Ù…‘¼”IµI=YIdÁ…ÍÍ½Ô¸ˆ°(€€€€€€‰½İ¹•Èˆè€‰…ÉÑ¡ÕÈˆ°(€€€€€€‰‰±½­ÍQ…Í­%‘Ìˆèmt(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰	1=,µA$µI1Mµ	%9%9ˆ°(€€€€€€‰ÍÑ…ÑÕÌˆè€‰É•Í½±Ù•ˆ°(€€€€€€‰ÍÕµµ…Éäˆè€‰<‰¥¹‘¥¹œÙ•ÉÍ¥½¹…‘¼™½¤½ÉÉ¥¥‘¼èÁÉ½µ¿Ÿ¼ÕÍ„„Ñ‘…˜”€ÔÙ…‘„Á•Éµ…¹•”Í½µ•¹Ñ”½µ¼É½±±‰…¬½É•½Ù•Éä…¹Ñ•É¥½È¸ˆ°(€€€€€€‰½İ¹•Èˆè€‰…•¹Ğˆ°(€€€€€€‰‰±½­ÍQ…Í­%‘Ìˆèmt(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰	1=,µYALµI1MµQIµ%9QI%Qdˆ°(€€€€€€‰ÍÑ…ÑÕÌˆè€‰½Á•¸ˆ°(€€€€€€‰ÍÕµµ…Éäˆè€‰ƒ…ÉÙ½É”€½½ÁĞ½•¹•Í¥Ì½É•±•…Í”ƒ¤ƒµ¹Ñ•É„Á…É„¼Á…È‘”‰Õ¹‘±•Ì‘•É¥Ù…‘¼‘¼A$µ…¥¸€ØäÌÁˆÉ”Ü°µ…Ì½Ì¹½Ù½Ì™¥¹•ÉÁÉ¥¹ÑÌ½¹Ñ…¥¹¥¹œµ½µµ¥Ğ‘•ÍÑ„É•½¹¥±¥‡Ÿ¼•á¥•´‰Õ¹‘±•Ì½µµ¥ÑÑ•µÉ•±•…Í”¹½Ù½Ì”É•‰¥¹…¹Ñ•Ì‘”ÅÕ…±ÅÕ•ÈÉ•ÑÉä½Á•É…¥½¹…°¸ˆ°(€€€€€€‰½İ¹•Èˆè€‰…•¹Ğˆ°(€€€€€€‰‰±½­ÍQ…Í­%‘ÌˆèlˆÀ¸àµ5Y@´Àà‰t(€€€ô(€t°(€€‰Á•¹‘¥¹!Õµ…¹•¥Í¥½¹Ìˆèl(€€€ì(€€€€€€‰¥ˆè€‰!µ5Y@Ààµ=AIQ%=90µQˆ°(€€€€€€‰ÅÕ•ÍÑ¥½¸ˆè€‰½¹•‘•ÈÕ´¹½Ù¼…Ñ”½Á•É…¥½¹…°Í½µ•¹Ñ”…ÃÍÌÉ•‰¥¹‘½Ì‰Õ¹‘±•Ì°É•Ù…±¥‘‡Ÿ¼‘„ƒ…ÉÙ½É”É•µ½Ñ„°¥¹Ù•¹Ó…É¥½Ì•áÑ•É¹½Ì”…±±½İ±¥ÍĞ•á…Ñ„‘¼É•ÑÉä•ÍÑ…É•´™•¡…‘½Ìüˆ°(€€€€€€‰İ¡å5…Ñ•É¥…°ˆè€‰<…Ñ”Á½‘•Ë„…ÕÑ½É¥é…ÈÕµ„¹½Ù„Ñ•¹Ñ…Ñ¥Ù„½½É‘•¹…‘„‘”É•±•…Í”°Y•É•°°Í•É•ĞÍÑ½É”°‘½·µ¹¥¼”9Lì„Ñ•¹Ñ…Ñ¥Ù„…¹Ñ•É¥½È™½¤É•Ù•ÉÑ¥‘„”»¼ÑÉ…¹Í™•É”…ÕÑ½É¥é‡Ÿ¼¸ˆ°(€€€€€€‰‰±½­¥¹Q…Í­%‘ÌˆèlˆÀ¸àµ5Y@´Àà‰t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰!µ5Y@Ààµ-@µI=11	,ˆ°(€€€€€€‰ÅÕ•ÍÑ¥½¸ˆè€‰ÃÍÌ¼Íµ½­”Í¥¹Ó¥Ñ¥¼‘¥Ù¥‘¥‘¼°µ…¹Ñ•È„É•±•…Í”½Ô•á•ÕÑ…ÈÉ½±±‰…¬¥¹‘•Á•¹‘•¹Ñ”‘”]•ˆ°A$”9Lüˆ°(€€€€€€‰İ¡å5…Ñ•É¥…°ˆè€‰‘•¥Ï¼™¥¹…°½¹ÑÉ½±„•áÁ½Í§Ÿ¼™Õ¹¥½¹…°”±½Í•½ÕĞ‘„µ¥ÍÏ¼Í•´‘…‘½Ì½ÔÕÍ×…É¥½ÌÉ•…¥Ì¸ˆ°(€€€€€€‰‰±½­¥¹Q…Í­%‘ÌˆèlˆÀ¸àµ5Y@´Àà‰t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰!µ5=9%Q=I%9ˆ°(€€€€€€‰ÅÕ•ÍÑ¥½¸ˆè€‰EÕ…°Á½³µÑ¥„‘”…±•ÉÑ…Ì°‘•ÍÑ¥¹…Ó…É¥½Ì”•Í…±½¹…µ•¹Ñ¼Í•Ë„…ÁÉ½Ù…‘„Á…É„¼UÁÑ¥µ•I½‰½Ğ”½ÌÍ¥¹…¥Ì¥¹Ñ•É¹½Ìüˆ°(€€€€€€‰İ¡å5…Ñ•É¥…°ˆè€‰…‰•ÉÑÕÉ„½¹ÑÉ½±…‘„•á¥”‘•Ñ•Ÿ¼”É•ÍÁ½ÍÑ„½Á•É…¥½¹…°¸ˆ°(€€€€€€‰‰±½­¥¹Q…Í­%‘ÌˆèlˆÀ¸àµ5Y@´ÀÜˆ°€ˆÀ¸àµ5Y@´Àä‰t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰!µI0µQˆ°(€€€€€€‰ÅÕ•ÍÑ¥½¸ˆè€‰EÕ…¥ÌÁÉ¥µ•¥É½ÌÕÍ×…É¥½Ì”‘…‘½ÌÉ•…¥ÌÁ½‘•Ë¼Í•È…ÕÑ½É¥é…‘½Ì°”•´ÅÕ…°µ½µ•¹Ñ¼üˆ°(€€€€€€‰İ¡å5…Ñ•É¥…°ˆè€‰…‘½ÌÉ•…¥Ì•á¥•´É•±•…Í”…Ñ•Ì”…ÕÑ½É¥é‡Ÿ¼¡Õµ…¹„•ÍÁ•µ™¥„¸ˆ°(€€€€€€‰‰±½­¥¹Q…Í­%‘ÌˆèlˆÀ¸àµ5Y@´Àä‰t(€€€ô(€t°(€€‰ÍÕÁ•ÉÍ•‘•‘A±…¹Ìˆèl(€€€ì(€€€€€€‰¥ˆè€‰A18´À¸à¸È´À¸à¸ÄÄˆ°(€€€€€€‰Ñ¥Ñ±”ˆè€‰M•Å×©¹¥„…¹Ñ•É¥½È‘”ÁÉ½‘×Ÿ¼€À¸à¸È„€À¸à¸ÄÄˆ°(€€€€€€‰ÍÕÁ•ÉÍ•‘•‘Ğˆè€ˆÈÀÈØ´Àà´ÀÍPÄÈèÀÀèÀÁhˆ°(€€€€€€‰É•Á±…•‘	äˆè€ˆÀ¸àµ5Y@ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl‰XµA$µHÀÄÌµ	M‰t(€€€ô(€t°(€€‰Á•Éµ…¹•¹Ñ%¹Ù…É¥…¹ÑÌˆèl(€€€ì(€€€€€€‰¥ˆè€‰A$µA$µUQ!=I%Qdˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰A$ƒ¤„…ÕÑ½É¥‘…‘”‘”Í•ÕÉ…»„°Ñ•¹…¹Ğ°É•É…Ì‘”¹•ŸÍ¥¼”•ÍÑ…‘¼Ñ•µÁ½É…°‘¼ÁÉ½©•Ñ¼¸ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl‰XµA$µHÀÄÌµ	M‰t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰A$µMIQLˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰M•É•‘½Ì»¼•¹ÑÉ…´•´¥Ğ°™É½¹Ñ•¹°¥µ…•´°±½Ì½Ô•Ù¥“©¹¥…Ì¸ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl‰XµA$µAI=UQ%=8µ	M‰t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰A$µ9<µ%IPµaA=MUIˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰A$”A½ÍÑÉ•ME0»¼Á½‘•´Í•È•áÁ½ÍÑ½Ì‘¥É•Ñ…µ•¹Ñ”ƒ€%¹Ñ•É¹•Ğ¸ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl‰XµA$µHÀÄÌµ	M‰t(€€€ô(€t°(€€‰É•±•…Í•…Ñ•Ìˆèl(€€€ì(€€€€€€‰¥ˆè€‰IµQ1Lˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰QÉ…•™¥¬°!QQAL”¡½ÍÑ¹…µ”™½É…´½µÁÉ½Ù…‘½Ì•á±ÕÍ¥Ù…µ•¹Ñ”Á…É„ÁÕ‰±¥Œ!QQAL¡•…±Ñ µ½¹±äì¼…Ñ”»¼…ÕÑ½É¥é„€½…Á¤½ØÄ¹•´ÅÕ…±ÅÕ•ÈÉ½Ñ„™Õ¹¥½¹…°¸ˆ°(€€€€€€‰ÍÑ…ÑÕÌˆè€‰Á…ÍÍ•ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl(€€€€€€€€‰XµA$µAI=UQ%=8µ	Mˆ°(€€€€€€€€‰Xµ5Y@ÀÙµ]%9=\Èµ1=M=UPˆ(€€€€€t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰IµI=YIdˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰	…­ÕÀÉ•ÕÁ•Ë…Ù•°”É•ÍÑ½É”Í¥¹Ó¥Ñ¥¼‘•Ù•´Á…ÍÍ…È…¹Ñ•Ì‘”‘…‘½ÌÉ•…¥Ì¸ˆ°(€€€€€€‰ÍÑ…ÑÕÌˆè€‰Á…ÍÍ•ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl(€€€€€€€€‰XµA$µAI=UQ%=8µ	Mˆ°(€€€€€€€€‰Xµ5Y@ÀİµIMQ=IµIU99Hµ=IIQ%=8ˆ°(€€€€€€€€‰Xµ5Y@Àİµ]%9=\µHĞµ1=M=UPˆ(€€€€€t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰IµI=MLµQ99Pˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰Mµ½­”™Õ¹¥½¹…°”Ñ•ÍÑ”…‘Ù•ÉÍ…É¥…°É½ÍÌµÑ•¹…¹Ğ‘•Ù•´Á…ÍÍ…È…¹Ñ•Ì‘½ÌÁÉ¥µ•¥É½ÌÕÍ×…É¥½Ì¸ˆ°(€€€€€€‰ÍÑ…ÑÕÌˆè€‰Á•¹‘¥¹œˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl‰XµA$µAI=UQ%=8µ	M‰t(€€€ô(€t°(€€‰ÕÉÉ•¹ÑI•ÍÑÉ¥Ñ¥½¹Ìˆèl(€€€ì(€€€€€€‰¥ˆè€‰=HµM%91µYALˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰‰…Í•±¥¹”‘½Õµ•¹Ñ…‘„ÕÍ„Õµ„ƒé¹¥„YAL”Õ´ƒé¹¥¼™…¥±ÕÉ”‘½µ…¥¸¸ˆ°(€€€€€€‰É•Ù¥•İQÉ¥•Èˆè€‰I•…Ù…±¥…È½´…‘¿Ÿ¼°É••¥Ñ„°M1<½Ô¹••ÍÍ¥‘…‘”‘”…±Ñ„‘¥ÍÁ½¹¥‰¥±¥‘…‘”¸ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl‰XµA$µHÀÄÌµ	Mˆ°€‰XµA$µAI=UQ%=8µ	M‰t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰=HµM%91µIA1%ˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰A$Ãé‰±¥„Á•Éµ…¹•”±¥µ¥Ñ…‘„„Õµ„Ë¥Á±¥„•¹ÅÕ…¹Ñ¼½¹ÑÉ½±•Ì™½É•´ÁÉ½•ÍÌµ±½…°¸ˆ°(€€€€€€‰É•Ù¥•İQÉ¥•Èˆè€‰I•…Ù…±¥…È…¹Ñ•Ì‘”•Í…±…È¡½É¥é½¹Ñ…±µ•¹Ñ”¸ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl‰XµA$µHÀÄÌµ	M‰t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰=Hµ9<µI0µQˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰…‘½ÌÉ•…¥ÌÁ•Éµ…¹••´»¼…ÕÑ½É¥é…‘½Ì¸ˆ°(€€€€€€‰É•Ù¥•İQÉ¥•Èˆè€‰I•…Ù…±¥…ÈÍ½µ•¹Ñ”…ÃÍÌÉ•±•…Í”…Ñ•Ì”‘•¥Ï¼¡Õµ…¹„•áÁ³µ¥Ñ„¸ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl‰XµA$µHÀÄÌµ	M‰t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰=HµA=MQILµAI%YQˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰<A½ÍÑÉ•ME0‘•Ù”Á•Éµ…¹••ÈÁÉ¥Ù…‘¼°Í•´‰¥¹‘¥¹œ‘”Á½ÉÑ„¹¼¡½ÍĞ½Ô•áÁ½Í§Ÿ¼‘¥É•Ñ„ƒ€%¹Ñ•É¹•Ğ¸ˆ°(€€€€€€‰É•Ù¥•İQÉ¥•Èˆè€‰%¹Ñ•ÉÉ½µÁ•È…¹Ñ•Ì‘”ÅÕ…±ÅÕ•È…±Ñ•É‡Ÿ¼ÅÕ”ÁÕ‰±¥ÅÕ”½Ô½¹Ñ½É¹”„É•‘”ÁÉ¥Ù…‘„‘¼‰…¹¼¸ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl(€€€€€€€€‰XµA$µHÀÄÌµ	Mˆ°(€€€€€€€€‰Xµ5Y@ÀÙµQÄµIA=IPˆ°(€€€€€€€€‰Xµ5Y@ÀÙµ]%9=\Äµ1=M=UPˆ(€€€€€t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰=HµU9Q%=90µA$µ%0µ1=Mˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰A$™Õ¹¥½¹…°€½…Á¤½ØÄÁ•Éµ…¹•”™…¥°µ±½Í•ì„€ÀÙ±¥µ¥Ñ„„•áÁ½Í§Ÿ¼Ãé‰±¥„…¼¡•…±Ñ µ½¹±ä¸ˆ°(€€€€€€‰É•Ù¥•İQÉ¥•Èˆè€‰I•…Ù…±¥…ÈÍ½µ•¹Ñ”…ÃÍÌÉ•½¹¥±¥‡Ÿ¼…ÁÀ¸½Y•É•°°Ñ•ÍÑ•Ì™Õ¹¥½¹…¥Ì°IµI=MLµQ99P”…ÕÑ½É¥é‡Ÿ¼•ÍÁ•µ™¥„¸ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl(€€€€€€€€‰Xµ5Y@ÀÙµQÄµIA=IPˆ°(€€€€€€€€‰Xµ5Y@ÀÙµ]%9=\Äµ1=M=UPˆ°(€€€€€€€€‰Xµ5Y@ÀÙµ]%9=\Èµ1=M=UPˆ(€€€€€t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰=HµAU	1%µ!1Q µ=91dˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰•áÁ½Í§Ÿ¼Ãé‰±¥„Á•Éµ…¹•”±¥µ¥Ñ…‘„„P€½¡•…±Ñ Á½È!QQALì€½…Á¤½ØÄ°‘•µ…¥ÌÉ½Ñ…Ì™Õ¹¥½¹…¥Ì°‘…Í¡‰½…É”·¥Ñ½‘½Ì»¼Á•Éµ¥Ñ¥‘½Ì½¹Ñ¥¹Õ…´™…¥°µ±½Í•¸ˆ°(€€€€€€‰É•Ù¥•İQÉ¥•Èˆè€‰I•…Ù…±¥…ÈÍ½µ•¹Ñ”…ÃÍÌÛµ¹Õ±¼…ÁÀ¸½Y•É•°°Ñ•ÍÑ•Ì™Õ¹¥½¹…¥Ì”É½ÍÌµÑ•¹…¹Ğ°É•½Ù•Éä…Á±¥…Ù•°”…ÕÑ½É¥é‡Ÿ¼¡Õµ…¹„•ÍÁ•µ™¥„Á…É„É½Ñ„™Õ¹¥½¹…°¸ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl‰Xµ5Y@ÀÙµ]%9=\Èµ1=M=UP‰t(€€€ô°(€€€ì(€€€€€€‰¥ˆè€‰=Hµ5Y@Ààµ9<µAI=UQ%=8µ5UQQ%=8ˆ°(€€€€€€‰ÍÑ…Ñ•µ•¹Ğˆè€‰ÃÍÌ¼É½±±‰…¬½Á•É…¥½¹…°”„½ÉÉ—Ÿ¼]•ˆ°¹•¹¡Õµ„¹½Ù„µÕÑ‡Ÿ¼‘”YAL°Y•É•°°!½ÍÑ¥¹•È°Í•É•Ğ°‘½·µ¹¥¼°É½ÕÑ•È™Õ¹¥½¹…°½Ô9L•ÍÓ„…ÕÑ½É¥é…‘„ìAÉ½‘ÕÑ¥½¸”¼ÉÕ¹Ñ¥µ”€ÔÙ…‘„‘•Ù•´Á•Éµ…¹••È¥¹…±Ñ•É…‘½Ì¸ˆ°(€€€€€€‰É•Ù¥•İQÉ¥•Èˆè€‰I•…Ù…±¥…ÈÍ½µ•¹Ñ”…ÃÍÌ‰Õ¹‘±•ÌÕÉÉ•¹Ğ½É½±±‰…¬‘¼¹½Ù¼½¹Ñ…¥¹¥¹œ½µµ¥Ğ°É•‰¥¹Ù•É¥™¥…‘¼”¹½Ù¼=Á•É…Ñ¥½¹…°I•ÑÉä…Ñ”•áÁ³µ¥Ñ¼¸ˆ°(€€€€€€‰Í½ÕÉ•Ù¥‘•¹•%‘Ìˆèl(€€€€€€€€‰Xµ5Y@ÀàµI=91dµAI1%!Pˆ°(€€€€€€€€‰Xµ5Y@ÀàµYALµ%9QI%QdµU%Pˆ°(€€€€€€€€‰Xµ5Y@ÀàµHÈµI1MµQIµ=9QIPˆ°(€€€€€€€€‰Xµ5Y@ÀàµQ=5%µI	U%1µI=11	,ˆ°(€€€€€€€€‰Xµ5Y@Ààµ]µAIY%\µ1=M=UPˆ(€€€€€t(€€€ô(€t°(€€‰Á½¥¹Ñ•É5•Ñ…‘…Ñ„ˆèì(€€€€‰É•Á½Í¥Ñ½Éäˆè€‰…ÉÑ¡ÕÉÁ½ÉÑ½‘•Ø½•¹•Í¥ÌµÁ±…Ñ™½É´µİ•ˆˆ°(€€€€‰Á…Ñ ˆè€‰‘½Ì½µ•µ½Éä½ÁÉ½©•ĞµÍÑ…Ñ”¹Á½¥¹Ñ•È¹ØÄ¹©Í½¸ˆ°(€€€€‰Í¡•µ…Y•ÉÍ¥½¸ˆè€ˆÄ¸À¸Àˆ°(€€€€‰µ½‘”ˆè€‰Á½¥¹Ñ•Èµ½¹±äˆ°(€€€€‰ÑÉ…¹Í¥Ñ¥½¹%ˆè€‰ ´ÀÄµI=MLµIA<ˆ°(€€€€‰Ñ…É•ÑMÑ…Ñ•I•Ù¥Í¥½¸ˆè€‰ ´ÀÄµ=5A1Qˆ(€ô)ô(
