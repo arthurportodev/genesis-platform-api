@@ -6,7 +6,7 @@
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-14T17:22:04Z",
+  "updatedAt": "2026-08-15T11:45:00Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -30,7 +30,7 @@
       "status": "integrated",
       "memoryRevision": {
         "kind": "commit",
-        "sha": "33e99bfcfb87375a801ac49343c28a9fe76e2bb2"
+        "sha": "b26f4079aa4da735faa881753f5351d377009dcc"
       }
     }
   ],
@@ -57,39 +57,35 @@
     "authorizedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a",
     "authorizedApiImageConfigDigest": "sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9",
     "rollbackApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659",
-    "webIntegratedRevision": "33e99bfcfb87375a801ac49343c28a9fe76e2bb2"
+    "webIntegratedRevision": "b26f4079aa4da735faa881753f5351d377009dcc"
   },
   "phase": {
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-08-WEB-RUNTIME-REMEDIATION",
-      "title": "Correção do runtime Web e Preview controlado",
-      "completedAt": "2026-08-14T17:22:04Z",
+      "id": "0.8-MVP-08",
+      "title": "Vercel, proxy, domínio e integração frontend/backend",
+      "completedAt": "2026-08-15T11:45:00Z",
       "evidenceIds": [
-        "EV-MVP08-WEB-RUNTIME-PR",
-        "EV-MVP08-WEB-RUNTIME-POSTMERGE-CI",
-        "EV-MVP08-WEB-PREVIEW-CLOSEOUT"
+        "EV-MVP08-WEB-FINAL-PR",
+        "EV-MVP08-WEB-FINAL-POSTMERGE-CI",
+        "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
       ]
     }
   },
   "currentWork": {
-    "status": "blocked",
-    "summary": "A correção Web foi integrada e o Preview controlado foi aprovado e removido, mas a produção continua no rollback declarado. A nova memória containing-commit altera os fingerprints dos bundles, portanto a árvore remota precisa de rebind antes de qualquer novo Gate operacional ou retry de produção.",
-    "task": {
-      "id": "0.8-MVP-08",
-      "title": "Vercel, proxy, domínio e integração frontend/backend"
-    }
+    "status": "none",
+    "summary": "A missão 0.8-MVP-08 foi concluída tecnicamente sem usuários ou dados reais. C4R1 está Current e funcional no domínio final, a origem permanece protegida, o rollback está preservado e qualquer próxima missão depende de decisão humana explícita."
   },
   "nextTask": {
-    "id": "0.8-MVP-08B-RELEASE-TREE-REBIND-AND-OPERATIONAL-RETRY-GATE",
-    "title": "Rebind da árvore de release e novo Gate de retry operacional"
+    "id": "0.8-MVP-09-READINESS-DECISION",
+    "title": "Decisão humana sobre escopo, plano de hosting e autorização da próxima missão"
   },
   "operationalState": {
-    "summary": "Production A permanece current; B foi rejeitado por falha ESM e o Web corrigido foi validado em Preview e integrado sem promoção. A operação funcional foi revertida: a VPS executa 56ada com FRONTEND_URL=https://genesis.invalid, router health-only e origin key ausente. A árvore remota é íntegra para os bundles de 6930b2e7, mas não corresponde aos novos fingerprints containing-commit; produção não foi retomada.",
+    "summary": "C4R1 está Current e READY no commit Web b26f4079, servindo app.agenciagenesismkt.com.br por CNAME e TLS válidos. O proxy same-origin /api/v1 alcança a API a4daf somente pelo Traefik protegido, com PostgreSQL privado e saudável. B4, A e a imagem 56ada permanecem como rollback; não houve migration, dado ou usuário real.",
     "basis": "observed",
-    "documentedAt": "2026-08-14T17:22:04Z",
-    "observedAt": "2026-08-14T17:22:04Z",
+    "documentedAt": "2026-08-15T11:45:00Z",
+    "observedAt": "2026-08-15T11:45:00Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -166,7 +162,7 @@
       {
         "id": "OPS-API-IMAGE-PRESERVED",
         "status": "present",
-        "statement": "A API usa o digest aprovado, está saudável com TRUST_PROXY_HOPS=1 e sem binding no host; somente a API foi recriada no Checkpoint C, com downtime medido de 4,711 segundos.",
+        "statement": "No Checkpoint C da Window 1, a API usou o digest então aprovado, permaneceu saudável com TRUST_PROXY_HOPS=1 e sem binding no host; somente a API foi recriada, com downtime medido de 4,711 segundos.",
         "basis": "observed",
         "documentedAt": "2026-08-11T20:40:48.3754942Z",
         "observedAt": "2026-08-11T20:27:40Z",
@@ -175,7 +171,7 @@
       {
         "id": "OPS-TRAEFIK-IMAGE-APPROVED",
         "status": "present",
-        "statement": "A imagem Traefik aprovada por digest imutável para linux/amd64 está ativa em modo public-full health-only, sem Docker socket ou dashboard público.",
+        "statement": "Na Window 2, a imagem Traefik aprovada por digest imutável para linux/amd64 foi ativada em modo public-full health-only, sem Docker socket ou dashboard público.",
         "basis": "observed",
         "documentedAt": "2026-08-12T10:47:26.6039363Z",
         "observedAt": "2026-08-12T10:17:13.281Z",
@@ -193,7 +189,7 @@
       {
         "id": "OPS-TRAEFIK-LIVE",
         "status": "present",
-        "statement": "O Traefik está running em modo public-full health-only com TRUST_PROXY_HOPS=1 e restart count zero; GET /health é a única rota pública bem-sucedida e a matriz fail-closed passou.",
+        "statement": "Na Window 2, o Traefik executou em modo public-full health-only com TRUST_PROXY_HOPS=1 e restart count zero; GET /health foi a única rota pública bem-sucedida e a matriz fail-closed passou naquele checkpoint.",
         "basis": "observed",
         "documentedAt": "2026-08-12T10:47:26.6039363Z",
         "observedAt": "2026-08-12T10:17:13.281Z",
@@ -220,7 +216,7 @@
       {
         "id": "OPS-PUBLIC-HTTPS",
         "status": "present",
-        "statement": "TCP/443 está público e GET https://api.agenciagenesismkt.com.br/health retorna 200; /api/v1, /api/v1/health, dashboard, métodos não permitidos e demais rotas funcionais permanecem fail-closed.",
+        "statement": "Na Window 2, TCP/443 ficou público e GET https://api.agenciagenesismkt.com.br/health retornou 200; /api/v1, /api/v1/health, dashboard, métodos não permitidos e demais rotas funcionais permaneceram fail-closed naquele checkpoint.",
         "basis": "observed",
         "documentedAt": "2026-08-12T10:47:26.6039363Z",
         "observedAt": "2026-08-12T10:17:13.281Z",
@@ -318,12 +314,12 @@
       },
       {
         "id": "OPS-VERCEL-LINK",
-        "status": "partial",
-        "statement": "O projeto Vercel e seus deployments foram inspecionados em sessão autenticada: Production A permanece current, B está rejeitado e o Preview corretivo foi removido. Nenhum custom domain ou alias app.agenciagenesismkt.com.br foi associado; o vínculo funcional continua pendente.",
+        "status": "present",
+        "statement": "O projeto Vercel Hobby genesis-platform-web foi reconciliado em sessão autenticada: C4R1 está Current e READY, app.agenciagenesismkt.com.br possui configuração válida Production, auto-deploy Git está desativado e não há bypass credential de automação.",
         "basis": "observed",
-        "documentedAt": "2026-08-14T17:22:04Z",
-        "observedAt": "2026-08-14T17:22:04Z",
-        "evidenceIds": ["EV-MVP08-WEB-PREVIEW-CLOSEOUT"]
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
       },
       {
         "id": "OPS-ACME-CONTACT",
@@ -424,35 +420,38 @@
       {
         "id": "OPS-MVP08-WEB-INTEGRATED",
         "status": "present",
-        "statement": "A revisão Web integrada e autoritativa para a 08 é 33e99bfcfb87375a801ac49343c28a9fe76e2bb2, resultado do squash do PR #13 após CI e verificação independentes.",
+        "statement": "A revisão Web integrada, implantada e autoritativa para a 08 é b26f4079aa4da735faa881753f5351d377009dcc, tree a9d71a2e3b4054f6307a1f7d677f81ceaf874cde, resultado do squash do PR #15 após CI e verificação independentes.",
         "basis": "observed",
-        "documentedAt": "2026-08-14T17:22:04Z",
-        "observedAt": "2026-08-14T17:22:04Z",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
         "evidenceIds": [
-          "EV-MVP08-WEB-RUNTIME-PR",
-          "EV-MVP08-WEB-RUNTIME-POSTMERGE-CI"
+          "EV-MVP08-WEB-FINAL-PR",
+          "EV-MVP08-WEB-FINAL-POSTMERGE-CI"
         ]
       },
       {
         "id": "OPS-MVP08-PREFLIGHT-BLOCKED",
-        "status": "partial",
-        "statement": "A 08B permanece fail-closed após rollback: Production A está current, a VPS executa 56ada com FRONTEND_URL=https://genesis.invalid, router health-only e origin key ausente. Rebind dos novos bundles, configuração de origem/domínio/DNS e novo Gate operacional ainda são necessários antes de qualquer retry.",
+        "status": "present",
+        "statement": "Os gaps do preflight 08B foram fechados dentro dos Gates autorizados: bundle versionado, árvore atômica, Vercel Hobby, domínio, DNS, chave de origem, router protegido, smokes e rehearsal foram comprovados sem dados reais.",
         "basis": "observed",
-        "documentedAt": "2026-08-14T17:22:04Z",
-        "observedAt": "2026-08-14T17:22:04Z",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
         "evidenceIds": [
           "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
-          "EV-MVP08-WEB-PREVIEW-CLOSEOUT"
+          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
         ]
       },
       {
         "id": "OPS-MVP08-VPS-INTEGRITY-AUDIT",
         "status": "present",
-        "statement": "remoteTreeBinding=REBIND_REQUIRED. A árvore remota foi reconstruída atomicamente e verificada para o par committed-release derivado de 6930b2e7; o rollback operacional subsequente preservou o runtime 56ada. Como esta reconciliação muda o containing commit, a árvore continua íntegra para o bundle anterior, mas exige rebind para os novos fingerprints.",
+        "statement": "remoteTreeBinding=REBIND_REQUIRED. No início deste closeout, a árvore remota estava íntegra e vinculada ao API main df7fca7392b90a788903797a2e30cb9f4b6cb05d, com fingerprints current 63312f7a848cd8646c9d7eefb965ba3f15e2cde6effdd0a7b5b3e62c26fb8d2e e rollback 2cdfb05a2392ab3527bb95f069e7fd70ae7db8403ea19824b62ee45b5583faf5. Como a memória faz parte da identidade containing-commit, o squash deste closeout exige rebind atômico pós-merge, sem alteração de bytes de runtime ou restart.",
         "basis": "observed",
-        "documentedAt": "2026-08-14T17:22:04Z",
-        "observedAt": "2026-08-14T17:22:04Z",
-        "evidenceIds": ["EV-MVP08-ATOMIC-REBUILD-ROLLBACK"]
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": [
+          "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
+          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
+        ]
       },
       {
         "id": "OPS-MVP08-RELEASE-TREE-CONTRACT",
@@ -465,10 +464,10 @@
       {
         "id": "OPS-MVP08-HUMAN-SECURITY",
         "status": "partial",
-        "statement": "2FA e recuperação foram confirmados para Vercel, GitHub e Bitwarden. O 2FA da Hostinger permanece pendente por decisão de risco humana explícita; a sessão autenticada foi usada somente dentro das janelas autorizadas e nova autenticação continua fail-closed.",
+        "statement": "2FA e recuperação foram confirmados para Vercel, GitHub e Bitwarden. O 2FA da Hostinger permanece pendente sob risco explicitamente aceito por Arthur; nenhuma nova operação Hostinger deve contornar reautenticação ou ampliar esse risco.",
         "basis": "documented",
-        "documentedAt": "2026-08-14T17:22:04Z",
-        "evidenceIds": ["EV-MVP08-ATOMIC-REBUILD-ROLLBACK"]
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
       },
       {
         "id": "OPS-MVP08-WEB-RUNTIME-INCIDENT",
@@ -491,14 +490,107 @@
       {
         "id": "OPS-MVP08-OPERATIONAL-ROLLBACK",
         "status": "present",
-        "statement": "Production A dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr no commit fa4193fc permanece current e inalterada; B foi retido apenas para diagnóstico. A VPS continua na imagem 56ada, FRONTEND_URL=https://genesis.invalid, router health-only e origin key ausente; nenhuma retomada de produção, alteração DNS, segredo ou dado real ocorreu nesta correção.",
+        "statement": "O rollback integral preservado é: remover o CNAME app para retornar a NODATA, promover A dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr, restaurar a imagem 56ada, router health-only, FRONTEND_URL=https://genesis.invalid e remover ou desativar a origin key. B4 dpl_9TsE7H1V7CSFuV4f5PYb5ckWswzi é o rollback Web fail-closed imediato.",
         "basis": "observed",
-        "documentedAt": "2026-08-14T17:22:04Z",
-        "observedAt": "2026-08-14T17:22:04Z",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
         "evidenceIds": [
           "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
-          "EV-MVP08-WEB-PREVIEW-CLOSEOUT"
+          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
         ]
+      },
+      {
+        "id": "OPS-MVP08-FINAL-ARCHITECTURE",
+        "status": "present",
+        "statement": "A arquitetura final é Browser → Vercel same-origin /api/v1 → api.agenciagenesismkt.com.br → Traefik com chave de origem → Nest → PostgreSQL privado. O navegador não usa a origem API diretamente e o acesso direto sem chave permanece 404.",
+        "basis": "observed",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-MVP08-VERCEL-DEPLOYMENTS",
+        "status": "present",
+        "statement": "C4R1 dpl_AuunpMMmehaXdXFa5wu52DAMF99P está Current e READY no commit b26f4079. B4 dpl_9TsE7H1V7CSFuV4f5PYb5ckWswzi, A dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr e o C4 funcionalmente rejeitado dpl_7qaTzkffYxSHdDoKtHkQtvjPNJxJ permanecem retidos. Auto-deploy Git está desativado e há zero bypass credentials.",
+        "basis": "observed",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-MVP08-DNS-TLS",
+        "status": "present",
+        "statement": "app.agenciagenesismkt.com.br usa CNAME 3271c7a0f81a40b0.vercel-dns-017.com com TTL 300, confirmado em dois autoritativos e quatro resolvedores públicos, sem A ou AAAA diretos. TLS possui CN/SAN exato, emissor Let's Encrypt YR2 e validade observada até 2026-11-12.",
+        "basis": "observed",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-MVP08-ORIGIN-TRUST",
+        "status": "present",
+        "statement": "A API a4daf está saudável, privada e sem porta pública, com FRONTEND_URL=https://app.agenciagenesismkt.com.br, router funcional protegido e web proxy attestation=true. A origin key existe somente por metadados root:root, modo 0600 e tamanho 64; seu valor nunca foi lido. Na Vercel ela é Sensitive e apenas Production; o target não secreto é https://api.agenciagenesismkt.com.br/.",
+        "basis": "observed",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-MVP08-WEB-CORRECTIONS",
+        "status": "present",
+        "statement": "As correções incorporadas cobrem import ESM empacotado, proveniência do rewrite real da Vercel e snapshot de configuração por invocation, com regressões locais, Preview diagnóstico e validação cloud antes do cutover. C2 e C3 foram aposentadas e não são credenciais ativas.",
+        "basis": "observed",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": [
+          "EV-MVP08-WEB-RUNTIME-PR",
+          "EV-MVP08-WEB-FINAL-PR",
+          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
+        ]
+      },
+      {
+        "id": "OPS-MVP08-SYNTHETIC-VERIFICATION",
+        "status": "present",
+        "statement": "B4 respondeu 503 configuration_unavailable com zero upstream. C4R1 respondeu GET 200, HEAD 200 e OPTIONS 204 com no-store, CDN MISS, CORS da origem final, credentials true e cookie __Host-genesis_csrf Secure, host-only e Path=/; o acesso direto sem chave respondeu 404.",
+        "basis": "observed",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-MVP08-REHEARSAL-OBSERVATION",
+        "status": "present",
+        "statement": "O rehearsal C4R1 → B4 → C4R1 restaurou o mesmo deployment sem criar outro. Seis amostras sintéticas em aproximadamente cinco minutos aprovaram frontend, Function, health, DNS e bloqueio direto, com zero 5xx inesperado.",
+        "basis": "observed",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-MVP08-DATABASE-SCOPE",
+        "status": "present",
+        "statement": "PostgreSQL permaneceu saudável, privado e sem restart; nenhuma migration, alteração de banco, usuário real ou dado real foi executado. RHO permaneceu fora do escopo.",
+        "basis": "observed",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-MVP08-PLAN-BOUNDARY",
+        "status": "present",
+        "statement": "A Vercel permanece no plano Hobby exclusivamente para validação técnica não comercial do MVP. Usuários reais, dados reais e operação comercial não estão autorizados; plano, custos e compatibilidade contratual devem ser revistos antes da MVP-09 comercial ou de produção com usuários.",
+        "basis": "documented",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-MVP08-CLOSEOUT-FINDINGS",
+        "status": "present",
+        "statement": "O closeout operacional encerrou com findings Critical, High e Medium vazios. Deployments, branches, quarentenas, árvores de rollback e evidências foram preservados; eventual limpeza futura de deployments com snapshots de chaves aposentadas é opcional e não bloqueante.",
+        "basis": "observed",
+        "documentedAt": "2026-08-15T11:45:00Z",
+        "observedAt": "2026-08-15T11:45:00Z",
+        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
       }
     ]
   },
@@ -652,22 +744,40 @@
       "kind": "artifact",
       "uri": "artifact://genesis-platform/0.8-MVP-08/web-runtime-preview-closeout",
       "capturedAt": "2026-08-14T17:22:04Z"
+    },
+    {
+      "id": "EV-MVP08-WEB-FINAL-PR",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/15",
+      "capturedAt": "2026-08-15T08:58:58Z"
+    },
+    {
+      "id": "EV-MVP08-WEB-FINAL-POSTMERGE-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/actions/runs/31875823698",
+      "capturedAt": "2026-08-15T08:58:58Z"
+    },
+    {
+      "id": "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-08/C4R1-operational-closeout",
+      "capturedAt": "2026-08-15T11:45:00Z"
     }
   ],
   "blockers": [
     {
       "id": "BLOCK-PUBLIC-ORIGIN",
       "status": "resolved",
-      "summary": "O blocker de DNS, TLS e HTTPS health-only foi resolvido pela Window 2 com decisão KEEP; esta resolução não autoriza /api/v1 nem qualquer rota funcional.",
+      "summary": "DNS, TLS e origem funcional protegida foram comprovados no domínio final; a API direta continua fail-closed e o PostgreSQL permanece privado.",
       "owner": "arthur",
       "blocksTaskIds": []
     },
     {
       "id": "BLOCK-WEB-VERCEL-FUNCTIONAL",
-      "status": "open",
-      "summary": "O runtime Web corrigido foi integrado e o Preview controlado foi removido, mas Production A continua sem custom domain funcional. Origin key, vínculo de domínio, DNS, smoke operacional e autorização de retry ainda precisam ser fechados antes da exposição /api/v1.",
+      "status": "resolved",
+      "summary": "C4R1 está Current e READY no domínio final, com variáveis Production corretas, zero bypass, smokes sintéticos aprovados e rollback B4/A preservado.",
       "owner": "arthur",
-      "blocksTaskIds": ["0.8-MVP-08"]
+      "blocksTaskIds": []
     },
     {
       "id": "BLOCK-RECOVERY",
@@ -685,25 +795,13 @@
     },
     {
       "id": "BLOCK-VPS-RELEASE-TREE-INTEGRITY",
-      "status": "open",
-      "summary": "A árvore /opt/genesis/release é íntegra para o par de bundles derivado do API main 6930b2e7, mas os novos fingerprints containing-commit desta reconciliação exigem bundles committed-release novos e rebind antes de qualquer retry operacional.",
+      "status": "resolved",
+      "summary": "A árvore ativa e o rollback estão íntegros e vinculados ao containing commit df7fca7; o rebind mecânico decorrente do squash deste closeout está autorizado e deve concluir sem alteração de runtime ou restart.",
       "owner": "agent",
-      "blocksTaskIds": ["0.8-MVP-08"]
+      "blocksTaskIds": []
     }
   ],
   "pendingHumanDecisions": [
-    {
-      "id": "HD-MVP08-OPERATIONAL-GATE",
-      "question": "Conceder um novo Gate operacional somente após rebind dos bundles, revalidação da árvore remota, inventários externos e allowlist exata do retry estarem fechados?",
-      "whyMaterial": "O Gate poderá autorizar uma nova tentativa coordenada de release, Vercel, secret store, domínio e DNS; a tentativa anterior foi revertida e não transfere autorização.",
-      "blockingTaskIds": ["0.8-MVP-08"]
-    },
-    {
-      "id": "HD-MVP08-KEEP-ROLLBACK",
-      "question": "Após o smoke sintético dividido, manter a release ou executar rollback independente de Web, API e DNS?",
-      "whyMaterial": "A decisão final controla exposição funcional e closeout da missão sem dados ou usuários reais.",
-      "blockingTaskIds": ["0.8-MVP-08"]
-    },
     {
       "id": "HD-MONITORING",
       "question": "Qual política de alertas, destinatários e escalonamento será aprovada para o UptimeRobot e os sinais internos?",
@@ -714,6 +812,12 @@
       "id": "HD-REAL-DATA",
       "question": "Quais primeiros usuários e dados reais poderão ser autorizados, e em qual momento?",
       "whyMaterial": "Dados reais exigem release gates e autorização humana específica.",
+      "blockingTaskIds": ["0.8-MVP-09"]
+    },
+    {
+      "id": "HD-MVP09-HOSTING-PLAN",
+      "question": "Antes da MVP-09 comercial ou de produção com usuários, o plano Hobby continua técnica e contratualmente compatível ou será necessário um novo Gate de plano, custo e pagamento?",
+      "whyMaterial": "A validação atual é estritamente técnica e não comercial; nenhuma autorização de upgrade, pagamento, usuário ou dado real foi concedida.",
       "blockingTaskIds": ["0.8-MVP-09"]
     }
   ],
@@ -746,11 +850,12 @@
   "releaseGates": [
     {
       "id": "RG-TLS",
-      "statement": "Traefik, HTTPS e hostname foram comprovados exclusivamente para public HTTPS health-only; o gate não autoriza /api/v1 nem qualquer rota funcional.",
+      "statement": "TLS, hostname, CNAME e o caminho funcional same-origin protegido foram comprovados no domínio final; o acesso direto à API sem a chave continua 404.",
       "status": "passed",
       "sourceEvidenceIds": [
         "EV-API-PRODUCTION-BASE",
-        "EV-MVP06B-WINDOW2-CLOSEOUT"
+        "EV-MVP06B-WINDOW2-CLOSEOUT",
+        "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
       ]
     },
     {
@@ -800,32 +905,34 @@
       ]
     },
     {
-      "id": "OR-FUNCTIONAL-API-FAIL-CLOSED",
-      "statement": "A API funcional /api/v1 permanece fail-closed; a 06B limita a exposição pública ao health-only.",
-      "reviewTrigger": "Reavaliar somente após reconciliação app./Vercel, testes funcionais, RG-CROSS-TENANT e autorização específica.",
+      "id": "OR-FUNCTIONAL-API-ORIGIN-PROTECTED",
+      "statement": "A API funcional é acessível somente pelo proxy same-origin /api/v1 do domínio final e pelo Traefik protegido; a origem direta sem chave permanece 404.",
+      "reviewTrigger": "Interromper antes de qualquer mudança que permita bypass do proxy, exponha a chave ou relaxe CORS, cookies, cache ou proteção da origem.",
       "sourceEvidenceIds": [
-        "EV-MVP06B-GATE1-REPORT",
-        "EV-MVP06B-WINDOW1-CLOSEOUT",
-        "EV-MVP06B-WINDOW2-CLOSEOUT"
+        "EV-MVP08-WEB-FINAL-PR",
+        "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
       ]
     },
     {
-      "id": "OR-PUBLIC-HEALTH-ONLY",
-      "statement": "A exposição pública permanece limitada a GET /health por HTTPS; /api/v1, demais rotas funcionais, dashboard e métodos não permitidos continuam fail-closed.",
-      "reviewTrigger": "Reavaliar somente após vínculo app./Vercel, testes funcionais e cross-tenant, recovery aplicável e autorização humana específica para rota funcional.",
-      "sourceEvidenceIds": ["EV-MVP06B-WINDOW2-CLOSEOUT"]
+      "id": "OR-VERCEL-HOBBY-TECHNICAL-MVP",
+      "statement": "A Vercel Hobby é usada somente para validação técnica não comercial, sem usuários ou dados reais e sem autorização de upgrade, trial ou pagamento.",
+      "reviewTrigger": "Revisar plano, termos, custo e compatibilidade antes da MVP-09 comercial ou de produção com usuários.",
+      "sourceEvidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
     },
     {
       "id": "OR-MVP08-NO-PRODUCTION-MUTATION",
-      "statement": "Após o rollback operacional e a correção Web, nenhuma nova mutação de VPS, Vercel, Hostinger, secret, domínio, router funcional ou DNS está autorizada; Production A e o runtime 56ada devem permanecer inalterados.",
-      "reviewTrigger": "Reavaliar somente após bundles current/rollback do novo containing commit, rebind verificado e novo Operational Retry Gate explícito.",
+      "statement": "Após o closeout, C4R1, DNS, domínio, variáveis, chave, router, imagens, banco e release tree não podem ser alterados sem novo Gate humano da próxima missão.",
+      "reviewTrigger": "Qualquer mudança posterior de produção exige escopo, rollback e autorização explícitos; não iniciar MVP-09 automaticamente.",
       "sourceEvidenceIds": [
-        "EV-MVP08-READONLY-PREFLIGHT",
-        "EV-MVP08-VPS-INTEGRITY-AUDIT",
         "EV-MVP08-R2-RELEASE-TREE-CONTRACT",
-        "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
-        "EV-MVP08-WEB-PREVIEW-CLOSEOUT"
+        "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
       ]
+    },
+    {
+      "id": "OR-RHO-OUT-OF-SCOPE",
+      "statement": "RHO permanece fora do escopo desta release e não foi consultado ou alterado.",
+      "reviewTrigger": "Somente incluir RHO mediante missão e autorização específicas.",
+      "sourceEvidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
     }
   ],
   "pointerMetadata": {
