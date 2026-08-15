@@ -39,6 +39,7 @@
     "migration:revert": "npm run prepare:runtime && node node_modules/typeorm/cli.js -d dist/database/data-source.js migration:revert",
     "migration:show": "npm run prepare:runtime && node node_modules/typeorm/cli.js -d dist/database/data-source.js migration:show",
     "seed": "npm run prepare:runtime && node dist/database/seeds/initial-tenant.seed.js",
+    "fixture:synthetic": "npm run prepare:runtime && node dist/database/synthetic-fixtures/cli.js",
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f api",
