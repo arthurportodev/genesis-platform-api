@@ -108,18 +108,29 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
     }
 
-    this.rateLimiter.resetCredential(context.ipAddress, email);
-    const sessionId = randomUUID();
-    const refreshToken = this.tokenService.generateRefreshToken(sessionId);
-    const access = await this.tokenService.issueAccessToken(user.id, sessionId);
-    const refreshExpiresAt = this.tokenService.getRefreshExpiration();
+    const operation = await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        `SELECT app_private.lock_auth_refresh_user($1::uuid)`,
+        [user.id],
+      );
+      const lockedUser = await manager.getRepository(User).findOneBy({
+        id: user.id,
+        status: UserStatus.ACTIVE,
+      });
+      if (lockedUser === null) return null;
 
-    await this.dataSource.transaction(async (manager) => {
+      const sessionId = randomUUID();
+      const refreshToken = this.tokenService.generateRefreshToken(sessionId);
+      const access = await this.tokenService.issueAccessToken(
+        lockedUser.id,
+        sessionId,
+      );
+      const refreshExpiresAt = this.tokenService.getRefreshExpiration();
       const sessions = manager.getRepository(AuthSession);
       await sessions.save(
         sessions.create({
           id: sessionId,
-          userId: user.id,
+          userId: lockedUser.id,
           status: AuthSessionStatus.ACTIVE,
           expiresAt: refreshExpiresAt,
           lastUsedAt: null,
@@ -145,18 +156,30 @@ export class AuthService {
         {
           ...context,
           eventType: AuthAuditEventType.LOGIN_SUCCEEDED,
-          userId: user.id,
+          userId: lockedUser.id,
           sessionId,
         },
         manager,
       );
+      return {
+        response: this.buildTokenResponse(access, lockedUser),
+        refreshToken,
+        refreshExpiresAt,
+      };
     });
 
-    return {
-      response: this.buildTokenResponse(access, user),
-      refreshToken,
-      refreshExpiresAt,
-    };
+    if (operation === null) {
+      this.rateLimiter.recordFailure(context.ipAddress, email);
+      await this.auditService.record({
+        ...context,
+        eventType: AuthAuditEventType.LOGIN_FAILED,
+        userId: user.id,
+        metadata: { reason: 'invalid_credentials' },
+      });
+      throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
+    }
+    this.rateLimiter.resetCredential(context.ipAddress, email);
+    return operation;
   }
 
   async refresh(
