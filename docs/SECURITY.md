@@ -100,48 +100,73 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   sobrescreve a atestação. O Compose base permanece health-only; segredo,
   ativação e exposição pertencem a Gate operacional posterior.
 
-## Segredos, seed e CI
+## Segredos, seed e controles de release
 
-- `.env` é ignorado; `.env.example` contém apenas placeholders e valores descartáveis.
-- JWT secret e refresh pepper são independentes, obrigatórios e validados contra placeholders conhecidos.
-- `INITIAL_OWNER_PASSWORD` é opcional no runtime e usada somente pelo seed quando falta credencial; não deve permanecer no ambiente, ser logada ou versionada.
-- `validate`, `image-impact` e `build-and-scan` têm somente `contents: read`.
-  `validate` usa PostgreSQL `_test` descartável e valores sintéticos;
-  `image-impact` usa apenas Git e Node.js; nenhum deles autentica ou publica.
-- A matriz sintética de produção do job `validate` contém somente configuração
-  não secreta. Seus seis secrets sintéticos ficam em arquivos `0600` sob
-  `RUNNER_TEMP`, são ligados por override Compose transitório, nunca são
-  impressos ou enviados como artifact e têm cleanup explícito com `always()`.
-  Os cinco paths são derivados em runtime por um step inicial e exportados via
-  `GITHUB_ENV`; expressões `${{ runner.* }}` em `jobs.*.env` são rejeitadas.
-  O render falha fechado diante de role repetida, referência mutável, frontend
-  divergente, versão de keyring divergente, path ou permissão de secret
-  incorretos. Remoção de arquivo ou diretório residual também falha fechado.
-- Todo `push` da `main` mantém a validação completa. `image-impact` compara
-  `github.event.before` e `github.sha` como commits completos e emite somente o
-  booleano canônico `should_publish`; SHA inválido, range irresolúvel, path
-  inseguro ou saída Git ambígua falha fechado.
-- Somente `publish-image`, condicionado a `push` impactante da `main`, sucesso
-  de `validate` e `image-impact` e saída exata `true`, recebe `packages: write`
-  e usa `GITHUB_TOKEN` para o GHCR. Não existe PAT ou secret adicional, e
-  nenhuma credencial é passada como build arg. Mudanças somente documentais,
-  operacionais, de Compose, CI, scripts ou testes param antes de login e build.
-- A allowlist image-affecting contém apenas `Dockerfile`, `.dockerignore`,
-  `.npmrc` quando rastreado, manifests npm, `nest-cli.json`, `tsconfig.json`,
-  demais `tsconfig*.json` legítimos na raiz e `src/**`. Ela deve mudar no mesmo
-  delta que introduzir uma nova entrada do build ou do filesystem final, com
-  atualização do detector, testes, validator e documentação.
-- A imagem `linux/amd64` usa somente tag `sha-<SHA completo>`, seis labels OCI e
-  referência remota por digest. Trivy v0.70.0, fixado por Action em SHA completo, bloqueia
-  vulnerabilidade Critical inclusive sem correção antes de qualquer push;
-  falha da base do scanner também bloqueia.
-- Tag existente é validada e reescaneada por digest sem rebuild ou overwrite.
-  Tag nova registra o config digest local antes do scan, exige que ele permaneça
-  igual no push e aceita o manifesto remoto somente pelo digest reportado pelo
-  próprio push. `.Manifest` é tratado exclusivamente como descriptor do manifest
-  digest, o manifesto OCI bruto obtido por `--raw` fornece `config.digest` e
-  `.Image` fornece plataforma e labels. A imagem remota por digest é reescaneada
-  depois da verificação de identidade e do package e antes do artifact.
+- `.env` é ignorado; `.env.example` contém apenas placeholders e valores
+  descartáveis. JWT secret e refresh pepper são independentes, obrigatórios e
+  validados contra placeholders conhecidos. `INITIAL_OWNER_PASSWORD` é
+  opcional no runtime e usada somente pelo seed quando falta credencial; não
+  deve permanecer no ambiente, ser logada ou versionada.
+- O CI automático em `.github/workflows/ci.yml` é acionado por Pull Request,
+  `push` na `main` e dispatch diagnóstico. Seus jobs `validate` e
+  `build-and-scan` recebem somente `contents: read`. Eles executam contratos,
+  formatação, lint, testes unitários, integração, E2E, build da aplicação,
+  build local da imagem, validação do runtime e Trivy bloqueante para
+  vulnerabilidades Critical. Não existe nesse grafo `packages: write`, login
+  de registry, push de imagem, chamada ao publicador ou deployment.
+- A matriz sintética do job `validate` continua usando somente configuração
+  descartável. Os seis secrets sintéticos ficam em arquivos `0600` sob
+  `RUNNER_TEMP`, ligados por override Compose transitório, nunca são impressos
+  ou enviados como artifact e têm cleanup explícito com `always()`.
+- A publicação existe somente em `.github/workflows/release-image.yml`, cujo
+  único trigger é `workflow_dispatch`. O operador deve fornecer o SHA completo
+  de 40 caracteres da `main` e marcar a confirmação explícita. O job valida o
+  formato, resolve o objeto commit, comprova ancestralidade em `main`, faz
+  checkout do SHA autorizado e confirma `HEAD` antes de qualquer login.
+- O job manual referencia o Environment `ghcr-production-release` e falha antes
+  do login enquanto `MANUAL_IMAGE_RELEASE_ENABLED` não for exatamente `true`.
+  O Environment remoto ainda **não está configurado nem verificado** por esta
+  mudança. Um Gate remoto futuro deve configurar required reviewer humano,
+  impedir self-review quando a conta/plano oferecer essa opção, restringir as
+  branches/tags elegíveis e somente então criar a variável de habilitação.
+- As permissões globais são `contents: read`. `packages: write` aparece somente
+  no job manual `publish-image`, associado ao Environment; nenhum job de CI,
+  validação, build ou scan recebe escrita de package. O login usa apenas
+  `github.actor` e o `GITHUB_TOKEN` efêmero depois de confirmação, enablement,
+  validação do SHA, checkout exato, build local, teste de runtime e scan.
+- A imagem `linux/amd64` usa exclusivamente `sha-<SHA completo>`; `latest` e
+  `main` não são referências operacionais. Runs do mesmo SHA são serializados,
+  e metadata de build usa o timestamp do commit. Depois do login, um lookup sem
+  mutação classifica o tag: ausência definitiva permite um único push após
+  recheck imediato; presença exige igualdade de plataforma, config digest,
+  revision, version e todos os labels OCI com a imagem local escaneada e então
+  reutiliza o digest sem push. Divergência ou resultado ambíguo falha fechado
+  sem alterar o registry. O digest selecionado é reinspecionado e comparado ao
+  manifest e config digest esperados nos dois caminhos.
+- A classificação de ausência é uma única regra aplicada nos dois lookups. Ela
+  aceita somente erro completo de manifest/tag ausente ou `404` do endpoint de
+  manifest exatamente ligado ao `IMAGE_REF`; nunca usa `not found` genérico.
+  Nas duas chamadas ela exige status `1`, stdout vazio e stderr exatamente
+  canônico; o recheck também captura stdout, sem `/dev/null`. Prefixo, sufixo,
+  whitespace flexível, CR, LF, U+0085, U+2028, U+2029 ou conteúdo simultâneo
+  nos dois canais são ambíguos. Falhas de helper/plugin, autenticação,
+  permissão, transporte, timeout, rate limit e qualquer resposta composta ou
+  desconhecida não produzem `exists=false` e encerram o job antes do push.
+- `image-release-identity.json` e o resumo do workflow registram repositório,
+  SHA, tag, digest, referência imutável, ator, run, horário e resultado do scan
+  sem expor token. O artifact de 14 dias é evidência transitória: a referência
+  durável para operação é
+  `ghcr.io/arthurportodev/genesis-platform-api@sha256:<digest>`.
+- Publicação termina em `IMAGE_PUBLISHED_AND_DIGEST_VERIFIED`. O workflow não
+  acessa servidor, Vercel, Traefik ou banco; não executa migration, fixture,
+  webhook ou deployment. Deployment exige tarefa e aprovação humana próprias e
+  deve consumir o digest, não apenas a tag.
+- Para revogar o caminho manual, defina
+  `MANUAL_IMAGE_RELEASE_ENABLED=false` (ou remova a variável) no Environment;
+  para suspensão mais forte, desabilite o workflow no GitHub. Preserve os
+  required reviewers e as restrições do Environment. A revogação não exclui
+  imagens: o digest publicado deve ser preservado até a desativação da fixture,
+  e qualquer limpeza depende de Gate posterior.
 
 <!-- genesis-memory-history:start -->
 

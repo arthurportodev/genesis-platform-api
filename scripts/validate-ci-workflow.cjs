@@ -2,7 +2,49 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 const WORKFLOW_PATH = '.github/workflows/ci.yml';
+const RELEASE_WORKFLOW_PATH = '.github/workflows/release-image.yml';
 const FULL_SHA = /^[a-f0-9]{40}$/u;
+const MANUAL_RELEASE_IMAGE_REF =
+  /^ghcr\.io\/(?<repository>[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*):(?<tag>sha-[a-f0-9]{40})$/u;
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+function isDefinitiveManifestAbsence({
+  status,
+  stdout,
+  stderr,
+  expectedImageRef,
+} = {}) {
+  if (
+    status !== 1 ||
+    stdout !== '' ||
+    typeof stderr !== 'string' ||
+    typeof expectedImageRef !== 'string'
+  ) {
+    return false;
+  }
+  const identity = MANUAL_RELEASE_IMAGE_REF.exec(expectedImageRef);
+  if (!identity?.groups) return false;
+  if (stderr.length === 0 || /[\r\n\u0085\u2028\u2029]/u.test(stderr)) {
+    return false;
+  }
+  const imageRef = escapeRegExp(expectedImageRef);
+  const manifestUrl = escapeRegExp(
+    `https://ghcr.io/v2/${identity.groups.repository}/manifests/${identity.groups.tag}`,
+  );
+  const absence = '(?:manifest unknown|name unknown|no such manifest)';
+  return [
+    new RegExp(`^(?:ERROR: )?${absence}: ${imageRef}$`, 'u'),
+    new RegExp(`^(?:ERROR: )?${imageRef}: ${absence}$`, 'u'),
+    new RegExp(
+      `^(?:ERROR: )?unexpected status from (?:HEAD|GET) request to ${manifestUrl}: 404 Not Found$`,
+      'u',
+    ),
+  ].some((pattern) => pattern.test(stderr));
+}
+
 const ACTIONS = new Map([
   [
     'actions/checkout',
@@ -720,7 +762,7 @@ function trivyFailures(step, location) {
   return failures;
 }
 
-function metadataFailures(job, location) {
+function metadataFailures(job, location, shaExpression = '${{ github.sha }}') {
   const failures = [];
   const metadata = findStep(
     job,
@@ -736,7 +778,7 @@ function metadataFailures(job, location) {
   if (String(inputs.flavor).trim() !== 'latest=false') {
     failures.push(`${location} must disable the implicit latest tag.`);
   }
-  if (String(inputs.tags).trim() !== 'type=raw,value=sha-${{ github.sha }}') {
+  if (String(inputs.tags).trim() !== `type=raw,value=sha-${shaExpression}`) {
     failures.push(`${location} must define only the full-SHA tag.`);
   }
   const labels = String(inputs.labels ?? '');
@@ -745,8 +787,8 @@ function metadataFailures(job, location) {
       'org.opencontainers.image.source',
       '${{ github.server_url }}/${{ github.repository }}',
     ],
-    ['org.opencontainers.image.revision', '${{ github.sha }}'],
-    ['org.opencontainers.image.version', 'sha-${{ github.sha }}'],
+    ['org.opencontainers.image.revision', shaExpression],
+    ['org.opencontainers.image.version', `sha-${shaExpression}`],
     [
       'org.opencontainers.image.created',
       '${{ steps.identity.outputs.created }}',
@@ -775,30 +817,86 @@ function metadataFailures(job, location) {
   return failures;
 }
 
-function validateWorkflowDocument(workflow) {
+function validatePinnedActions(jobs) {
   const failures = [];
-  const triggers = workflow?.on;
-  if (!triggers || typeof triggers !== 'object' || Array.isArray(triggers)) {
-    failures.push('workflow triggers must be a mapping.');
-  } else {
-    const eventNames = Object.keys(triggers).sort();
-    if (
-      JSON.stringify(eventNames) !==
-      JSON.stringify(['pull_request', 'push', 'workflow_dispatch'])
-    ) {
-      failures.push(
-        'workflow must define only pull_request, push, and workflow_dispatch events.',
-      );
-    }
-    for (const event of ['pull_request', 'push']) {
-      const branches = triggers[event]?.branches;
-      if (
-        !Array.isArray(branches) ||
-        branches.length !== 1 ||
-        branches[0] !== 'main'
+  for (const [jobName, job] of Object.entries(jobs)) {
+    for (const step of stepsFor(job)) {
+      const reference = actionReference(step);
+      if (!reference) continue;
+      const approved = ACTIONS.get(reference.action);
+      if (!approved) {
+        failures.push(`${jobName} uses unapproved Action ${reference.action}.`);
+      } else if (
+        !FULL_SHA.test(reference.sha) ||
+        reference.sha !== approved.sha
       ) {
-        failures.push(`${event} must target only main.`);
+        failures.push(
+          `${reference.action} must use ${approved.sha} (${approved.version}).`,
+        );
       }
+    }
+  }
+  return failures;
+}
+
+function configuredEvents(workflow) {
+  if (
+    !workflow?.on ||
+    typeof workflow.on !== 'object' ||
+    Array.isArray(workflow.on)
+  ) {
+    return null;
+  }
+  return Object.keys(workflow.on).sort();
+}
+
+function containsRegistryCapability(job) {
+  return stepsFor(job).some((step) => {
+    const action = actionReference(step)?.action ?? '';
+    const run = String(step.run ?? '');
+    return (
+      action === 'docker/login-action' ||
+      /\bdocker\s+(?:login|push)\b/iu.test(run) ||
+      /\b(?:buildx\s+imagetools\s+create|docker\s+manifest\s+(?:create|push)|oras\s+push)\b/iu.test(
+        run,
+      ) ||
+      (action === 'docker/build-push-action' && step.with?.push === true)
+    );
+  });
+}
+
+function containsDeploymentCapability(job) {
+  return stepsFor(job).some((step) => {
+    const action = actionReference(step)?.action ?? '';
+    const run = String(step.run ?? '');
+    return (
+      /(?:deploy|ssh-action|scp-action|vercel-action)/iu.test(action) ||
+      /\b(?:ssh|scp|rsync|vercel|kubectl|helm)\b|deploy(?:ment)?|webhook|docker\s+(?:compose|service)\s+(?:up|restart|update)/iu.test(
+        run,
+      )
+    );
+  });
+}
+
+function validateAutomaticWorkflowDocument(workflow) {
+  const failures = [];
+  const events = configuredEvents(workflow);
+  if (
+    JSON.stringify(events) !==
+    JSON.stringify(['pull_request', 'push', 'workflow_dispatch'])
+  ) {
+    failures.push(
+      'automatic CI must define only pull_request, push, and workflow_dispatch events.',
+    );
+  }
+  for (const event of ['pull_request', 'push']) {
+    const branches = workflow?.on?.[event]?.branches;
+    if (
+      !Array.isArray(branches) ||
+      branches.length !== 1 ||
+      branches[0] !== 'main'
+    ) {
+      failures.push(`${event} must target only main.`);
     }
   }
   failures.push(
@@ -808,203 +906,56 @@ function validateWorkflowDocument(workflow) {
       'global',
     ),
   );
-  if (
-    workflow?.concurrency?.group !==
-    "ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}"
-  ) {
-    failures.push(
-      'concurrency must group PRs by number and push/manual runs by unique run ID.',
-    );
-  }
-  if (
-    normalizeExpression(workflow?.concurrency?.['cancel-in-progress']) !==
-    "github.event_name == 'pull_request'"
-  ) {
-    failures.push('only pull request runs may be cancelled in progress.');
-  }
-
   const jobs = workflow?.jobs;
   if (!jobs || typeof jobs !== 'object' || Array.isArray(jobs)) {
-    failures.push('jobs must be a mapping.');
+    failures.push('automatic CI jobs must be a mapping.');
     return failures;
   }
   if (
     JSON.stringify(Object.keys(jobs).sort()) !==
-    JSON.stringify([
-      'build-and-scan',
-      'image-impact',
-      'publish-image',
-      'validate',
-    ])
+    JSON.stringify(['build-and-scan', 'validate'])
   ) {
     failures.push(
-      'workflow must contain exactly validate, image-impact, build-and-scan, and publish-image jobs.',
+      'automatic CI must contain exactly validate and build-and-scan jobs.',
     );
   }
   const validate = jobs.validate ?? {};
-  const imageImpact = jobs['image-impact'] ?? {};
   const build = jobs['build-and-scan'] ?? {};
-  const publish = jobs['publish-image'] ?? {};
   failures.push(...jobEnvironmentContextFailures(jobs));
   for (const [name, job] of Object.entries({
     validate,
-    'image-impact': imageImpact,
     'build-and-scan': build,
-    'publish-image': publish,
   })) {
     if (job['runs-on'] !== 'ubuntu-24.04')
       failures.push(`${name} must use ubuntu-24.04.`);
+    failures.push(
+      ...permissionFailures(job.permissions, { contents: 'read' }, name),
+    );
+    if (Object.hasOwn(job, 'uses')) {
+      failures.push(`${name} must not call a reusable workflow.`);
+    }
+    if (containsRegistryCapability(job)) {
+      failures.push(
+        `${name} must have no registry login or publication capability.`,
+      );
+    }
+    if (containsDeploymentCapability(job)) {
+      failures.push(`${name} must have no deployment capability.`);
+    }
   }
-  failures.push(
-    ...permissionFailures(
-      validate.permissions,
-      { contents: 'read' },
-      'validate',
-    ),
-  );
-  failures.push(
-    ...permissionFailures(
-      imageImpact.permissions,
-      { contents: 'read' },
-      'image-impact',
-    ),
-  );
-  failures.push(
-    ...permissionFailures(
-      build.permissions,
-      { contents: 'read' },
-      'build-and-scan',
-    ),
-  );
-  failures.push(
-    ...permissionFailures(
-      publish.permissions,
-      { contents: 'read', packages: 'write' },
-      'publish-image',
-    ),
-  );
   if (build.needs !== 'validate')
     failures.push('build-and-scan must need validate.');
   if (normalizeExpression(validate.if) !== '') {
-    failures.push('validate must run for every configured workflow event.');
+    failures.push('validate must run for every configured automatic CI event.');
   }
-  if (
-    !Array.isArray(publish.needs) ||
-    JSON.stringify([...publish.needs].sort()) !==
-      JSON.stringify(['image-impact', 'validate'])
-  ) {
-    failures.push('publish-image must need validate and image-impact.');
-  }
-  const imageImpactCondition = normalizeExpression(imageImpact.if);
-  if (
-    imageImpactCondition !==
-    "github.event_name == 'push' && github.ref == 'refs/heads/main'"
-  ) {
-    failures.push('image-impact must run only for push of refs/heads/main.');
-  }
-  const buildCondition = normalizeExpression(build.if);
-  if (
-    buildCondition !==
-    "github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'"
-  ) {
+  if (normalizeExpression(build.if) !== '') {
     failures.push(
-      'build-and-scan must run only for pull_request or workflow_dispatch.',
-    );
-  }
-  const publishCondition = normalizeExpression(publish.if);
-  if (
-    publishCondition !==
-    "github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.validate.result == 'success' && needs.image-impact.result == 'success' && needs.image-impact.outputs.should_publish == 'true'"
-  ) {
-    failures.push(
-      'publish-image must require push of main, successful validation and detection, and canonical true image impact.',
-    );
-  }
-
-  const imageImpactSteps = stepsFor(imageImpact);
-  const imageImpactCheckouts = imageImpactSteps.filter(
-    (step) => actionReference(step)?.action === 'actions/checkout',
-  );
-  if (
-    imageImpactCheckouts.length !== 1 ||
-    Number(imageImpactCheckouts[0]?.with?.['fetch-depth']) !== 0 ||
-    imageImpactCheckouts[0]?.with?.['persist-credentials'] !== false
-  ) {
-    failures.push(
-      'image-impact must use one pinned checkout with complete history and no persisted credential.',
-    );
-  }
-  const imageImpactSetups = imageImpactSteps.filter(
-    (step) => actionReference(step)?.action === 'actions/setup-node',
-  );
-  if (
-    imageImpactSetups.length !== 1 ||
-    imageImpactSetups[0]?.with?.['node-version-file'] !== '.nvmrc'
-  ) {
-    failures.push('image-impact must use the pinned project Node.js runtime.');
-  }
-  const detector = imageImpactSteps.find((step) => step.id === 'detect');
-  if (
-    imageImpactSteps.length !== 3 ||
-    imageImpactSteps[0] !== imageImpactCheckouts[0] ||
-    imageImpactSteps[1] !== imageImpactSetups[0] ||
-    imageImpactSteps[2] !== detector ||
-    !detector ||
-    String(detector.run ?? '').trim() !==
-      'node scripts/detect-image-impact.cjs --base "$IMAGE_IMPACT_BASE_SHA" --head "$IMAGE_IMPACT_HEAD_SHA"' ||
-    detector.env?.IMAGE_IMPACT_BASE_SHA !== '${{ github.event.before }}' ||
-    detector.env?.IMAGE_IMPACT_HEAD_SHA !== '${{ github.sha }}' ||
-    Object.hasOwn(detector, 'continue-on-error')
-  ) {
-    failures.push(
-      'image-impact must invoke the fail-closed detector with the exact push endpoints.',
-    );
-  }
-  if (
-    !imageImpact.outputs ||
-    typeof imageImpact.outputs !== 'object' ||
-    Array.isArray(imageImpact.outputs) ||
-    JSON.stringify(imageImpact.outputs) !==
-      JSON.stringify({
-        should_publish: '${{ steps.detect.outputs.should_publish }}',
-      })
-  ) {
-    failures.push(
-      'image-impact must expose only the canonical detector boolean.',
-    );
-  }
-  if (
-    Object.hasOwn(imageImpact, 'continue-on-error') ||
-    imageImpactSteps.some(
-      (step) =>
-        actionReference(step)?.action.startsWith('docker/') ||
-        /\bdocker\s+(?:build|login|push)\b/u.test(String(step.run ?? '')) ||
-        /secrets\.|GITHUB_TOKEN|ghcr\.io/iu.test(JSON.stringify(step)),
-    )
-  ) {
-    failures.push(
-      'image-impact must not continue on error, use registry credentials, build, login, or publish.',
+      'build-and-scan must run after validation for every configured CI event.',
     );
   }
 
   const validateSteps = stepsFor(validate);
   failures.push(...syntheticProductionFailures(validate));
-  if (
-    validateSteps.some((step) =>
-      actionReference(step)?.action.startsWith('docker/'),
-    )
-  ) {
-    failures.push('validate must not use Docker actions.');
-  }
-  if (
-    validateSteps.some((step) =>
-      /\bdocker\s+(?:build|login|push)\b/u.test(String(step.run ?? '')),
-    )
-  ) {
-    failures.push(
-      'validate must not build, authenticate, or publish an image.',
-    );
-  }
   const requiredValidationCommands = [
     'npm run task:contracts',
     'npm run format:check:task-tools',
@@ -1032,499 +983,452 @@ function validateWorkflowDocument(workflow) {
     String(step.run ?? '').trim(),
   );
   for (const command of requiredValidationCommands) {
-    if (!validateRuns.includes(command))
+    if (!validateRuns.includes(command)) {
       failures.push(`validate is missing exact command: ${command}.`);
-  }
-  const memoryValidationIndex = validateRuns.indexOf(
-    'node scripts/validate-project-memory.cjs --mode local',
-  );
-  const memoryTestsIndex = validateRuns.indexOf(
-    'node --test test/project-memory/project-memory.test.cjs',
-  );
-  const ciContractIndex = validateRuns.indexOf('npm run ci:contract:validate');
-  if (
-    memoryValidationIndex < 0 ||
-    memoryTestsIndex !== memoryValidationIndex + 1 ||
-    ciContractIndex <= memoryTestsIndex
-  ) {
-    failures.push(
-      'canonical memory validation and tests must run consecutively before the CI contract.',
-    );
-  }
-  const composeStep = validateSteps.find(
-    (step) =>
-      String(step.run ?? '').trim() === 'npm run production:compose:validate',
-  );
-  if (!composeStep) {
-    failures.push('Compose validation step is missing.');
+    }
   }
 
   failures.push(...buildFailures(build, 'build-and-scan'));
-  failures.push(...buildFailures(publish, 'publish-image'));
   failures.push(...metadataFailures(build, 'build-and-scan'));
-  failures.push(...metadataFailures(publish, 'publish-image'));
-
-  const buildScans = stepsFor(build).filter(
+  const buildSteps = stepsFor(build);
+  const scans = buildSteps.filter(
     (step) => actionReference(step)?.action === 'aquasecurity/trivy-action',
   );
-  if (buildScans.length !== 1)
-    failures.push('build-and-scan must contain exactly one Trivy step.');
-  failures.push(...trivyFailures(buildScans[0], 'build-and-scan'));
-  const buildRuntimeSteps = stepsFor(build).filter(
+  if (scans.length !== 1) {
+    failures.push(
+      'build-and-scan must contain exactly one blocking Trivy scan.',
+    );
+  } else {
+    failures.push(...trivyFailures(scans[0], 'build-and-scan'));
+  }
+  const buildIndex = stepIndex(
+    build,
+    (step) => actionReference(step)?.action === 'docker/build-push-action',
+  );
+  const runtimeIndex = stepIndex(
+    build,
     (step) =>
       String(step.run ?? '').trim() ===
       'node --test test/production/production-image.test.cjs',
   );
+  const scanIndex = buildSteps.indexOf(scans[0]);
+  if (!(
+    buildIndex >= 0 &&
+    buildIndex < runtimeIndex &&
+    runtimeIndex < scanIndex
+  )) {
+    failures.push(
+      'automatic image build, runtime validation, and scan order is invalid.',
+    );
+  }
+  const buildAction = buildSteps.find(
+    (step) => actionReference(step)?.action === 'docker/build-push-action',
+  );
+  if (buildAction?.with?.push !== false || buildAction?.with?.load !== true) {
+    failures.push('automatic build must load locally with push false.');
+  }
+  if (!String(build?.env?.IMAGE_REF ?? '').endsWith(':sha-${{ github.sha }}')) {
+    failures.push(
+      'automatic image reference must use the full github.sha tag.',
+    );
+  }
+  failures.push(...validatePinnedActions(jobs));
+  return [...new Set(failures)].sort();
+}
+
+function validateManualReleaseDocument(workflow) {
+  const failures = [];
+  const events = configuredEvents(workflow);
+  if (JSON.stringify(events) !== JSON.stringify(['workflow_dispatch'])) {
+    failures.push(
+      'manual release must be triggered only by workflow_dispatch.',
+    );
+  }
+  const inputs = workflow?.on?.workflow_dispatch?.inputs;
   if (
-    buildRuntimeSteps.length !== 1 ||
-    buildRuntimeSteps[0]?.env?.PRODUCTION_IMAGE_UNDER_TEST !==
-      '${{ env.IMAGE_REF }}'
+    !inputs ||
+    inputs.full_sha?.required !== true ||
+    inputs.full_sha?.type !== 'string'
+  ) {
+    failures.push('manual release must require a full_sha string input.');
+  }
+  if (
+    inputs?.confirm_release?.required !== true ||
+    inputs?.confirm_release?.type !== 'boolean'
+  ) {
+    failures.push('manual release must require explicit boolean confirmation.');
+  }
+  failures.push(
+    ...permissionFailures(
+      workflow?.permissions,
+      { contents: 'read' },
+      'global',
+    ),
+  );
+  if (
+    workflow?.concurrency?.group !==
+      'manual-image-release-${{ inputs.full_sha }}' ||
+    workflow?.concurrency?.['cancel-in-progress'] !== false
   ) {
     failures.push(
-      'build-and-scan must validate the loaded production runtime exactly once.',
+      'manual release must serialize runs for the same full SHA without cancellation.',
     );
-  } else {
-    const imageBuildIndex = stepIndex(
-      build,
-      (step) => actionReference(step)?.action === 'docker/build-push-action',
-    );
-    const runtimeIndex = stepsFor(build).indexOf(buildRuntimeSteps[0]);
-    const scanIndex = stepsFor(build).indexOf(buildScans[0]);
-    if (!(imageBuildIndex < runtimeIndex && runtimeIndex < scanIndex)) {
-      failures.push(
-        'build-and-scan runtime validation must run after build and before Trivy.',
-      );
+  }
+  const jobs = workflow?.jobs;
+  if (!jobs || typeof jobs !== 'object' || Array.isArray(jobs)) {
+    failures.push('manual release jobs must be a mapping.');
+    return failures;
+  }
+  if (JSON.stringify(Object.keys(jobs)) !== JSON.stringify(['publish-image'])) {
+    failures.push('manual release must contain exactly one publish-image job.');
+  }
+  const publish = jobs['publish-image'] ?? {};
+  failures.push(
+    ...permissionFailures(
+      publish.permissions,
+      { contents: 'read', packages: 'write' },
+      'publish-image',
+    ),
+  );
+  for (const [jobName, job] of Object.entries(jobs)) {
+    if (jobName !== 'publish-image' && job?.permissions?.packages === 'write') {
+      failures.push('packages write must be isolated to publish-image.');
     }
   }
-  if (
-    stepsFor(build).some(
-      (step) => actionReference(step)?.action === 'docker/login-action',
-    )
-  ) {
-    failures.push('build-and-scan must not authenticate to a registry.');
+  if (publish.environment !== 'ghcr-production-release') {
+    failures.push(
+      'publish-image must reference ghcr-production-release Environment.',
+    );
+  }
+  if (publish['runs-on'] !== 'ubuntu-24.04') {
+    failures.push('publish-image must use ubuntu-24.04.');
+  }
+  if (Object.hasOwn(publish, 'uses')) {
+    failures.push('manual release must not delegate to another workflow.');
   }
   if (
-    stepsFor(build).some((step) =>
-      /\bdocker\s+push\b/u.test(String(step.run ?? '')),
+    publish.env?.RELEASE_ENABLED !== '${{ vars.MANUAL_IMAGE_RELEASE_ENABLED }}'
+  ) {
+    failures.push(
+      'manual release must read MANUAL_IMAGE_RELEASE_ENABLED from Environment vars.',
+    );
+  }
+  if (publish.env?.REQUESTED_SHA !== '${{ inputs.full_sha }}') {
+    failures.push('manual release must bind REQUESTED_SHA to full_sha.');
+  }
+  if (
+    publish.env?.IMAGE_TAG !== 'sha-${{ inputs.full_sha }}' ||
+    !String(publish.env?.IMAGE_REF ?? '').endsWith(
+      ':sha-${{ inputs.full_sha }}',
     )
   ) {
-    failures.push('build-and-scan must not publish an image.');
+    failures.push('manual release must use only the immutable full SHA tag.');
   }
 
-  const publishSteps = stepsFor(publish);
-  const logins = publishSteps.filter(
-    (step) => actionReference(step)?.action === 'docker/login-action',
-  );
-  if (logins.length !== 1)
-    failures.push('publish-image must contain exactly one registry login.');
-  else {
-    const withInputs = logins[0].with ?? {};
-    if (
-      withInputs.registry !== 'ghcr.io' ||
-      withInputs.username !== '${{ github.actor }}' ||
-      withInputs.password !== '${{ secrets.GITHUB_TOKEN }}'
-    ) {
-      failures.push(
-        'publish-image login must use only the GitHub actor and GITHUB_TOKEN for ghcr.io.',
-      );
-    }
+  const steps = stepsFor(publish);
+  const authorize = steps.find((step) => step.id === 'authorize');
+  const authorizeRun = String(authorize?.run ?? '');
+  if (
+    !authorize ||
+    authorize.env?.CONFIRM_RELEASE !== '${{ inputs.confirm_release }}' ||
+    !/"\$CONFIRM_RELEASE" != 'true'/u.test(authorizeRun) ||
+    !/"\$RELEASE_ENABLED" != 'true'/u.test(authorizeRun) ||
+    !/\^\[a-f0-9\]\{40\}\$/u.test(authorizeRun) ||
+    !/git cat-file -e "\$REQUESTED_SHA\^\{commit\}"/u.test(authorizeRun) ||
+    !/git merge-base --is-ancestor "\$REQUESTED_SHA" refs\/remotes\/origin\/main/u.test(
+      authorizeRun,
+    ) ||
+    !/resolved_sha=.*git rev-parse/u.test(authorizeRun) ||
+    !/"\$resolved_sha" != "\$REQUESTED_SHA"/u.test(authorizeRun)
+  ) {
+    failures.push(
+      'authorization must fail closed on confirmation, enablement, full SHA, commit, and main ancestry.',
+    );
   }
-  const publishScans = publishSteps.filter(
-    (step) => actionReference(step)?.action === 'aquasecurity/trivy-action',
+  const checkouts = steps.filter(
+    (step) => actionReference(step)?.action === 'actions/checkout',
   );
-  if (publishScans.length !== 2)
+  if (
+    checkouts.length !== 2 ||
+    checkouts[0]?.with?.ref !== 'main' ||
+    checkouts[0]?.with?.['fetch-depth'] !== 0 ||
+    checkouts[0]?.with?.['persist-credentials'] !== false ||
+    checkouts[1]?.with?.ref !== '${{ steps.authorize.outputs.sha }}' ||
+    checkouts[1]?.with?.['persist-credentials'] !== false
+  ) {
     failures.push(
-      'publish-image needs one pre-push local scan and one post-identity remote rescan.',
+      'manual release must inspect main and then checkout only the authorized full SHA without credentials.',
     );
-  for (const [index, step] of publishScans.entries())
-    failures.push(...trivyFailures(step, `publish-image scan ${index + 1}`));
-  const pushIndexes = publishSteps
-    .map((step, index) =>
-      /\bdocker\s+push\b/u.test(String(step.run ?? '')) ? index : -1,
+  }
+  const exactCheckout = steps.find(
+    (step) => String(step.name ?? '') === 'Verify exact checkout identity',
+  );
+  if (
+    !/git rev-parse HEAD/u.test(String(exactCheckout?.run ?? '')) ||
+    !/"\$checked_out_sha" != "\$REQUESTED_SHA"/u.test(
+      String(exactCheckout?.run ?? ''),
     )
-    .filter((index) => index >= 0);
-  if (pushIndexes.length !== 1)
+  ) {
     failures.push(
-      'publish-image must contain exactly one docker push command.',
+      'manual release must verify HEAD remains the requested SHA after checkout.',
     );
-  const firstPush = pushIndexes[0] ?? -1;
-  const buildStep = findStep(
+  }
+  const identity = steps.find((step) => step.id === 'identity');
+  if (
+    !/git show -s --format=%cI "\$REQUESTED_SHA"/u.test(
+      String(identity?.run ?? ''),
+    ) ||
+    /new Date/u.test(String(identity?.run ?? ''))
+  ) {
+    failures.push(
+      'manual release metadata time must derive from the requested commit, not the workflow clock.',
+    );
+  }
+
+  failures.push(...buildFailures(publish, 'publish-image'));
+  failures.push(
+    ...metadataFailures(publish, 'publish-image', '${{ inputs.full_sha }}'),
+  );
+  const buildIndex = stepIndex(
     publish,
     (step) => actionReference(step)?.action === 'docker/build-push-action',
   );
-  if (
-    normalizeExpression(buildStep?.if) !==
-    "steps.existence.outputs.exists == 'false'"
-  ) {
-    failures.push(
-      'publish-image may build only when the immutable tag is absent.',
-    );
-  }
-  const pushStep = publishSteps[firstPush];
-  const pushRun = String(pushStep?.run ?? '');
-  if (
-    pushStep?.id !== 'push' ||
-    normalizeExpression(pushStep?.if) !==
-      "steps.existence.outputs.exists == 'false'" ||
-    !/docker push "\$IMAGE_REF" 2>&1 \| tee/u.test(pushRun) ||
-    pushStep?.env?.EXPECTED_LOCAL_CONFIG_DIGEST !==
-      '${{ steps.local.outputs.config_digest }}' ||
-    !/current_config_digest="\$\(docker image inspect --format '\{\{\.Id\}\}' "\$IMAGE_REF"\)"/u.test(
-      pushRun,
-    ) ||
-    !/"\$current_config_digest" != "\$EXPECTED_LOCAL_CONFIG_DIGEST"/u.test(
-      pushRun,
-    ) ||
-    !/mapfile -t pushed_digests/u.test(pushRun) ||
-    !/digest: \(sha256:\[a-f0-9\]\{64\}\)/u.test(pushRun) ||
-    !/"\$\{#pushed_digests\[@\]\}" -ne 1/u.test(pushRun) ||
-    !/pushed_digest="\$\{pushed_digests\[0\]\}"/u.test(pushRun) ||
-    !/immutable_ref="\$IMAGE_REPOSITORY@\$pushed_digest"/u.test(pushRun) ||
-    !/echo "digest=\$pushed_digest" >> "\$GITHUB_OUTPUT"/u.test(pushRun) ||
-    !/echo "immutable_ref=\$immutable_ref" >> "\$GITHUB_OUTPUT"/u.test(
-      pushRun,
-    ) ||
-    !/echo "config_digest=\$current_config_digest" >> "\$GITHUB_OUTPUT"/u.test(
-      pushRun,
-    ) ||
-    /sha256:[a-f0-9]{64}/u.test(pushRun)
-  ) {
-    failures.push(
-      'publish-image must push only an absent tag and capture exactly one reported digest.',
-    );
-  }
-  const newScan = publishScans.find(
-    (step) =>
-      normalizeExpression(step.if) ===
-      "steps.existence.outputs.exists == 'false'",
-  );
-  if (
-    !newScan ||
-    String(newScan.with?.['image-ref']) !== '${{ env.IMAGE_REF }}'
-  ) {
-    failures.push('new local image must be scanned before publication.');
-  }
-  const publishRuntimeSteps = publishSteps.filter(
+  const runtimeIndex = stepIndex(
+    publish,
     (step) =>
       String(step.run ?? '').trim() ===
       'node --test test/production/production-image.test.cjs',
   );
-  const existingRuntime = publishRuntimeSteps.find(
-    (step) =>
-      normalizeExpression(step.if) ===
-      "steps.existence.outputs.exists == 'true'",
+  const scanIndex = stepIndex(
+    publish,
+    (step) => actionReference(step)?.action === 'aquasecurity/trivy-action',
   );
-  const newRuntime = publishRuntimeSteps.find(
-    (step) =>
-      normalizeExpression(step.if) ===
-      "steps.existence.outputs.exists == 'false'",
+  const loginIndex = stepIndex(
+    publish,
+    (step) => actionReference(step)?.action === 'docker/login-action',
   );
-  const pullExisting = publishSteps.find(
-    (step) =>
-      normalizeExpression(step.if) ===
-        "steps.existence.outputs.exists == 'true'" &&
-      String(step.run ?? '').trim() ===
-        'docker pull "${{ steps.existing.outputs.immutable_ref }}"',
+  const pushIndex = stepIndex(publish, (step) =>
+    /\bdocker\s+push\b/u.test(String(step.run ?? '')),
   );
-  if (
-    publishRuntimeSteps.length !== 2 ||
-    existingRuntime?.env?.PRODUCTION_IMAGE_UNDER_TEST !==
-      '${{ steps.existing.outputs.immutable_ref }}' ||
-    newRuntime?.env?.PRODUCTION_IMAGE_UNDER_TEST !== '${{ env.IMAGE_REF }}' ||
-    !pullExisting
-  ) {
+  const existence = steps.find((step) => step.id === 'existence');
+  const existenceIndex = steps.indexOf(existence);
+  const selected = steps.find((step) => step.id === 'selected');
+  const selectedIndex = steps.indexOf(selected);
+  const verifyIndex = steps.findIndex((step) => step.id === 'verify');
+  if (!(
+    buildIndex >= 0 &&
+    buildIndex < runtimeIndex &&
+    runtimeIndex < scanIndex &&
+    scanIndex < loginIndex &&
+    loginIndex < existenceIndex &&
+    existenceIndex < pushIndex &&
+    pushIndex < selectedIndex &&
+    selectedIndex < verifyIndex
+  )) {
     failures.push(
-      'publish-image must validate both existing and new production runtimes.',
-    );
-  } else {
-    const existingRuntimeIndex = publishSteps.indexOf(existingRuntime);
-    const newRuntimeIndex = publishSteps.indexOf(newRuntime);
-    const newScanIndex = publishSteps.indexOf(newScan);
-    const pullExistingIndex = publishSteps.indexOf(pullExisting);
-    if (
-      !(pullExistingIndex < existingRuntimeIndex) ||
-      !(newRuntimeIndex < newScanIndex) ||
-      !(newScanIndex < firstPush) ||
-      !(newRuntimeIndex < firstPush)
-    ) {
-      failures.push(
-        'runtime validation and the local Trivy scan must precede image push.',
-      );
-    }
-  }
-  const existence = publishSteps.find((step) => step.id === 'existence');
-  const existing = publishSteps.find((step) => step.id === 'existing');
-  const local = publishSteps.find((step) => step.id === 'local');
-  const selected = publishSteps.find((step) => step.id === 'selected');
-  const verify = publishSteps.find((step) => step.id === 'verify');
-  const packageStep = publishSteps.find((step) => step.id === 'package');
-  const remoteScan = publishSteps.find((step) => step.id === 'remote-scan');
-  const evidence = publishSteps.find((step) => step.id === 'evidence');
-  if (
-    !existence ||
-    !/imagetools inspect/u.test(String(existence.run ?? '')) ||
-    !/manifest unknown|not found|name unknown/u.test(
-      String(existence.run ?? ''),
-    )
-  ) {
-    failures.push(
-      'publish-image must distinguish an absent tag from ambiguous registry failure.',
+      'build, runtime validation, scan, login, immutable lookup, conditional push, selection, and digest verification order is invalid.',
     );
   }
-  const existingRun = String(existing?.run ?? '');
+  if (!(
+    steps.indexOf(authorize) >= 0 && steps.indexOf(authorize) < loginIndex
+  )) {
+    failures.push(
+      'all fail-closed authorization checks must precede registry login.',
+    );
+  }
+  const scan = steps[scanIndex];
+  if (scan) failures.push(...trivyFailures(scan, 'publish-image'));
+  const build = steps[buildIndex];
+  if (build?.with?.push !== false || build?.with?.load !== true) {
+    failures.push(
+      'manual release must build and load locally with push false before login.',
+    );
+  }
+  const login = steps[loginIndex];
   if (
-    !existing ||
-    normalizeExpression(existing.if) !==
-      "steps.existence.outputs.exists == 'true'" ||
-    !/immutable_ref/u.test(existingRun) ||
-    !/--format '\{\{json \.Manifest\}\}'/u.test(existingRun) ||
-    !/imagetools inspect "\$IMAGE_REF" --raw/u.test(existingRun) ||
-    !/--format '\{\{json \.Image\}\}'/u.test(existingRun) ||
-    !/descriptor\?\.digest/u.test(existingRun) ||
-    !/manifest\?\.config\?\.digest/u.test(existingRun) ||
-    /descriptor\?\.config|descriptor\.config/u.test(existingRun) ||
-    /manifest\?\.digest|manifest\.digest/u.test(existingRun) ||
-    !/image\?\.os !== 'linux' \|\| image\?\.architecture !== 'amd64'/u.test(
-      existingRun,
+    login?.with?.registry !== 'ghcr.io' ||
+    login?.with?.username !== '${{ github.actor }}' ||
+    login?.with?.password !== '${{ secrets.GITHUB_TOKEN }}'
+  ) {
+    failures.push(
+      'manual release login must use only github.actor and GITHUB_TOKEN for GHCR.',
+    );
+  }
+  const existenceRun = String(existence?.run ?? '');
+  if (
+    existence?.env?.EXPECTED_LOCAL_CONFIG_DIGEST !==
+      '${{ steps.local.outputs.config_digest }}' ||
+    !/imagetools inspect "\$IMAGE_REF" --format '\{\{json \.Manifest\}\}'/u.test(
+      existenceRun,
     ) ||
-    !/labels\[key\] !== value/u.test(existingRun) ||
-    !/echo "config_digest=\$config_digest" >> "\$GITHUB_OUTPUT"/u.test(
-      existingRun,
+    !/imagetools inspect "\$IMAGE_REF" --raw/u.test(existenceRun) ||
+    !/--format '\{\{json \.Image\}\}'/u.test(existenceRun) ||
+    !/remoteConfigDigest !== process\.env\.EXPECTED_LOCAL_CONFIG_DIGEST/u.test(
+      existenceRun,
     ) ||
-    /\{\{\.Name\}\}/u.test(existingRun)
+    !/remoteImage\?\.os !== 'linux' \|\| remoteImage\?\.architecture !== 'amd64'/u.test(
+      existenceRun,
+    ) ||
+    !/org\.opencontainers\.image\.revision/u.test(existenceRun) ||
+    !/org\.opencontainers\.image\.version/u.test(existenceRun) ||
+    !/remoteLabels\[name\] !== localLabels\[name\]/u.test(existenceRun) ||
+    !/exists=true/u.test(existenceRun) ||
+    !/digest=\$\{existing_identity\[0\]\}/u.test(existenceRun) ||
+    !/immutable_ref=\$\{existing_identity\[1\]\}/u.test(existenceRun) ||
+    !existenceRun.includes(
+      '> "${{ runner.temp }}/existing-descriptor.json" 2> "${{ runner.temp }}/existing-error.txt"',
+    ) ||
+    !existenceRun.includes(
+      'node scripts/validate-ci-workflow.cjs --classify-manifest-absence "$lookup_status" "${{ runner.temp }}/existing-descriptor.json" "${{ runner.temp }}/existing-error.txt" "$IMAGE_REF"',
+    ) ||
+    /grep\s+-[^\n]*[iE][^\n]*manifest unknown/iu.test(existenceRun) ||
+    !/lookup was ambiguous; refusing registry mutation/u.test(existenceRun) ||
+    !/exit "\$lookup_status"/u.test(existenceRun) ||
+    /\bdocker\s+push\b/u.test(existenceRun)
   ) {
     failures.push(
-      'existing-tag path must separate descriptor, raw manifest, and image inspection without rebuilding.',
+      'existing full-SHA tag must be classified without mutation and reused only when manifest, config, platform, and labels equal the scanned local image.',
     );
   }
+  const push = steps[pushIndex];
+  const pushRun = String(push?.run ?? '');
   if (
-    !local ||
-    normalizeExpression(local.if) !==
+    push?.id !== 'push' ||
+    normalizeExpression(push?.if) !==
       "steps.existence.outputs.exists == 'false'" ||
-    !/docker image inspect --format '\{\{\.Id\}\}' "\$IMAGE_REF"/u.test(
-      String(local.run ?? ''),
+    !/imagetools inspect "\$IMAGE_REF"/u.test(pushRun) ||
+    !/Immutable tag appeared after lookup; refusing overwrite/u.test(pushRun) ||
+    !/Pre-push tag lookup was ambiguous; refusing registry mutation/u.test(
+      pushRun,
     ) ||
-    !/echo "config_digest=\$config_digest" >> "\$GITHUB_OUTPUT"/u.test(
-      String(local.run ?? ''),
-    )
+    !pushRun.includes(
+      '> "${{ runner.temp }}/prepush-output.txt" 2> "${{ runner.temp }}/prepush-error.txt"',
+    ) ||
+    pushRun.includes('/dev/null') ||
+    !pushRun.includes(
+      'node scripts/validate-ci-workflow.cjs --classify-manifest-absence "$prepush_status" "${{ runner.temp }}/prepush-output.txt" "${{ runner.temp }}/prepush-error.txt" "$IMAGE_REF"',
+    ) ||
+    /grep\s+-[^\n]*[iE][^\n]*manifest unknown/iu.test(pushRun) ||
+    !/exit "\$prepush_status"/u.test(pushRun) ||
+    !/docker push "\$IMAGE_REF"/u.test(pushRun) ||
+    !/pushed_digests/u.test(pushRun) ||
+    !/digest=\$digest/u.test(pushRun) ||
+    !/immutable_ref=\$IMAGE_REPOSITORY@\$digest/u.test(pushRun)
   ) {
     failures.push(
-      'new-image path must expose the validated local config digest before scanning.',
+      'manual release must perform exactly one guarded push only after definitive tag absence and capture its digest.',
+    );
+  }
+  const pushSteps = steps.filter((step) =>
+    /\bdocker\s+push\b/u.test(String(step.run ?? '')),
+  );
+  if (pushSteps.length !== 1) {
+    failures.push(
+      'manual release must contain exactly one conditional image push.',
+    );
+  }
+  const absenceClassifierCalls = steps.reduce(
+    (count, step) =>
+      count +
+      (String(step.run ?? '').match(
+        /node scripts\/validate-ci-workflow\.cjs --classify-manifest-absence/gu,
+      )?.length ?? 0),
+    0,
+  );
+  if (absenceClassifierCalls !== 2) {
+    failures.push(
+      'manual release must apply the centralized strict absence classifier exactly once in each registry lookup.',
     );
   }
   const selectedRun = String(selected?.run ?? '');
   if (
-    !selected ||
     selected?.env?.TAG_EXISTS !== '${{ steps.existence.outputs.exists }}' ||
+    selected?.env?.EXISTING_DIGEST !==
+      '${{ steps.existence.outputs.digest }}' ||
     selected?.env?.EXISTING_IMMUTABLE_REF !==
-      '${{ steps.existing.outputs.immutable_ref }}' ||
-    selected?.env?.EXISTING_CONFIG_DIGEST !==
-      '${{ steps.existing.outputs.config_digest }}' ||
+      '${{ steps.existence.outputs.immutable_ref }}' ||
+    selected?.env?.PUSHED_DIGEST !== '${{ steps.push.outputs.digest }}' ||
     selected?.env?.PUSHED_IMMUTABLE_REF !==
       '${{ steps.push.outputs.immutable_ref }}' ||
-    selected?.env?.PUSHED_CONFIG_DIGEST !==
-      '${{ steps.push.outputs.config_digest }}' ||
-    !/immutable_ref="\$EXISTING_IMMUTABLE_REF"/u.test(selectedRun) ||
-    !/config_digest="\$EXISTING_CONFIG_DIGEST"/u.test(selectedRun) ||
-    !/immutable_ref="\$PUSHED_IMMUTABLE_REF"/u.test(selectedRun) ||
-    !/config_digest="\$PUSHED_CONFIG_DIGEST"/u.test(selectedRun) ||
-    !/\^\$\{IMAGE_REPOSITORY\}@sha256:\[a-f0-9\]\{64\}\$/u.test(selectedRun) ||
-    !/digest="\$\{immutable_ref##\*@\}"/u.test(selectedRun) ||
-    !/echo "digest=\$digest" >> "\$GITHUB_OUTPUT"/u.test(selectedRun) ||
-    !/echo "immutable_ref=\$immutable_ref" >> "\$GITHUB_OUTPUT"/u.test(
-      selectedRun,
-    ) ||
-    !/echo "config_digest=\$config_digest" >> "\$GITHUB_OUTPUT"/u.test(
-      selectedRun,
-    ) ||
-    /sha256:[a-f0-9]{64}/u.test(selectedRun)
+    !/"\$TAG_EXISTS" = 'true'/u.test(selectedRun) ||
+    !/digest="\$EXISTING_DIGEST"/u.test(selectedRun) ||
+    !/"\$TAG_EXISTS" = 'false'/u.test(selectedRun) ||
+    !/digest="\$PUSHED_DIGEST"/u.test(selectedRun) ||
+    !/immutable_ref/u.test(selectedRun)
   ) {
     failures.push(
-      'publish-image must select only the scanned existing or pushed immutable reference.',
+      'manual release must select the verified existing digest without push or the single newly pushed digest.',
     );
   }
+  const verify = steps[verifyIndex];
   const verifyRun = String(verify?.run ?? '');
   if (
-    !verify ||
-    verify?.env?.EXPECTED_CONFIG_DIGEST !==
-      '${{ steps.selected.outputs.config_digest }}' ||
     verify?.env?.EXPECTED_DIGEST !== '${{ steps.selected.outputs.digest }}' ||
     verify?.env?.IMMUTABLE_REF !==
       '${{ steps.selected.outputs.immutable_ref }}' ||
-    (verifyRun.match(/imagetools inspect "\$IMMUTABLE_REF"/gu) ?? []).length !==
-      3 ||
-    /imagetools inspect "\$IMAGE_REF"/u.test(verifyRun) ||
-    !/--format '\{\{json \.Manifest\}\}'/u.test(verifyRun) ||
-    !/imagetools inspect "\$IMMUTABLE_REF" --raw/u.test(verifyRun) ||
-    !/--format '\{\{json \.Image\}\}'/u.test(verifyRun) ||
-    !/descriptor\?\.digest/u.test(verifyRun) ||
-    !/manifest\?\.config\?\.digest/u.test(verifyRun) ||
-    /descriptor\?\.config|descriptor\.config/u.test(verifyRun) ||
-    /manifest\?\.digest|manifest\.digest/u.test(verifyRun) ||
+    !/imagetools inspect "\$IMMUTABLE_REF"/u.test(verifyRun) ||
     !/manifestDigest !== process\.env\.EXPECTED_DIGEST/u.test(verifyRun) ||
     !/configDigest !== process\.env\.EXPECTED_CONFIG_DIGEST/u.test(verifyRun) ||
-    !/immutableReference = process\.env\.IMMUTABLE_REF/u.test(verifyRun) ||
-    !/immutableReference !== `\$\{process\.env\.IMAGE_REPOSITORY\}@\$\{manifestDigest\}`/u.test(
-      verifyRun,
-    ) ||
-    !/image\?\.os !== 'linux' \|\| image\?\.architecture !== 'amd64'/u.test(
-      verifyRun,
-    ) ||
-    !/labels\[key\] !== value/u.test(verifyRun) ||
-    !/Date\.parse\(labels\['org\.opencontainers\.image\.created'\]\)/u.test(
-      verifyRun,
-    ) ||
-    /sha256:[a-f0-9]{64}/u.test(verifyRun) ||
-    /\{\{\.Name\}\}/u.test(verifyRun)
+    !/immutable registry reference mismatch/u.test(verifyRun)
   ) {
     failures.push(
-      'publish-image must verify descriptor digest, raw config digest, platform, and labels for the selected immutable image.',
+      'manual release must reinspect and verify the selected manifest and config digests.',
     );
   }
-  const packageRun = String(packageStep?.run ?? '');
-  if (
-    !packageStep ||
-    packageStep?.env?.GH_TOKEN !== '${{ secrets.GITHUB_TOKEN }}' ||
-    packageStep?.env?.EXPECTED_DIGEST !==
-      '${{ steps.selected.outputs.digest }}' ||
-    !/GITHUB_API_URL/u.test(packageRun) ||
-    !/pkg = await request\(`\/users\/\$\{owner\}\/packages\/container\/\$\{encoded\}`\)/u.test(
-      packageRun,
-    ) ||
-    !/pkg\?\.visibility !== 'public'/u.test(packageRun) ||
-    !/linkage !== process\.env\.GITHUB_REPOSITORY/u.test(packageRun) ||
-    !/tags\.length !== 1 \|\| tags\[0\] !== expectedTag/u.test(packageRun) ||
-    !/tag === 'latest' \|\| tag === 'main'/u.test(packageRun) ||
-    !/matching\.length !== 1/u.test(packageRun) ||
-    /secrets\.(?!GITHUB_TOKEN)/u.test(packageRun)
-  ) {
-    failures.push(
-      'publish-image must fail closed through the official API on package existence, public visibility, repository linkage, selected tag, and mutable tags.',
-    );
-  }
-  if (
-    !remoteScan ||
-    normalizeExpression(remoteScan.if) !== '' ||
-    String(remoteScan.with?.['image-ref']) !==
-      '${{ steps.selected.outputs.immutable_ref }}'
-  ) {
-    failures.push(
-      'publish-image must rescan the verified remote immutable digest for both publication paths.',
-    );
-  }
+  const evidence = steps.find((step) => step.id === 'evidence');
   const evidenceRun = String(evidence?.run ?? '');
-  if (
-    !evidence ||
-    evidence?.env?.MANIFEST_DIGEST !== '${{ steps.selected.outputs.digest }}' ||
-    evidence?.env?.CONFIG_DIGEST !==
-      '${{ steps.selected.outputs.config_digest }}' ||
-    evidence?.env?.IMMUTABLE_REF !==
-      '${{ steps.selected.outputs.immutable_ref }}' ||
-    !/writeFileSync\('image-identity\.json'/u.test(evidenceRun) ||
-    !/chmodSync\('image-identity\.json', 0o600\)/u.test(evidenceRun) ||
-    !/name: 'Trivy'/u.test(evidenceRun) ||
-    !/version: '0\.70\.0'/u.test(evidenceRun) ||
-    !/scanners: \['vuln'\]/u.test(evidenceRun) ||
-    !/severity: \['CRITICAL'\]/u.test(evidenceRun) ||
-    !/ignoreUnfixed: false/u.test(evidenceRun) ||
-    !/result: 'passed'/u.test(evidenceRun)
-  ) {
-    failures.push(
-      'image-identity.json must be generated in mode 0600 from verified immutable outputs.',
-    );
-  } else {
-    for (const field of [
-      'repository:',
-      'visibility:',
-      'tag:',
-      'manifestDigest:',
-      'configDigest:',
-      'immutableReference:',
-      'commit:',
-      'workflowRunId:',
-      'workflowRunUrl:',
-      'platform:',
-      'labels,',
-      'scanner:',
-      'remoteRescan:',
-      'package:',
-    ]) {
-      if (!evidenceRun.includes(field)) {
-        failures.push(
-          `image-identity.json must include ${field.replace(/[:,]$/u, '')}.`,
-        );
-      }
-    }
+  for (const field of [
+    'IMAGE_PUBLISHED_AND_DIGEST_VERIFIED',
+    'repository:',
+    'commitSha:',
+    'tag:',
+    'manifestDigest:',
+    'actor:',
+    'workflowRun:',
+    'recordedAt:',
+    'scan:',
+  ]) {
+    if (!evidenceRun.includes(field))
+      failures.push(`release evidence is missing ${field}.`);
   }
-  const artifact = findStep(
-    publish,
+  const artifact = steps.find(
     (step) => actionReference(step)?.action === 'actions/upload-artifact',
   );
   if (
-    !artifact ||
-    artifact.with?.path !== 'image-identity.json' ||
-    artifact.with?.['if-no-files-found'] !== 'error' ||
-    Number(artifact.with?.['retention-days']) !== 14
+    artifact?.with?.path !== 'image-release-identity.json' ||
+    artifact?.with?.['if-no-files-found'] !== 'error' ||
+    artifact?.with?.['retention-days'] !== 14
   ) {
     failures.push(
-      'publish-image must retain image-identity.json for 14 days and fail if it is absent.',
+      'manual release evidence artifact must fail closed and retain for 14 days.',
     );
   }
-  const verifyIndex = publishSteps.indexOf(verify);
-  const packageIndex = publishSteps.indexOf(packageStep);
-  const remoteScanIndex = publishSteps.indexOf(remoteScan);
-  const evidenceIndex = publishSteps.indexOf(evidence);
-  const artifactIndex = publishSteps.indexOf(artifact);
-  if (!(
-    firstPush < verifyIndex &&
-    verifyIndex < packageIndex &&
-    packageIndex < remoteScanIndex &&
-    remoteScanIndex < evidenceIndex &&
-    evidenceIndex < artifactIndex
-  )) {
+  if (containsDeploymentCapability(publish)) {
     failures.push(
-      'remote identity and package verification must precede remote rescan, evidence generation, and artifact upload.',
+      'manual image release must contain no deployment capability.',
     );
   }
-
-  const allSteps = Object.values(jobs).flatMap(stepsFor);
-  for (const step of allSteps) {
-    const reference = actionReference(step);
-    if (!reference) continue;
-    const approved = ACTIONS.get(reference.action);
-    if (!approved) {
-      failures.push(`unapproved Action used: ${reference.action}.`);
-    } else if (
-      !FULL_SHA.test(reference.sha) ||
-      reference.sha !== approved.sha
-    ) {
-      failures.push(
-        `${reference.action} must use ${approved.sha} (${approved.version}).`,
-      );
-    }
-  }
-  const serialized = JSON.stringify(workflow);
-  if (/pull_request_target/u.test(serialized))
-    failures.push('pull_request_target is forbidden.');
-  if (/\b(?:latest|main)\b/u.test(String(build?.env?.IMAGE_REF ?? '')))
-    failures.push('build-and-scan image reference must not use a mutable tag.');
-  if (/\b(?:latest|main)\b/u.test(String(publish?.env?.IMAGE_REF ?? '')))
-    failures.push('publish-image reference must not use a mutable tag.');
   if (
-    /secrets\.(?!GITHUB_TOKEN)/u.test(serialized) ||
-    /\bPAT\b|personal.access.token/iu.test(serialized)
+    steps.some((step) =>
+      /\b(?:migration|fixture|traefik)\b/iu.test(String(step.run ?? '')),
+    )
   ) {
-    failures.push('new secrets and PATs are forbidden.');
+    failures.push(
+      'manual image release must contain no deployment capability.',
+    );
   }
-  if (
-    !String(build?.env?.IMAGE_REF ?? '').endsWith(':sha-${{ github.sha }}') ||
-    !String(publish?.env?.IMAGE_REF ?? '').endsWith(':sha-${{ github.sha }}')
-  ) {
-    failures.push('image references must use sha-${{ github.sha }}.');
+  if (/\b(?:latest|main)\b/u.test(String(publish.env?.IMAGE_TAG ?? ''))) {
+    failures.push(
+      'manual release must not use latest or another mutable operational tag.',
+    );
   }
+  failures.push(...validatePinnedActions(jobs));
   return [...new Set(failures)].sort();
 }
 
+function validateWorkflowDocument(workflow) {
+  return validateAutomaticWorkflowDocument(workflow);
+}
 function validateWorkflowSource(source) {
   let workflow;
   try {
@@ -1539,6 +1443,20 @@ function validateWorkflowSource(source) {
   return workflow;
 }
 
+function validateReleaseWorkflowSource(source) {
+  let workflow;
+  try {
+    workflow = parseYamlSubset(source);
+  } catch (error) {
+    throw new WorkflowContractError([
+      `release workflow YAML could not be parsed: ${error.message}`,
+    ]);
+  }
+  const failures = validateManualReleaseDocument(workflow);
+  if (failures.length > 0) throw new WorkflowContractError(failures);
+  return workflow;
+}
+
 function validateWorkflowFile({
   cwd = process.cwd(),
   path = WORKFLOW_PATH,
@@ -1548,10 +1466,21 @@ function validateWorkflowFile({
   );
 }
 
+function validateReleaseWorkflowFile({
+  cwd = process.cwd(),
+  path = RELEASE_WORKFLOW_PATH,
+} = {}) {
+  return validateReleaseWorkflowSource(
+    readFileSync(join(cwd, ...path.split('/')), 'utf8'),
+  );
+}
+
 function main() {
   try {
     validateWorkflowFile();
+    validateReleaseWorkflowFile();
     console.log(`CI workflow contract passed: ${WORKFLOW_PATH}`);
+    console.log(`Manual release contract passed: ${RELEASE_WORKFLOW_PATH}`);
   } catch (error) {
     for (const failure of error.failures ?? [error.message])
       console.error(`FAIL: ${failure}`);
@@ -1559,7 +1488,37 @@ function main() {
   }
 }
 
-if (require.main === module) main();
+function classifyManifestAbsenceCli(args) {
+  if (args.length !== 4 || args[0] !== '1') {
+    process.exitCode = 2;
+    return;
+  }
+  let stdout;
+  let stderr;
+  try {
+    stdout = readFileSync(args[1], 'utf8');
+    stderr = readFileSync(args[2], 'utf8');
+  } catch {
+    process.exitCode = 2;
+    return;
+  }
+  process.exitCode = isDefinitiveManifestAbsence({
+    status: 1,
+    stdout,
+    stderr,
+    expectedImageRef: args[3],
+  })
+    ? 0
+    : 1;
+}
+
+if (require.main === module) {
+  if (process.argv[2] === '--classify-manifest-absence') {
+    classifyManifestAbsenceCli(process.argv.slice(3));
+  } else {
+    main();
+  }
+}
 
 module.exports = {
   ACTIONS,
@@ -1567,9 +1526,15 @@ module.exports = {
   SYNTHETIC_ENV_MATRIX,
   SYNTHETIC_PATH_ENV,
   SYNTHETIC_SECRET_FILES,
+  RELEASE_WORKFLOW_PATH,
   WORKFLOW_PATH,
   WorkflowContractError,
+  isDefinitiveManifestAbsence,
   parseYamlSubset,
+  validateAutomaticWorkflowDocument,
+  validateManualReleaseDocument,
+  validateReleaseWorkflowFile,
+  validateReleaseWorkflowSource,
   validateWorkflowDocument,
   validateWorkflowFile,
   validateWorkflowSource,
