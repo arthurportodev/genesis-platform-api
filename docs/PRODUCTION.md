@@ -228,63 +228,113 @@ As respostas são apenas `{"status":"ok"}` ou
 `{"status":"unavailable"}`, com `Cache-Control: no-store`, sem versão,
 topologia, credencial ou causa interna.
 
-## CI e imagem
+## CI, publicação de imagem e deployment
 
-A `0.8-MVP-04` divide a CI em `validate`, `image-impact`, `build-and-scan` e
-`publish-image`, todos em `ubuntu-24.04`. `validate` preserva o perfil completo e
-acrescenta contratos da CI, os 34 testes focados de produção e validação real
-do Compose com valores sintéticos. Em Pull Requests e execuções manuais,
-`build-and-scan` produz uma única imagem local do target `production` para
-`linux/amd64` e a submete ao Trivy antes de terminar, sem login ou publicação.
+O CI automático em `.github/workflows/ci.yml` possui somente os jobs
+`validate` e `build-and-scan`, ambos com `contents: read`. Pull Requests,
+`push` na `main` e dispatch diagnóstico executam a validação completa e, depois
+de seu sucesso, constroem uma imagem local `linux/amd64`, validam o runtime e
+executam Trivy v0.70.0 com bloqueio de vulnerabilidade Critical. A imagem é
+carregada somente no runner (`load: true`, `push: false`). O CI não recebe
+`packages: write`, não autentica no GHCR, não publica manifest/tag e não chama
+nenhum caminho de release ou deployment.
 
-As três correções da `0.8-MVP-05A` integram o contrato incorporado. A
-`CORR-01` alinhou a validação sintética à matriz não secreta completa, com três
-roles PostgreSQL distintas, referências imutáveis, frontend canônico, versão
-do keyring de Leads, seis arquivos temporários `0600` e cleanup exato e
-fail-closed. A `CORR-02` removeu o contexto indisponível `runner.temp` do nível
-do job e passou a derivar os cinco paths em um step inicial, somente em runtime
-a partir de `RUNNER_TEMP`, via `GITHUB_ENV`. A `CORR-03` tornou todos os testes
-candidate-mode herméticos: cada caso cria e remove sua própria fixture Git,
-manifesto e identidade, sem depender de estado local ignorado.
+A publicação automática no `push` da `main` foi removida porque um merge não é
+aprovação humana específica para release. O antigo grafo `image-impact` →
+`publish-image` não existe mais no workflow automático. O detector versionado
+continua como utilitário histórico testado, mas não concede capacidade de
+registry nem participa do grafo atual.
 
-Todo `push` da `main` continua executando `validate`. O job não privilegiado
-`image-impact`, também limitado a esse evento e com somente `contents: read`,
-compara os commits completos `before` e `head`. `publish-image` depende dos
-dois jobs e somente é autorizado quando ambos terminam com sucesso e o detector
-emite exatamente `should_publish=true`. Falha de Git, SHA inválido, range não
-resolvido ou saída ambígua deixa o workflow vermelho e impede login, build e
-push. Mudança apenas documental, operacional, de Compose, CI, scripts ou testes
-emite `false`, portanto a própria correção do filtro não publica imagem.
+### Publicação manual fail-closed
 
-Os paths canônicos que podem alterar a imagem são `Dockerfile`, `.dockerignore`,
-`.npmrc` quando rastreado, `package.json`, `package-lock.json`, `nest-cli.json`,
-`tsconfig.json`, os demais `tsconfig*.json` legítimos na raiz e `src/**`,
-incluindo as migrations versionadas atuais. A lista deve ser revista junto com
-o Dockerfile sempre que mudarem entradas de dependências, build Nest, geração
-de `dist`, migrations embarcadas ou arquivos copiados para o runtime final; o
-mesmo delta deve atualizar detector, testes, validator da CI e este documento.
+`.github/workflows/release-image.yml` aceita somente `workflow_dispatch` e
+termina em `IMAGE_PUBLISHED_AND_DIGEST_VERIFIED`. Para solicitar uma publicação:
 
-Somente um `push` impactante da `main` habilita `publish-image`, com
-`contents: read` e `packages: write` limitados ao job. A identidade canônica é
-`ghcr.io/arthurportodev/genesis-platform-api:sha-<SHA completo>`. O fluxo de tag
-nova constrói uma vez, carrega, registra o config digest local, verifica as seis
-labels OCI, bloqueia toda vulnerabilidade Critical e revalida esse config digest
-imediatamente antes do único push. O digest reportado pelo push forma a
-referência imutável. A correção `0.8-MVP-04-CORR-01` separa as fontes de
-identidade: `.Manifest` fornece somente o digest do descriptor,
-`imagetools inspect --raw` fornece `config.digest` e `.Image` fornece plataforma
-e labels OCI. O fluxo de tag existente não reconstrói nem sobrescreve; ambos os
-caminhos verificam identidade, package e tag, fazem novo scan da referência
-remota por digest e só então geram a evidência.
+1. selecione um commit já pertencente à história da `main`;
+2. copie o SHA completo, em 40 caracteres hexadecimais minúsculos, para o input
+   `full_sha`;
+3. marque `confirm_release=true`;
+4. aguarde a aprovação humana do Environment protegido;
+5. confirme no resumo o repositório, SHA, tag, digest, ator, run, horário e o
+   resultado do scan.
 
-`image-identity.json`, retido por 14 dias e criado em modo `0600`, registra
-repositório, visibilidade, tag, manifest e config digests, referência imutável,
-commit, run, plataforma, labels OCI completas, scanner, resultado do rescan e
-vínculo package/repositório. A referência autoritativa para deploy e rollback é
-`ghcr.io/arthurportodev/genesis-platform-api@sha256:<digest>`. Não existem tags
-`latest` ou `main`; provenance, SBOM, assinatura, multiarch e cache remoto de
-build permanecem fora desta entrega.
+O workflow falha antes de login se a confirmação não for exata, se o SHA não
+tiver o formato completo, não resolver para um commit, não for ancestral da
+`main`, divergir depois do checkout ou se a variável remota
+`MANUAL_IMAGE_RELEASE_ENABLED` não for exatamente `true`. O checkout não
+persiste credenciais. A imagem é reconstruída do SHA autorizado, validada em
+runtime e escaneada antes de qualquer autenticação; não se confia em artifact
+produzido por outro run.
 
+As permissões globais são `contents: read`. Somente o job manual
+`publish-image`, associado ao Environment `ghcr-production-release`, possui
+`packages: write`. O login usa o `GITHUB_TOKEN` efêmero e ocorre depois de
+Environment, enablement, identidade Git, build, runtime e scan aprovados.
+
+O tag é exclusivamente `sha-<SHA completo>`; não há referência operacional
+`latest` ou `main`. Runs do mesmo SHA são serializados sem cancelamento, e o
+label OCI `created` deriva do timestamp do commit para manter a identidade de
+build estável. Depois do login, o workflow consulta o tag sem mutação. Se ele
+estiver definitivamente ausente, faz uma segunda consulta imediatamente antes
+de um único push e aborta se o tag tiver surgido ou se o resultado for
+ambíguo. Se já existir, exige a mesma plataforma `linux/amd64`, config digest,
+revision, version e todos os labels OCI da imagem local já escaneada; somente
+nesse caso reutiliza o manifest digest sem push. Qualquer divergência ou falha
+de lookup termina sem alterar o registry.
+
+“Definitivamente ausente” é uma classificação centralizada e idêntica nas duas
+consultas: somente `manifest unknown`, `name unknown`, `no such manifest` ou um
+`404 Not Found` do endpoint de manifest são aceitos, e apenas quando a mensagem
+completa identifica exatamente o `IMAGE_REF` solicitado. A mesma implementação
+recebe o status e os dois canais do processo nas duas consultas: exige status
+`1`, stdout com zero bytes e stderr exatamente igual a uma forma canônica, sem
+prefixo, sufixo, whitespace flexível ou separadores CR, LF, U+0085, U+2028 e
+U+2029. O recheck captura stdout em arquivo; não o descarta. Texto genérico
+`not found` não é evidência de ausência. Erros de credential helper, plugin,
+autenticação, permissão, transporte, timeout ou rate limit, mensagens de outro
+tag/ref, conteúdo em ambos os canais e respostas compostas ou não reconhecidas
+abortam antes do push.
+
+Nos dois caminhos aceitos, o workflow seleciona exatamente um manifest digest,
+reinspeciona a referência por digest e compara manifest e config digests com a
+imagem local escaneada. Portanto, repetir manualmente um release idêntico
+revalida e reutiliza a identidade existente; não republica nem move o tag. O artifact
+`image-release-identity.json`, retido por 14 dias, é apenas evidência
+transitória. A fonte durável de verdade para promoção e rollback é:
+
+`ghcr.io/arthurportodev/genesis-platform-api@sha256:<digest>`
+
+Preserve a imagem e esse digest até a desativação da fixture. Exclusão,
+limpeza ou alteração de retenção do digest exige Gate posterior. Um deployment
+futuro deve consumir a referência por digest, nunca depender apenas da tag.
+
+### Configuração remota pendente
+
+Este candidato somente referencia o Environment; ele não o cria nem comprova
+suas proteções. Antes de habilitar o primeiro run, um Gate remoto separado deve:
+
+1. criar ou revisar `ghcr-production-release`;
+2. configurar required reviewer humano;
+3. habilitar prevenção de self-review quando disponível;
+4. restringir as branches/tags elegíveis de modo compatível com releases da
+   `main`;
+5. criar `MANUAL_IMAGE_RELEASE_ENABLED=true` somente depois de revisar os
+   controles;
+6. registrar evidência read-only das proteções efetivamente aplicadas.
+
+Enquanto a variável estiver ausente ou diferente de `true`, o publicador
+permanece fail-closed. Para revogar, altere-a para `false` ou remova-a; para uma
+suspensão adicional, desabilite o workflow. Nenhum desses procedimentos exclui
+o digest já publicado.
+
+### Separação obrigatória do deployment
+
+CI valida; release publica e verifica uma imagem; deployment promove um digest
+para runtime. O workflow de release não acessa VPS, Vercel, Traefik ou banco,
+não chama webhook, não altera container em execução e não executa migration ou
+fixture. Deployment permanece uma tarefa distinta, com aprovação humana,
+allowlist, rollback e evidência próprios. A ausência dessas ações no grafo YAML
+é validada por regressões estruturais versionadas.
 <!-- genesis-memory-history:start -->
 
 ### Snapshot histórico da publicação GHCR
@@ -318,7 +368,8 @@ estágios que executam npm e build. A imagem final recebe somente o executável
 Node, `libstdc++`, dependências podadas, `dist` e `package.json`. npm, npx, Yarn,
 Corepack, módulos globais e o pacote npm `tar` não entram no runtime. O contrato
 estrutural e a inspeção da imagem real verificam esse limite antes do Trivy e de
-qualquer push, tanto no caminho de imagem nova quanto em rerun por digest.
+qualquer lookup ou push. Em rerun, a equivalência com a imagem já escaneada é
+obrigatória e o digest existente é reutilizado sem push.
 
 Essa entrega não depende de cadeia customizada de evidências. Controles
 avançados de supply chain são backlog pós-MVP.

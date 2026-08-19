@@ -1,0 +1,367 @@
+name: Manual immutable image release
+
+on:
+  workflow_dispatch:
+    inputs:
+      full_sha:
+        description: Full 40-character commit SHA from main to publish
+        required: true
+        type: string
+      confirm_release:
+        description: I explicitly approve publishing this commit image
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-image-release-${{ inputs.full_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish-image:
+    name: Build, scan, and publish immutable image
+    environment: ghcr-production-release
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
+      IMAGE_REPOSITORY: ghcr.io/arthurportodev/genesis-platform-api
+      IMAGE_TAG: sha-${{ inputs.full_sha }}
+      IMAGE_REF: ghcr.io/arthurportodev/genesis-platform-api:sha-${{ inputs.full_sha }}
+      RELEASE_ENABLED: ${{ vars.MANUAL_IMAGE_RELEASE_ENABLED }}
+      REQUESTED_SHA: ${{ inputs.full_sha }}
+
+    steps:
+      - name: Checkout main history without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate approval, enablement, SHA, and main ancestry
+        id: authorize
+        shell: bash
+        env:
+          CONFIRM_RELEASE: ${{ inputs.confirm_release }}
+        run: |
+          set -euo pipefail
+          if [ "$CONFIRM_RELEASE" != 'true' ]; then
+            echo "Explicit release confirmation is required." >&2
+            exit 1
+          fi
+          if [ "$RELEASE_ENABLED" != 'true' ]; then
+            echo "Manual image release is disabled by the protected Environment." >&2
+            exit 1
+          fi
+          if [[ ! "$REQUESTED_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "A full lowercase 40-character hexadecimal SHA is required." >&2
+            exit 1
+          fi
+          git cat-file -e "$REQUESTED_SHA^{commit}"
+          git merge-base --is-ancestor "$REQUESTED_SHA" refs/remotes/origin/main
+          resolved_sha="$(git rev-parse "$REQUESTED_SHA^{commit}")"
+          if [ "$resolved_sha" != "$REQUESTED_SHA" ]; then
+            echo "Requested SHA did not resolve to the exact commit." >&2
+            exit 1
+          fi
+          echo "sha=$resolved_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the exact authorized commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.authorize.outputs.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact checkout identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [ "$checked_out_sha" != "$REQUESTED_SHA" ]; then
+            echo "Checked out commit differs from the authorized SHA." >&2
+            exit 1
+          fi
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Read image identity
+        id: identity
+        shell: bash
+        run: |
+          node -e "const p=require('./package.json'); console.log('title='+p.name); console.log('description='+p.description)" >> "$GITHUB_OUTPUT"
+          echo "created=$(git show -s --format=%cI "$REQUESTED_SHA")" >> "$GITHUB_OUTPUT"
+
+      - name: Generate immutable image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/arthurportodev/genesis-platform-api
+          flavor: latest=false
+          tags: type=raw,value=sha-${{ inputs.full_sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ inputs.full_sha }}
+            org.opencontainers.image.version=sha-${{ inputs.full_sha }}
+            org.opencontainers.image.created=${{ steps.identity.outputs.created }}
+            org.opencontainers.image.title=${{ steps.identity.outputs.title }}
+            org.opencontainers.image.description=${{ steps.identity.outputs.description }}
+
+      - name: Build one local production image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          target: production
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+          push: false
+          provenance: false
+          sbom: false
+
+      - name: Verify local image identity
+        id: local
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker image inspect "$IMAGE_REF" > "${{ runner.temp }}/local-image.json"
+          IMAGE_JSON="${{ runner.temp }}/local-image.json" node <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const [image] = JSON.parse(readFileSync(process.env.IMAGE_JSON, 'utf8'));
+          const labels = image?.Config?.Labels ?? {};
+          if (image?.Os !== 'linux' || image?.Architecture !== 'amd64') throw new Error('local image platform mismatch');
+          if (labels['org.opencontainers.image.revision'] !== process.env.REQUESTED_SHA) throw new Error('local image revision mismatch');
+          if (labels['org.opencontainers.image.version'] !== `sha-${process.env.REQUESTED_SHA}`) throw new Error('local image version mismatch');
+          NODE
+          config_digest="$(docker image inspect --format '{{.Id}}' "$IMAGE_REF")"
+          if [[ ! "$config_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Local config digest is invalid." >&2
+            exit 1
+          fi
+          echo "config_digest=$config_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Validate local production runtime
+        env:
+          PRODUCTION_IMAGE_UNDER_TEST: ${{ env.IMAGE_REF }}
+        run: node --test test/production/production-image.test.cjs
+
+      - name: Scan local production image
+        id: scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_REF }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: false
+          scanners: vuln
+          severity: CRITICAL
+          version: v0.70.0
+          cache: false
+
+      - name: Log in to GHCR after all gates
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Inspect immutable full-SHA tag without mutation
+        id: existence
+        shell: bash
+        env:
+          EXPECTED_LOCAL_CONFIG_DIGEST: ${{ steps.local.outputs.config_digest }}
+        run: |
+          set -euo pipefail
+          set +e
+          docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/existing-descriptor.json" 2> "${{ runner.temp }}/existing-error.txt"
+          lookup_status=$?
+          set -e
+          if [ "$lookup_status" -eq 0 ]; then
+            docker buildx imagetools inspect "$IMAGE_REF" --raw > "${{ runner.temp }}/existing-manifest.json"
+            docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Image}}' > "${{ runner.temp }}/existing-image.json"
+            DESCRIPTOR_JSON="${{ runner.temp }}/existing-descriptor.json" MANIFEST_JSON="${{ runner.temp }}/existing-manifest.json" REMOTE_IMAGE_JSON="${{ runner.temp }}/existing-image.json" LOCAL_IMAGE_JSON="${{ runner.temp }}/local-image.json" node <<'NODE' > "${{ runner.temp }}/existing-identity.txt"
+            const { readFileSync } = require('node:fs');
+            const descriptor = JSON.parse(readFileSync(process.env.DESCRIPTOR_JSON, 'utf8'));
+            const manifest = JSON.parse(readFileSync(process.env.MANIFEST_JSON, 'utf8'));
+            const remoteImage = JSON.parse(readFileSync(process.env.REMOTE_IMAGE_JSON, 'utf8'));
+            const [localImage] = JSON.parse(readFileSync(process.env.LOCAL_IMAGE_JSON, 'utf8'));
+            const digest = descriptor?.digest ?? '';
+            const remoteConfigDigest = manifest?.config?.digest ?? '';
+            const remoteLabels = remoteImage?.config?.Labels ?? {};
+            const localLabels = localImage?.Config?.Labels ?? {};
+            const labelNames = [
+              'org.opencontainers.image.source',
+              'org.opencontainers.image.revision',
+              'org.opencontainers.image.version',
+              'org.opencontainers.image.created',
+              'org.opencontainers.image.title',
+              'org.opencontainers.image.description',
+            ];
+            if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error('existing manifest digest is invalid');
+            if (remoteConfigDigest !== process.env.EXPECTED_LOCAL_CONFIG_DIGEST) throw new Error('existing tag config differs from the scanned local image');
+            if (remoteImage?.os !== 'linux' || remoteImage?.architecture !== 'amd64') throw new Error('existing tag platform differs from linux/amd64');
+            if (remoteLabels['org.opencontainers.image.revision'] !== process.env.REQUESTED_SHA) throw new Error('existing tag revision differs from the requested SHA');
+            if (remoteLabels['org.opencontainers.image.version'] !== `sha-${process.env.REQUESTED_SHA}`) throw new Error('existing tag version differs from the requested SHA');
+            for (const name of labelNames) {
+              if (remoteLabels[name] !== localLabels[name]) throw new Error(`existing tag label differs from the scanned local image: ${name}`);
+            }
+            process.stdout.write(`${digest}\n${process.env.IMAGE_REPOSITORY}@${digest}`);
+            NODE
+            mapfile -t existing_identity < "${{ runner.temp }}/existing-identity.txt"
+            if [ "${#existing_identity[@]}" -ne 2 ]; then
+              echo "Existing immutable identity is incomplete." >&2
+              exit 1
+            fi
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "digest=${existing_identity[0]}" >> "$GITHUB_OUTPUT"
+            echo "immutable_ref=${existing_identity[1]}" >> "$GITHUB_OUTPUT"
+          elif node scripts/validate-ci-workflow.cjs --classify-manifest-absence "$lookup_status" "${{ runner.temp }}/existing-descriptor.json" "${{ runner.temp }}/existing-error.txt" "$IMAGE_REF"; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Immutable tag lookup was ambiguous; refusing registry mutation." >&2
+            exit "$lookup_status"
+          fi
+
+      - name: Push scanned immutable image and capture digest
+        id: push
+        if: ${{ steps.existence.outputs.exists == 'false' }}
+        shell: bash
+        env:
+          EXPECTED_LOCAL_CONFIG_DIGEST: ${{ steps.local.outputs.config_digest }}
+        run: |
+          set -euo pipefail
+          set +e
+          docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/prepush-output.txt" 2> "${{ runner.temp }}/prepush-error.txt"
+          prepush_status=$?
+          set -e
+          if [ "$prepush_status" -eq 0 ]; then
+            echo "Immutable tag appeared after lookup; refusing overwrite." >&2
+            exit 1
+          elif ! node scripts/validate-ci-workflow.cjs --classify-manifest-absence "$prepush_status" "${{ runner.temp }}/prepush-output.txt" "${{ runner.temp }}/prepush-error.txt" "$IMAGE_REF"; then
+            echo "Pre-push tag lookup was ambiguous; refusing registry mutation." >&2
+            exit "$prepush_status"
+          fi
+          current_config_digest="$(docker image inspect --format '{{.Id}}' "$IMAGE_REF")"
+          if [ "$current_config_digest" != "$EXPECTED_LOCAL_CONFIG_DIGEST" ]; then
+            echo "Local image identity changed after validation and scan." >&2
+            exit 1
+          fi
+          docker push "$IMAGE_REF" 2>&1 | tee "${{ runner.temp }}/push-output.txt"
+          mapfile -t pushed_digests < <(sed -nE 's/^.*digest: (sha256:[a-f0-9]{64})( size: [0-9]+)?$/\1/p' "${{ runner.temp }}/push-output.txt")
+          if [ "${#pushed_digests[@]}" -ne 1 ]; then
+            echo "Push did not report exactly one canonical manifest digest." >&2
+            exit 1
+          fi
+          digest="${pushed_digests[0]}"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "immutable_ref=$IMAGE_REPOSITORY@$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Select verified immutable digest
+        id: selected
+        shell: bash
+        env:
+          TAG_EXISTS: ${{ steps.existence.outputs.exists }}
+          EXISTING_DIGEST: ${{ steps.existence.outputs.digest }}
+          EXISTING_IMMUTABLE_REF: ${{ steps.existence.outputs.immutable_ref }}
+          PUSHED_DIGEST: ${{ steps.push.outputs.digest }}
+          PUSHED_IMMUTABLE_REF: ${{ steps.push.outputs.immutable_ref }}
+        run: |
+          set -euo pipefail
+          if [ "$TAG_EXISTS" = 'true' ]; then
+            digest="$EXISTING_DIGEST"
+            immutable_ref="$EXISTING_IMMUTABLE_REF"
+          elif [ "$TAG_EXISTS" = 'false' ]; then
+            digest="$PUSHED_DIGEST"
+            immutable_ref="$PUSHED_IMMUTABLE_REF"
+          else
+            echo "Immutable tag state is invalid." >&2
+            exit 1
+          fi
+          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || [ "$immutable_ref" != "$IMAGE_REPOSITORY@$digest" ]; then
+            echo "Selected immutable identity is invalid." >&2
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "immutable_ref=$immutable_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Reinspect and verify the registry digest
+        id: verify
+        shell: bash
+        env:
+          EXPECTED_CONFIG_DIGEST: ${{ steps.local.outputs.config_digest }}
+          EXPECTED_DIGEST: ${{ steps.selected.outputs.digest }}
+          IMMUTABLE_REF: ${{ steps.selected.outputs.immutable_ref }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$IMMUTABLE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/remote-descriptor.json"
+          docker buildx imagetools inspect "$IMMUTABLE_REF" --raw > "${{ runner.temp }}/remote-manifest.json"
+          REMOTE_DESCRIPTOR_JSON="${{ runner.temp }}/remote-descriptor.json" REMOTE_MANIFEST_JSON="${{ runner.temp }}/remote-manifest.json" node <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const descriptor = JSON.parse(readFileSync(process.env.REMOTE_DESCRIPTOR_JSON, 'utf8'));
+          const manifest = JSON.parse(readFileSync(process.env.REMOTE_MANIFEST_JSON, 'utf8'));
+          const manifestDigest = descriptor?.digest ?? '';
+          const configDigest = manifest?.config?.digest ?? '';
+          if (!/^sha256:[a-f0-9]{64}$/.test(manifestDigest)) throw new Error('registry manifest digest is invalid');
+          if (manifestDigest !== process.env.EXPECTED_DIGEST) throw new Error('registry manifest digest differs from push result');
+          if (configDigest !== process.env.EXPECTED_CONFIG_DIGEST) throw new Error('registry config digest differs from scanned local image');
+          if (process.env.IMMUTABLE_REF !== `${process.env.IMAGE_REPOSITORY}@${manifestDigest}`) throw new Error('immutable registry reference mismatch');
+          NODE
+          echo "digest=$EXPECTED_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "immutable_ref=$IMMUTABLE_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Record immutable release evidence
+        id: evidence
+        shell: bash
+        env:
+          CONFIG_DIGEST: ${{ steps.local.outputs.config_digest }}
+          MANIFEST_DIGEST: ${{ steps.verify.outputs.digest }}
+          IMMUTABLE_REF: ${{ steps.verify.outputs.immutable_ref }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { chmodSync, writeFileSync } = require('node:fs');
+          const evidence = {
+            result: 'IMAGE_PUBLISHED_AND_DIGEST_VERIFIED',
+            repository: process.env.IMAGE_REPOSITORY,
+            commitSha: process.env.REQUESTED_SHA,
+            tag: process.env.IMAGE_TAG,
+            manifestDigest: process.env.MANIFEST_DIGEST,
+            configDigest: process.env.CONFIG_DIGEST,
+            immutableReference: process.env.IMMUTABLE_REF,
+            actor: process.env.GITHUB_ACTOR,
+            workflowRun: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            recordedAt: new Date().toISOString(),
+            scan: { tool: 'Trivy', version: '0.70.0', severity: ['CRITICAL'], result: 'passed' },
+          };
+          writeFileSync('image-release-identity.json', `${JSON.stringify(evidence, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+          chmodSync('image-release-identity.json', 0o600);
+          NODE
+          {
+            echo '## IMAGE_PUBLISHED_AND_DIGEST_VERIFIED'
+            echo "- Repository: $IMAGE_REPOSITORY"
+            echo "- Commit SHA: $REQUESTED_SHA"
+            echo "- Immutable tag: $IMAGE_TAG"
+            echo "- Digest: $MANIFEST_DIGEST"
+            echo "- Immutable reference: $IMMUTABLE_REF"
+            echo "- Actor: $GITHUB_ACTOR"
+            echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "- Recorded at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo '- Scan: Trivy v0.70.0 CRITICAL passed'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image-release-identity-${{ inputs.full_sha }}
+          path: image-release-identity.json
+          if-no-files-found: error
+          retention-days: 14
