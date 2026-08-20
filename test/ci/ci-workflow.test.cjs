@@ -591,17 +591,9 @@ test('rejects ambiguous lookup handling that could continue to registry mutation
   );
 });
 
-test('strict absence classifier accepts only exact missing-manifest responses tied to the expected ref', () => {
-  for (const message of [
-    `ERROR: manifest unknown: ${ABSENT_REF}`,
-    `name unknown: ${ABSENT_REF}`,
-    `no such manifest: ${ABSENT_REF}`,
-    `${ABSENT_REF}: manifest unknown`,
-    `ERROR: ${ABSENT_REF}: not found`,
-    `ERROR: unexpected status from HEAD request to https://ghcr.io/v2/arthurportodev/genesis-platform-api/manifests/sha-0123456789abcdef0123456789abcdef01234567: 404 Not Found`,
-  ]) {
-    assert.equal(classifyAbsence(message), true, message);
-  }
+test('strict absence classifier accepts only the exact trailing-LF signature', () => {
+  const message = `ERROR: ${ABSENT_REF}: not found\n`;
+  assert.equal(classifyAbsence(message), true, message);
 });
 
 test('strict absence classifier rejects credential, plugin, auth, transport, timeout, rate-limit, permission, and ambiguous errors', () => {
@@ -613,6 +605,16 @@ test('strict absence classifier rejects credential, plugin, auth, transport, tim
     `ERROR: request for ${ABSENT_REF} timed out`,
     `ERROR: unexpected status from HEAD request for ${ABSENT_REF}: 429 Too Many Requests`,
     `ERROR: denied: permission denied for ${ABSENT_REF}`,
+    `ERROR: manifest unknown: ${ABSENT_REF}`,
+    `name unknown: ${ABSENT_REF}`,
+    `no such manifest: ${ABSENT_REF}`,
+    `${ABSENT_REF}: manifest unknown`,
+    `ERROR: ${ABSENT_REF}: not found`,
+    `ERROR: ${ABSENT_REF}: not found\r\n`,
+    `ERROR: ${ABSENT_REF}: not found\n\n`,
+    `ERROR: ${ABSENT_REF}: not found \n`,
+    `ERROR: ${ABSENT_REF.toUpperCase()}: not found\n`,
+    `ERROR: unexpected status from HEAD request to https://ghcr.io/v2/arthurportodev/genesis-platform-api/manifests/sha-0123456789abcdef0123456789abcdef01234567: 404 Not Found`,
     `${ABSENT_REF}: not found`,
     'manifest unknown',
     `MANIFEST UNKNOWN: ${ABSENT_REF}`,
@@ -626,7 +628,7 @@ test('strict absence classifier rejects credential, plugin, auth, transport, tim
 });
 
 test('strict absence classifier requires failure status one and an exactly empty stdout channel', () => {
-  const canonical = `manifest unknown: ${ABSENT_REF}`;
+  const canonical = `ERROR: ${ABSENT_REF}: not found\n`;
   assert.equal(classifyAbsence(canonical, { status: 0 }), false);
   assert.equal(classifyAbsence(canonical, { status: 2 }), false);
   for (const stdout of [
@@ -641,7 +643,7 @@ test('strict absence classifier requires failure status one and an exactly empty
 });
 
 test('strict absence classifier rejects all relevant line separators and combined-channel content', () => {
-  const canonical = `manifest unknown: ${ABSENT_REF}`;
+  const canonical = `ERROR: ${ABSENT_REF}: not found\n`;
   for (const separator of ['\r', '\n', '\u0085', '\u2028', '\u2029']) {
     for (const stderr of [
       `${separator}${canonical}`,

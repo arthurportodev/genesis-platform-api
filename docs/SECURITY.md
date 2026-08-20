@@ -153,18 +153,19 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   5xx falham fechado sem alcançar o push. O digest publicado é reinspecionado e
   comparado aos manifest e config digests esperados.
 - A classificação de ausência é uma única regra aplicada nos dois lookups. Ela
-  aceita erro completo de manifest/tag ausente, `404` do endpoint de manifest
-  exatamente ligado ao `IMAGE_REF` e a assinatura Buildx 0.36.1 comprovada
-  três vezes no GHCR: `ERROR: <IMAGE_REF exato>: not found`, exit `1` e stdout
-  exatamente vazio. Três leituras OCI `404/MANIFEST_UNKNOWN` corroboraram essa
-  assinatura. Cada lookup usa uma única chamada Buildx, de modo que o exit code,
-  stdout e stderr preservados descrevem o comando causal; nenhuma inspeção
-  secundária pode perder seus canais. `not found` genérico, referência ausente ou divergente, tag
-  parcial, prefixo, sufixo, whitespace flexível, ANSI, CR, LF, U+0085, U+2028,
-  U+2029 ou conteúdo simultâneo nos canais permanecem ambíguos. Falhas de
-  helper/plugin, autenticação, permissão, transporte, timeout, rate limit,
-  servidor e qualquer resposta composta ou desconhecida não produzem
-  `exists=false` e encerram o job antes do push.
+  aceita somente a assinatura Buildx 0.36.1 preservada no artifact sanitizado
+  da tentativa 4: exit `1`, stdout de zero bytes e stderr UTF-8 byte a byte igual
+  a `ERROR: <IMAGE_REF exato>: not found\n`, com exatamente um LF terminal. A
+  comparação ocorre sem `trim()`, normalização ou conversão de finais de linha.
+  Cada lookup usa uma única chamada Buildx, de modo que o exit code, stdout e
+  stderr preservados descrevem o comando causal; nenhuma inspeção secundária
+  pode perder seus canais. A forma sem LF, CRLF, LF adicional, linha extra,
+  espaço residual, referência ausente ou divergente, diferença de caixa, ANSI,
+  NUL, U+0085, U+2028, U+2029, `manifest unknown`, `404` textual ou conteúdo
+  simultâneo nos canais permanecem ambíguos. Falhas de helper/plugin,
+  autenticação, permissão, transporte, timeout, rate limit, servidor e qualquer
+  resposta composta ou desconhecida não produzem `exists=false` e encerram o
+  job antes do push.
 - Todo lookup recebe um path isolado para JSON diagnóstico. Em falha, somente
   esse arquivo estruturado e sanitizado é retido por 14 dias: horário UTC com
   milissegundos, comando lógico sem credencial, exit code, classe da resposta,

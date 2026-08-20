@@ -3,15 +3,31 @@
   "classification": "DEFINITIVE_TAG_ABSENCE",
   "imageRef": "ghcr.io/arthurportodev/genesis-platform-api:sha-0a56a8aee7c64bda59a1981888418e1ad03950c0",
   "stableReads": 3,
+  "source": {
+    "kind": "sanitized-workflow-artifact",
+    "runId": 32376631200,
+    "artifactId": 9409360946,
+    "relativePath": "runner-artifact/tag-inspection-diagnostic.json",
+    "artifactByteLength": 638,
+    "artifactSha256": "940c6baedb1c8f664fada414e9b33279c8f7555557e48f1587b39dddacc76dad",
+    "sanitized": true,
+    "credentialsExposed": false
+  },
   "buildx": {
     "version": "0.36.1",
     "logicalCommand": "docker buildx imagetools inspect <IMAGE_REF> --format {{json .Manifest}}",
     "exitCode": 1,
     "stdout": "",
+    "stdoutByteLength": 0,
+    "stdoutBase64": "",
     "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stderr": "ERROR: ghcr.io/arthurportodev/genesis-platform-api:sha-0a56a8aee7c64bda59a1981888418e1ad03950c0: not found",
-    "stderrSha256": "ec739cfe25efca22018b27be6afe803d7d8715316de07b37042d9e748088f6a3"
+    "stderr": "ERROR: ghcr.io/arthurportodev/genesis-platform-api:sha-0a56a8aee7c64bda59a1981888418e1ad03950c0: not found\n",
+    "stderrByteLength": 107,
+    "stderrBase64": "RVJST1I6IGdoY3IuaW8vYXJ0aHVycG9ydG9kZXYvZ2VuZXNpcy1wbGF0Zm9ybS1hcGk6c2hhLTBhNTZhOGFlZTdjNjRiZGE1OWExOTgxODg4NDE4ZTFhZDAzOTUwYzA6IG5vdCBmb3VuZAo=",
+    "stderrSha256": "9b5df1c027c09f9537eef394287442a17b25ff94720a03f636950748c1afaa92"
   },
+  "observedInspectorExitCode": 12,
+  "observedClassifierResult": "TAG_LOOKUP_FAILED",
   "oci": {
     "method": "GET",
     "httpStatus": 404,

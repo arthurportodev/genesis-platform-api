@@ -293,24 +293,25 @@ autenticação, autorização, rate limit ou servidor também terminam sem alter
 registry.
 
 “Definitivamente ausente” é uma classificação centralizada e idêntica nas duas
-consultas. Além de `manifest unknown`, `name unknown`, `no such manifest` e do
-`404 Not Found` do endpoint de manifest, ela reconhece a assinatura real e
-estável do Buildx 0.36.1 para o GHCR: `ERROR: <IMAGE_REF exato>: not found`.
-Essa forma foi observada três vezes com exit `1` e stdout de zero bytes e
-corroborada por três respostas OCI `404/MANIFEST_UNKNOWN`. O texto genérico
-`not found`, sem o prefixo `ERROR:`, sem a referência completa ou com qualquer
-conteúdo adicional, continua não sendo evidência de ausência.
+consultas. Ela reconhece exclusivamente a assinatura real do Buildx 0.36.1
+preservada pelo artifact sanitizado da tentativa 4: `ERROR: <IMAGE_REF
+exato>: not found` seguido de exatamente um byte LF (`0x0A`). Essa observação
+teve exit `1`, stdout de zero bytes e foi corroborada pelo estado estável do
+registry. `manifest unknown`, `name unknown`, `no such manifest`, `404 Not
+Found` textual ou `not found` genérico não são aceitos isoladamente pelo
+classificador Buildx.
 
 A implementação executa exatamente uma chamada Buildx por lookup e recebe seu
-status, stdout e stderr: exige
-status `1`, stdout exatamente vazio e stderr igual a uma forma canônica
-ancorada no `IMAGE_REF`, sem prefixo, sufixo, whitespace flexível ou
-separadores CR, LF, U+0085, U+2028 e U+2029. O recheck também captura stdout em
-arquivo. Nenhuma consulta secundária de manifest ou imagem pode descartar um
-exit code ou canal causal. Erros de credential helper, plugin, autenticação, permissão,
-transporte, timeout, rate limit ou servidor, mensagens de outro tag/ref,
-conteúdo em ambos os canais e respostas compostas ou desconhecidas abortam
-antes do push.
+status, stdout e stderr sem `trim()`, normalização ou conversão de finais de
+linha antes da comparação. Ela exige status `1`, stdout de zero bytes e stderr
+UTF-8 byte a byte igual a `ERROR: <IMAGE_REF exato>: not found\n`, sem qualquer
+byte anterior ou posterior. A forma sem LF, CRLF, LF adicional, linha extra,
+espaço residual, diferença de referência ou caixa, ANSI, NUL, U+0085, U+2028 e
+U+2029 permanece ambígua. O recheck também captura stdout em arquivo. Nenhuma
+consulta secundária de manifest ou imagem pode descartar um exit code ou canal
+causal. Erros de credential helper, plugin, autenticação, permissão, transporte,
+timeout, rate limit ou servidor, conteúdo em ambos os canais e respostas
+compostas ou desconhecidas abortam antes do push.
 
 Quando um lookup falha, o workflow retém por 14 dias somente um JSON
 estruturado e sanitizado com horário UTC em milissegundos, comando lógico sem
