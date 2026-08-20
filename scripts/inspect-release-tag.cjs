@@ -188,6 +188,64 @@ function loadAvailability(args, env) {
   };
 }
 
+function redactStandaloneBasicCredentials(value) {
+  return value.replace(
+    /(?<![a-z0-9+/])(?:[a-z0-9+/]{8,}={0,2})(?![a-z0-9+/=])/giu,
+    (candidate) => {
+      if (candidate.length % 4 !== 0) return candidate;
+      const decodedBytes = Buffer.from(candidate, 'base64');
+      const canonical = decodedBytes.toString('base64').replace(/=+$/u, '');
+      if (canonical !== candidate.replace(/=+$/u, '')) return candidate;
+      const decoded = decodedBytes.toString('utf8');
+      if (!Buffer.from(decoded, 'utf8').equals(decodedBytes)) return candidate;
+      if (!/^[!-~]{1,256}:[ -~]{0,512}$/u.test(decoded)) return candidate;
+      return '[REDACTED]';
+    },
+  );
+}
+
+function redactStandaloneJwt(value) {
+  return value.replace(
+    /(?<![a-z0-9_-])([a-z0-9_-]{8,})\.([a-z0-9_-]{8,})\.([a-z0-9_-]{8,})(?![a-z0-9_-])/giu,
+    (candidate, encodedHeader, encodedPayload) => {
+      try {
+        const header = JSON.parse(
+          Buffer.from(encodedHeader, 'base64url').toString('utf8'),
+        );
+        const payload = JSON.parse(
+          Buffer.from(encodedPayload, 'base64url').toString('utf8'),
+        );
+        if (
+          header !== null &&
+          typeof header === 'object' &&
+          !Array.isArray(header) &&
+          typeof header.alg === 'string' &&
+          payload !== null &&
+          typeof payload === 'object' &&
+          !Array.isArray(payload)
+        ) {
+          return '[REDACTED]';
+        }
+      } catch {
+        // Non-JWT dotted registry evidence remains available to operators.
+      }
+      return candidate;
+    },
+  );
+}
+
+function redactStandaloneSecrets(value) {
+  const githubClassicPat = /\bgh[pousr]_[a-z0-9]{20,}\b/giu;
+  const githubFineGrainedPat = /\bgithub_pat_[a-z0-9_]{20,}\b/giu;
+  return redactStandaloneBasicCredentials(
+    redactStandaloneJwt(
+      value
+        .replace(githubFineGrainedPat, '[REDACTED]')
+        .replace(githubClassicPat, '[REDACTED]'),
+    ),
+  );
+}
+
 function sanitizeDiagnosticText(value) {
   let sanitized = String(value)
     .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, '[ANSI_REMOVED]')
@@ -209,6 +267,7 @@ function sanitizeDiagnosticText(value) {
     )
     .replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^@\s/]+@/giu, '$1[REDACTED]@')
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, '\ufffd');
+  sanitized = redactStandaloneSecrets(sanitized);
   const maximumLength = 4096;
   if (sanitized.length > maximumLength) {
     sanitized = `${sanitized.slice(0, maximumLength)}[TRUNCATED]`;

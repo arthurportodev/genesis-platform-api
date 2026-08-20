@@ -341,19 +341,19 @@ Preserve a imagem e esse digest até a desativação da fixture. Exclusão,
 limpeza ou alteração de retenção do digest exige Gate posterior. Um deployment
 futuro deve consumir a referência por digest, nunca depender apenas da tag.
 
-### Configuração remota pendente
+### Estado remoto verificado e habilitação pendente
 
-Este candidato somente referencia o Environment; ele não o cria nem comprova
-suas proteções. Antes de habilitar o primeiro run, um Gate remoto separado deve:
+A inspeção read-only de 20/08/2026 confirmou que o Environment
+`ghcr-production-release` existe e tem três proteções: required reviewer humano,
+wait timer de um minuto e policy custom restrita à branch `main`. O Environment
+tem zero secrets e uma única variável, `MANUAL_IMAGE_RELEASE_ENABLED=false`.
+A prevenção de self-review está desabilitada e administradores podem fazer
+bypass; esses limites não autorizam habilitação nem dispatch.
 
-1. criar ou revisar `ghcr-production-release`;
-2. configurar required reviewer humano;
-3. habilitar prevenção de self-review quando disponível;
-4. restringir as branches/tags elegíveis de modo compatível com releases da
-   `main`;
-5. criar `MANUAL_IMAGE_RELEASE_ENABLED=true` somente depois de revisar os
-   controles;
-6. registrar evidência read-only das proteções efetivamente aplicadas.
+Antes de qualquer execução, um Gate remoto separado deve obter autorização
+humana explícita, reconfirmar as proteções e a branch elegível, e somente então
+alterar `MANUAL_IMAGE_RELEASE_ENABLED` para `true` durante a janela autorizada.
+O dispatch manual permanece uma ação separada e também requer autorização.
 
 Enquanto a variável estiver ausente ou diferente de `true`, o publicador
 permanece fail-closed. Para revogar, altere-a para `false` ou remova-a; para uma

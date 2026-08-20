@@ -130,10 +130,13 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   que não contém o script de inspeção não pode apagar o tooling do workflow.
 - O job manual referencia o Environment `ghcr-production-release` e falha antes
   do login enquanto `MANUAL_IMAGE_RELEASE_ENABLED` não for exatamente `true`.
-  O Environment remoto ainda **não está configurado nem verificado** por esta
-  mudança. Um Gate remoto futuro deve configurar required reviewer humano,
-  impedir self-review quando a conta/plano oferecer essa opção, restringir as
-  branches/tags elegíveis e somente então criar a variável de habilitação.
+  A inspeção remota de 20/08/2026 confirmou o Environment existente com três
+  proteções: required reviewer humano, wait timer de um minuto e policy custom
+  restrita à branch `main`. Ele possui zero Environment secrets e a única
+  variável, `MANUAL_IMAGE_RELEASE_ENABLED`, está em `false`. A prevenção de
+  self-review permanece desabilitada e administradores podem fazer bypass;
+  portanto, mudar a variável para `true` ou disparar o workflow continua
+  exigindo autorização humana explícita e um Gate operacional separado.
 - As permissões globais são `contents: read`. `packages: write` aparece somente
   no job manual `publish-image`, associado ao Environment; nenhum job de CI,
   validação, build ou scan recebe escrita de package. O login usa apenas

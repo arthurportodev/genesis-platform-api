@@ -363,6 +363,59 @@ test('sanitizer redacts JSON, underscored, header, assignment, and URL credentia
   assert.match(sanitized, /https:\/\/\[REDACTED\]@ghcr\.io/u);
 });
 
+test('sanitizer redacts standalone GitHub tokens, JWTs, and Basic credentials before artifact custody', () => {
+  const classicPat = `ghp_${'A'.repeat(36)}`;
+  const fineGrainedPat = `github_pat_${'B'.repeat(82)}`;
+  const jwt = `eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.${'c'.repeat(32)}`;
+  const whitespaceJwt = [
+    Buffer.from('{\n  "alg": "HS256"}', 'utf8').toString('base64url'),
+    Buffer.from('{"sub":"atypical-header"}', 'utf8').toString('base64url'),
+    `${'d'.repeat(31)}_`,
+  ].join('.');
+  const basicCredential = Buffer.from(
+    'diagnostic-user:basic-password',
+    'utf8',
+  ).toString('base64');
+  const result = execute({
+    command: 'availability',
+    status: 1,
+    overrides: {
+      stdout: `standalone ${classicPat} ${jwt} ${whitespaceJwt}`,
+      stderr: `registry failure ${fineGrainedPat} ${basicCredential}`,
+    },
+    captureDiagnostic: true,
+  });
+  assertOutcome(
+    result,
+    EXIT.LOOKUP_FAILED,
+    RESULT.LOOKUP_FAILED,
+    /invalid or ambiguous/u,
+  );
+  const artifact = JSON.stringify(result.diagnostic);
+  for (const secret of [
+    classicPat,
+    fineGrainedPat,
+    jwt,
+    whitespaceJwt,
+    basicCredential,
+  ]) {
+    assert.doesNotMatch(artifact, new RegExp(secret, 'u'));
+  }
+  assert.match(
+    result.diagnostic.stdout,
+    /standalone \[REDACTED\] \[REDACTED\] \[REDACTED\]/u,
+  );
+  assert.match(
+    result.diagnostic.stderr,
+    /registry failure \[REDACTED\] \[REDACTED\]/u,
+  );
+});
+
+test('standalone secret redaction preserves useful non-secret registry evidence', () => {
+  const safe = `ERROR: ${IMAGE_REF}: not found; HTTP/1.1 404; digest=${MANIFEST_DIGEST}`;
+  assert.equal(sanitizeDiagnosticText(safe), safe);
+});
+
 test('extracts only explicit HTTP status forms including the canonical GHCR 404', () => {
   const manifestUrl =
     'https://ghcr.io/v2/arthurportodev/genesis-platform-api/manifests/sha-' +
