@@ -250,13 +250,56 @@ registry nem participa do grafo atual.
 `.github/workflows/release-image.yml` aceita somente `workflow_dispatch` e
 termina em `IMAGE_PUBLISHED_AND_DIGEST_VERIFIED`. Para solicitar uma publicação:
 
-1. selecione um commit já pertencente à história da `main`;
-2. copie o SHA completo, em 40 caracteres hexadecimais minúsculos, para o input
-   `full_sha`;
-3. marque `confirm_release=true`;
-4. aguarde a aprovação humana do Environment protegido;
-5. confirme no resumo o repositório, SHA, tag, digest, ator, run, horário e o
+1. aprove separadamente o SHA exato da `main` que fornece o workflow
+   (`workflowRef`) e o commit da aplicação que será publicado
+   (`imageSourceSha`);
+2. execute `scripts/dispatch-release-image.cjs` com os dois SHAs explícitos; o
+   helper comprova a `main` remota, faz no máximo um dispatch e valida o run;
+3. mantenha `ref: main` e copie o `imageSourceSha`, em 40 caracteres
+   hexadecimais minúsculos, exclusivamente para o input `full_sha`;
+4. marque `confirm_release=true`;
+5. aguarde a aprovação humana do Environment protegido;
+6. confirme no resumo o repositório, SHA, tag, digest, ator, run, horário e o
    resultado do scan.
+
+Na API do GitHub, `ref: main` — ou o `--ref main` semanticamente equivalente
+da CLI — escolhe a versão do workflow. Um SHA bruto nunca deve ocupar esse
+campo. O SHA da aplicação ocupa somente `inputs.full_sha`. Antes da operação
+real, use o modo sem mutação para verificar identidades e payload:
+
+```bash
+node scripts/dispatch-release-image.cjs \
+  --workflow-ref <approved-full-main-sha> \
+  --image-source-sha <approved-full-application-sha> \
+  --dry-run
+```
+
+Remover `--dry-run` é uma operação mutável separada e só é permitido por uma
+janela de release explicitamente autorizada. O helper identifica o workflow
+inequivocamente por `.github/workflows/release-image.yml`, registra o conjunto
+anterior de runs e o instante da operação, consulta a referência remota
+autoritativa de `main` imediatamente antes do dispatch e exige
+`remoteMainSha === workflowRef`. Divergência termina como
+`MAIN_MOVED_BEFORE_DISPATCH`; o helper não seleciona automaticamente a nova
+revisão.
+
+Uma resposta HTTP 204 não contém `runId`. Nesse caso, o helper não repete o
+dispatch: ele faz polling limitado somente no workflow correto, evento
+`workflow_dispatch` e runs novos a partir do início registrado. Exige exatamente
+um candidato e então comprova `head_sha === workflowRef` e
+`head_branch === main`. SHA ou branch divergente bloqueia aprovação humana,
+solicita o cancelamento fail-closed do run e sinaliza que o guardian operacional
+deve restaurar `MANUAL_IMAGE_RELEASE_ENABLED=false`. Zero ou múltiplos
+candidatos permanecem inconclusivos e exigem investigação e nova decisão
+humana.
+
+HTTP 422 e qualquer resposta de dispatch ambígua falham sem fallback e sem
+retry. Os estados estruturados usam exit `0` para `DRY_RUN_READY` ou
+`DISPATCH_CONFIRMED`; `20` para `MAIN_MOVED_BEFORE_DISPATCH`; `21` para HTTP
+422; `22` para resposta ambígua; `23` para zero run; `24` para múltiplos runs;
+`25` para `head_sha` divergente; `26` para branch divergente; e `27` quando uma
+leitura autoritativa não pode ser comprovada. Qualquer falha exige nova decisão
+humana; nunca transforme um estado inconclusivo em um segundo dispatch.
 
 O workflow falha antes de login se a confirmação não for exata, se o SHA não
 tiver o formato completo, não resolver para um commit, não for ancestral da
