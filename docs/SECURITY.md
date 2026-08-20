@@ -119,9 +119,12 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   `RUNNER_TEMP`, ligados por override Compose transitório, nunca são impressos
   ou enviados como artifact e têm cleanup explícito com `always()`.
 - A publicação existe somente em `.github/workflows/release-image.yml`, cujo
-  único trigger é `workflow_dispatch`. O operador deve fornecer o SHA completo
-  de 40 caracteres da `main` e marcar a confirmação explícita. O job valida o
-  formato, resolve o objeto commit e comprova ancestralidade em `main`. O
+  único trigger é `workflow_dispatch`. O dispatch usa sempre a branch literal
+  `main` para selecionar a revisão do workflow; um SHA bruto nunca ocupa
+  `workflow_dispatch.ref`. O operador deve fornecer o SHA completo de 40
+  caracteres da aplicação somente no input `full_sha` e marcar a confirmação
+  explícita. O job valida o formato, resolve o objeto commit e comprova
+  ancestralidade em `main`. O
   tooling de controle é isolado em `release-control` e preso ao
   `github.workflow_sha`; a fonte da imagem fica em `image-source`, seleciona o
   SHA autorizado em modo detached e confirma `HEAD` antes de qualquer login.
@@ -178,6 +181,19 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   `imageSourceSha` continua
   `0a56a8aee7c64bda59a1981888418e1ad03950c0` e
   `sourceShaChanged=false`.
+- `scripts/dispatch-release-image.cjs` recebe essas duas autoridades
+  explicitamente, mas envia somente `imageSourceSha` em `inputs.full_sha` e usa
+  `ref: main`. Imediatamente antes da única chamada mutável, ele exige que a
+  referência remota autoritativa de `main` seja igual ao `workflowRef`
+  aprovado. Depois de HTTP 204, não repete a chamada: faz polling limitado no
+  workflow identificado pelo arquivo, exige exatamente um novo run de
+  `workflow_dispatch` e comprova `head_sha` e `head_branch`. Divergência de SHA
+  ou branch solicita cancelamento do run, bloqueia aprovação e exige que o
+  guardian separado restaure a variável do Environment para `false`. HTTP 422,
+  resposta ambígua, zero ou múltiplos runs e falha de leitura permanecem
+  fail-closed e dependem de nova decisão humana. O modo `--dry-run` executa
+  somente leituras e produz zero mutações; o helper não manipula Environment,
+  secrets, aprovação, registry, imagem ou deployment.
 - `image-release-identity.json` e o resumo do workflow registram repositório,
   SHA, tag, digest, referência imutável, ator, run, horário e resultado do scan
   sem expor token. O artifact de 14 dias é evidência transitória: a referência

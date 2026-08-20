@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "genesis-release-dispatch-error.v1",
+  "source": {
+    "kind": "sanitized-operational-evidence",
+    "attempt": 5,
+    "sanitized": true,
+    "containsSecrets": false
+  },
+  "commandAttempt": 1,
+  "createdRun": false,
+  "httpStatus": 422,
+  "errorClass": "NO_REF_FOUND",
+  "requestedRef": "b00a111735aade7689d7abd8d6833ce7b93efeac",
+  "responseBody": "No ref found for requested immutable workflow commit",
+  "retryPerformed": false
+}
