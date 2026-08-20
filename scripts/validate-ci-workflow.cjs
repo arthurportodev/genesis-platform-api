@@ -1,5 +1,6 @@
-const { readFileSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const WORKFLOW_PATH = '.github/workflows/ci.yml';
 const RELEASE_WORKFLOW_PATH = '.github/workflows/release-image.yml';
@@ -1130,6 +1131,7 @@ function validateManualReleaseDocument(workflow) {
   const authorizeRun = String(authorize?.run ?? '');
   if (
     !authorize ||
+    authorize['working-directory'] !== 'image-source' ||
     authorize.env?.CONFIRM_RELEASE !== '${{ inputs.confirm_release }}' ||
     !/"\$CONFIRM_RELEASE" != 'true'/u.test(authorizeRun) ||
     !/"\$RELEASE_ENABLED" != 'true'/u.test(authorizeRun) ||
@@ -1150,20 +1152,56 @@ function validateManualReleaseDocument(workflow) {
   );
   if (
     checkouts.length !== 2 ||
-    checkouts[0]?.with?.ref !== 'main' ||
-    checkouts[0]?.with?.['fetch-depth'] !== 0 ||
+    checkouts[0]?.with?.ref !== '${{ github.workflow_sha }}' ||
+    checkouts[0]?.with?.path !== 'release-control' ||
+    checkouts[0]?.with?.['fetch-depth'] !== 1 ||
     checkouts[0]?.with?.['persist-credentials'] !== false ||
-    checkouts[1]?.with?.ref !== '${{ steps.authorize.outputs.sha }}' ||
+    checkouts[1]?.with?.ref !== 'main' ||
+    checkouts[1]?.with?.path !== 'image-source' ||
+    checkouts[1]?.with?.['fetch-depth'] !== 0 ||
     checkouts[1]?.with?.['persist-credentials'] !== false
   ) {
     failures.push(
-      'manual release must inspect main and then checkout only the authorized full SHA without credentials.',
+      'manual release must isolate workflow-revision tooling from main image source history in two credential-free checkout paths.',
+    );
+  }
+  const toolingIdentity = steps.find(
+    (step) =>
+      String(step.name ?? '') === 'Verify release control tooling identity',
+  );
+  const toolingIdentityRun = String(toolingIdentity?.run ?? '');
+  if (
+    toolingIdentity?.['working-directory'] !== 'release-control' ||
+    toolingIdentity?.env?.EXPECTED_WORKFLOW_SHA !==
+      '${{ github.workflow_sha }}' ||
+    !/git rev-parse HEAD/u.test(toolingIdentityRun) ||
+    !/"\$tooling_sha" != "\$EXPECTED_WORKFLOW_SHA"/u.test(toolingIdentityRun) ||
+    !/\[ ! -f scripts\/inspect-release-tag\.cjs \]/u.test(toolingIdentityRun)
+  ) {
+    failures.push(
+      'manual release must bind available release inspection tooling to the exact workflow revision.',
+    );
+  }
+  const sourceSelection = steps.find(
+    (step) =>
+      String(step.name ?? '') === 'Select the exact authorized image source',
+  );
+  const sourceSelectionRun = String(sourceSelection?.run ?? '');
+  if (
+    sourceSelection?.['working-directory'] !== 'image-source' ||
+    sourceSelection?.env?.AUTHORIZED_SHA !==
+      '${{ steps.authorize.outputs.sha }}' ||
+    !/git checkout --detach "\$AUTHORIZED_SHA"/u.test(sourceSelectionRun)
+  ) {
+    failures.push(
+      'manual release must select the authorized full SHA only inside the isolated image source checkout.',
     );
   }
   const exactCheckout = steps.find(
     (step) => String(step.name ?? '') === 'Verify exact checkout identity',
   );
   if (
+    exactCheckout?.['working-directory'] !== 'image-source' ||
     !/git rev-parse HEAD/u.test(String(exactCheckout?.run ?? '')) ||
     !/"\$checked_out_sha" != "\$REQUESTED_SHA"/u.test(
       String(exactCheckout?.run ?? ''),
@@ -1175,6 +1213,7 @@ function validateManualReleaseDocument(workflow) {
   }
   const identity = steps.find((step) => step.id === 'identity');
   if (
+    identity?.['working-directory'] !== 'image-source' ||
     !/git show -s --format=%cI "\$REQUESTED_SHA"/u.test(
       String(identity?.run ?? ''),
     ) ||
@@ -1239,9 +1278,19 @@ function validateManualReleaseDocument(workflow) {
   const scan = steps[scanIndex];
   if (scan) failures.push(...trivyFailures(scan, 'publish-image'));
   const build = steps[buildIndex];
-  if (build?.with?.push !== false || build?.with?.load !== true) {
+  if (
+    build?.with?.context !== './image-source' ||
+    build?.with?.push !== false ||
+    build?.with?.load !== true
+  ) {
     failures.push(
-      'manual release must build and load locally with push false before login.',
+      'manual release must build only the isolated image source and load locally with push false before login.',
+    );
+  }
+  const runtime = steps[runtimeIndex];
+  if (runtime?.['working-directory'] !== 'image-source') {
+    failures.push(
+      'manual release runtime validation must execute only from the isolated image source.',
     );
   }
   const login = steps[loginIndex];
@@ -1263,31 +1312,23 @@ function validateManualReleaseDocument(workflow) {
     ) ||
     !/imagetools inspect "\$IMAGE_REF" --raw/u.test(existenceRun) ||
     !/--format '\{\{json \.Image\}\}'/u.test(existenceRun) ||
-    !/remoteConfigDigest !== process\.env\.EXPECTED_LOCAL_CONFIG_DIGEST/u.test(
-      existenceRun,
-    ) ||
-    !/remoteImage\?\.os !== 'linux' \|\| remoteImage\?\.architecture !== 'amd64'/u.test(
-      existenceRun,
-    ) ||
-    !/org\.opencontainers\.image\.revision/u.test(existenceRun) ||
-    !/org\.opencontainers\.image\.version/u.test(existenceRun) ||
-    !/remoteLabels\[name\] !== localLabels\[name\]/u.test(existenceRun) ||
-    !/exists=true/u.test(existenceRun) ||
-    !/digest=\$\{existing_identity\[0\]\}/u.test(existenceRun) ||
-    !/immutable_ref=\$\{existing_identity\[1\]\}/u.test(existenceRun) ||
     !existenceRun.includes(
       '> "${{ runner.temp }}/existing-descriptor.json" 2> "${{ runner.temp }}/existing-error.txt"',
     ) ||
     !existenceRun.includes(
-      'node scripts/validate-ci-workflow.cjs --classify-manifest-absence "$lookup_status" "${{ runner.temp }}/existing-descriptor.json" "${{ runner.temp }}/existing-error.txt" "$IMAGE_REF"',
+      'node release-control/scripts/inspect-release-tag.cjs inspect "$lookup_status"',
     ) ||
+    !/TAG_AVAILABLE/u.test(existenceRun) ||
+    !/state=TAG_AVAILABLE/u.test(existenceRun) ||
+    !/if \[ "\$inspection_status" -ne 0 \]; then\s+exit "\$inspection_status"/u.test(
+      existenceRun,
+    ) ||
+    /<<-?\s*['"]?[A-Za-z_]/u.test(existenceRun) ||
     /grep\s+-[^\n]*[iE][^\n]*manifest unknown/iu.test(existenceRun) ||
-    !/lookup was ambiguous; refusing registry mutation/u.test(existenceRun) ||
-    !/exit "\$lookup_status"/u.test(existenceRun) ||
     /\bdocker\s+push\b/u.test(existenceRun)
   ) {
     failures.push(
-      'existing full-SHA tag must be classified without mutation and reused only when manifest, config, platform, and labels equal the scanned local image.',
+      'existing full-SHA tag must be classified by the versioned inspection script without inline heredoc or registry mutation.',
     );
   }
   const push = steps[pushIndex];
@@ -1295,21 +1336,20 @@ function validateManualReleaseDocument(workflow) {
   if (
     push?.id !== 'push' ||
     normalizeExpression(push?.if) !==
-      "steps.existence.outputs.exists == 'false'" ||
+      "steps.existence.outputs.state == 'TAG_AVAILABLE'" ||
     !/imagetools inspect "\$IMAGE_REF"/u.test(pushRun) ||
-    !/Immutable tag appeared after lookup; refusing overwrite/u.test(pushRun) ||
-    !/Pre-push tag lookup was ambiguous; refusing registry mutation/u.test(
-      pushRun,
-    ) ||
     !pushRun.includes(
       '> "${{ runner.temp }}/prepush-output.txt" 2> "${{ runner.temp }}/prepush-error.txt"',
     ) ||
     pushRun.includes('/dev/null') ||
     !pushRun.includes(
-      'node scripts/validate-ci-workflow.cjs --classify-manifest-absence "$prepush_status" "${{ runner.temp }}/prepush-output.txt" "${{ runner.temp }}/prepush-error.txt" "$IMAGE_REF"',
+      'node release-control/scripts/inspect-release-tag.cjs availability "$prepush_status"',
+    ) ||
+    !/TAG_AVAILABLE/u.test(pushRun) ||
+    !/if \[ "\$availability_status" -ne 0 \]; then\s+exit "\$availability_status"/u.test(
+      pushRun,
     ) ||
     /grep\s+-[^\n]*[iE][^\n]*manifest unknown/iu.test(pushRun) ||
-    !/exit "\$prepush_status"/u.test(pushRun) ||
     !/docker push "\$IMAGE_REF"/u.test(pushRun) ||
     !/pushed_digests/u.test(pushRun) ||
     !/digest=\$digest/u.test(pushRun) ||
@@ -1327,37 +1367,31 @@ function validateManualReleaseDocument(workflow) {
       'manual release must contain exactly one conditional image push.',
     );
   }
-  const absenceClassifierCalls = steps.reduce(
+  const tagInspectionCalls = steps.reduce(
     (count, step) =>
       count +
       (String(step.run ?? '').match(
-        /node scripts\/validate-ci-workflow\.cjs --classify-manifest-absence/gu,
+        /node release-control\/scripts\/inspect-release-tag\.cjs (?:inspect|availability)/gu,
       )?.length ?? 0),
     0,
   );
-  if (absenceClassifierCalls !== 2) {
+  if (tagInspectionCalls !== 2) {
     failures.push(
-      'manual release must apply the centralized strict absence classifier exactly once in each registry lookup.',
+      'manual release must apply the versioned fail-closed tag classifier exactly once in each registry lookup.',
     );
   }
   const selectedRun = String(selected?.run ?? '');
   if (
-    selected?.env?.TAG_EXISTS !== '${{ steps.existence.outputs.exists }}' ||
-    selected?.env?.EXISTING_DIGEST !==
-      '${{ steps.existence.outputs.digest }}' ||
-    selected?.env?.EXISTING_IMMUTABLE_REF !==
-      '${{ steps.existence.outputs.immutable_ref }}' ||
+    selected?.env?.TAG_STATE !== '${{ steps.existence.outputs.state }}' ||
     selected?.env?.PUSHED_DIGEST !== '${{ steps.push.outputs.digest }}' ||
     selected?.env?.PUSHED_IMMUTABLE_REF !==
       '${{ steps.push.outputs.immutable_ref }}' ||
-    !/"\$TAG_EXISTS" = 'true'/u.test(selectedRun) ||
-    !/digest="\$EXISTING_DIGEST"/u.test(selectedRun) ||
-    !/"\$TAG_EXISTS" = 'false'/u.test(selectedRun) ||
+    !/"\$TAG_STATE" != 'TAG_AVAILABLE'/u.test(selectedRun) ||
     !/digest="\$PUSHED_DIGEST"/u.test(selectedRun) ||
     !/immutable_ref/u.test(selectedRun)
   ) {
     failures.push(
-      'manual release must select the verified existing digest without push or the single newly pushed digest.',
+      'manual release must select only the single digest pushed after TAG_AVAILABLE.',
     );
   }
   const verify = steps[verifyIndex];
@@ -1443,6 +1477,55 @@ function validateWorkflowSource(source) {
   return workflow;
 }
 
+function resolveBashExecutable({
+  env = process.env,
+  platform = process.platform,
+} = {}) {
+  if (env.GENESIS_BASH_PATH) return env.GENESIS_BASH_PATH;
+  if (platform === 'win32') {
+    const programFiles = env.ProgramFiles ?? 'C:\\Program Files';
+    const candidates = [
+      join(programFiles, 'Git', 'bin', 'bash.exe'),
+      join(programFiles, 'Git', 'usr', 'bin', 'bash.exe'),
+    ];
+    const available = candidates.find((candidate) => existsSync(candidate));
+    if (available) return available;
+  }
+  return 'bash';
+}
+
+function shellSourceForSyntaxCheck(source) {
+  return source.replace(/\$\{\{[\s\S]*?\}\}/gu, '__GITHUB_EXPRESSION__');
+}
+
+function validateReleaseRunShellSyntax(workflow, options = {}) {
+  const failures = [];
+  const bash = options.bash ?? resolveBashExecutable(options);
+  for (const step of stepsFor(workflow?.jobs?.['publish-image'])) {
+    if (typeof step.run !== 'string') continue;
+    const result = spawnSync(bash, ['--noprofile', '--norc', '-n'], {
+      input: shellSourceForSyntaxCheck(step.run),
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    if (result.error) {
+      failures.push(
+        `release shell syntax could not be checked for ${step.name ?? step.id ?? 'unnamed step'}: ${result.error.code ?? 'spawn failed'}.`,
+      );
+      continue;
+    }
+    if (result.status !== 0) {
+      const diagnostic = String(result.stderr ?? '')
+        .split(/\r?\n/u)
+        .find((line) => line.trim().length > 0);
+      failures.push(
+        `release shell syntax is invalid for ${step.name ?? step.id ?? 'unnamed step'}${diagnostic ? `: ${diagnostic.trim()}` : ''}.`,
+      );
+    }
+  }
+  return failures;
+}
+
 function validateReleaseWorkflowSource(source) {
   let workflow;
   try {
@@ -1452,7 +1535,10 @@ function validateReleaseWorkflowSource(source) {
       `release workflow YAML could not be parsed: ${error.message}`,
     ]);
   }
-  const failures = validateManualReleaseDocument(workflow);
+  const failures = [
+    ...validateManualReleaseDocument(workflow),
+    ...validateReleaseRunShellSyntax(workflow),
+  ];
   if (failures.length > 0) throw new WorkflowContractError(failures);
   return workflow;
 }
@@ -1533,6 +1619,7 @@ module.exports = {
   parseYamlSubset,
   validateAutomaticWorkflowDocument,
   validateManualReleaseDocument,
+  validateReleaseRunShellSyntax,
   validateReleaseWorkflowFile,
   validateReleaseWorkflowSource,
   validateWorkflowDocument,
