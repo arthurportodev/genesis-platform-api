@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
 const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const test = require('node:test');
@@ -9,6 +10,7 @@ const {
   parseYamlSubset,
   validateAutomaticWorkflowDocument,
   validateManualReleaseDocument,
+  validateReleaseRunShellSyntax,
   validateReleaseWorkflowSource,
   validateWorkflowSource,
 } = require('../../scripts/validate-ci-workflow.cjs');
@@ -45,6 +47,7 @@ function rejects(failures, pattern) {
 
 const ABSENT_REF =
   'ghcr.io/arthurportodev/genesis-platform-api:sha-0123456789abcdef0123456789abcdef01234567';
+const IMAGE_SOURCE_SHA = '0a56a8aee7c64bda59a1981888418e1ad03950c0';
 
 function classifyAbsence(stderr, overrides = {}) {
   return isDefinitiveManifestAbsence({
@@ -176,15 +179,15 @@ test('negative 7 rejects release without full SHA enforcement', () => {
   );
 });
 
-test('negative 8 rejects checkout of a branch instead of authorized SHA', () => {
+test('negative 8 rejects overlap between workflow tooling and image source checkout paths', () => {
   rejects(
     releaseMutation((workflow) => {
       const checkouts = workflow.jobs['publish-image'].steps.filter((step) =>
         String(step.uses ?? '').startsWith('actions/checkout@'),
       );
-      checkouts[1].with.ref = 'main';
+      checkouts[0].with.path = 'image-source';
     }),
-    /checkout only the authorized full SHA/u,
+    /isolate workflow-revision tooling/u,
   );
 });
 
@@ -320,6 +323,114 @@ test('manual release serializes the same SHA and derives stable image metadata f
   assert.doesNotMatch(identity.run, /new Date/u);
 });
 
+test('workflow-revision tooling survives the old image-source checkout in a separate path', () => {
+  const workflow = parseYamlSubset(releaseSource);
+  const steps = workflow.jobs['publish-image'].steps;
+  const checkouts = steps.filter((step) =>
+    String(step.uses ?? '').startsWith('actions/checkout@'),
+  );
+  assert.deepEqual(
+    checkouts.map((step) => ({
+      ref: step.with.ref,
+      path: step.with.path,
+      fetchDepth: step.with['fetch-depth'],
+      persistCredentials: step.with['persist-credentials'],
+    })),
+    [
+      {
+        ref: '${{ github.workflow_sha }}',
+        path: 'release-control',
+        fetchDepth: 1,
+        persistCredentials: false,
+      },
+      {
+        ref: 'main',
+        path: 'image-source',
+        fetchDepth: 0,
+        persistCredentials: false,
+      },
+    ],
+  );
+
+  const oldSourceLookup = spawnSync(
+    'git',
+    ['cat-file', '-e', `${IMAGE_SOURCE_SHA}:scripts/inspect-release-tag.cjs`],
+    { cwd: process.cwd(), encoding: 'utf8' },
+  );
+  assert.notEqual(
+    oldSourceLookup.status,
+    0,
+    'the approved old image source must model the missing tooling that caused F-001',
+  );
+
+  const modeledWorkspace = new Set();
+  const modelCheckout = (path, files) => {
+    for (const entry of [...modeledWorkspace]) {
+      if (entry.startsWith(`${path}/`)) modeledWorkspace.delete(entry);
+    }
+    for (const file of files) modeledWorkspace.add(`${path}/${file}`);
+  };
+  modelCheckout(checkouts[0].with.path, ['scripts/inspect-release-tag.cjs']);
+  modelCheckout(checkouts[1].with.path, ['package.json', 'Dockerfile']);
+  assert.ok(
+    modeledWorkspace.has('release-control/scripts/inspect-release-tag.cjs'),
+  );
+  assert.equal(
+    modeledWorkspace.has('image-source/scripts/inspect-release-tag.cjs'),
+    false,
+  );
+
+  const selection = steps.find(
+    (step) => step.name === 'Select the exact authorized image source',
+  );
+  assert.equal(selection['working-directory'], 'image-source');
+  assert.equal(
+    selection.env.AUTHORIZED_SHA,
+    '${{ steps.authorize.outputs.sha }}',
+  );
+  assert.match(selection.run, /git checkout --detach "\$AUTHORIZED_SHA"/u);
+
+  const build = steps.find((step) =>
+    String(step.uses ?? '').startsWith('docker/build-push-action@'),
+  );
+  const runtime = steps.find(
+    (step) =>
+      String(step.run ?? '').trim() ===
+      'node --test test/production/production-image.test.cjs',
+  );
+  assert.equal(build.with.context, './image-source');
+  assert.equal(runtime['working-directory'], 'image-source');
+
+  for (const stepId of ['existence', 'push']) {
+    const run = String(steps.find((step) => step.id === stepId).run);
+    assert.match(
+      run,
+      /node release-control\/scripts\/inspect-release-tag\.cjs/u,
+    );
+    assert.doesNotMatch(
+      run,
+      /node (?:\.\/)?image-source\/scripts\/inspect-release-tag\.cjs/u,
+    );
+  }
+});
+
+test('rejects resolving release inspection tooling from the old image source', () => {
+  rejects(
+    releaseMutation((workflow) => {
+      for (const stepId of ['existence', 'push']) {
+        const step = workflow.jobs['publish-image'].steps.find(
+          (candidate) => candidate.id === stepId,
+        );
+        step.run = step.run.replace(
+          'node release-control/scripts/inspect-release-tag.cjs',
+          'node image-source/scripts/inspect-release-tag.cjs',
+        );
+      }
+    }),
+    /versioned inspection script|tag classifier/u,
+  );
+});
+
 test('absent full-SHA path performs one guarded push only after scan, login, and lookup', () => {
   const workflow = parseYamlSubset(releaseSource);
   const steps = workflow.jobs['publish-image'].steps;
@@ -337,18 +448,17 @@ test('absent full-SHA path performs one guarded push only after scan, login, and
   assert.equal(pushSteps.length, 1);
   assert.equal(
     pushSteps[0].if,
-    "${{ steps.existence.outputs.exists == 'false' }}",
+    "${{ steps.existence.outputs.state == 'TAG_AVAILABLE' }}",
   );
-  assert.match(pushSteps[0].run, /Immutable tag appeared after lookup/u);
-  assert.match(pushSteps[0].run, /Pre-push tag lookup was ambiguous/u);
+  assert.match(pushSteps[0].run, /TAG_AVAILABLE/u);
   const existence = steps[existenceIndex];
   assert.match(
     existence.run,
-    /--classify-manifest-absence "\$lookup_status" "\$\{\{ runner\.temp \}\}\/existing-descriptor\.json" "\$\{\{ runner\.temp \}\}\/existing-error\.txt" "\$IMAGE_REF"/u,
+    /release-control\/scripts\/inspect-release-tag\.cjs inspect "\$lookup_status"/u,
   );
   assert.match(
     pushSteps[0].run,
-    /--classify-manifest-absence "\$prepush_status" "\$\{\{ runner\.temp \}\}\/prepush-output\.txt" "\$\{\{ runner\.temp \}\}\/prepush-error\.txt" "\$IMAGE_REF"/u,
+    /release-control\/scripts\/inspect-release-tag\.cjs availability "\$prepush_status"/u,
   );
   assert.match(
     existence.run,
@@ -362,25 +472,18 @@ test('absent full-SHA path performs one guarded push only after scan, login, and
   assert.doesNotMatch(`${existence.run}\n${pushSteps[0].run}`, /grep\s+-/u);
 });
 
-test('existing equivalent full-SHA path reuses a verified digest without pushing', () => {
+test('existing full-SHA tag is classified by a versioned script and never reaches push', () => {
   const workflow = parseYamlSubset(releaseSource);
   const steps = workflow.jobs['publish-image'].steps;
   const existence = steps.find((step) => step.id === 'existence');
-  const selected = steps.find((step) => step.id === 'selected');
-  const verify = steps.find((step) => step.id === 'verify');
   assert.doesNotMatch(existence.run, /\bdocker\s+push\b/u);
-  assert.match(
-    existence.run,
-    /remoteConfigDigest !== process\.env\.EXPECTED_LOCAL_CONFIG_DIGEST/u,
-  );
-  assert.match(existence.run, /remoteLabels\[name\] !== localLabels\[name\]/u);
-  assert.match(existence.run, /exists=true/u);
-  assert.match(selected.run, /digest="\$EXISTING_DIGEST"/u);
+  assert.match(existence.run, /inspect-release-tag\.cjs inspect/u);
+  assert.match(existence.run, /TAG_AVAILABLE/u);
+  assert.doesNotMatch(existence.run, /<<-?\s*['"]?[A-Za-z_]/u);
   assert.equal(
-    verify.env.EXPECTED_DIGEST,
-    '${{ steps.selected.outputs.digest }}',
+    steps.find((step) => step.id === 'push').if,
+    "${{ steps.existence.outputs.state == 'TAG_AVAILABLE' }}",
   );
-  assert.match(verify.run, /manifestDigest !== process\.env\.EXPECTED_DIGEST/u);
 });
 
 test('rejects removal of immutable-tag overwrite protection or an unconditional push', () => {
@@ -406,8 +509,8 @@ test('rejects an existing tag path that does not prove local equivalence', () =>
         (step) => step.id === 'existence',
       );
       existence.run = existence.run.replace(
-        'remoteConfigDigest !== process.env.EXPECTED_LOCAL_CONFIG_DIGEST',
-        'false',
+        'node release-control/scripts/inspect-release-tag.cjs inspect',
+        'node scripts/untrusted-tag-check.cjs inspect',
       );
     }),
     /existing full-SHA tag/u,
@@ -421,8 +524,8 @@ test('rejects ambiguous lookup handling that could continue to registry mutation
         (step) => step.id === 'existence',
       );
       existence.run = existence.run.replace(
-        'exit "$lookup_status"',
-        'echo "exists=false" >> "$GITHUB_OUTPUT"',
+        'exit "$inspection_status"',
+        'echo "state=TAG_AVAILABLE" >> "$GITHUB_OUTPUT"',
       );
     }),
     /existing full-SHA tag/u,
@@ -509,7 +612,7 @@ test('rejects replacing the centralized absence classifier with a generic text m
         (step) => step.id === 'existence',
       );
       existence.run = existence.run.replace(
-        /node scripts\/validate-ci-workflow\.cjs --classify-manifest-absence[^\n]+/u,
+        /node release-control\/scripts\/inspect-release-tag\.cjs inspect[^\n]+/u,
         'grep -Eiq \'manifest unknown|not found\' "${{ runner.temp }}/existing-error.txt"',
       );
     }),
@@ -536,10 +639,29 @@ test('rejects discarded or unclassified stdout in either absence lookup', () => 
         (step) => step.id === 'existence',
       );
       existence.run = existence.run.replace(
-        '"$lookup_status" "${{ runner.temp }}/existing-descriptor.json"',
-        '"${{ runner.temp }}/existing-descriptor.json"',
+        '"${{ runner.temp }}/existing-descriptor.json" 2> "${{ runner.temp }}/existing-error.txt"',
+        '"${{ runner.temp }}/existing-descriptor.json" 2> /dev/null',
       );
     }),
     /existing full-SHA tag|centralized strict absence classifier/u,
+  );
+});
+
+test('validates every release run block with Bash and rejects an unvalidated critical heredoc', () => {
+  const workflow = parseYamlSubset(releaseSource);
+  const runSteps = workflow.jobs['publish-image'].steps.filter(
+    (step) => typeof step.run === 'string',
+  );
+  assert.ok(runSteps.length > 0);
+  assert.deepEqual(validateReleaseRunShellSyntax(workflow), []);
+
+  const existence = workflow.jobs['publish-image'].steps.find(
+    (step) => step.id === 'existence',
+  );
+  existence.run +=
+    "\nif true; then\n  node <<'NODE'\n  process.exit(0);\n  NODE\nfi";
+  rejects(
+    validateReleaseRunShellSyntax(workflow),
+    /shell syntax is invalid|here-document/u,
   );
 });

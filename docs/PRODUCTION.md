@@ -261,10 +261,16 @@ termina em `IMAGE_PUBLISHED_AND_DIGEST_VERIFIED`. Para solicitar uma publicaçã
 O workflow falha antes de login se a confirmação não for exata, se o SHA não
 tiver o formato completo, não resolver para um commit, não for ancestral da
 `main`, divergir depois do checkout ou se a variável remota
-`MANUAL_IMAGE_RELEASE_ENABLED` não for exatamente `true`. O checkout não
-persiste credenciais. A imagem é reconstruída do SHA autorizado, validada em
-runtime e escaneada antes de qualquer autenticação; não se confia em artifact
-produzido por outro run.
+`MANUAL_IMAGE_RELEASE_ENABLED` não for exatamente `true`. Dois checkouts sem
+credenciais ficam em paths independentes: `release-control` é preso ao
+`github.workflow_sha` que forneceu o próprio workflow, enquanto `image-source`
+recebe a história de `main` e então seleciona em modo detached somente o SHA
+autorizado. O contexto de build e o teste de runtime usam exclusivamente
+`image-source`; a inspeção do tag usa exclusivamente o script versionado de
+`release-control`. Assim, publicar um `imageSourceSha` anterior à introdução do
+controle não remove a ferramenta da revisão do workflow. A imagem é validada e
+escaneada antes de qualquer autenticação; não se confia em artifact produzido
+por outro run.
 
 As permissões globais são `contents: read`. Somente o job manual
 `publish-image`, associado ao Environment `ghcr-production-release`, possui
@@ -277,10 +283,14 @@ label OCI `created` deriva do timestamp do commit para manter a identidade de
 build estável. Depois do login, o workflow consulta o tag sem mutação. Se ele
 estiver definitivamente ausente, faz uma segunda consulta imediatamente antes
 de um único push e aborta se o tag tiver surgido ou se o resultado for
-ambíguo. Se já existir, exige a mesma plataforma `linux/amd64`, config digest,
-revision, version e todos os labels OCI da imagem local já escaneada; somente
-nesse caso reutiliza o manifest digest sem push. Qualquer divergência ou falha
-de lookup termina sem alterar o registry.
+ambíguo. A inspeção produz somente `TAG_AVAILABLE` para essa ausência
+definitiva. Se o tag já resolver para a mesma plataforma `linux/amd64`, config
+digest, revision, version e labels OCI da imagem local, produz
+`TAG_ALREADY_EXISTS`; se o conteúdo for diferente, produz `TAG_COLLISION`.
+Ambos os resultados de presença são bloqueantes e nunca sobrescrevem nem
+reutilizam o tag nessa execução. Resposta vazia, inválida ou ambígua e erros de
+autenticação, autorização, rate limit ou servidor também terminam sem alterar o
+registry.
 
 “Definitivamente ausente” é uma classificação centralizada e idêntica nas duas
 consultas: somente `manifest unknown`, `name unknown`, `no such manifest` ou um
@@ -295,14 +305,22 @@ autenticação, permissão, transporte, timeout ou rate limit, mensagens de outr
 tag/ref, conteúdo em ambos os canais e respostas compostas ou não reconhecidas
 abortam antes do push.
 
-Nos dois caminhos aceitos, o workflow seleciona exatamente um manifest digest,
-reinspeciona a referência por digest e compara manifest e config digests com a
-imagem local escaneada. Portanto, repetir manualmente um release idêntico
-revalida e reutiliza a identidade existente; não republica nem move o tag. O artifact
-`image-release-identity.json`, retido por 14 dias, é apenas evidência
+Somente `TAG_AVAILABLE` habilita o recheck e, se ele também confirmar ausência,
+o push. Depois desse único push, o workflow seleciona exatamente um manifest
+digest, reinspeciona a referência por digest e compara manifest e config
+digests com a imagem local escaneada. Repetir manualmente um release idêntico
+falha fechado como `TAG_ALREADY_EXISTS`; não republica nem move o tag. O
+artifact `image-release-identity.json`, retido por 14 dias, é apenas evidência
 transitória. A fonte durável de verdade para promoção e rollback é:
 
 `ghcr.io/arthurportodev/genesis-platform-api@sha256:<digest>`
+
+O `workflowRef` identifica a futura revisão da `main` que contém este controle;
+o input `full_sha` é o `imageSourceSha` aprovado separadamente. Corrigir ou
+executar o workflow a partir de uma `main` futura não muda silenciosamente a
+fonte da imagem: `workflowRef` ocupa `release-control`, enquanto
+`imageSourceSha` ocupa `image-source`. Para esta remediação, o `imageSourceSha` permanece
+`0a56a8aee7c64bda59a1981888418e1ad03950c0` (`sourceShaChanged=false`).
 
 Preserve a imagem e esse digest até a desativação da fixture. Exclusão,
 limpeza ou alteração de retenção do digest exige Gate posterior. Um deployment
@@ -368,8 +386,12 @@ estágios que executam npm e build. A imagem final recebe somente o executável
 Node, `libstdc++`, dependências podadas, `dist` e `package.json`. npm, npx, Yarn,
 Corepack, módulos globais e o pacote npm `tar` não entram no runtime. O contrato
 estrutural e a inspeção da imagem real verificam esse limite antes do Trivy e de
-qualquer lookup ou push. Em rerun, a equivalência com a imagem já escaneada é
-obrigatória e o digest existente é reutilizado sem push.
+qualquer lookup ou push. Em rerun, qualquer tag full-SHA existente é bloqueante.
+Mesmo quando o conteúdo remoto é equivalente à imagem local já escaneada, a
+inspeção produz `TAG_ALREADY_EXISTS` e encerra a execução fail-closed, sem
+reutilizar ou sobrescrever tag ou digest e sem tratar o resultado como sucesso
+idempotente. O operador deve investigar o estado existente; um novo dispatch
+com essa tag não alcança o push.
 
 Essa entrega não depende de cadeia customizada de evidências. Controles
 avançados de supply chain são backlog pós-MVP.

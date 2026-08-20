@@ -121,8 +121,13 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - A publicação existe somente em `.github/workflows/release-image.yml`, cujo
   único trigger é `workflow_dispatch`. O operador deve fornecer o SHA completo
   de 40 caracteres da `main` e marcar a confirmação explícita. O job valida o
-  formato, resolve o objeto commit, comprova ancestralidade em `main`, faz
-  checkout do SHA autorizado e confirma `HEAD` antes de qualquer login.
+  formato, resolve o objeto commit e comprova ancestralidade em `main`. O
+  tooling de controle é isolado em `release-control` e preso ao
+  `github.workflow_sha`; a fonte da imagem fica em `image-source`, seleciona o
+  SHA autorizado em modo detached e confirma `HEAD` antes de qualquer login.
+  Build e runtime usam apenas `image-source`; a inspeção do tag usa apenas o
+  script versionado em `release-control`. Dessa forma, um SHA de imagem antigo
+  que não contém o script de inspeção não pode apagar o tooling do workflow.
 - O job manual referencia o Environment `ghcr-production-release` e falha antes
   do login enquanto `MANUAL_IMAGE_RELEASE_ENABLED` não for exatamente `true`.
   O Environment remoto ainda **não está configurado nem verificado** por esta
@@ -138,11 +143,12 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   `main` não são referências operacionais. Runs do mesmo SHA são serializados,
   e metadata de build usa o timestamp do commit. Depois do login, um lookup sem
   mutação classifica o tag: ausência definitiva permite um único push após
-  recheck imediato; presença exige igualdade de plataforma, config digest,
-  revision, version e todos os labels OCI com a imagem local escaneada e então
-  reutiliza o digest sem push. Divergência ou resultado ambíguo falha fechado
-  sem alterar o registry. O digest selecionado é reinspecionado e comparado ao
-  manifest e config digest esperados nos dois caminhos.
+  recheck imediato como `TAG_AVAILABLE`; presença equivalente produz o
+  bloqueio `TAG_ALREADY_EXISTS`, e conteúdo diferente produz o bloqueio
+  `TAG_COLLISION`. Nenhum resultado de presença reutiliza ou sobrescreve o tag
+  nessa execução. Resposta vazia, inválida ou ambígua e falhas 401, 403, 429 ou
+  5xx falham fechado sem alcançar o push. O digest publicado é reinspecionado e
+  comparado aos manifest e config digests esperados.
 - A classificação de ausência é uma única regra aplicada nos dois lookups. Ela
   aceita somente erro completo de manifest/tag ausente ou `404` do endpoint de
   manifest exatamente ligado ao `IMAGE_REF`; nunca usa `not found` genérico.
@@ -152,6 +158,11 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   nos dois canais são ambíguos. Falhas de helper/plugin, autenticação,
   permissão, transporte, timeout, rate limit e qualquer resposta composta ou
   desconhecida não produzem `exists=false` e encerram o job antes do push.
+- `workflowRef` e `imageSourceSha` são autoridades independentes. Para esta
+  remediação, o workflow vem do candidato futuro de `main`, o
+  `imageSourceSha` continua
+  `0a56a8aee7c64bda59a1981888418e1ad03950c0` e
+  `sourceShaChanged=false`.
 - `image-release-identity.json` e o resumo do workflow registram repositório,
   SHA, tag, digest, referência imutável, ator, run, horário e resultado do scan
   sem expor token. O artifact de 14 dias é evidência transitória: a referência
