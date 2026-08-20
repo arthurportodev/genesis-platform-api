@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/arthurportodev/genesis-platform-api/schemas/production/api-digest-deployment-contract.v1.schema.json",
+  "title": "Genesis API digest deployment contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contractId",
+    "root",
+    "state",
+    "overlays",
+    "pointers",
+    "evidence",
+    "images",
+    "service",
+    "policy",
+    "retention",
+    "rollback"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "contractId": { "const": "0.8-MVP-09E.api-digest-deployment.v1" },
+    "root": { "$ref": "#/$defs/root" },
+    "state": { "$ref": "#/$defs/state" },
+    "overlays": { "$ref": "#/$defs/overlays" },
+    "pointers": { "$ref": "#/$defs/pointers" },
+    "evidence": { "$ref": "#/$defs/evidence" },
+    "images": { "$ref": "#/$defs/images" },
+    "service": { "const": "api" },
+    "policy": { "$ref": "#/$defs/policy" },
+    "retention": { "$ref": "#/$defs/retention" },
+    "rollback": { "$ref": "#/$defs/rollback" }
+  },
+  "$defs": {
+    "mode": { "type": "string", "pattern": "^0[0-7]{3}$" },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[a-z0-9./-]+$"
+    },
+    "image": {
+      "type": "string",
+      "pattern": "^ghcr\\.io/arthurportodev/genesis-platform-api@sha256:[a-f0-9]{64}$"
+    },
+    "root": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "owner", "group", "mode"],
+      "properties": {
+        "path": { "const": "/opt/genesis/release" },
+        "owner": { "const": 0 },
+        "group": { "const": 0 },
+        "mode": { "const": "0755" }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relativePath",
+        "owner",
+        "group",
+        "mode",
+        "stagingPrefix",
+        "stagingMode"
+      ],
+      "properties": {
+        "relativePath": { "const": "deployment-state" },
+        "owner": { "const": 0 },
+        "group": { "const": 0 },
+        "mode": { "const": "0755" },
+        "stagingPrefix": { "const": ".staging-" },
+        "stagingMode": { "const": "0700" }
+      }
+    },
+    "overlays": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relativePath",
+        "owner",
+        "group",
+        "directoryMode",
+        "fileName",
+        "fileMode",
+        "format",
+        "requiredShape"
+      ],
+      "properties": {
+        "relativePath": { "const": "deployment-state/overlays" },
+        "owner": { "const": 0 },
+        "group": { "const": 0 },
+        "directoryMode": { "const": "0755" },
+        "fileName": { "const": "compose.api-image.json" },
+        "fileMode": { "const": "0644" },
+        "format": { "const": "compose-json-v1" },
+        "requiredShape": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["services"],
+          "properties": {
+            "services": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["api"],
+              "properties": {
+                "api": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["image"],
+                  "properties": {
+                    "image": { "const": "immutable-digest-reference" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "pointers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relativePath",
+        "owner",
+        "group",
+        "temporaryPrefix",
+        "schemaVersion",
+        "fields",
+        "atomicUpdate",
+        "interruptionRecovery",
+        "fileMode"
+      ],
+      "properties": {
+        "relativePath": { "const": "deployment-state/pointers.json" },
+        "owner": { "const": 0 },
+        "group": { "const": 0 },
+        "temporaryPrefix": { "const": ".pointers." },
+        "schemaVersion": { "const": "1.0.0" },
+        "fields": {
+          "type": "array",
+          "prefixItems": [{ "const": "current" }, { "const": "previous" }],
+          "items": false
+        },
+        "atomicUpdate": { "const": "write-fsync-replace-fsync-directory" },
+        "interruptionRecovery": {
+          "const": "validate-last-complete-document-remove-temporary-files"
+        },
+        "fileMode": { "const": "0644" }
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "rollback"],
+      "properties": {
+        "target": { "$ref": "#/$defs/image" },
+        "rollback": { "$ref": "#/$defs/image" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relativePath",
+        "owner",
+        "group",
+        "directoryMode",
+        "snapshotMode",
+        "hashMode",
+        "content",
+        "rawLogRetention"
+      ],
+      "properties": {
+        "relativePath": { "const": "deployment-state/evidence" },
+        "owner": { "const": 0 },
+        "group": { "const": 0 },
+        "directoryMode": { "const": "0700" },
+        "snapshotMode": { "const": "0600" },
+        "hashMode": { "const": "0600" },
+        "content": { "const": "utc-timestamp-and-classification-only" },
+        "rawLogRetention": {
+          "const": "memory-or-root-temporary-until-sanitized-then-delete"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowMutableTags",
+        "allowCredentials",
+        "allowSymlinks",
+        "allowExternalPaths",
+        "allowedOverlayKeys",
+        "forbiddenServices",
+        "forbiddenFieldPatterns"
+      ],
+      "properties": {
+        "allowMutableTags": { "const": false },
+        "allowCredentials": { "const": false },
+        "allowSymlinks": { "const": false },
+        "allowExternalPaths": { "const": false },
+        "allowedOverlayKeys": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "services" },
+            { "const": "api" },
+            { "const": "image" }
+          ],
+          "items": false
+        },
+        "forbiddenServices": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "postgres" },
+            { "const": "migrate" },
+            { "const": "traefik" }
+          ],
+          "items": false
+        },
+        "forbiddenFieldPatterns": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "auth" },
+            { "const": "credential" },
+            { "const": "password" },
+            { "const": "secret" },
+            { "const": "token" }
+          ],
+          "items": false
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimumValidatedBundles",
+        "preserveCurrent",
+        "preservePrevious",
+        "cleanupPolicy",
+        "automaticDeletion"
+      ],
+      "properties": {
+        "minimumValidatedBundles": { "const": 2 },
+        "preserveCurrent": { "const": true },
+        "preservePrevious": { "const": true },
+        "cleanupPolicy": {
+          "const": "remove-only-unreferenced-validated-bundles-after-observation"
+        },
+        "automaticDeletion": { "const": false }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "validateBeforeActivation",
+        "activatePointerAfterHealth",
+        "pullPolicy"
+      ],
+      "properties": {
+        "source": { "const": "pre-deployment-current-pointer" },
+        "validateBeforeActivation": { "const": true },
+        "activatePointerAfterHealth": { "const": true },
+        "pullPolicy": { "const": "never" }
+      }
+    }
+  }
+}

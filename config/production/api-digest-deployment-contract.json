@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "0.8-MVP-09E.api-digest-deployment.v1",
+  "root": {
+    "path": "/opt/genesis/release",
+    "owner": 0,
+    "group": 0,
+    "mode": "0755"
+  },
+  "state": {
+    "relativePath": "deployment-state",
+    "owner": 0,
+    "group": 0,
+    "mode": "0755",
+    "stagingPrefix": ".staging-",
+    "stagingMode": "0700"
+  },
+  "overlays": {
+    "relativePath": "deployment-state/overlays",
+    "owner": 0,
+    "group": 0,
+    "directoryMode": "0755",
+    "fileName": "compose.api-image.json",
+    "fileMode": "0644",
+    "format": "compose-json-v1",
+    "requiredShape": {
+      "services": {
+        "api": {
+          "image": "immutable-digest-reference"
+        }
+      }
+    }
+  },
+  "pointers": {
+    "relativePath": "deployment-state/pointers.json",
+    "owner": 0,
+    "group": 0,
+    "temporaryPrefix": ".pointers.",
+    "schemaVersion": "1.0.0",
+    "fields": ["current", "previous"],
+    "atomicUpdate": "write-fsync-replace-fsync-directory",
+    "interruptionRecovery": "validate-last-complete-document-remove-temporary-files",
+    "fileMode": "0644"
+  },
+  "evidence": {
+    "relativePath": "deployment-state/evidence",
+    "owner": 0,
+    "group": 0,
+    "directoryMode": "0700",
+    "snapshotMode": "0600",
+    "hashMode": "0600",
+    "content": "utc-timestamp-and-classification-only",
+    "rawLogRetention": "memory-or-root-temporary-until-sanitized-then-delete"
+  },
+  "images": {
+    "target": "ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb",
+    "rollback": "ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a"
+  },
+  "service": "api",
+  "policy": {
+    "allowMutableTags": false,
+    "allowCredentials": false,
+    "allowSymlinks": false,
+    "allowExternalPaths": false,
+    "allowedOverlayKeys": ["services", "api", "image"],
+    "forbiddenServices": ["postgres", "migrate", "traefik"],
+    "forbiddenFieldPatterns": [
+      "auth",
+      "credential",
+      "password",
+      "secret",
+      "token"
+    ]
+  },
+  "retention": {
+    "minimumValidatedBundles": 2,
+    "preserveCurrent": true,
+    "preservePrevious": true,
+    "cleanupPolicy": "remove-only-unreferenced-validated-bundles-after-observation",
+    "automaticDeletion": false
+  },
+  "rollback": {
+    "source": "pre-deployment-current-pointer",
+    "validateBeforeActivation": true,
+    "activatePointerAfterHealth": true,
+    "pullPolicy": "never"
+  }
+}

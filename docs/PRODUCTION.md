@@ -849,3 +849,116 @@ stdin e só o pgpass root-only é materializado. Rollback exige procedência exa
 da própria window. Antes do rclone, evidência não secreta deve provar OAuth
 externo `In production`, conta `admreserva433@gmail.com` e scope exato
 `drive.file`; `Testing` e status não comprovável param a execução.
+
+## Deployment manual da API por digest — contrato 09E
+
+O contrato `0.8-MVP-09E.api-digest-deployment.v1` prepara, mas não autoriza nem
+executa, a troca manual somente da imagem do serviço `api`. A autoridade
+machine-readable é
+`config/production/api-digest-deployment-contract.json`; o schema fica em
+`schemas/production/api-digest-deployment-contract.v1.schema.json`, a validação
+local em `scripts/validate-api-digest-deployment.cjs` e o procedimento
+executável em `docker/production/api-digest-deployment.sh`.
+
+O target é
+`ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb`
+e o rollback imediato é
+`ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a`.
+Tags mutáveis, referências sem digest e qualquer serviço diferente de `api`
+são recusados. Migration, fixture, PostgreSQL e Traefik não participam do
+procedimento; o Compose usa `up ... --no-deps --pull never api`.
+
+### Namespace operacional e pointers
+
+Todos os artefatos persistentes desta operação resolvem sob a raiz fixa
+`/opt/genesis/release`:
+
+- `deployment-state/overlays/<digest>/compose.api-image.json`: overlay JSON
+  mínimo com somente `services.api.image`;
+- `deployment-state/pointers.json`: documento único com `current` e `previous`;
+- `deployment-state/evidence/`: snapshots cumulativos sanitizados e hashes.
+
+Root, state, overlays, arquivos e pointers têm owner/group e modes fechados no
+contrato. Os diretórios de evidência usam `0700` e snapshots/hashes usam `0600`.
+Cada componente existente é inspecionado sem seguir links antes de qualquer
+criação ou ajuste de metadata, incluindo a própria raiz, que precisa ser
+`root:root 0755`. Paths absolutos externos, `..`, barras invertidas, symlink/reparse,
+campos extras, credenciais e nomes de serviço como `postgres`, `migrate` ou
+`traefik` falham antes da ativação. Overlay existente nunca é sobrescrito; ele
+precisa corresponder byte a byte ao binding imutável esperado.
+
+O documento dos pointers é validado antes da ativação e atualizado por
+write + `fsync` + replace atômico + `fsync` do diretório. O estado anterior
+completo permanece válido se houver interrupção antes do replace. Staging e
+temporários incompletos são removidos na recuperação seguinte somente após
+rejeitar links inesperados. Antes de cada tentativa, o rollback vincula e valida
+como baseline o bundle apontado por `current`, que deve corresponder à imagem
+live. Em falha, recria somente `api` com esse baseline, prova health e só então
+registra o target falho como `previous`. Isso também preserva o estado correto
+no ciclo keep → rollback → nova tentativa. Current e previous nunca entram no cleanup; somente bundles
+validados, não referenciados e fora da observação podem ser removidos, e não há
+deleção automática.
+
+Esse namespace é estado operacional da promoção API-only e não substitui o
+contrato de ativação integral de committed releases do ADR-018. Criá-lo ou
+alterá-lo na VPS é mutação de produção e exige Gate humano próprio. O merge
+deste contrato não cria o namespace remoto e não altera a árvore ativa.
+
+### Credencial fail-safe
+
+Depois da autorização separada, o operador cria um `DOCKER_CONFIG` privado e
+root-only em um filho direto de `/run`, resolve e valida o caminho exato,
+registra sua identidade de device/inode e instala traps para `EXIT`, `INT`,
+`TERM` e `HUP`. Somente depois lê o token por TTY e executa `docker login` com
+`--password-stdin`. O config default do root nunca é utilizado.
+
+O cleanup valida novamente prefixo, caminho canônico, tipo, ausência de link e
+device/inode; rejeita vazio, `/`, `/run`, home, parent amplo ou troca do alvo.
+Ele efetua logout silencioso, remove somente o diretório exato, confirma a
+ausência e é idempotente. O status original é preservado em sucesso, falha e
+sinais. Simulações descartáveis cobrem falha imediatamente antes e depois do
+login simulado, `INT`, `TERM`, `HUP`, path amplo e reparse sem realizar login
+real nem imprimir o valor sintético.
+
+### Observação sem lacunas
+
+`deploymentStartedAt` é capturado em UTC imediatamente antes da mutação. T+0,
+T+2, T+5, T+10 e T+15 sempre coletam cumulativamente. Como os limites de
+`docker logs --since/--until` são exclusivos, a consulta usa sobreposição de
+um nanossegundo antes do início e depois do fim; a sanitização então filtra o
+intervalo fechado exato `[deploymentStartedAt, checkpoint]`. Assim, falha em
+um checkpoint não move cursor nem abre lacuna. Depois de definir
+`observationEndedAt`, a captura final usa o mesmo início e o fim UTC inclusivo.
+
+Logs brutos permanecem apenas em diretório temporário root-only e são apagados
+no exit. Os traps são armados antes de qualquer criação desse diretório, e o
+no-op de target já mantido retorna antes de criá-lo. Antes de persistir evidência, a sanitização descarta a mensagem e
+preserva somente timestamp UTC e classificação operacional (`other`, `fatal`,
+`database-error` ou `http-5xx`). Cada snapshot sanitizado recebe SHA-256. Testes
+cobrem início, fronteiras, pontos imediatamente posteriores, intervalos,
+checkpoint falho e timestamp final inclusivo, sem corpo, token, email ou dado
+pessoal na evidência.
+
+### Sequência futura — não executada por este contrato
+
+1. Reconfirmar baseline saudável, restart count zero, digest live, IDs de
+   PostgreSQL/Traefik e rollback local `linux/amd64`.
+2. Validar contrato, root fixo, overlays e estado atual dos pointers.
+3. Armar cleanup/traps e só então fazer login temporário.
+4. Fazer pull exclusivamente do target por digest; validar RepoDigest e
+   plataforma; remover toda autenticação antes da mutação.
+5. Fixar `deploymentStartedAt` e recriar somente `api` com `--no-deps` e
+   `--pull never`.
+6. Provar digest executado, health local/público, rotas fail-closed, IDs das
+   dependências, restart count e checkpoints cumulativos.
+7. Em qualquer falha ou sinal, restaurar o baseline live validado que `current`
+   apontava antes da tentativa, validar health e somente depois registrar o
+   target falho em `previous`.
+8. Após T+15 e captura final integral, atualizar atomicamente current/previous,
+   confirmar novamente o digest executado e encerrar com cleanup.
+
+A consulta administrativa de exclusão do package não pertence ao gate e não
+justifica ampliar scopes: `F-09E-L01: RESOLVED_AS_NON_REQUIRED_CHECK`. Manifest
+acessível, tag, digest e disponibilidade da imagem são as evidências de leitura
+necessárias. O script exige argumento `--execute`, root e o marcador de uma
+autorização humana separada; nenhum desses requisitos é satisfeito pelo merge.
