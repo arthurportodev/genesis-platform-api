@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "classification": "DEFINITIVE_TAG_ABSENCE",
+  "imageRef": "ghcr.io/arthurportodev/genesis-platform-api:sha-0a56a8aee7c64bda59a1981888418e1ad03950c0",
+  "stableReads": 3,
+  "buildx": {
+    "version": "0.36.1",
+    "logicalCommand": "docker buildx imagetools inspect <IMAGE_REF> --format {{json .Manifest}}",
+    "exitCode": 1,
+    "stdout": "",
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr": "ERROR: ghcr.io/arthurportodev/genesis-platform-api:sha-0a56a8aee7c64bda59a1981888418e1ad03950c0: not found",
+    "stderrSha256": "ec739cfe25efca22018b27be6afe803d7d8715316de07b37042d9e748088f6a3"
+  },
+  "oci": {
+    "method": "GET",
+    "httpStatus": 404,
+    "contentType": "application/json",
+    "distributionApiVersion": "registry/2.0",
+    "errorCode": "MANIFEST_UNKNOWN",
+    "errorMessage": "manifest unknown",
+    "body": "{\"errors\":[{\"code\":\"MANIFEST_UNKNOWN\",\"message\":\"manifest unknown\"}]}\n",
+    "bodySha256": "3cc1b73e81471d9dcd2672f0b5a102c7632fc068e47b5346738dfd9a549608f0"
+  },
+  "credentialsExposed": false,
+  "mutableCallPerformed": false
+}

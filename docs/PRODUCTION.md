@@ -284,26 +284,41 @@ build estável. Depois do login, o workflow consulta o tag sem mutação. Se ele
 estiver definitivamente ausente, faz uma segunda consulta imediatamente antes
 de um único push e aborta se o tag tiver surgido ou se o resultado for
 ambíguo. A inspeção produz somente `TAG_AVAILABLE` para essa ausência
-definitiva. Se o tag já resolver para a mesma plataforma `linux/amd64`, config
-digest, revision, version e labels OCI da imagem local, produz
-`TAG_ALREADY_EXISTS`; se o conteúdo for diferente, produz `TAG_COLLISION`.
-Ambos os resultados de presença são bloqueantes e nunca sobrescrevem nem
-reutilizam o tag nessa execução. Resposta vazia, inválida ou ambígua e erros de
+definitiva. Qualquer descriptor válido de presença produz
+`TAG_ALREADY_EXISTS`, sem tentar provar equivalência com a imagem local. Assim,
+um conteúdo igual ou uma colisão são igualmente bloqueantes e nunca
+sobrescrevem nem reutilizam o tag nessa execução. Resposta vazia, inválida ou
+ambígua e erros de
 autenticação, autorização, rate limit ou servidor também terminam sem alterar o
 registry.
 
 “Definitivamente ausente” é uma classificação centralizada e idêntica nas duas
-consultas: somente `manifest unknown`, `name unknown`, `no such manifest` ou um
-`404 Not Found` do endpoint de manifest são aceitos, e apenas quando a mensagem
-completa identifica exatamente o `IMAGE_REF` solicitado. A mesma implementação
-recebe o status e os dois canais do processo nas duas consultas: exige status
-`1`, stdout com zero bytes e stderr exatamente igual a uma forma canônica, sem
-prefixo, sufixo, whitespace flexível ou separadores CR, LF, U+0085, U+2028 e
-U+2029. O recheck captura stdout em arquivo; não o descarta. Texto genérico
-`not found` não é evidência de ausência. Erros de credential helper, plugin,
-autenticação, permissão, transporte, timeout ou rate limit, mensagens de outro
-tag/ref, conteúdo em ambos os canais e respostas compostas ou não reconhecidas
-abortam antes do push.
+consultas. Além de `manifest unknown`, `name unknown`, `no such manifest` e do
+`404 Not Found` do endpoint de manifest, ela reconhece a assinatura real e
+estável do Buildx 0.36.1 para o GHCR: `ERROR: <IMAGE_REF exato>: not found`.
+Essa forma foi observada três vezes com exit `1` e stdout de zero bytes e
+corroborada por três respostas OCI `404/MANIFEST_UNKNOWN`. O texto genérico
+`not found`, sem o prefixo `ERROR:`, sem a referência completa ou com qualquer
+conteúdo adicional, continua não sendo evidência de ausência.
+
+A implementação executa exatamente uma chamada Buildx por lookup e recebe seu
+status, stdout e stderr: exige
+status `1`, stdout exatamente vazio e stderr igual a uma forma canônica
+ancorada no `IMAGE_REF`, sem prefixo, sufixo, whitespace flexível ou
+separadores CR, LF, U+0085, U+2028 e U+2029. O recheck também captura stdout em
+arquivo. Nenhuma consulta secundária de manifest ou imagem pode descartar um
+exit code ou canal causal. Erros de credential helper, plugin, autenticação, permissão,
+transporte, timeout, rate limit ou servidor, mensagens de outro tag/ref,
+conteúdo em ambos os canais e respostas compostas ou desconhecidas abortam
+antes do push.
+
+Quando um lookup falha, o workflow retém por 14 dias somente um JSON
+estruturado e sanitizado com horário UTC em milissegundos, comando lógico sem
+credencial, exit code do lookup, classe da resposta, status HTTP quando
+conhecido e os dois canais sanitizados. Authorization, WWW-Authenticate,
+tokens, senhas, auth Docker e credenciais são removidos; os arquivos brutos do
+runner não são publicados. Falhar ao produzir ou preservar esse diagnóstico
+também falha fechado.
 
 Somente `TAG_AVAILABLE` habilita o recheck e, se ele também confirmar ausência,
 o push. Depois desse único push, o workflow seleciona exatamente um manifest

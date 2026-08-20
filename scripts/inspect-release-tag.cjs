@@ -1,26 +1,29 @@
-const { readFileSync } = require('node:fs');
+const { chmodSync, readFileSync, writeFileSync } = require('node:fs');
 
-const {
-  OCI_LABELS,
-  isDefinitiveManifestAbsence,
-} = require('./validate-ci-workflow.cjs');
+const { isDefinitiveManifestAbsence } = require('./validate-ci-workflow.cjs');
 
 const RESULT = Object.freeze({
   AVAILABLE: 'TAG_AVAILABLE',
   ALREADY_EXISTS: 'TAG_ALREADY_EXISTS',
-  COLLISION: 'TAG_COLLISION',
   LOOKUP_FAILED: 'TAG_LOOKUP_FAILED',
+});
+
+const RESPONSE_CLASS = Object.freeze({
+  DEFINITIVE_TAG_ABSENCE: 'DEFINITIVE_TAG_ABSENCE',
+  TAG_EXISTS: 'TAG_EXISTS',
+  AUTHENTICATION_FAILURE: 'AUTHENTICATION_FAILURE',
+  TRANSIENT_REGISTRY_FAILURE: 'TRANSIENT_REGISTRY_FAILURE',
+  EMPTY_RESPONSE: 'EMPTY_RESPONSE',
+  AMBIGUOUS_RESPONSE: 'AMBIGUOUS_RESPONSE',
 });
 
 const EXIT = Object.freeze({
   AVAILABLE: 0,
   ALREADY_EXISTS: 10,
-  COLLISION: 11,
   LOOKUP_FAILED: 12,
   USAGE: 64,
 });
 
-const SHA = /^[a-f0-9]{40}$/u;
 const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 
 function readText(path, label) {
@@ -31,30 +34,88 @@ function readText(path, label) {
   }
 }
 
-function parseJson(text, label) {
-  if (text.length === 0) throw new Error(`${label} is empty`);
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`${label} is malformed`);
+function extractHttpStatus(stderr) {
+  const source = String(stderr);
+  const patterns = [
+    /\bHTTP\/\d(?:\.\d)?\s+([1-5]\d\d)\b/iu,
+    /\bstatus(?:\s+code)?\s*[:=]?\s*([1-5]\d\d)\b/iu,
+    /\bunexpected status from (?:HEAD|GET) request to https:\/\/ghcr\.io\/v2\/[a-z0-9]+(?:[._/-][a-z0-9]+)*\/manifests\/sha-[a-f0-9]{40}: ([1-5]\d\d)\b/iu,
+  ];
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (match) return Number(match[1]);
   }
+  return null;
+}
+
+function classifyLookupFailure({ stdout, stderr }) {
+  const httpStatus = extractHttpStatus(stderr);
+  if (/\b(?:401|403)\b|unauthorized|forbidden|denied/iu.test(stderr)) {
+    return {
+      responseClass: RESPONSE_CLASS.AUTHENTICATION_FAILURE,
+      httpStatus,
+      diagnostic: 'registry authentication or authorization failed',
+    };
+  }
+  if (/\b429\b|too many requests|rate[ -]?limit/iu.test(stderr)) {
+    return {
+      responseClass: RESPONSE_CLASS.TRANSIENT_REGISTRY_FAILURE,
+      httpStatus,
+      diagnostic: 'registry rate limit prevented a definitive lookup',
+    };
+  }
+  if (
+    /\b5\d\d\b|internal server error|service unavailable|timed? out|timeout|connection (?:refused|reset)|temporary failure|network is unreachable/iu.test(
+      stderr,
+    )
+  ) {
+    return {
+      responseClass: RESPONSE_CLASS.TRANSIENT_REGISTRY_FAILURE,
+      httpStatus,
+      diagnostic:
+        'registry transport or server failure prevented a definitive lookup',
+    };
+  }
+  if (stdout.length === 0 && stderr.length === 0) {
+    return {
+      responseClass: RESPONSE_CLASS.EMPTY_RESPONSE,
+      httpStatus,
+      diagnostic: 'registry response was empty',
+    };
+  }
+  return {
+    responseClass: RESPONSE_CLASS.AMBIGUOUS_RESPONSE,
+    httpStatus,
+    diagnostic: 'registry response was invalid or ambiguous',
+  };
 }
 
 function lookupFailureDiagnostic(stderr) {
-  if (/\b(?:401|403)\b|unauthorized|forbidden|denied/iu.test(stderr)) {
-    return 'registry authentication or authorization failed';
-  }
-  if (/\b429\b|too many requests|rate[ -]?limit/iu.test(stderr)) {
-    return 'registry rate limit prevented a definitive lookup';
-  }
-  if (/\b5\d\d\b|internal server error|service unavailable/iu.test(stderr)) {
-    return 'registry server failure prevented a definitive lookup';
-  }
-  return 'registry response was empty, invalid, or ambiguous';
+  return classifyLookupFailure({ stdout: '', stderr }).diagnostic;
 }
 
-function outcome(result, exitCode, diagnostic = '') {
-  return { result, exitCode, diagnostic };
+function outcome(
+  result,
+  exitCode,
+  diagnostic = '',
+  responseClass = RESPONSE_CLASS.AMBIGUOUS_RESPONSE,
+  httpStatus = null,
+) {
+  return { result, exitCode, diagnostic, responseClass, httpStatus };
+}
+
+function isValidExistingDescriptor(stdout) {
+  try {
+    const descriptor = JSON.parse(stdout);
+    return (
+      descriptor !== null &&
+      typeof descriptor === 'object' &&
+      !Array.isArray(descriptor) &&
+      DIGEST.test(descriptor.digest ?? '')
+    );
+  } catch {
+    return false;
+  }
 }
 
 function classifyAvailability({ status, stdout, stderr, expectedImageRef }) {
@@ -66,17 +127,25 @@ function classifyAvailability({ status, stdout, stderr, expectedImageRef }) {
     );
   }
   if (status === 0) {
-    if (stdout.length === 0 || stderr.length !== 0) {
+    if (
+      stdout.length === 0 ||
+      stderr.length !== 0 ||
+      !isValidExistingDescriptor(stdout)
+    ) {
+      const failure = classifyLookupFailure({ stdout, stderr });
       return outcome(
         RESULT.LOOKUP_FAILED,
         EXIT.LOOKUP_FAILED,
-        lookupFailureDiagnostic(stderr),
+        failure.diagnostic,
+        failure.responseClass,
+        failure.httpStatus,
       );
     }
     return outcome(
       RESULT.ALREADY_EXISTS,
       EXIT.ALREADY_EXISTS,
-      'immutable tag already exists; refusing overwrite',
+      'immutable tag already exists; refusing reuse or overwrite',
+      RESPONSE_CLASS.TAG_EXISTS,
     );
   }
   if (
@@ -87,151 +156,21 @@ function classifyAvailability({ status, stdout, stderr, expectedImageRef }) {
       expectedImageRef,
     })
   ) {
-    return outcome(RESULT.AVAILABLE, EXIT.AVAILABLE);
+    return outcome(
+      RESULT.AVAILABLE,
+      EXIT.AVAILABLE,
+      '',
+      RESPONSE_CLASS.DEFINITIVE_TAG_ABSENCE,
+    );
   }
+  const failure = classifyLookupFailure({ stdout, stderr });
   return outcome(
     RESULT.LOOKUP_FAILED,
     EXIT.LOOKUP_FAILED,
-    lookupFailureDiagnostic(stderr),
+    failure.diagnostic,
+    failure.responseClass,
+    failure.httpStatus,
   );
-}
-
-function validateExpectedIdentity({
-  expectedImageRef,
-  imageRepository,
-  requestedSha,
-  expectedLocalConfigDigest,
-}) {
-  if (!SHA.test(requestedSha)) throw new Error('requested SHA is invalid');
-  if (!DIGEST.test(expectedLocalConfigDigest)) {
-    throw new Error('expected local config digest is invalid');
-  }
-  if (
-    expectedImageRef !== `${imageRepository}:sha-${requestedSha}` ||
-    !/^ghcr\.io\/[a-z0-9]+(?:[._/-][a-z0-9]+)*$/u.test(imageRepository)
-  ) {
-    throw new Error('expected image identity is invalid');
-  }
-}
-
-function classifyExistingTag({
-  descriptor,
-  manifest,
-  remoteImage,
-  localImage,
-  imageRepository,
-  requestedSha,
-  expectedLocalConfigDigest,
-}) {
-  const digest = descriptor?.digest;
-  const remoteConfigDigest = manifest?.config?.digest;
-  const remoteLabels = remoteImage?.config?.Labels;
-  const localLabels = localImage?.Config?.Labels;
-  if (!DIGEST.test(digest ?? '')) {
-    throw new Error('existing manifest digest is invalid');
-  }
-  if (!DIGEST.test(remoteConfigDigest ?? '')) {
-    throw new Error('existing config digest is invalid');
-  }
-  if (
-    !remoteImage ||
-    typeof remoteImage !== 'object' ||
-    Array.isArray(remoteImage) ||
-    !remoteLabels ||
-    typeof remoteLabels !== 'object' ||
-    Array.isArray(remoteLabels)
-  ) {
-    throw new Error('remote image identity is invalid');
-  }
-  if (
-    !localImage ||
-    typeof localImage !== 'object' ||
-    Array.isArray(localImage) ||
-    !localLabels ||
-    typeof localLabels !== 'object' ||
-    Array.isArray(localLabels)
-  ) {
-    throw new Error('local image identity is invalid');
-  }
-  for (const name of OCI_LABELS) {
-    if (typeof localLabels[name] !== 'string') {
-      throw new Error('local image labels are incomplete');
-    }
-  }
-
-  const equivalent =
-    remoteConfigDigest === expectedLocalConfigDigest &&
-    remoteImage.os === 'linux' &&
-    remoteImage.architecture === 'amd64' &&
-    remoteLabels['org.opencontainers.image.revision'] === requestedSha &&
-    remoteLabels['org.opencontainers.image.version'] ===
-      `sha-${requestedSha}` &&
-    OCI_LABELS.every((name) => remoteLabels[name] === localLabels[name]);
-
-  if (equivalent) {
-    return outcome(
-      RESULT.ALREADY_EXISTS,
-      EXIT.ALREADY_EXISTS,
-      `immutable tag already resolves to ${imageRepository}@${digest}; refusing overwrite`,
-    );
-  }
-  return outcome(
-    RESULT.COLLISION,
-    EXIT.COLLISION,
-    'immutable tag resolves to different content; refusing overwrite',
-  );
-}
-
-function inspectTag({
-  status,
-  stdout,
-  stderr,
-  manifestText,
-  remoteImageText,
-  localImageText,
-  expectedImageRef,
-  imageRepository,
-  requestedSha,
-  expectedLocalConfigDigest,
-}) {
-  const availability = classifyAvailability({
-    status,
-    stdout,
-    stderr,
-    expectedImageRef,
-  });
-  if (availability.result !== RESULT.ALREADY_EXISTS) return availability;
-
-  try {
-    validateExpectedIdentity({
-      expectedImageRef,
-      imageRepository,
-      requestedSha,
-      expectedLocalConfigDigest,
-    });
-    const descriptor = parseJson(stdout, 'registry descriptor');
-    const manifest = parseJson(manifestText, 'registry manifest');
-    const remoteImage = parseJson(remoteImageText, 'remote image identity');
-    const localImages = parseJson(localImageText, 'local image identity');
-    if (!Array.isArray(localImages) || localImages.length !== 1) {
-      throw new Error('local image identity is ambiguous');
-    }
-    return classifyExistingTag({
-      descriptor,
-      manifest,
-      remoteImage,
-      localImage: localImages[0],
-      imageRepository,
-      requestedSha,
-      expectedLocalConfigDigest,
-    });
-  } catch {
-    return outcome(
-      RESULT.LOOKUP_FAILED,
-      EXIT.LOOKUP_FAILED,
-      'registry response was empty, invalid, or ambiguous',
-    );
-  }
 }
 
 function parseStatus(value) {
@@ -240,7 +179,7 @@ function parseStatus(value) {
 }
 
 function loadAvailability(args, env) {
-  if (args.length < 3) return null;
+  if (args.length !== 3) return null;
   return {
     status: parseStatus(args[0]),
     stdout: readText(args[1], 'registry stdout'),
@@ -249,48 +188,100 @@ function loadAvailability(args, env) {
   };
 }
 
+function sanitizeDiagnosticText(value) {
+  let sanitized = String(value)
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, '[ANSI_REMOVED]')
+    .replace(
+      /(\b(?:authorization|proxy-authorization|www-authenticate)\s*:\s*)[^\r\n]*/giu,
+      '$1[REDACTED]',
+    )
+    .replace(/(\b(?:bearer|basic)\s+)[a-z0-9._~+/-]+=*/giu, '$1[REDACTED]')
+    .replace(
+      /(["']?)(\b(?:access[_-]?token|identity[_-]?token|refresh[_-]?token|id[_-]?token|token|password|secret|credentials?|auth)\b)\1(\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;}]+)/giu,
+      (_match, quote, key, separator, secretValue) => {
+        const redactedValue = secretValue.startsWith('"')
+          ? '"[REDACTED]"'
+          : secretValue.startsWith("'")
+            ? "'[REDACTED]'"
+            : '[REDACTED]';
+        return `${quote}${key}${quote}${separator}${redactedValue}`;
+      },
+    )
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^@\s/]+@/giu, '$1[REDACTED]@')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, '\ufffd');
+  const maximumLength = 4096;
+  if (sanitized.length > maximumLength) {
+    sanitized = `${sanitized.slice(0, maximumLength)}[TRUNCATED]`;
+  }
+  return sanitized;
+}
+
+function createLookupDiagnostic({ availability, result, recordedAt }) {
+  return {
+    schemaVersion: 1,
+    recordedAt: recordedAt ?? new Date().toISOString(),
+    logicalCommand: `docker buildx imagetools inspect ${availability.expectedImageRef} --format {{json .Manifest}}`,
+    imageRef: availability.expectedImageRef,
+    lookupExitCode: Number.isInteger(availability.status)
+      ? availability.status
+      : null,
+    classifierResult: result.result,
+    responseClass: result.responseClass,
+    httpStatus: result.httpStatus,
+    stdout: sanitizeDiagnosticText(availability.stdout),
+    stderr: sanitizeDiagnosticText(availability.stderr),
+    sanitized: true,
+  };
+}
+
+function writeLookupDiagnostic(path, diagnostic) {
+  writeFileSync(path, `${JSON.stringify(diagnostic, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  chmodSync(path, 0o600);
+}
+
 function runCli(args = process.argv.slice(2), env = process.env) {
   const [command, ...values] = args;
-  let result;
   try {
     const availability = loadAvailability(values, env);
-    if (
-      !availability ||
-      !['availability', 'inspect'].includes(command) ||
-      (command === 'availability' && values.length !== 3) ||
-      (command === 'inspect' && values.length !== 6)
-    ) {
+    if (!availability || command !== 'availability') {
       return outcome(
         RESULT.LOOKUP_FAILED,
         EXIT.USAGE,
         'invalid release tag inspection invocation',
       );
     }
-    if (command === 'availability') {
-      result = classifyAvailability(availability);
-    } else {
-      result = inspectTag({
-        ...availability,
-        manifestText: readText(values[3], 'registry manifest'),
-        remoteImageText: readText(values[4], 'remote image identity'),
-        localImageText: readText(values[5], 'local image identity'),
-        imageRepository: env.IMAGE_REPOSITORY,
-        requestedSha: env.REQUESTED_SHA,
-        expectedLocalConfigDigest: env.EXPECTED_LOCAL_CONFIG_DIGEST,
-      });
-    }
+    return classifyAvailability(availability);
   } catch {
-    result = outcome(
+    return outcome(
       RESULT.LOOKUP_FAILED,
       EXIT.LOOKUP_FAILED,
-      'registry response was empty, invalid, or ambiguous',
+      'registry response was invalid or ambiguous',
     );
   }
-  return result;
 }
 
 function main() {
-  const result = runCli();
+  const args = process.argv.slice(2);
+  let result = runCli(args);
+  if (process.env.TAG_LOOKUP_DIAGNOSTIC_PATH) {
+    try {
+      const availability = loadAvailability(args.slice(1), process.env);
+      if (!availability) throw new Error('lookup inputs are unavailable');
+      writeLookupDiagnostic(
+        process.env.TAG_LOOKUP_DIAGNOSTIC_PATH,
+        createLookupDiagnostic({ availability, result }),
+      );
+    } catch {
+      result = outcome(
+        RESULT.LOOKUP_FAILED,
+        EXIT.LOOKUP_FAILED,
+        'sanitized registry diagnostic could not be preserved',
+      );
+    }
+  }
   process.stdout.write(`${result.result}\n`);
   if (result.diagnostic) {
     process.stderr.write(`${result.result}: ${result.diagnostic}\n`);
@@ -302,10 +293,15 @@ if (require.main === module) main();
 
 module.exports = {
   EXIT,
+  RESPONSE_CLASS,
   RESULT,
   classifyAvailability,
-  classifyExistingTag,
-  inspectTag,
+  classifyLookupFailure,
+  createLookupDiagnostic,
+  extractHttpStatus,
+  isValidExistingDescriptor,
   lookupFailureDiagnostic,
   runCli,
+  sanitizeDiagnosticText,
+  writeLookupDiagnostic,
 };

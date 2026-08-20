@@ -143,21 +143,32 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   `main` não são referências operacionais. Runs do mesmo SHA são serializados,
   e metadata de build usa o timestamp do commit. Depois do login, um lookup sem
   mutação classifica o tag: ausência definitiva permite um único push após
-  recheck imediato como `TAG_AVAILABLE`; presença equivalente produz o
-  bloqueio `TAG_ALREADY_EXISTS`, e conteúdo diferente produz o bloqueio
-  `TAG_COLLISION`. Nenhum resultado de presença reutiliza ou sobrescreve o tag
-  nessa execução. Resposta vazia, inválida ou ambígua e falhas 401, 403, 429 ou
+  recheck imediato como `TAG_AVAILABLE`; qualquer descriptor válido de
+  presença, equivalente ou divergente, produz o bloqueio
+  `TAG_ALREADY_EXISTS`. Nenhuma presença reutiliza ou sobrescreve o tag nessa
+  execução. Resposta vazia, inválida ou ambígua e falhas 401, 403, 429 ou
   5xx falham fechado sem alcançar o push. O digest publicado é reinspecionado e
   comparado aos manifest e config digests esperados.
 - A classificação de ausência é uma única regra aplicada nos dois lookups. Ela
-  aceita somente erro completo de manifest/tag ausente ou `404` do endpoint de
-  manifest exatamente ligado ao `IMAGE_REF`; nunca usa `not found` genérico.
-  Nas duas chamadas ela exige status `1`, stdout vazio e stderr exatamente
-  canônico; o recheck também captura stdout, sem `/dev/null`. Prefixo, sufixo,
-  whitespace flexível, CR, LF, U+0085, U+2028, U+2029 ou conteúdo simultâneo
-  nos dois canais são ambíguos. Falhas de helper/plugin, autenticação,
-  permissão, transporte, timeout, rate limit e qualquer resposta composta ou
-  desconhecida não produzem `exists=false` e encerram o job antes do push.
+  aceita erro completo de manifest/tag ausente, `404` do endpoint de manifest
+  exatamente ligado ao `IMAGE_REF` e a assinatura Buildx 0.36.1 comprovada
+  três vezes no GHCR: `ERROR: <IMAGE_REF exato>: not found`, exit `1` e stdout
+  exatamente vazio. Três leituras OCI `404/MANIFEST_UNKNOWN` corroboraram essa
+  assinatura. Cada lookup usa uma única chamada Buildx, de modo que o exit code,
+  stdout e stderr preservados descrevem o comando causal; nenhuma inspeção
+  secundária pode perder seus canais. `not found` genérico, referência ausente ou divergente, tag
+  parcial, prefixo, sufixo, whitespace flexível, ANSI, CR, LF, U+0085, U+2028,
+  U+2029 ou conteúdo simultâneo nos canais permanecem ambíguos. Falhas de
+  helper/plugin, autenticação, permissão, transporte, timeout, rate limit,
+  servidor e qualquer resposta composta ou desconhecida não produzem
+  `exists=false` e encerram o job antes do push.
+- Todo lookup recebe um path isolado para JSON diagnóstico. Em falha, somente
+  esse arquivo estruturado e sanitizado é retido por 14 dias: horário UTC com
+  milissegundos, comando lógico sem credencial, exit code, classe da resposta,
+  status HTTP quando conhecido, stdout e stderr sanitizados. Authorization,
+  WWW-Authenticate, token, senha, auth Docker e credencial são redigidos; os
+  canais brutos e o Docker config não são artifacts. Incapacidade de preservar
+  o diagnóstico falha fechado e não habilita o push.
 - `workflowRef` e `imageSourceSha` são autoridades independentes. Para esta
   remediação, o workflow vem do candidato futuro de `main`, o
   `imageSourceSha` continua
