@@ -39,6 +39,7 @@ function isDefinitiveManifestAbsence({
   return [
     new RegExp(`^(?:ERROR: )?${absence}: ${imageRef}$`, 'u'),
     new RegExp(`^(?:ERROR: )?${imageRef}: ${absence}$`, 'u'),
+    new RegExp(`^ERROR: ${imageRef}: not found$`, 'u'),
     new RegExp(
       `^(?:ERROR: )?unexpected status from (?:HEAD|GET) request to ${manifestUrl}: 404 Not Found$`,
       'u',
@@ -1305,18 +1306,19 @@ function validateManualReleaseDocument(workflow) {
   }
   const existenceRun = String(existence?.run ?? '');
   if (
-    existence?.env?.EXPECTED_LOCAL_CONFIG_DIGEST !==
-      '${{ steps.local.outputs.config_digest }}' ||
+    existence?.env?.TAG_LOOKUP_DIAGNOSTIC_PATH !==
+      '${{ runner.temp }}/tag-inspection-diagnostic.json' ||
     !/imagetools inspect "\$IMAGE_REF" --format '\{\{json \.Manifest\}\}'/u.test(
       existenceRun,
     ) ||
-    !/imagetools inspect "\$IMAGE_REF" --raw/u.test(existenceRun) ||
-    !/--format '\{\{json \.Image\}\}'/u.test(existenceRun) ||
     !existenceRun.includes(
       '> "${{ runner.temp }}/existing-descriptor.json" 2> "${{ runner.temp }}/existing-error.txt"',
     ) ||
     !existenceRun.includes(
-      'node release-control/scripts/inspect-release-tag.cjs inspect "$lookup_status"',
+      'node release-control/scripts/inspect-release-tag.cjs availability "$lookup_status"',
+    ) ||
+    /imagetools inspect "\$IMAGE_REF" --(?:raw|format '\{\{json \.Image\}\}')/u.test(
+      existenceRun,
     ) ||
     !/TAG_AVAILABLE/u.test(existenceRun) ||
     !/state=TAG_AVAILABLE/u.test(existenceRun) ||
@@ -1335,6 +1337,8 @@ function validateManualReleaseDocument(workflow) {
   const pushRun = String(push?.run ?? '');
   if (
     push?.id !== 'push' ||
+    push?.env?.TAG_LOOKUP_DIAGNOSTIC_PATH !==
+      '${{ runner.temp }}/prepush-tag-inspection-diagnostic.json' ||
     normalizeExpression(push?.if) !==
       "steps.existence.outputs.state == 'TAG_AVAILABLE'" ||
     !/imagetools inspect "\$IMAGE_REF"/u.test(pushRun) ||
@@ -1371,13 +1375,46 @@ function validateManualReleaseDocument(workflow) {
     (count, step) =>
       count +
       (String(step.run ?? '').match(
-        /node release-control\/scripts\/inspect-release-tag\.cjs (?:inspect|availability)/gu,
+        /node release-control\/scripts\/inspect-release-tag\.cjs availability/gu,
       )?.length ?? 0),
     0,
   );
   if (tagInspectionCalls !== 2) {
     failures.push(
       'manual release must apply the versioned fail-closed tag classifier exactly once in each registry lookup.',
+    );
+  }
+  const diagnosticUploads = steps.filter((step) =>
+    String(step?.with?.path ?? '').includes('tag-inspection-diagnostic.json'),
+  );
+  const expectedDiagnosticUploads = [
+    {
+      name: 'tag-inspection-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}',
+      path: '${{ runner.temp }}/tag-inspection-diagnostic.json',
+      condition: "failure() && steps.existence.outcome == 'failure'",
+    },
+    {
+      name: 'prepush-tag-inspection-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}',
+      path: '${{ runner.temp }}/prepush-tag-inspection-diagnostic.json',
+      condition: "failure() && steps.push.outcome == 'failure'",
+    },
+  ];
+  if (
+    diagnosticUploads.length !== expectedDiagnosticUploads.length ||
+    diagnosticUploads.some((step, index) => {
+      const expected = expectedDiagnosticUploads[index];
+      return (
+        actionReference(step)?.action !== 'actions/upload-artifact' ||
+        step.with?.name !== expected.name ||
+        step.with?.path !== expected.path ||
+        step.with?.['if-no-files-found'] !== 'error' ||
+        step.with?.['retention-days'] !== 14 ||
+        normalizeExpression(step.if) !== expected.condition
+      );
+    })
+  ) {
+    failures.push(
+      'failed tag lookups must upload only their structured sanitized diagnostic with fail-closed retention.',
     );
   }
   const selectedRun = String(selected?.run ?? '');
@@ -1426,7 +1463,9 @@ function validateManualReleaseDocument(workflow) {
       failures.push(`release evidence is missing ${field}.`);
   }
   const artifact = steps.find(
-    (step) => actionReference(step)?.action === 'actions/upload-artifact',
+    (step) =>
+      actionReference(step)?.action === 'actions/upload-artifact' &&
+      step?.with?.path === 'image-release-identity.json',
   );
   if (
     artifact?.with?.path !== 'image-release-identity.json' ||

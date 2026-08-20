@@ -454,7 +454,7 @@ test('absent full-SHA path performs one guarded push only after scan, login, and
   const existence = steps[existenceIndex];
   assert.match(
     existence.run,
-    /release-control\/scripts\/inspect-release-tag\.cjs inspect "\$lookup_status"/u,
+    /release-control\/scripts\/inspect-release-tag\.cjs availability "\$lookup_status"/u,
   );
   assert.match(
     pushSteps[0].run,
@@ -470,6 +470,65 @@ test('absent full-SHA path performs one guarded push only after scan, login, and
   );
   assert.doesNotMatch(pushSteps[0].run, /\/dev\/null/u);
   assert.doesNotMatch(`${existence.run}\n${pushSteps[0].run}`, /grep\s+-/u);
+  assert.equal(
+    existence.env.TAG_LOOKUP_DIAGNOSTIC_PATH,
+    '${{ runner.temp }}/tag-inspection-diagnostic.json',
+  );
+  assert.equal(
+    pushSteps[0].env.TAG_LOOKUP_DIAGNOSTIC_PATH,
+    '${{ runner.temp }}/prepush-tag-inspection-diagnostic.json',
+  );
+  assert.doesNotMatch(existence.run, /--raw|json \.Image/u);
+  assert.equal(
+    (existence.run.match(/\bdocker buildx imagetools inspect\b/gu) ?? [])
+      .length,
+    1,
+  );
+});
+
+test('failed registry lookups preserve only structured sanitized diagnostics', () => {
+  const workflow = parseYamlSubset(releaseSource);
+  const steps = workflow.jobs['publish-image'].steps;
+  const uploads = steps.filter((step) =>
+    String(step.with?.path ?? '').includes('tag-inspection-diagnostic.json'),
+  );
+  assert.deepEqual(
+    uploads.map((step) => ({
+      action: step.uses,
+      condition: step.if,
+      name: step.with.name,
+      path: step.with.path,
+      missing: step.with['if-no-files-found'],
+      retention: step.with['retention-days'],
+    })),
+    [
+      {
+        action:
+          'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
+        condition: "${{ failure() && steps.existence.outcome == 'failure' }}",
+        name: 'tag-inspection-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}',
+        path: '${{ runner.temp }}/tag-inspection-diagnostic.json',
+        missing: 'error',
+        retention: 14,
+      },
+      {
+        action:
+          'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
+        condition: "${{ failure() && steps.push.outcome == 'failure' }}",
+        name: 'prepush-tag-inspection-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}',
+        path: '${{ runner.temp }}/prepush-tag-inspection-diagnostic.json',
+        missing: 'error',
+        retention: 14,
+      },
+    ],
+  );
+  assert.equal(workflow.jobs['publish-image'].permissions.packages, 'write');
+  assert.deepEqual(Object.keys(workflow.jobs), ['publish-image']);
+  assert.doesNotMatch(
+    uploads.map((step) => step.with.path).join('\n'),
+    /existing-error|prepush-error|docker.*config|authorization|token/iu,
+  );
+  assert.deepEqual(validateManualReleaseDocument(workflow), []);
 });
 
 test('existing full-SHA tag is classified by a versioned script and never reaches push', () => {
@@ -477,7 +536,7 @@ test('existing full-SHA tag is classified by a versioned script and never reache
   const steps = workflow.jobs['publish-image'].steps;
   const existence = steps.find((step) => step.id === 'existence');
   assert.doesNotMatch(existence.run, /\bdocker\s+push\b/u);
-  assert.match(existence.run, /inspect-release-tag\.cjs inspect/u);
+  assert.match(existence.run, /inspect-release-tag\.cjs availability/u);
   assert.match(existence.run, /TAG_AVAILABLE/u);
   assert.doesNotMatch(existence.run, /<<-?\s*['"]?[A-Za-z_]/u);
   assert.equal(
@@ -502,15 +561,15 @@ test('rejects removal of immutable-tag overwrite protection or an unconditional 
   );
 });
 
-test('rejects an existing tag path that does not prove local equivalence', () => {
+test('rejects an existing tag path that bypasses the versioned classifier', () => {
   rejects(
     releaseMutation((workflow) => {
       const existence = workflow.jobs['publish-image'].steps.find(
         (step) => step.id === 'existence',
       );
       existence.run = existence.run.replace(
-        'node release-control/scripts/inspect-release-tag.cjs inspect',
-        'node scripts/untrusted-tag-check.cjs inspect',
+        'node release-control/scripts/inspect-release-tag.cjs availability',
+        'node scripts/untrusted-tag-check.cjs availability',
       );
     }),
     /existing full-SHA tag/u,
@@ -538,6 +597,7 @@ test('strict absence classifier accepts only exact missing-manifest responses ti
     `name unknown: ${ABSENT_REF}`,
     `no such manifest: ${ABSENT_REF}`,
     `${ABSENT_REF}: manifest unknown`,
+    `ERROR: ${ABSENT_REF}: not found`,
     `ERROR: unexpected status from HEAD request to https://ghcr.io/v2/arthurportodev/genesis-platform-api/manifests/sha-0123456789abcdef0123456789abcdef01234567: 404 Not Found`,
   ]) {
     assert.equal(classifyAbsence(message), true, message);
@@ -612,7 +672,7 @@ test('rejects replacing the centralized absence classifier with a generic text m
         (step) => step.id === 'existence',
       );
       existence.run = existence.run.replace(
-        /node release-control\/scripts\/inspect-release-tag\.cjs inspect[^\n]+/u,
+        /node release-control\/scripts\/inspect-release-tag\.cjs availability[^\n]+/u,
         'grep -Eiq \'manifest unknown|not found\' "${{ runner.temp }}/existing-error.txt"',
       );
     }),

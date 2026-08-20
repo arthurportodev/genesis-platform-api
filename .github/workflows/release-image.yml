@@ -210,20 +210,13 @@ jobs:
         id: existence
         shell: bash
         env:
-          EXPECTED_LOCAL_CONFIG_DIGEST: ${{ steps.local.outputs.config_digest }}
+          TAG_LOOKUP_DIAGNOSTIC_PATH: ${{ runner.temp }}/tag-inspection-diagnostic.json
         run: |
           set -euo pipefail
           set +e
           docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Manifest}}' > "${{ runner.temp }}/existing-descriptor.json" 2> "${{ runner.temp }}/existing-error.txt"
           lookup_status=$?
-          if [ "$lookup_status" -eq 0 ]; then
-            docker buildx imagetools inspect "$IMAGE_REF" --raw > "${{ runner.temp }}/existing-manifest.json" 2> "${{ runner.temp }}/existing-manifest-error.txt"
-            docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Image}}' > "${{ runner.temp }}/existing-image.json" 2> "${{ runner.temp }}/existing-image-error.txt"
-          else
-            : > "${{ runner.temp }}/existing-manifest.json"
-            : > "${{ runner.temp }}/existing-image.json"
-          fi
-          node release-control/scripts/inspect-release-tag.cjs inspect "$lookup_status" "${{ runner.temp }}/existing-descriptor.json" "${{ runner.temp }}/existing-error.txt" "${{ runner.temp }}/existing-manifest.json" "${{ runner.temp }}/existing-image.json" "${{ runner.temp }}/local-image.json" > "${{ runner.temp }}/tag-inspection-result.txt"
+          node release-control/scripts/inspect-release-tag.cjs availability "$lookup_status" "${{ runner.temp }}/existing-descriptor.json" "${{ runner.temp }}/existing-error.txt" > "${{ runner.temp }}/tag-inspection-result.txt"
           inspection_status=$?
           set -e
           cat "${{ runner.temp }}/tag-inspection-result.txt"
@@ -236,12 +229,22 @@ jobs:
           fi
           echo "state=TAG_AVAILABLE" >> "$GITHUB_OUTPUT"
 
+      - name: Upload sanitized tag inspection diagnostic on failure
+        if: ${{ failure() && steps.existence.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tag-inspection-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tag-inspection-diagnostic.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Push scanned immutable image and capture digest
         id: push
         if: ${{ steps.existence.outputs.state == 'TAG_AVAILABLE' }}
         shell: bash
         env:
           EXPECTED_LOCAL_CONFIG_DIGEST: ${{ steps.local.outputs.config_digest }}
+          TAG_LOOKUP_DIAGNOSTIC_PATH: ${{ runner.temp }}/prepush-tag-inspection-diagnostic.json
         run: |
           set -euo pipefail
           set +e
@@ -272,6 +275,15 @@ jobs:
           digest="${pushed_digests[0]}"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "immutable_ref=$IMAGE_REPOSITORY@$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Upload sanitized pre-push tag diagnostic on failure
+        if: ${{ failure() && steps.push.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: prepush-tag-inspection-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prepush-tag-inspection-diagnostic.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Select verified immutable digest
         id: selected
