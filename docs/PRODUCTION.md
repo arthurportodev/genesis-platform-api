@@ -386,8 +386,12 @@ estágios que executam npm e build. A imagem final recebe somente o executável
 Node, `libstdc++`, dependências podadas, `dist` e `package.json`. npm, npx, Yarn,
 Corepack, módulos globais e o pacote npm `tar` não entram no runtime. O contrato
 estrutural e a inspeção da imagem real verificam esse limite antes do Trivy e de
-qualquer lookup ou push. Em rerun, a equivalência com a imagem já escaneada é
-obrigatória e o digest existente é reutilizado sem push.
+qualquer lookup ou push. Em rerun, qualquer tag full-SHA existente é bloqueante.
+Mesmo quando o conteúdo remoto é equivalente à imagem local já escaneada, a
+inspeção produz `TAG_ALREADY_EXISTS` e encerra a execução fail-closed, sem
+reutilizar ou sobrescrever tag ou digest e sem tratar o resultado como sucesso
+idempotente. O operador deve investigar o estado existente; um novo dispatch
+com essa tag não alcança o push.
 
 Essa entrega não depende de cadeia customizada de evidências. Controles
 avançados de supply chain são backlog pós-MVP.
