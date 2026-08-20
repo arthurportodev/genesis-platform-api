@@ -127,12 +127,12 @@ function assertOutcome(result, status, stdout, stderrPattern) {
   else assert.equal(result.stderr, '');
 }
 
-test('returns TAG_AVAILABLE only for a definitive absence tied to the exact ref', () => {
+test('returns TAG_AVAILABLE only for the exact ref with one terminal LF', () => {
   const result = execute({
     status: 1,
     overrides: {
       stdout: '',
-      stderr: `manifest unknown: ${IMAGE_REF}`,
+      stderr: `ERROR: ${IMAGE_REF}: not found\n`,
     },
   });
   assertOutcome(result, EXIT.AVAILABLE, RESULT.AVAILABLE);
@@ -142,9 +142,27 @@ test('real Buildx and OCI fixtures bind the proven GHCR definitive-absence signa
   const observed = REAL_ABSENCE_FIXTURE;
   assert.equal(observed.classification, 'DEFINITIVE_TAG_ABSENCE');
   assert.equal(observed.stableReads, 3);
-  assert.equal(sha256(observed.buildx.stdout), observed.buildx.stdoutSha256);
-  assert.equal(sha256(observed.buildx.stderr), observed.buildx.stderrSha256);
+  const stdoutBytes = Buffer.from(observed.buildx.stdoutBase64, 'base64');
+  const stderrBytes = Buffer.from(observed.buildx.stderrBase64, 'base64');
+  assert.equal(stdoutBytes.length, observed.buildx.stdoutByteLength);
+  assert.equal(stderrBytes.length, observed.buildx.stderrByteLength);
+  assert.equal(stdoutBytes.toString('utf8'), observed.buildx.stdout);
+  assert.equal(stderrBytes.toString('utf8'), observed.buildx.stderr);
+  assert.equal(sha256(stdoutBytes), observed.buildx.stdoutSha256);
+  assert.equal(sha256(stderrBytes), observed.buildx.stderrSha256);
   assert.equal(sha256(observed.oci.body), observed.oci.bodySha256);
+  assert.equal(observed.source.kind, 'sanitized-workflow-artifact');
+  assert.equal(observed.source.runId, 32376631200);
+  assert.equal(observed.source.artifactId, 9409360946);
+  assert.equal(observed.source.artifactByteLength, 638);
+  assert.equal(
+    observed.source.artifactSha256,
+    '940c6baedb1c8f664fada414e9b33279c8f7555557e48f1587b39dddacc76dad',
+  );
+  assert.equal(observed.source.sanitized, true);
+  assert.equal(observed.source.credentialsExposed, false);
+  assert.equal(observed.observedInspectorExitCode, 12);
+  assert.equal(observed.observedClassifierResult, RESULT.LOOKUP_FAILED);
   assert.equal(observed.oci.httpStatus, 404);
   assert.equal(observed.oci.errorCode, 'MANIFEST_UNKNOWN');
   assert.equal(observed.credentialsExposed, false);
@@ -184,18 +202,22 @@ test('a disagreement between the Buildx and OCI observations is never definitive
   }
 });
 
-test('real not-found signature stays exact, single-line, and tied to the full target ref', () => {
+test('real not-found signature stays byte-exact and tied to the full target ref', () => {
   const { imageRef } = REAL_ABSENCE_FIXTURE;
   const exact = REAL_ABSENCE_FIXTURE.buildx.stderr;
   const rejected = [
-    `${imageRef}: not found`,
-    'ERROR: not found',
+    `ERROR: ${imageRef}: not found`,
+    `ERROR: ${imageRef}: not found\r\n`,
+    `ERROR: ${imageRef}: not found\n\n`,
+    `ERROR: ${imageRef}: not found\nadditional line`,
+    `ERROR: ${imageRef}: not found \n`,
     `ERROR: ${imageRef.slice(0, -1)}: not found`,
-    `ERROR: ${imageRef}: not found `,
+    `ERROR: ${imageRef.toUpperCase()}: not found\n`,
     `prefix ${exact}`,
     `${exact} suffix`,
-    `${exact}\n401 Unauthorized`,
     `\u001b[31m${exact}\u001b[0m`,
+    `${exact}\0`,
+    '',
   ];
   for (const stderr of rejected) {
     const result = execute({
@@ -208,7 +230,27 @@ test('real not-found signature stays exact, single-line, and tied to the full ta
       result,
       EXIT.LOOKUP_FAILED,
       RESULT.LOOKUP_FAILED,
-      /invalid or ambiguous|authentication or authorization/u,
+      /empty|invalid or ambiguous|authentication or authorization/u,
+    );
+  }
+
+  for (const [status, stdout, stderr] of [
+    [2, '', exact],
+    [1, 'unexpected output', exact],
+    [1, '', `manifest unknown: ${imageRef}\n`],
+    [1, '', `ERROR: ${imageRef}: not found\u2028`],
+  ]) {
+    const result = execute({
+      command: 'availability',
+      status,
+      overrides: { stdout, stderr },
+      env: { IMAGE_REF: imageRef },
+    });
+    assertOutcome(
+      result,
+      EXIT.LOOKUP_FAILED,
+      RESULT.LOOKUP_FAILED,
+      /invalid or ambiguous/u,
     );
   }
 });
@@ -435,13 +477,13 @@ test('final serialized-payload scan rejects residual sensitive signatures before
     availability: {
       status: 1,
       stdout: '',
-      stderr: `ERROR: ${IMAGE_REF}: not found`,
+      stderr: `ERROR: ${IMAGE_REF}: not found\n`,
       expectedImageRef: IMAGE_REF,
     },
     result: classifyAvailability({
       status: 1,
       stdout: '',
-      stderr: `ERROR: ${IMAGE_REF}: not found`,
+      stderr: `ERROR: ${IMAGE_REF}: not found\n`,
       expectedImageRef: IMAGE_REF,
     }),
     recordedAt: '2026-08-20T12:00:00.000Z',
@@ -548,7 +590,7 @@ test('timeouts, empty channels, malformed payloads, and unknown responses remain
     {
       status: 2,
       stdout: '',
-      stderr: `ERROR: ${IMAGE_REF}: not found`,
+      stderr: `ERROR: ${IMAGE_REF}: not found\n`,
       responseClass: 'AMBIGUOUS_RESPONSE',
     },
   ];
@@ -601,11 +643,19 @@ test('fails closed with sanitized diagnostics for rate limits and server errors'
   }
 });
 
-test('every non-absence outcome is nonzero and therefore cannot unlock push', () => {
+test('every rejected absence variant is nonzero and therefore cannot unlock push', () => {
+  const exact = `ERROR: ${IMAGE_REF}: not found\n`;
   const results = [
     execute(),
     execute({ overrides: { stdout: '{}' } }),
     execute({ overrides: { stdout: '{invalid-json' } }),
+    execute({
+      status: 1,
+      overrides: { stdout: '', stderr: exact.slice(0, -1) },
+    }),
+    execute({ status: 1, overrides: { stdout: '', stderr: `${exact}\n` } }),
+    execute({ status: 1, overrides: { stdout: 'x', stderr: exact } }),
+    execute({ status: 2, overrides: { stdout: '', stderr: exact } }),
     execute({
       command: 'availability',
       status: 1,

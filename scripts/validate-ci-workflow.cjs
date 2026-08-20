@@ -8,10 +8,6 @@ const FULL_SHA = /^[a-f0-9]{40}$/u;
 const MANUAL_RELEASE_IMAGE_REF =
   /^ghcr\.io\/(?<repository>[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*):(?<tag>sha-[a-f0-9]{40})$/u;
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-}
-
 function isDefinitiveManifestAbsence({
   status,
   stdout,
@@ -26,25 +22,13 @@ function isDefinitiveManifestAbsence({
   ) {
     return false;
   }
-  const identity = MANUAL_RELEASE_IMAGE_REF.exec(expectedImageRef);
-  if (!identity?.groups) return false;
-  if (stderr.length === 0 || /[\r\n\u0085\u2028\u2029]/u.test(stderr)) {
-    return false;
-  }
-  const imageRef = escapeRegExp(expectedImageRef);
-  const manifestUrl = escapeRegExp(
-    `https://ghcr.io/v2/${identity.groups.repository}/manifests/${identity.groups.tag}`,
+  if (!MANUAL_RELEASE_IMAGE_REF.test(expectedImageRef)) return false;
+  const observedBytes = Buffer.from(stderr, 'utf8');
+  const expectedBytes = Buffer.from(
+    `ERROR: ${expectedImageRef}: not found\n`,
+    'utf8',
   );
-  const absence = '(?:manifest unknown|name unknown|no such manifest)';
-  return [
-    new RegExp(`^(?:ERROR: )?${absence}: ${imageRef}$`, 'u'),
-    new RegExp(`^(?:ERROR: )?${imageRef}: ${absence}$`, 'u'),
-    new RegExp(`^ERROR: ${imageRef}: not found$`, 'u'),
-    new RegExp(
-      `^(?:ERROR: )?unexpected status from (?:HEAD|GET) request to ${manifestUrl}: 404 Not Found$`,
-      'u',
-    ),
-  ].some((pattern) => pattern.test(stderr));
+  return observedBytes.equals(expectedBytes);
 }
 
 const ACTIONS = new Map([
