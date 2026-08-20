@@ -243,7 +243,7 @@ for (const [signal, expectedStatus] of [
       writeFileSync(input, `${SECRET}\n`);
       const command = [
         `export GENESIS_09E_READY_FILE='${ready.replaceAll('\\', '/')}'`,
-        `exec timeout --preserve-status -s ${signal} 1 '${SCRIPT.replaceAll('\\', '/')}' --simulate-credential-cleanup wait-signal '${parent.replaceAll('\\', '/')}' '${marker.replaceAll('\\', '/')}' < '${input.replaceAll('\\', '/')}'`,
+        `exec timeout --preserve-status -s ${signal} 1 bash '${SCRIPT.replaceAll('\\', '/')}' --simulate-credential-cleanup wait-signal '${parent.replaceAll('\\', '/')}' '${marker.replaceAll('\\', '/')}' < '${input.replaceAll('\\', '/')}'`,
       ].join('\n');
       const result = spawnSync(BASH, ['-c', command], {
         encoding: 'utf8',
