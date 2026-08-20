@@ -246,33 +246,67 @@ function redactStandaloneSecrets(value) {
   );
 }
 
+function redactDiagnosticSecrets(value) {
+  return redactStandaloneSecrets(
+    String(value)
+      .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, '[ANSI_REMOVED]')
+      .replace(
+        /(\b(?:authorization|proxy-authorization|www-authenticate)\s*:\s*)[^\r\n]*/giu,
+        '$1[REDACTED]',
+      )
+      .replace(/(\b(?:bearer|basic)\s+)[a-z0-9._~+/-]+=*/giu, '$1[REDACTED]')
+      .replace(
+        /(["']?)(\b(?:access[_-]?token|identity[_-]?token|refresh[_-]?token|id[_-]?token|token|password|secret|credentials?|auth)\b)\1(\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;}]+)/giu,
+        (_match, quote, key, separator, secretValue) => {
+          const redactedValue = secretValue.startsWith('"')
+            ? '"[REDACTED]"'
+            : secretValue.startsWith("'")
+              ? "'[REDACTED]'"
+              : '[REDACTED]';
+          return `${quote}${key}${quote}${separator}${redactedValue}`;
+        },
+      )
+      .replace(
+        /([a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^@\s/]+@/giu,
+        '$1[REDACTED]@',
+      )
+      .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, '\ufffd'),
+  );
+}
+
 function sanitizeDiagnosticText(value) {
-  let sanitized = String(value)
-    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, '[ANSI_REMOVED]')
-    .replace(
-      /(\b(?:authorization|proxy-authorization|www-authenticate)\s*:\s*)[^\r\n]*/giu,
-      '$1[REDACTED]',
-    )
-    .replace(/(\b(?:bearer|basic)\s+)[a-z0-9._~+/-]+=*/giu, '$1[REDACTED]')
-    .replace(
-      /(["']?)(\b(?:access[_-]?token|identity[_-]?token|refresh[_-]?token|id[_-]?token|token|password|secret|credentials?|auth)\b)\1(\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;}]+)/giu,
-      (_match, quote, key, separator, secretValue) => {
-        const redactedValue = secretValue.startsWith('"')
-          ? '"[REDACTED]"'
-          : secretValue.startsWith("'")
-            ? "'[REDACTED]'"
-            : '[REDACTED]';
-        return `${quote}${key}${quote}${separator}${redactedValue}`;
-      },
-    )
-    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^@\s/]+@/giu, '$1[REDACTED]@')
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, '\ufffd');
-  sanitized = redactStandaloneSecrets(sanitized);
+  let sanitized = redactDiagnosticSecrets(value);
   const maximumLength = 4096;
   if (sanitized.length > maximumLength) {
     sanitized = `${sanitized.slice(0, maximumLength)}[TRUNCATED]`;
   }
   return sanitized;
+}
+
+function serializedDiagnosticContainsSensitiveSignature(serialized) {
+  let payload;
+  try {
+    payload = JSON.parse(String(serialized));
+  } catch {
+    return true;
+  }
+  const pending = [payload];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === 'string') {
+      if (/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/u.test(value)) return true;
+      if (redactDiagnosticSecrets(value) !== value) return true;
+      continue;
+    }
+    if (Array.isArray(value)) {
+      pending.push(...value);
+      continue;
+    }
+    if (value !== null && typeof value === 'object') {
+      pending.push(...Object.values(value));
+    }
+  }
+  return false;
 }
 
 function createLookupDiagnostic({ availability, result, recordedAt }) {
@@ -294,7 +328,11 @@ function createLookupDiagnostic({ availability, result, recordedAt }) {
 }
 
 function writeLookupDiagnostic(path, diagnostic) {
-  writeFileSync(path, `${JSON.stringify(diagnostic, null, 2)}\n`, {
+  const serialized = `${JSON.stringify(diagnostic, null, 2)}\n`;
+  if (serializedDiagnosticContainsSensitiveSignature(serialized)) {
+    throw new Error('sanitized diagnostic payload failed final safety check');
+  }
+  writeFileSync(path, serialized, {
     encoding: 'utf8',
     mode: 0o600,
   });
@@ -362,5 +400,6 @@ module.exports = {
   lookupFailureDiagnostic,
   runCli,
   sanitizeDiagnosticText,
+  serializedDiagnosticContainsSensitiveSignature,
   writeLookupDiagnostic,
 };

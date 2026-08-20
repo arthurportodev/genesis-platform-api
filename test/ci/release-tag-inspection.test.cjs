@@ -1,6 +1,12 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
-const { mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -10,8 +16,11 @@ const {
   EXIT,
   RESULT,
   classifyAvailability,
+  createLookupDiagnostic,
   extractHttpStatus,
   sanitizeDiagnosticText,
+  serializedDiagnosticContainsSensitiveSignature,
+  writeLookupDiagnostic,
 } = require('../../scripts/inspect-release-tag.cjs');
 
 const SHA = 'a'.repeat(40);
@@ -102,8 +111,11 @@ function execute({
     windowsHide: true,
   });
   result.diagnostic = captureDiagnostic
-    ? JSON.parse(readFileSync(diagnosticPath, 'utf8'))
+    ? existsSync(diagnosticPath)
+      ? JSON.parse(readFileSync(diagnosticPath, 'utf8'))
+      : null
     : null;
+  result.diagnosticPathExists = existsSync(diagnosticPath);
   rmSync(directory, { recursive: true, force: true });
   return result;
 }
@@ -414,6 +426,81 @@ test('sanitizer redacts standalone GitHub tokens, JWTs, and Basic credentials be
 test('standalone secret redaction preserves useful non-secret registry evidence', () => {
   const safe = `ERROR: ${IMAGE_REF}: not found; HTTP/1.1 404; digest=${MANIFEST_DIGEST}`;
   assert.equal(sanitizeDiagnosticText(safe), safe);
+});
+
+test('final serialized-payload scan rejects residual sensitive signatures before creating a file', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'release-tag-final-scan-'));
+  const path = join(directory, 'diagnostic.json');
+  const safe = createLookupDiagnostic({
+    availability: {
+      status: 1,
+      stdout: '',
+      stderr: `ERROR: ${IMAGE_REF}: not found`,
+      expectedImageRef: IMAGE_REF,
+    },
+    result: classifyAvailability({
+      status: 1,
+      stdout: '',
+      stderr: `ERROR: ${IMAGE_REF}: not found`,
+      expectedImageRef: IMAGE_REF,
+    }),
+    recordedAt: '2026-08-20T12:00:00.000Z',
+  });
+  const residuals = [
+    { ...safe, recordedAt: `ghp_${'R'.repeat(36)}` },
+    { ...safe, stdout: `github_pat_${'S'.repeat(82)}` },
+    {
+      ...safe,
+      stderr: `eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJyZXNpZHVhbCJ9.${'t'.repeat(32)}`,
+    },
+    {
+      ...safe,
+      logicalCommand: Buffer.from('user:residual-password', 'utf8').toString(
+        'base64',
+      ),
+    },
+  ];
+  for (const residual of residuals) {
+    const serialized = `${JSON.stringify(residual, null, 2)}\n`;
+    assert.equal(
+      serializedDiagnosticContainsSensitiveSignature(serialized),
+      true,
+    );
+    assert.throws(
+      () => writeLookupDiagnostic(path, residual),
+      /sanitized diagnostic payload failed final safety check/u,
+    );
+    assert.equal(existsSync(path), false);
+  }
+  rmSync(directory, { recursive: true, force: true });
+});
+
+test('an unredacted residual channel fails closed without artifact or secret-bearing output', () => {
+  const privateKeyBegin = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ');
+  const privateKeyEnd = ['-----END', 'PRIVATE KEY-----'].join(' ');
+  const residual = [
+    privateKeyBegin,
+    'synthetic-residual-never-a-real-key',
+    privateKeyEnd,
+  ].join('\n');
+  const result = execute({
+    command: 'availability',
+    status: 1,
+    overrides: { stdout: residual, stderr: 'ambiguous registry response' },
+    captureDiagnostic: true,
+  });
+  assertOutcome(
+    result,
+    EXIT.LOOKUP_FAILED,
+    RESULT.LOOKUP_FAILED,
+    /sanitized registry diagnostic could not be preserved/u,
+  );
+  assert.equal(result.diagnosticPathExists, false);
+  assert.equal(result.diagnostic, null);
+  assert.doesNotMatch(
+    `${result.stdout}${result.stderr}`,
+    /PRIVATE KEY|synthetic-residual/u,
+  );
 });
 
 test('extracts only explicit HTTP status forms including the canonical GHCR 404', () => {
