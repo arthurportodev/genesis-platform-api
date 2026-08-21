@@ -4,25 +4,25 @@
 
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
-- **Revisão de estado:** GH-01-COMPLETE
-- **Atualização documentada:** 2026-08-15T11:45:00Z
+- **Revisão de estado:** MVP-10B-LIVE-2026-08-21
+- **Atualização documentada:** 2026-08-21T20:32:57.3293060Z
 - **Fase:** 0.8-MVP — Primeira produção mínima viável
-- **Último trabalho concluído:** 0.8-MVP-08 — Vercel, proxy, domínio e integração frontend/backend
-- **Trabalho vigente:** none — A missão 0.8-MVP-08 foi concluída tecnicamente sem usuários ou dados reais. C4R1 está Current e funcional no domínio final, a origem permanece protegida, o rollback está preservado e qualquer próxima missão depende de decisão humana explícita.
-- **Próxima tarefa:** 0.8-MVP-09-READINESS-DECISION — Decisão humana sobre escopo, plano de hosting e autorização da próxima missão
-- **Web integrado:** b26f4079aa4da735faa881753f5351d377009dcc
-- **Revisão da aplicação API:** 9402d067897ab727fb369d7e696a11ba3b9cf68f
-- **Revisão do manifesto de release API:** containing-commit
-- **Revisão do contrato da árvore de release:** containing-commit
-- **Fingerprint do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit
-- **Fingerprint do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit
-- **Imagem API autorizada:** ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a
-- **Imagem API de rollback:** ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659
-- **Proveniência da memória API:** containing-commit
+- **Último trabalho concluído:** 0.8-MVP-10B — Correções de usabilidade do frontend em produção
+- **Trabalho vigente:** none — Nenhum trabalho de engenharia está ativo. O MVP está disponível para uso normal inicial do CRM pela organização Porto; novas melhorias devem ser priorizadas por experiência real.
+- **Próxima tarefa:** NORMAL-CRM-USE — Uso normal do CRM e avaliações orientadas por experiência real
+- **Web live integrado:** 04515f8b17545947129466faab5d8140d1463f4f
+- **Revisão fonte da imagem API live:** 0a56a8aee7c64bda59a1981888418e1ad03950c0
+- **Revisão do contrato versionado de release API:** containing-commit
+- **Revisão do contrato versionado da árvore de release:** containing-commit
+- **Fingerprint contratual do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit
+- **Fingerprint contratual do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit
+- **Imagem API live:** ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb
+- **Imagem API de rollback:** ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a
+- **Proveniência da memória e tooling API:** containing-commit
 
 ## Estado operacional
 
-C4R1 está Current e READY no commit Web b26f4079, servindo app.agenciagenesismkt.com.br por CNAME e TLS válidos. O proxy same-origin /api/v1 alcança a API a4daf somente pelo Traefik protegido, com PostgreSQL privado e saudável. B4, A e a imagem 56ada permanecem como rollback; não houve migration, dado ou usuário real.
+O MVP está live em app.agenciagenesismkt.com.br. O frontend 04515f8 está no deployment Vercel aprovado dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z; o proxy same-origin, login, API b45425d7, PostgreSQL e Traefik estão saudáveis. A organização Porto e exatamente um OWNER real estão ativos, sem registrar PII; a fixture sintética está DEACTIVATED e não há trabalho de engenharia ativo.
 
 - **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
 - **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
@@ -49,36 +49,43 @@ C4R1 está Current e READY no commit Web b26f4079, servindo app.agenciagenesismk
 - **OPS-06B-ROLLBACK-READY** [observed/present] — O release anterior e o procedimento de retorno permanecem preservados para rollback integral; nenhum rollback foi executado na Window 2 porque todos os critérios passaram e a decisão foi KEEP.
 - **OPS-DNS-API** [observed/present] — api.agenciagenesismkt.com.br possui um único registro A para 147.79.82.44, sem AAAA ou CNAME no closeout.
 - **OPS-DNS-APP** [observed/present] — app.agenciagenesismkt.com.br apresentou A 185.158.133.1, sem CNAME ou AAAA, no snapshot do Gate 1.
-- **OPS-VERCEL-LINK** [observed/present] — O projeto Vercel Hobby genesis-platform-web foi reconciliado em sessão autenticada: C4R1 está Current e READY, app.agenciagenesismkt.com.br possui configuração válida Production, auto-deploy Git está desativado e não há bypass credential de automação.
+- **OPS-VERCEL-LINK** [observed/absent] — Registro histórico: C4R1 deixou de ser o deployment live e foi superseded pela promoção 10B dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z; dpl_AuunpMMmehaXdXFa5wu52DAMF99P é o rollback Web preservado. O controle durável git.deploymentEnabled=false permanece, sem inferir estado atual de C4R1.
 - **OPS-ACME-CONTACT** [observed/present] — O contato aprovado contato@agenciagenesismkt.com.br foi usado na solicitação ACME production única concluída pela Window 2.
 - **OPS-APPROVED-RECOVERY** [documented/present] — Google Drive dedicado opera com RPO de 24 horas, frequência de 12 horas, RTO lógico sintético de quatro horas, retenção regular/checkpoint de 30/90 dias, duas cópias verificadas e trash-only; a Window R4 comprovou a ativação e o restore.
 - **OPS-RECOVERY-TOOLING** [documented/present] — A 07A incorporou contrato versionado, runners, configuração não secreta, systemd, validação, testes e plano Window R; o tooling futuro classifica e provisiona genesis_backup somente sob autorização explícita, e rejeita OAuth externo que não prove status In production com scope drive.file; nenhum backup, OAuth, role, timer ou restore live foi executado.
 - **OPS-RECOVERY-WINDOW-R3** [observed/present] — A Window R3 preservou genesis_backup conforme, identidade age sob custódia dupla e OAuth externo In production com scope drive.file. O checkpoint e o round trip passaram, mas o restore falhou porque o runner exigia SELECT runtime em migrations e três tabelas de idempotência onde produção o nega intencionalmente; o rollback foi trash-only, sem restart, volume ativo, porta publicada ou timer habilitado. A correção candidata torna as quatro negações parte explícita da prova ACL.
 - **OPS-RECOVERY-WINDOW-R4** [observed/present] — A Window R4 instalou atomicamente o committed release corrigido sem restart, validou a credencial Drive sem novo OAuth, manteve genesis_backup conforme com zero mutações, comprovou checkpoint cifrado, round trip e restore PostgreSQL 17 isolado em 17 segundos, ativou o timer e observou o primeiro backup regular. Checkpoint e regular formam duas cópias remotas verificadas; não houve acesso ao volume ativo, porta publicada, untrash, purge ou recurso residual.
 - **OPS-APPROVED-MONITORING** [documented/present] — UptimeRobot sobre /health permanece o destino de monitoramento externo aprovado; política de alertas e implementação seguem pendentes.
-- **OPS-GHCR-VISIBILITY** [observed/present] — O package GHCR da API está publicamente legível; digest a4daf, config ba67, plataforma linux/amd64 e provenance da application revision 9402d067 foram revalidados sem autenticação.
+- **OPS-GHCR-VISIBILITY** [observed/present] — A imagem publicada para a application revision 0a56a8aee7c64bda59a1981888418e1ad03950c0 possui manifest digest b45425d7, config digest 1cd06152 e scan Trivy Critical aprovado; a publicação manual foi o run 32401997540.
 - **OPS-GHCR-PUBLIC-READ-OBSERVED** [observed/present] — O package GHCR da API aceitou leitura anônima no Gate 1; a transição futura para privado permanece separada.
-- **OPS-REAL-DATA** [documented/not-authorized] — Dados reais não estão autorizados.
-- **OPS-MVP08-API-RELEASE-BINDING** [documented/present] — O caminho normal de promoção e o manifesto do bundle selecionam exclusivamente a imagem a4daf em linux/amd64, com config ba67 e application revision 9402d067; a release-manifest revision é resolvida pelo containing commit corretivo.
-- **OPS-MVP08-API-ROLLBACK-BINDING** [documented/present] — A imagem 56ada permanece registrada como rollback anterior e recovery binding; validators rejeitam sua seleção pelo caminho normal de promoção.
-- **OPS-MVP08-WEB-INTEGRATED** [observed/present] — A revisão Web integrada, implantada e autoritativa para a 08 é b26f4079aa4da735faa881753f5351d377009dcc, tree a9d71a2e3b4054f6307a1f7d677f81ceaf874cde, resultado do squash do PR #15 após CI e verificação independentes.
+- **OPS-REAL-DATA** [observed/partial] — Existe uma identidade OWNER real e a organização Porto está ativa. A 10A criou zero Leads, Sessions e Refresh Tokens; nenhum Lead de negócio foi criado durante 10A ou 10B.
+- **OPS-MVP08-API-RELEASE-BINDING** [observed/present] — O binding runtime atual seleciona a imagem b45425d7, derivada da application revision 0a56a8ae. O API main f5a11c6 contém tooling de onboarding posterior e não é apresentada como origem da imagem implantada.
+- **OPS-MVP08-API-ROLLBACK-BINDING** [observed/present] — A imagem a4dafefa é o rollback atual da API para o deployment 09E; a imagem 56ada pertence ao histórico anterior e não é o rollback operacional vigente.
+- **OPS-MVP08-WEB-INTEGRATED** [observed/present] — A revisão Web integrada e live é 04515f8b17545947129466faab5d8140d1463f4f, squash do PR #16; b26f4079 permanece somente como revisão histórica anterior.
 - **OPS-MVP08-PREFLIGHT-BLOCKED** [observed/present] — Os gaps do preflight 08B foram fechados dentro dos Gates autorizados: bundle versionado, árvore atômica, Vercel Hobby, domínio, DNS, chave de origem, router protegido, smokes e rehearsal foram comprovados sem dados reais.
-- **OPS-MVP08-VPS-INTEGRITY-AUDIT** [observed/present] — remoteTreeBinding=REBIND_REQUIRED. No início deste closeout, a árvore remota estava íntegra e vinculada ao API main df7fca7392b90a788903797a2e30cb9f4b6cb05d, com fingerprints current 63312f7a848cd8646c9d7eefb965ba3f15e2cde6effdd0a7b5b3e62c26fb8d2e e rollback 2cdfb05a2392ab3527bb95f069e7fd70ae7db8403ea19824b62ee45b5583faf5. Como a memória faz parte da identidade containing-commit, o squash deste closeout exige rebind atômico pós-merge, sem alteração de bytes de runtime ou restart.
+- **OPS-MVP08-VPS-INTEGRITY-AUDIT** [observed/absent] — remoteTreeBinding=SUPERSEDED. Registro histórico: a auditoria MVP08 vinculava a árvore remota a df7fca7 e registrava REBIND_REQUIRED para aquele closeout. Não se infere nem se reconstrói um rebind. O deployment 09E posterior promoveu a imagem b45425d7, fonte 0a56a8a, preservou a4dafefa como rollback e observou API, PostgreSQL e Traefik saudáveis; esse é o estado runtime vigente.
 - **OPS-MVP08-RELEASE-TREE-CONTRACT** [documented/present] — O bundle v2 define onze diretórios, staging root-only, papéis current/rollback, quarentena e renameat2(RENAME_EXCHANGE). O rollback deriva do mesmo containing commit por duas substituições fechadas para a imagem previous-approved. O par exige papéis, imagens e fingerprints distintos, sourceCommit idêntico e todos os demais artefatos iguais; o contrato foi usado no rebuild atômico autorizado e permanece inalterado por esta reconciliação.
 - **OPS-MVP08-HUMAN-SECURITY** [documented/partial] — 2FA e recuperação foram confirmados para Vercel, GitHub e Bitwarden. O 2FA da Hostinger permanece pendente sob risco explicitamente aceito por Arthur; nenhuma nova operação Hostinger deve contornar reautenticação ou ampliar esse risco.
 - **OPS-MVP08-WEB-RUNTIME-INCIDENT** [observed/present] — O deployment B dpl_7rm5gaRDfvmVEDHjiJb9wFCF8jh9 foi rejeitado e não é elegível: o bundle Node 24 preservava o import ESM sem extensão ../src/server/api-proxy, causando ERR_MODULE_NOT_FOUND em /var/task. O PR #13 corrigiu o specifier para ../src/server/api-proxy.js e adicionou regressão sobre o artefato empacotado.
 - **OPS-MVP08-WEB-PREVIEW** [observed/present] — O único Preview autorizado dpl_8jxNbftLPyS3BJ9XtZwJ9A3mk36K, ligado ao commit 5c631fb8c577b0310668204b41f5ace61cfc5cdc, inicializou a Function sem erro de módulo, permaneceu fail-closed e não contatou upstream. Após aprovação técnica, foi excluído e seus aliases passaram a DEPLOYMENT_NOT_FOUND.
-- **OPS-MVP08-OPERATIONAL-ROLLBACK** [observed/present] — O rollback integral preservado é: remover o CNAME app para retornar a NODATA, promover A dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr, restaurar a imagem 56ada, router health-only, FRONTEND_URL=https://genesis.invalid e remover ou desativar a origin key. B4 dpl_9TsE7H1V7CSFuV4f5PYb5ckWswzi é o rollback Web fail-closed imediato.
+- **OPS-MVP08-OPERATIONAL-ROLLBACK** [observed/absent] — Registro histórico superseded: o plano integral MVP08 baseado na imagem 56ada e nos deployments dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr/B4 não é mais o rollback vigente. Após 09E e 10B, o rollback API preservado é a4dafefa e o rollback Web é dpl_AuunpMMmehaXdXFa5wu52DAMF99P; qualquer reversão futura exige autorização própria.
 - **OPS-MVP08-FINAL-ARCHITECTURE** [observed/present] — A arquitetura final é Browser → Vercel same-origin /api/v1 → api.agenciagenesismkt.com.br → Traefik com chave de origem → Nest → PostgreSQL privado. O navegador não usa a origem API diretamente e o acesso direto sem chave permanece 404.
-- **OPS-MVP08-VERCEL-DEPLOYMENTS** [observed/present] — C4R1 dpl_AuunpMMmehaXdXFa5wu52DAMF99P está Current e READY no commit b26f4079. B4 dpl_9TsE7H1V7CSFuV4f5PYb5ckWswzi, A dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr e o C4 funcionalmente rejeitado dpl_7qaTzkffYxSHdDoKtHkQtvjPNJxJ permanecem retidos. Auto-deploy Git está desativado e há zero bypass credentials.
+- **OPS-MVP08-VERCEL-DEPLOYMENTS** [observed/present] — O deployment Vercel live aprovado é dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z no commit 04515f8; dpl_AuunpMMmehaXdXFa5wu52DAMF99P é o rollback preservado. git.deploymentEnabled=false mantém merge e deployment separados.
 - **OPS-MVP08-DNS-TLS** [observed/present] — app.agenciagenesismkt.com.br usa CNAME 3271c7a0f81a40b0.vercel-dns-017.com com TTL 300, confirmado em dois autoritativos e quatro resolvedores públicos, sem A ou AAAA diretos. TLS possui CN/SAN exato, emissor Let's Encrypt YR2 e validade observada até 2026-11-12.
-- **OPS-MVP08-ORIGIN-TRUST** [observed/present] — A API a4daf está saudável, privada e sem porta pública, com FRONTEND_URL=https://app.agenciagenesismkt.com.br, router funcional protegido e web proxy attestation=true. A origin key existe somente por metadados root:root, modo 0600 e tamanho 64; seu valor nunca foi lido. Na Vercel ela é Sensitive e apenas Production; o target não secreto é https://api.agenciagenesismkt.com.br/.
+- **OPS-MVP08-ORIGIN-TRUST** [observed/present] — A API b45425d7 está saudável, privada e sem porta pública; o proxy same-origin e login funcionam no domínio final e a origem direta continua protegida. Nenhum segredo foi lido ou registrado nesta reconciliação.
 - **OPS-MVP08-WEB-CORRECTIONS** [observed/present] — As correções incorporadas cobrem import ESM empacotado, proveniência do rewrite real da Vercel e snapshot de configuração por invocation, com regressões locais, Preview diagnóstico e validação cloud antes do cutover. C2 e C3 foram aposentadas e não são credenciais ativas.
 - **OPS-MVP08-SYNTHETIC-VERIFICATION** [observed/present] — B4 respondeu 503 configuration_unavailable com zero upstream. C4R1 respondeu GET 200, HEAD 200 e OPTIONS 204 com no-store, CDN MISS, CORS da origem final, credentials true e cookie __Host-genesis_csrf Secure, host-only e Path=/; o acesso direto sem chave respondeu 404.
 - **OPS-MVP08-REHEARSAL-OBSERVATION** [observed/present] — O rehearsal C4R1 → B4 → C4R1 restaurou o mesmo deployment sem criar outro. Seis amostras sintéticas em aproximadamente cinco minutos aprovaram frontend, Function, health, DNS e bloqueio direto, com zero 5xx inesperado.
-- **OPS-MVP08-DATABASE-SCOPE** [observed/present] — PostgreSQL permaneceu saudável, privado e sem restart; nenhuma migration, alteração de banco, usuário real ou dado real foi executado. RHO permaneceu fora do escopo.
-- **OPS-MVP08-PLAN-BOUNDARY** [documented/present] — A Vercel permanece no plano Hobby exclusivamente para validação técnica não comercial do MVP. Usuários reais, dados reais e operação comercial não estão autorizados; plano, custos e compatibilidade contratual devem ser revistos antes da MVP-09 comercial ou de produção com usuários.
+- **OPS-MVP08-DATABASE-SCOPE** [observed/present] — O snapshot 08 não continha usuário real. A 10A posteriormente criou, por operação autorizada e transacional, a organização Porto e um OWNER real; nenhuma migration foi executada e nenhum Lead de negócio foi criado.
+- **OPS-MVP08-PLAN-BOUNDARY** [documented/partial] — A restrição histórica que proibia qualquer usuário real foi superada pela autorização e execução da 10A. A compatibilidade do plano Vercel para onboarding externo ou uso comercial ampliado permanece uma decisão específica pendente e não bloqueia o uso normal inicial pela organização Porto.
 - **OPS-MVP08-CLOSEOUT-FINDINGS** [observed/present] — O closeout operacional encerrou com findings Critical, High e Medium vazios. Deployments, branches, quarentenas, árvores de rollback e evidências foram preservados; eventual limpeza futura de deployments com snapshots de chaves aposentadas é opcional e não bloqueante.
+- **OPS-MVP09-API-DEPLOYMENT** [observed/present] — A 09E implantou e observou com resultado KEEP a imagem API b45425d7; a4dafefa foi preservada como rollback. API, PostgreSQL e Traefik terminaram saudáveis, sem migration posterior ao deployment.
+- **OPS-MVP09-FIXTURE-DEACTIVATED** [observed/present] — A fixture sintética reversível usada na validação foi encerrada em estado DEACTIVATED; Leads, Sessions e Refresh Tokens sintéticos ativos ficaram em zero, sem hard delete, migration ou alteração de dado real.
+- **OPS-MVP09-USABILITY-CLOSURE** [documented/present] — A 09I encerrou o MVP live validado com três gaps de usabilidade identificados; esses gaps foram posteriormente resolvidos e implantados pela 10B.
+- **OPS-MVP10A-OWNER-ONBOARDED** [observed/present] — A organização Porto está ativa com exatamente um OWNER real e ativo. A criação privada foi atômica, o login humano passou e nenhuma PII ou credencial da conta é registrada nesta memória.
+- **OPS-MVP10A-API-MAIN** [documented/present] — O API main f5a11c6ad5b6f4817198730b8311d27117ee01a7 contém o CLI privado de onboarding OWNER. Essa revisão de tooling não substitui a application revision 0a56a8ae da imagem API live.
+- **OPS-MVP10B-USABILITY-CORRECTIONS** [observed/present] — A 10B resolveu em produção o 404 da raiz com / para /app, tornou a etapa do Lead imediatamente persistida e confirmada pelo servidor com restauração em falha, e passou a hidratar o e-mail atual no editor por identidade do Lead.
+- **OPS-MVP09E-HELPER-PROVENANCE** [documented/partial] — O deployment 09E foi executado com script aprovado SHA-256 e99dee6fb4610f9ca470aca8e12f00c4076e60ea45de3f9fb7a4f762208b6db6, preservado na custódia externa 0.8-MVP-09E/deployment-execution. O artefato exato não está comprovadamente versionado na main; isso não afeta o runtime atual, mas exige reconciliar e versionar novamente o procedimento antes de qualquer futuro deployment API.
 
 ## Blockers abertos
 
@@ -87,22 +94,23 @@ C4R1 está Current e READY no commit Web b26f4079, servindo app.agenciagenesismk
 ## Decisões humanas pendentes
 
 - **HD-MONITORING** — Qual política de alertas, destinatários e escalonamento será aprovada para o UptimeRobot e os sinais internos?
-- **HD-REAL-DATA** — Quais primeiros usuários e dados reais poderão ser autorizados, e em qual momento?
-- **HD-MVP09-HOSTING-PLAN** — Antes da MVP-09 comercial ou de produção com usuários, o plano Hobby continua técnica e contratualmente compatível ou será necessário um novo Gate de plano, custo e pagamento?
+- **HD-EXTERNAL-ONBOARDING** — Qual política aprovará novos usuários externos e dados comerciais além do uso inicial da organização Porto?
+- **HD-COMMERCIAL-HOSTING-PLAN** — Antes de onboarding externo ou uso comercial ampliado, o plano Vercel atual continua técnica e contratualmente compatível?
 
 ## Release gates
 
 - **RG-TLS** [passed] — TLS, hostname, CNAME e o caminho funcional same-origin protegido foram comprovados no domínio final; o acesso direto à API sem a chave continua 404.
 - **RG-RECOVERY** [passed] — Backup recuperável e restore sintético devem passar antes de dados reais.
-- **RG-CROSS-TENANT** [pending] — Smoke funcional e teste adversarial cross-tenant devem passar antes dos primeiros usuários.
+- **RG-CROSS-TENANT** [pending] — A evidência atual não é suficiente para aprovar o gate adversarial cross-tenant. Ele permanece pendente para expansão de usuários e dados e não invalida o estado live atual com um OWNER efetivo.
 
 ## Restrições atuais
 
 - **OR-SINGLE-VPS** — A baseline documentada usa uma única VPS e um único failure domain.
 - **OR-SINGLE-REPLICA** — A API pública permanece limitada a uma réplica enquanto controles forem process-local.
-- **OR-NO-REAL-DATA** — Dados reais permanecem não autorizados.
+- **OR-NO-COMMERCIAL-LEADS-OBSERVED** — A 10A e a 10B não criaram Leads de negócio; o fato comprovado é a existência da organização Porto e de um OWNER real ativo, com uso normal inicial do CRM disponível.
 - **OR-POSTGRES-PRIVATE** — O PostgreSQL deve permanecer privado, sem binding de porta no host ou exposição direta à Internet.
 - **OR-FUNCTIONAL-API-ORIGIN-PROTECTED** — A API funcional é acessível somente pelo proxy same-origin /api/v1 do domínio final e pelo Traefik protegido; a origem direta sem chave permanece 404.
-- **OR-VERCEL-HOBBY-TECHNICAL-MVP** — A Vercel Hobby é usada somente para validação técnica não comercial, sem usuários ou dados reais e sem autorização de upgrade, trial ou pagamento.
-- **OR-MVP08-NO-PRODUCTION-MUTATION** — Após o closeout, C4R1, DNS, domínio, variáveis, chave, router, imagens, banco e release tree não podem ser alterados sem novo Gate humano da próxima missão.
+- **OR-VERCEL-HOBBY-TECHNICAL-MVP** — O frontend live e o OWNER real foram aprovados no plano Vercel atual; a adequação técnica e contratual para onboarding externo ou uso comercial ampliado permanece decisão específica pendente.
+- **OR-FUTURE-PRODUCTION-MUTATION** — Qualquer futura alteração de produção continua exigindo escopo, rollback e autorização humana explícitos; esta reconciliação documental não concede autorização operacional.
+- **OR-API-DEPLOYMENT-HELPER-PROVENANCE** — O script exato executado na 09E está preservado somente na custódia operacional externa e não está comprovadamente versionado na main atual.
 - **OR-RHO-OUT-OF-SCOPE** — RHO permanece fora do escopo desta release e não foi consultado ou alterado.

@@ -40,6 +40,7 @@ A memória oficial começa em [`docs/START_HERE.md`](docs/START_HERE.md). Consul
 também o [estado atual](docs/CURRENT_STATE.md), o [roadmap](docs/ROADMAP.md), a
 [arquitetura](docs/ARCHITECTURE.md), a
 [baseline operacional do MVP](docs/PRODUCTION.md), o
+[runbook privado de onboarding de OWNER](docs/PRODUCTION_OWNER_ONBOARDING.md), o
 [ADR-013](docs/decisions/ADR-013-mvp-production-baseline.md) e o
 [índice de ADRs](docs/decisions/README.md).
 
@@ -371,6 +372,12 @@ estado, identidade, tenant, chave ou token válido estruturalmente converge para
 
 ## Seed inicial
 
+O seed inicial é um mecanismo de desenvolvimento e bootstrap legado para a
+identidade fixa descrita abaixo. Ele permanece documentado porque o contrato
+técnico ainda é testado, mas não é o caminho normal para criar um OWNER em
+produção. Para uma criação produtiva autorizada, use exclusivamente o
+[CLI privado de onboarding](docs/PRODUCTION_OWNER_ONBOARDING.md).
+
 Após aplicar as migrations, execute manualmente. Na primeira execução, forneça a senha somente ao processo do seed, sem gravá-la no `.env` nem mantê-la no ambiente permanente da API:
 
 ```bash
@@ -387,7 +394,9 @@ O seed não executa durante a inicialização da API e é idempotente. Uma segun
 
 Se o usuário inicial ainda não possuir credencial, o seed também exige `INITIAL_OWNER_PASSWORD`, gera um hash Argon2id e registra apenas que a credencial foi criada. Se o hash já existir, ele não é substituído automaticamente e a variável deixa de ser obrigatória para essa execução.
 
-Nunca execute o seed em produção com senha padrão. Defina a senha inicial por um canal seguro, execute o seed, confirme o acesso e substitua a credencial conforme a política operacional da equipe.
+Não use o seed como procedimento normal de onboarding em produção e nunca o
+execute com senha padrão. Seu uso excepcional exige escopo e autorização
+operacional próprios.
 
 Quando a credencial inicial já existir, novas execuções idempotentes não exigem a variável e não substituem o hash existente:
 

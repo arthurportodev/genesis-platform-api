@@ -107,6 +107,12 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   validados contra placeholders conhecidos. `INITIAL_OWNER_PASSWORD` é
   opcional no runtime e usada somente pelo seed quando falta credencial; não
   deve permanecer no ambiente, ser logada ou versionada.
+- O onboarding produtivo de OWNER usa somente o CLI privado descrito em
+  [PRODUCTION_OWNER_ONBOARDING.md](PRODUCTION_OWNER_ONBOARDING.md): TTY
+  obrigatório, senha sem eco, autorização literal antes da conexão, role
+  operacional atestada e transação `SERIALIZABLE`. Senha, hash, e-mail, nome
+  pessoal, UUID, cookie e token não entram em argumento, log ou evidência
+  versionada.
 - O CI automático em `.github/workflows/ci.yml` é acionado por Pull Request,
   `push` na `main` e dispatch diagnóstico. Seus jobs `validate` e
   `build-and-scan` recebem somente `contents: read`. Eles executam contratos,
@@ -207,8 +213,9 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   `MANUAL_IMAGE_RELEASE_ENABLED=false` (ou remova a variável) no Environment;
   para suspensão mais forte, desabilite o workflow no GitHub. Preserve os
   required reviewers e as restrições do Environment. A revogação não exclui
-  imagens: o digest publicado deve ser preservado até a desativação da fixture,
-  e qualquer limpeza depende de Gate posterior.
+  imagens. A fixture 09 foi desativada; qualquer limpeza ou mudança de retenção
+  de digest continua dependendo de Gate posterior e da preservação do rollback
+  vigente registrado na memória canônica.
 
 <!-- genesis-memory-history:start -->
 

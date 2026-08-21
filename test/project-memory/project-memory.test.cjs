@@ -101,7 +101,7 @@ const POINTER_SCHEMA = {
         transitionId: { type: 'string' },
         targetStateRevision: { type: 'string' },
         baseSha: { type: 'string', pattern: '^[a-f0-9]{40}$' },
-        revisionSource: { const: 'containing-commit' },
+        revisionSource: { const: 'integrated-revision' },
         generatedAt: { type: 'string', format: 'date-time' },
       },
     },
@@ -175,7 +175,7 @@ test('accepts the complete API authority and generated projection', () => {
   assert.deepEqual(result.json, {
     ok: true,
     code: 'MEMORY_VALID',
-    stateRevision: 'GH-01-COMPLETE',
+    stateRevision: 'MVP-10B-LIVE-2026-08-21',
     schemaValidated: true,
     semanticRulesValidated: true,
     projectionCurrent: true,
@@ -304,10 +304,23 @@ test('rejects observedAt on documented or unknown facts', () => {
   );
 });
 
+test('requires the MVP08 remote tree binding to be explicitly superseded', () => {
+  const state = readJson(ROOT);
+  const fact = state.operationalState.facts.find(
+    (entry) => entry.id === 'OPS-MVP08-VPS-INTEGRITY-AUDIT',
+  );
+  fact.status = 'present';
+  fact.statement = 'remoteTreeBinding=REBIND_REQUIRED. Historical value.';
+  assert.throws(
+    () => validateState(state),
+    (error) => error.code === 'MEMORY_RELEASE_TREE_BINDING_INVALID',
+  );
+});
+
 test('binds application, containing release contracts, derived bundle, images and Web exactly', () => {
   const state = readJson(ROOT);
   assert.deepEqual(state.releaseBindings, {
-    apiApplicationRevision: '9402d067897ab727fb369d7e696a11ba3b9cf68f',
+    apiApplicationRevision: '0a56a8aee7c64bda59a1981888418e1ad03950c0',
     apiReleaseManifestRevision: { kind: 'containing-commit' },
     apiReleaseTreeContractRevision: { kind: 'containing-commit' },
     apiReleaseBundleFingerprint: {
@@ -323,11 +336,11 @@ test('binds application, containing release contracts, derived bundle, images an
       releaseRole: 'rollback',
     },
     authorizedApiImage:
-      'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a',
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb',
     authorizedApiImageConfigDigest:
-      'sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9',
+      'sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24',
     rollbackApiImage:
-      'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659',
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a',
     webIntegratedRevision: WEB_SHA,
   });
 
@@ -613,12 +626,12 @@ test('projection is derived only from the authority object', () => {
     new RegExp(state.nextTask.id.replaceAll('.', '\\.')),
   );
   assert.match(projection, /containing-commit/u);
-  assert.match(projection, /9402d067897ab727fb369d7e696a11ba3b9cf68f/u);
-  assert.match(projection, /sha256:a4dafefab191093/u);
-  assert.match(projection, /sha256:56ada3e6bea3/u);
+  assert.match(projection, /0a56a8aee7c64bda59a1981888418e1ad03950c0/u);
+  assert.match(projection, /sha256:b45425d7f6ea63/u);
+  assert.match(projection, /sha256:a4dafefab191/u);
 });
 
-test('cross-repo contract accepts the integrated Web origin/main revision', () => {
+test('cross-repo contract accepts the integrated Web live revision receipt', () => {
   const web = mkdtempSync(join(tmpdir(), 'genesis-web-pointer-'));
   FIXTURES.push(web);
   const pointerPath = target(web, 'docs/memory/project-state.pointer.v1.json');
@@ -642,17 +655,16 @@ test('cross-repo contract accepts the integrated Web origin/main revision', () =
         ],
       },
       receipt: {
-        transitionId: 'GH-01-CROSS-REPO',
-        targetStateRevision: 'GH-01-COMPLETE',
-        baseSha: '1c2ba2af9306f13b9995b48619f4aafb682385cf',
-        revisionSource: 'containing-commit',
+        transitionId: 'MVP-10C-CROSS-REPO',
+        targetStateRevision: 'MVP-10B-LIVE-2026-08-21',
+        baseSha: WEB_SHA,
+        revisionSource: 'integrated-revision',
         generatedAt: '2026-08-10T12:28:06.317Z',
       },
     },
     'docs/memory/project-state.pointer.v1.json',
   );
   const result = validateCrossRepo(readJson(ROOT), web, {
-    resolveCommit: () => WEB_SHA,
     pointerSchema: POINTER_SCHEMA,
   });
   assert.equal(result.commit, WEB_SHA);
@@ -676,10 +688,10 @@ test('cross-repo schema rejects extra temporal or secret-bearing pointer data', 
         resolutionOrder: ['explicit-checkout'],
       },
       receipt: {
-        transitionId: 'GH-01-CROSS-REPO',
-        targetStateRevision: 'GH-01-COMPLETE',
-        baseSha: '1c2ba2af9306f13b9995b48619f4aafb682385cf',
-        revisionSource: 'containing-commit',
+        transitionId: 'MVP-10C-CROSS-REPO',
+        targetStateRevision: 'MVP-10B-LIVE-2026-08-21',
+        baseSha: WEB_SHA,
+        revisionSource: 'integrated-revision',
         generatedAt: '2026-08-10T12:28:06.317Z',
       },
       [property]: property === 'phase' ? { id: 'forbidden' } : 'forbidden',
@@ -688,7 +700,6 @@ test('cross-repo schema rejects extra temporal or secret-bearing pointer data', 
     assert.throws(
       () =>
         validateCrossRepo(readJson(ROOT), web, {
-          resolveCommit: () => WEB_SHA,
           pointerSchema: POINTER_SCHEMA,
         }),
       (error) =>

@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
   "instanceKind": "current",
-  "stateRevision": "GH-01-COMPLETE",
+  "stateRevision": "MVP-10B-LIVE-2026-08-21",
   "project": {
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-15T11:45:00Z",
+  "updatedAt": "2026-08-21T20:32:57.3293060Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -30,12 +30,12 @@
       "status": "integrated",
       "memoryRevision": {
         "kind": "commit",
-        "sha": "b26f4079aa4da735faa881753f5351d377009dcc"
+        "sha": "04515f8b17545947129466faab5d8140d1463f4f"
       }
     }
   ],
   "releaseBindings": {
-    "apiApplicationRevision": "9402d067897ab727fb369d7e696a11ba3b9cf68f",
+    "apiApplicationRevision": "0a56a8aee7c64bda59a1981888418e1ad03950c0",
     "apiReleaseManifestRevision": {
       "kind": "containing-commit"
     },
@@ -54,38 +54,38 @@
       "artifact": "release-manifest.json",
       "releaseRole": "rollback"
     },
-    "authorizedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a",
-    "authorizedApiImageConfigDigest": "sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9",
-    "rollbackApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659",
-    "webIntegratedRevision": "b26f4079aa4da735faa881753f5351d377009dcc"
+    "authorizedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb",
+    "authorizedApiImageConfigDigest": "sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24",
+    "rollbackApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a",
+    "webIntegratedRevision": "04515f8b17545947129466faab5d8140d1463f4f"
   },
   "phase": {
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-08",
-      "title": "Vercel, proxy, domínio e integração frontend/backend",
-      "completedAt": "2026-08-15T11:45:00Z",
+      "id": "0.8-MVP-10B",
+      "title": "Correções de usabilidade do frontend em produção",
+      "completedAt": "2026-08-21T20:32:57.3293060Z",
       "evidenceIds": [
-        "EV-MVP08-WEB-FINAL-PR",
-        "EV-MVP08-WEB-FINAL-POSTMERGE-CI",
-        "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
+        "EV-MVP10B-WEB-PR16",
+        "EV-MVP10B-WEB-POSTMERGE-CI",
+        "EV-MVP10B-PRODUCTION-PROMOTION"
       ]
     }
   },
   "currentWork": {
     "status": "none",
-    "summary": "A missão 0.8-MVP-08 foi concluída tecnicamente sem usuários ou dados reais. C4R1 está Current e funcional no domínio final, a origem permanece protegida, o rollback está preservado e qualquer próxima missão depende de decisão humana explícita."
+    "summary": "Nenhum trabalho de engenharia está ativo. O MVP está disponível para uso normal inicial do CRM pela organização Porto; novas melhorias devem ser priorizadas por experiência real."
   },
   "nextTask": {
-    "id": "0.8-MVP-09-READINESS-DECISION",
-    "title": "Decisão humana sobre escopo, plano de hosting e autorização da próxima missão"
+    "id": "NORMAL-CRM-USE",
+    "title": "Uso normal do CRM e avaliações orientadas por experiência real"
   },
   "operationalState": {
-    "summary": "C4R1 está Current e READY no commit Web b26f4079, servindo app.agenciagenesismkt.com.br por CNAME e TLS válidos. O proxy same-origin /api/v1 alcança a API a4daf somente pelo Traefik protegido, com PostgreSQL privado e saudável. B4, A e a imagem 56ada permanecem como rollback; não houve migration, dado ou usuário real.",
+    "summary": "O MVP está live em app.agenciagenesismkt.com.br. O frontend 04515f8 está no deployment Vercel aprovado dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z; o proxy same-origin, login, API b45425d7, PostgreSQL e Traefik estão saudáveis. A organização Porto e exatamente um OWNER real estão ativos, sem registrar PII; a fixture sintética está DEACTIVATED e não há trabalho de engenharia ativo.",
     "basis": "observed",
-    "documentedAt": "2026-08-15T11:45:00Z",
-    "observedAt": "2026-08-15T11:45:00Z",
+    "documentedAt": "2026-08-21T20:32:57.3293060Z",
+    "observedAt": "2026-08-21T20:32:57.3293060Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -314,12 +314,15 @@
       },
       {
         "id": "OPS-VERCEL-LINK",
-        "status": "present",
-        "statement": "O projeto Vercel Hobby genesis-platform-web foi reconciliado em sessão autenticada: C4R1 está Current e READY, app.agenciagenesismkt.com.br possui configuração válida Production, auto-deploy Git está desativado e não há bypass credential de automação.",
+        "status": "absent",
+        "statement": "Registro histórico: C4R1 deixou de ser o deployment live e foi superseded pela promoção 10B dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z; dpl_AuunpMMmehaXdXFa5wu52DAMF99P é o rollback Web preservado. O controle durável git.deploymentEnabled=false permanece, sem inferir estado atual de C4R1.",
         "basis": "observed",
         "documentedAt": "2026-08-15T11:45:00Z",
         "observedAt": "2026-08-15T11:45:00Z",
-        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+        "evidenceIds": [
+          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT",
+          "EV-MVP10B-PRODUCTION-PROMOTION"
+        ]
       },
       {
         "id": "OPS-ACME-CONTACT",
@@ -378,11 +381,11 @@
       {
         "id": "OPS-GHCR-VISIBILITY",
         "status": "present",
-        "statement": "O package GHCR da API está publicamente legível; digest a4daf, config ba67, plataforma linux/amd64 e provenance da application revision 9402d067 foram revalidados sem autenticação.",
+        "statement": "A imagem publicada para a application revision 0a56a8aee7c64bda59a1981888418e1ad03950c0 possui manifest digest b45425d7, config digest 1cd06152 e scan Trivy Critical aprovado; a publicação manual foi o run 32401997540.",
         "basis": "observed",
-        "documentedAt": "2026-08-14T07:58:01.159Z",
-        "observedAt": "2026-08-14T07:58:01.159Z",
-        "evidenceIds": ["EV-MVP08-API-POSTMERGE-CI"]
+        "documentedAt": "2026-08-20T18:19:13.0958992Z",
+        "observedAt": "2026-08-20T18:19:13.0958992Z",
+        "evidenceIds": ["EV-MVP09D-RELEASE-RUN", "EV-MVP09D-RELEASE-MANIFEST"]
       },
       {
         "id": "OPS-GHCR-PUBLIC-READ-OBSERVED",
@@ -395,38 +398,42 @@
       },
       {
         "id": "OPS-REAL-DATA",
-        "status": "not-authorized",
-        "statement": "Dados reais não estão autorizados.",
-        "basis": "documented",
-        "documentedAt": "2026-08-11T16:50:44Z",
-        "evidenceIds": ["EV-API-ADR013-BASE"]
+        "status": "partial",
+        "statement": "Existe uma identidade OWNER real e a organização Porto está ativa. A 10A criou zero Leads, Sessions e Refresh Tokens; nenhum Lead de negócio foi criado durante 10A ou 10B.",
+        "basis": "observed",
+        "documentedAt": "2026-08-21T18:44:56.7357484Z",
+        "observedAt": "2026-08-21T18:44:56.7357484Z",
+        "evidenceIds": ["EV-MVP10A-OWNER-EVIDENCE"]
       },
       {
         "id": "OPS-MVP08-API-RELEASE-BINDING",
         "status": "present",
-        "statement": "O caminho normal de promoção e o manifesto do bundle selecionam exclusivamente a imagem a4daf em linux/amd64, com config ba67 e application revision 9402d067; a release-manifest revision é resolvida pelo containing commit corretivo.",
-        "basis": "documented",
-        "documentedAt": "2026-08-14T07:58:01.159Z",
-        "evidenceIds": ["EV-MVP08-R1-RELEASE-BINDING"]
+        "statement": "O binding runtime atual seleciona a imagem b45425d7, derivada da application revision 0a56a8ae. O API main f5a11c6 contém tooling de onboarding posterior e não é apresentada como origem da imagem implantada.",
+        "basis": "observed",
+        "documentedAt": "2026-08-21T04:10:42.7186699Z",
+        "observedAt": "2026-08-21T04:08:04.537544119Z",
+        "evidenceIds": ["EV-MVP09E-DEPLOYMENT-MANIFEST", "EV-MVP10A-API-PR61"]
       },
       {
         "id": "OPS-MVP08-API-ROLLBACK-BINDING",
         "status": "present",
-        "statement": "A imagem 56ada permanece registrada como rollback anterior e recovery binding; validators rejeitam sua seleção pelo caminho normal de promoção.",
-        "basis": "documented",
-        "documentedAt": "2026-08-14T07:58:01.159Z",
-        "evidenceIds": ["EV-MVP08-R1-RELEASE-BINDING"]
+        "statement": "A imagem a4dafefa é o rollback atual da API para o deployment 09E; a imagem 56ada pertence ao histórico anterior e não é o rollback operacional vigente.",
+        "basis": "observed",
+        "documentedAt": "2026-08-21T04:10:42.7186699Z",
+        "observedAt": "2026-08-21T04:08:04.537544119Z",
+        "evidenceIds": ["EV-MVP09E-DEPLOYMENT-MANIFEST"]
       },
       {
         "id": "OPS-MVP08-WEB-INTEGRATED",
         "status": "present",
-        "statement": "A revisão Web integrada, implantada e autoritativa para a 08 é b26f4079aa4da735faa881753f5351d377009dcc, tree a9d71a2e3b4054f6307a1f7d677f81ceaf874cde, resultado do squash do PR #15 após CI e verificação independentes.",
+        "statement": "A revisão Web integrada e live é 04515f8b17545947129466faab5d8140d1463f4f, squash do PR #16; b26f4079 permanece somente como revisão histórica anterior.",
         "basis": "observed",
-        "documentedAt": "2026-08-15T11:45:00Z",
-        "observedAt": "2026-08-15T11:45:00Z",
+        "documentedAt": "2026-08-21T20:32:57.3293060Z",
+        "observedAt": "2026-08-21T20:32:57.3293060Z",
         "evidenceIds": [
-          "EV-MVP08-WEB-FINAL-PR",
-          "EV-MVP08-WEB-FINAL-POSTMERGE-CI"
+          "EV-MVP10B-WEB-PR16",
+          "EV-MVP10B-WEB-POSTMERGE-CI",
+          "EV-MVP10B-PRODUCTION-PROMOTION"
         ]
       },
       {
@@ -443,14 +450,15 @@
       },
       {
         "id": "OPS-MVP08-VPS-INTEGRITY-AUDIT",
-        "status": "present",
-        "statement": "remoteTreeBinding=REBIND_REQUIRED. No início deste closeout, a árvore remota estava íntegra e vinculada ao API main df7fca7392b90a788903797a2e30cb9f4b6cb05d, com fingerprints current 63312f7a848cd8646c9d7eefb965ba3f15e2cde6effdd0a7b5b3e62c26fb8d2e e rollback 2cdfb05a2392ab3527bb95f069e7fd70ae7db8403ea19824b62ee45b5583faf5. Como a memória faz parte da identidade containing-commit, o squash deste closeout exige rebind atômico pós-merge, sem alteração de bytes de runtime ou restart.",
+        "status": "absent",
+        "statement": "remoteTreeBinding=SUPERSEDED. Registro histórico: a auditoria MVP08 vinculava a árvore remota a df7fca7 e registrava REBIND_REQUIRED para aquele closeout. Não se infere nem se reconstrói um rebind. O deployment 09E posterior promoveu a imagem b45425d7, fonte 0a56a8a, preservou a4dafefa como rollback e observou API, PostgreSQL e Traefik saudáveis; esse é o estado runtime vigente.",
         "basis": "observed",
         "documentedAt": "2026-08-15T11:45:00Z",
         "observedAt": "2026-08-15T11:45:00Z",
         "evidenceIds": [
           "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
-          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
+          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT",
+          "EV-MVP09E-DEPLOYMENT-MANIFEST"
         ]
       },
       {
@@ -489,14 +497,16 @@
       },
       {
         "id": "OPS-MVP08-OPERATIONAL-ROLLBACK",
-        "status": "present",
-        "statement": "O rollback integral preservado é: remover o CNAME app para retornar a NODATA, promover A dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr, restaurar a imagem 56ada, router health-only, FRONTEND_URL=https://genesis.invalid e remover ou desativar a origin key. B4 dpl_9TsE7H1V7CSFuV4f5PYb5ckWswzi é o rollback Web fail-closed imediato.",
+        "status": "absent",
+        "statement": "Registro histórico superseded: o plano integral MVP08 baseado na imagem 56ada e nos deployments dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr/B4 não é mais o rollback vigente. Após 09E e 10B, o rollback API preservado é a4dafefa e o rollback Web é dpl_AuunpMMmehaXdXFa5wu52DAMF99P; qualquer reversão futura exige autorização própria.",
         "basis": "observed",
         "documentedAt": "2026-08-15T11:45:00Z",
         "observedAt": "2026-08-15T11:45:00Z",
         "evidenceIds": [
           "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
-          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
+          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT",
+          "EV-MVP09E-DEPLOYMENT-MANIFEST",
+          "EV-MVP10B-PRODUCTION-PROMOTION"
         ]
       },
       {
@@ -511,11 +521,11 @@
       {
         "id": "OPS-MVP08-VERCEL-DEPLOYMENTS",
         "status": "present",
-        "statement": "C4R1 dpl_AuunpMMmehaXdXFa5wu52DAMF99P está Current e READY no commit b26f4079. B4 dpl_9TsE7H1V7CSFuV4f5PYb5ckWswzi, A dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr e o C4 funcionalmente rejeitado dpl_7qaTzkffYxSHdDoKtHkQtvjPNJxJ permanecem retidos. Auto-deploy Git está desativado e há zero bypass credentials.",
+        "statement": "O deployment Vercel live aprovado é dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z no commit 04515f8; dpl_AuunpMMmehaXdXFa5wu52DAMF99P é o rollback preservado. git.deploymentEnabled=false mantém merge e deployment separados.",
         "basis": "observed",
-        "documentedAt": "2026-08-15T11:45:00Z",
-        "observedAt": "2026-08-15T11:45:00Z",
-        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+        "documentedAt": "2026-08-21T20:32:57.3293060Z",
+        "observedAt": "2026-08-21T20:32:57.3293060Z",
+        "evidenceIds": ["EV-MVP10B-PRODUCTION-PROMOTION"]
       },
       {
         "id": "OPS-MVP08-DNS-TLS",
@@ -529,11 +539,14 @@
       {
         "id": "OPS-MVP08-ORIGIN-TRUST",
         "status": "present",
-        "statement": "A API a4daf está saudável, privada e sem porta pública, com FRONTEND_URL=https://app.agenciagenesismkt.com.br, router funcional protegido e web proxy attestation=true. A origin key existe somente por metadados root:root, modo 0600 e tamanho 64; seu valor nunca foi lido. Na Vercel ela é Sensitive e apenas Production; o target não secreto é https://api.agenciagenesismkt.com.br/.",
+        "statement": "A API b45425d7 está saudável, privada e sem porta pública; o proxy same-origin e login funcionam no domínio final e a origem direta continua protegida. Nenhum segredo foi lido ou registrado nesta reconciliação.",
         "basis": "observed",
-        "documentedAt": "2026-08-15T11:45:00Z",
-        "observedAt": "2026-08-15T11:45:00Z",
-        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+        "documentedAt": "2026-08-21T20:32:57.3293060Z",
+        "observedAt": "2026-08-21T20:32:57.3293060Z",
+        "evidenceIds": [
+          "EV-MVP09E-DEPLOYMENT-MANIFEST",
+          "EV-MVP10B-PRODUCTION-PROMOTION"
+        ]
       },
       {
         "id": "OPS-MVP08-WEB-CORRECTIONS",
@@ -569,19 +582,26 @@
       {
         "id": "OPS-MVP08-DATABASE-SCOPE",
         "status": "present",
-        "statement": "PostgreSQL permaneceu saudável, privado e sem restart; nenhuma migration, alteração de banco, usuário real ou dado real foi executado. RHO permaneceu fora do escopo.",
+        "statement": "O snapshot 08 não continha usuário real. A 10A posteriormente criou, por operação autorizada e transacional, a organização Porto e um OWNER real; nenhuma migration foi executada e nenhum Lead de negócio foi criado.",
         "basis": "observed",
-        "documentedAt": "2026-08-15T11:45:00Z",
-        "observedAt": "2026-08-15T11:45:00Z",
-        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+        "documentedAt": "2026-08-21T18:44:56.7357484Z",
+        "observedAt": "2026-08-21T18:44:56.7357484Z",
+        "evidenceIds": [
+          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT",
+          "EV-MVP10A-OWNER-EVIDENCE"
+        ]
       },
       {
         "id": "OPS-MVP08-PLAN-BOUNDARY",
-        "status": "present",
-        "statement": "A Vercel permanece no plano Hobby exclusivamente para validação técnica não comercial do MVP. Usuários reais, dados reais e operação comercial não estão autorizados; plano, custos e compatibilidade contratual devem ser revistos antes da MVP-09 comercial ou de produção com usuários.",
+        "status": "partial",
+        "statement": "A restrição histórica que proibia qualquer usuário real foi superada pela autorização e execução da 10A. A compatibilidade do plano Vercel para onboarding externo ou uso comercial ampliado permanece uma decisão específica pendente e não bloqueia o uso normal inicial pela organização Porto.",
         "basis": "documented",
-        "documentedAt": "2026-08-15T11:45:00Z",
-        "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+        "documentedAt": "2026-08-21T20:32:57.3293060Z",
+        "evidenceIds": [
+          "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT",
+          "EV-MVP10A-OWNER-EVIDENCE",
+          "EV-MVP10B-PRODUCTION-PROMOTION"
+        ]
       },
       {
         "id": "OPS-MVP08-CLOSEOUT-FINDINGS",
@@ -591,6 +611,76 @@
         "documentedAt": "2026-08-15T11:45:00Z",
         "observedAt": "2026-08-15T11:45:00Z",
         "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+      },
+      {
+        "id": "OPS-MVP09-API-DEPLOYMENT",
+        "status": "present",
+        "statement": "A 09E implantou e observou com resultado KEEP a imagem API b45425d7; a4dafefa foi preservada como rollback. API, PostgreSQL e Traefik terminaram saudáveis, sem migration posterior ao deployment.",
+        "basis": "observed",
+        "documentedAt": "2026-08-21T04:10:42.7186699Z",
+        "observedAt": "2026-08-21T04:08:04.537544119Z",
+        "evidenceIds": ["EV-MVP09E-DEPLOYMENT-MANIFEST"]
+      },
+      {
+        "id": "OPS-MVP09-FIXTURE-DEACTIVATED",
+        "status": "present",
+        "statement": "A fixture sintética reversível usada na validação foi encerrada em estado DEACTIVATED; Leads, Sessions e Refresh Tokens sintéticos ativos ficaram em zero, sem hard delete, migration ou alteração de dado real.",
+        "basis": "observed",
+        "documentedAt": "2026-08-21T12:29:49.6535582Z",
+        "observedAt": "2026-08-21T12:22:26.378Z",
+        "evidenceIds": ["EV-MVP09H-FIXTURE-FINAL", "EV-MVP09H-EVIDENCE-PACKAGE"]
+      },
+      {
+        "id": "OPS-MVP09-USABILITY-CLOSURE",
+        "status": "present",
+        "statement": "A 09I encerrou o MVP live validado com três gaps de usabilidade identificados; esses gaps foram posteriormente resolvidos e implantados pela 10B.",
+        "basis": "documented",
+        "documentedAt": "2026-08-21T15:25:59.8709467Z",
+        "evidenceIds": [
+          "EV-MVP09I-CLOSURE-MANIFEST",
+          "EV-MVP10B-PRODUCTION-PROMOTION"
+        ]
+      },
+      {
+        "id": "OPS-MVP10A-OWNER-ONBOARDED",
+        "status": "present",
+        "statement": "A organização Porto está ativa com exatamente um OWNER real e ativo. A criação privada foi atômica, o login humano passou e nenhuma PII ou credencial da conta é registrada nesta memória.",
+        "basis": "observed",
+        "documentedAt": "2026-08-21T18:44:56.7357484Z",
+        "observedAt": "2026-08-21T18:44:56.7357484Z",
+        "evidenceIds": ["EV-MVP10A-API-PR61", "EV-MVP10A-OWNER-EVIDENCE"]
+      },
+      {
+        "id": "OPS-MVP10A-API-MAIN",
+        "status": "present",
+        "statement": "O API main f5a11c6ad5b6f4817198730b8311d27117ee01a7 contém o CLI privado de onboarding OWNER. Essa revisão de tooling não substitui a application revision 0a56a8ae da imagem API live.",
+        "basis": "documented",
+        "documentedAt": "2026-08-21T18:04:17Z",
+        "evidenceIds": ["EV-MVP10A-API-PR61"]
+      },
+      {
+        "id": "OPS-MVP10B-USABILITY-CORRECTIONS",
+        "status": "present",
+        "statement": "A 10B resolveu em produção o 404 da raiz com / para /app, tornou a etapa do Lead imediatamente persistida e confirmada pelo servidor com restauração em falha, e passou a hidratar o e-mail atual no editor por identidade do Lead.",
+        "basis": "observed",
+        "documentedAt": "2026-08-21T20:32:57.3293060Z",
+        "observedAt": "2026-08-21T20:32:57.3293060Z",
+        "evidenceIds": [
+          "EV-MVP10B-WEB-PR16",
+          "EV-MVP10B-WEB-POSTMERGE-CI",
+          "EV-MVP10B-PRODUCTION-PROMOTION"
+        ]
+      },
+      {
+        "id": "OPS-MVP09E-HELPER-PROVENANCE",
+        "status": "partial",
+        "statement": "O deployment 09E foi executado com script aprovado SHA-256 e99dee6fb4610f9ca470aca8e12f00c4076e60ea45de3f9fb7a4f762208b6db6, preservado na custódia externa 0.8-MVP-09E/deployment-execution. O artefato exato não está comprovadamente versionado na main; isso não afeta o runtime atual, mas exige reconciliar e versionar novamente o procedimento antes de qualquer futuro deployment API.",
+        "basis": "documented",
+        "documentedAt": "2026-08-21T04:10:42.7186699Z",
+        "evidenceIds": [
+          "EV-MVP09E-EXECUTED-SCRIPT",
+          "EV-MVP09E-DEPLOYMENT-MANIFEST"
+        ]
       }
     ]
   },
@@ -762,6 +852,86 @@
       "kind": "artifact",
       "uri": "artifact://genesis-platform/0.8-MVP-08/C4R1-operational-closeout",
       "capturedAt": "2026-08-15T11:45:00Z"
+    },
+    {
+      "id": "EV-MVP09D-RELEASE-RUN",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/actions/runs/32401997540",
+      "capturedAt": "2026-08-20T18:19:13.0958992Z"
+    },
+    {
+      "id": "EV-MVP09D-RELEASE-MANIFEST",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-09D/attempt-7/manifest.json",
+      "sha256": "b492851312b3fb5e51542c4757b4da9835d9cf124c2f1ef21bd04c1dec2f580a",
+      "capturedAt": "2026-08-20T18:19:13.0958992Z"
+    },
+    {
+      "id": "EV-MVP09E-EXECUTED-SCRIPT",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-09E/deployment-execution/deploy-api-digest.sh",
+      "sha256": "e99dee6fb4610f9ca470aca8e12f00c4076e60ea45de3f9fb7a4f762208b6db6",
+      "capturedAt": "2026-08-21T04:10:42.7186699Z"
+    },
+    {
+      "id": "EV-MVP09E-DEPLOYMENT-MANIFEST",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-09E/deployment-execution/manifest.json",
+      "sha256": "035ce98be31cd870162104748bf1178e7c1bdc4ccf18603ed52494751f41bb33",
+      "capturedAt": "2026-08-21T04:10:42.7186699Z"
+    },
+    {
+      "id": "EV-MVP09H-FIXTURE-FINAL",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-09H/fixture-manifest-final.json",
+      "sha256": "2504986f63a348fd560843173fbb6d0935d55a24a31de5e5c42739426c977680",
+      "capturedAt": "2026-08-21T12:29:49.6535582Z"
+    },
+    {
+      "id": "EV-MVP09H-EVIDENCE-PACKAGE",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-09H/evidence-package",
+      "sha256": "dbc8185512793d8fbaa192612ee8488157f8495f77e5ae7862faebb6ef941ae5",
+      "capturedAt": "2026-08-21T12:29:49.6535582Z"
+    },
+    {
+      "id": "EV-MVP09I-CLOSURE-MANIFEST",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-09I/manifest.json",
+      "sha256": "b0e7f78b13f0283dfe1005883a22527f31d4e0aed44c036d71229403a3d56c26",
+      "capturedAt": "2026-08-21T15:25:59.8709467Z"
+    },
+    {
+      "id": "EV-MVP10A-API-PR61",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/pull/61",
+      "capturedAt": "2026-08-21T18:04:17Z"
+    },
+    {
+      "id": "EV-MVP10A-OWNER-EVIDENCE",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-10A/manifest.json",
+      "sha256": "48804774393a6eceeb454b57219e00b3ec75d37911c05030f9a622f60912d725",
+      "capturedAt": "2026-08-21T18:44:56.7357484Z"
+    },
+    {
+      "id": "EV-MVP10B-WEB-PR16",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/16",
+      "capturedAt": "2026-08-21T20:01:36Z"
+    },
+    {
+      "id": "EV-MVP10B-WEB-POSTMERGE-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/actions/runs/32521468321",
+      "capturedAt": "2026-08-21T20:30:56.3391483Z"
+    },
+    {
+      "id": "EV-MVP10B-PRODUCTION-PROMOTION",
+      "kind": "artifact",
+      "uri": "artifact://genesis-platform/0.8-MVP-10B/03-exceptional-promotion.json",
+      "sha256": "c758288a3518cdbc369c5eb2a6d53638d8a54872e398bdfd2efeceeb12581859",
+      "capturedAt": "2026-08-21T20:32:57.3293060Z"
     }
   ],
   "blockers": [
@@ -775,7 +945,7 @@
     {
       "id": "BLOCK-WEB-VERCEL-FUNCTIONAL",
       "status": "resolved",
-      "summary": "C4R1 está Current e READY no domínio final, com variáveis Production corretas, zero bypass, smokes sintéticos aprovados e rollback B4/A preservado.",
+      "summary": "Histórico resolvido e superseded: C4R1/B4 não são mais o par live/rollback. A produção Web 10B usa dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z, com dpl_AuunpMMmehaXdXFa5wu52DAMF99P preservado para rollback.",
       "owner": "arthur",
       "blocksTaskIds": []
     },
@@ -789,14 +959,14 @@
     {
       "id": "BLOCK-API-RELEASE-BINDING",
       "status": "resolved",
-      "summary": "O binding versionado foi corrigido: promoção usa a4daf e 56ada permanece somente como rollback/recovery anterior.",
+      "summary": "O deployment 09E promoveu b45425d7 e preservou a4dafefa como rollback; a lacuna de versionamento do helper é restrição para um deployment futuro, não blocker do runtime atual.",
       "owner": "agent",
       "blocksTaskIds": []
     },
     {
       "id": "BLOCK-VPS-RELEASE-TREE-INTEGRITY",
       "status": "resolved",
-      "summary": "A árvore ativa e o rollback estão íntegros e vinculados ao containing commit df7fca7; o rebind mecânico decorrente do squash deste closeout está autorizado e deve concluir sem alteração de runtime ou restart.",
+      "summary": "Histórico resolvido e superseded: o requisito de rebind associado a df7fca7 pertencia ao closeout MVP08. Sem afirmar rebind posterior, a evidência 09E estabelece o runtime b45425d7, fonte 0a56a8a, rollback a4dafefa e serviços saudáveis; o helper exato continua sujeito à restrição de proveniência para qualquer deployment futuro.",
       "owner": "agent",
       "blocksTaskIds": []
     }
@@ -806,19 +976,19 @@
       "id": "HD-MONITORING",
       "question": "Qual política de alertas, destinatários e escalonamento será aprovada para o UptimeRobot e os sinais internos?",
       "whyMaterial": "A abertura controlada exige detecção e resposta operacional.",
-      "blockingTaskIds": ["0.8-MVP-07", "0.8-MVP-09"]
+      "blockingTaskIds": ["FUTURE-MONITORING-IMPROVEMENT"]
     },
     {
-      "id": "HD-REAL-DATA",
-      "question": "Quais primeiros usuários e dados reais poderão ser autorizados, e em qual momento?",
-      "whyMaterial": "Dados reais exigem release gates e autorização humana específica.",
-      "blockingTaskIds": ["0.8-MVP-09"]
+      "id": "HD-EXTERNAL-ONBOARDING",
+      "question": "Qual política aprovará novos usuários externos e dados comerciais além do uso inicial da organização Porto?",
+      "whyMaterial": "A 10A autorizou uma identidade OWNER específica; onboarding externo e expansão comercial ainda exigem priorização e critérios próprios.",
+      "blockingTaskIds": ["FUTURE-EXTERNAL-ONBOARDING"]
     },
     {
-      "id": "HD-MVP09-HOSTING-PLAN",
-      "question": "Antes da MVP-09 comercial ou de produção com usuários, o plano Hobby continua técnica e contratualmente compatível ou será necessário um novo Gate de plano, custo e pagamento?",
-      "whyMaterial": "A validação atual é estritamente técnica e não comercial; nenhuma autorização de upgrade, pagamento, usuário ou dado real foi concedida.",
-      "blockingTaskIds": ["0.8-MVP-09"]
+      "id": "HD-COMMERCIAL-HOSTING-PLAN",
+      "question": "Antes de onboarding externo ou uso comercial ampliado, o plano Vercel atual continua técnica e contratualmente compatível?",
+      "whyMaterial": "O MVP live e o OWNER real não comprovam, por si, adequação de plano, custo ou termos para expansão comercial.",
+      "blockingTaskIds": ["FUTURE-EXTERNAL-ONBOARDING"]
     }
   ],
   "supersededPlans": [
@@ -870,7 +1040,7 @@
     },
     {
       "id": "RG-CROSS-TENANT",
-      "statement": "Smoke funcional e teste adversarial cross-tenant devem passar antes dos primeiros usuários.",
+      "statement": "A evidência atual não é suficiente para aprovar o gate adversarial cross-tenant. Ele permanece pendente para expansão de usuários e dados e não invalida o estado live atual com um OWNER efetivo.",
       "status": "pending",
       "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE"]
     }
@@ -889,10 +1059,13 @@
       "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
     },
     {
-      "id": "OR-NO-REAL-DATA",
-      "statement": "Dados reais permanecem não autorizados.",
-      "reviewTrigger": "Reavaliar somente após release gates e decisão humana explícita.",
-      "sourceEvidenceIds": ["EV-API-ADR013-BASE"]
+      "id": "OR-NO-COMMERCIAL-LEADS-OBSERVED",
+      "statement": "A 10A e a 10B não criaram Leads de negócio; o fato comprovado é a existência da organização Porto e de um OWNER real ativo, com uso normal inicial do CRM disponível.",
+      "reviewTrigger": "Reavaliar quando o uso real criar os primeiros Leads ou quando houver onboarding externo.",
+      "sourceEvidenceIds": [
+        "EV-MVP10A-OWNER-EVIDENCE",
+        "EV-MVP10B-PRODUCTION-PROMOTION"
+      ]
     },
     {
       "id": "OR-POSTGRES-PRIVATE",
@@ -915,17 +1088,31 @@
     },
     {
       "id": "OR-VERCEL-HOBBY-TECHNICAL-MVP",
-      "statement": "A Vercel Hobby é usada somente para validação técnica não comercial, sem usuários ou dados reais e sem autorização de upgrade, trial ou pagamento.",
-      "reviewTrigger": "Revisar plano, termos, custo e compatibilidade antes da MVP-09 comercial ou de produção com usuários.",
-      "sourceEvidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
+      "statement": "O frontend live e o OWNER real foram aprovados no plano Vercel atual; a adequação técnica e contratual para onboarding externo ou uso comercial ampliado permanece decisão específica pendente.",
+      "reviewTrigger": "Revisar plano, termos, custo e compatibilidade antes de expandir usuários externos ou operação comercial.",
+      "sourceEvidenceIds": [
+        "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT",
+        "EV-MVP10A-OWNER-EVIDENCE",
+        "EV-MVP10B-PRODUCTION-PROMOTION"
+      ]
     },
     {
-      "id": "OR-MVP08-NO-PRODUCTION-MUTATION",
-      "statement": "Após o closeout, C4R1, DNS, domínio, variáveis, chave, router, imagens, banco e release tree não podem ser alterados sem novo Gate humano da próxima missão.",
-      "reviewTrigger": "Qualquer mudança posterior de produção exige escopo, rollback e autorização explícitos; não iniciar MVP-09 automaticamente.",
+      "id": "OR-FUTURE-PRODUCTION-MUTATION",
+      "statement": "Qualquer futura alteração de produção continua exigindo escopo, rollback e autorização humana explícitos; esta reconciliação documental não concede autorização operacional.",
+      "reviewTrigger": "Interromper antes de merge com efeito operacional, deployment, release, migration ou mutação de produção sem Gate próprio.",
       "sourceEvidenceIds": [
         "EV-MVP08-R2-RELEASE-TREE-CONTRACT",
-        "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"
+        "EV-MVP09E-DEPLOYMENT-MANIFEST",
+        "EV-MVP10B-PRODUCTION-PROMOTION"
+      ]
+    },
+    {
+      "id": "OR-API-DEPLOYMENT-HELPER-PROVENANCE",
+      "statement": "O script exato executado na 09E está preservado somente na custódia operacional externa e não está comprovadamente versionado na main atual.",
+      "reviewTrigger": "Antes de qualquer futuro deployment da API, reconciliar, revisar e versionar novamente o procedimento; não inferir o artefato a partir da branch local 09E.",
+      "sourceEvidenceIds": [
+        "EV-MVP09E-EXECUTED-SCRIPT",
+        "EV-MVP09E-DEPLOYMENT-MANIFEST"
       ]
     },
     {
@@ -940,7 +1127,7 @@
     "path": "docs/memory/project-state.pointer.v1.json",
     "schemaVersion": "1.0.0",
     "mode": "pointer-only",
-    "transitionId": "GH-01-CROSS-REPO",
-    "targetStateRevision": "GH-01-COMPLETE"
+    "transitionId": "MVP-10C-CROSS-REPO",
+    "targetStateRevision": "MVP-10B-LIVE-2026-08-21"
   }
 }

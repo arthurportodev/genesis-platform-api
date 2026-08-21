@@ -860,3 +860,72 @@ ao validator e, em Linux, ao manager; o candidato e seus fingerprints anteriores
 foram invalidados. A comparação do par também exige o mesmo `sourceCommit` e
 igualdade integral dos demais artefatos; drift não-Compose é rejeitado mesmo
 quando o manifesto divergente se auto-recalcula de forma consistente.
+
+## 0.8-MVP-09A — Fixture sintética reversível
+
+Em 15 de agosto de 2026, o PR #54 incorporou no commit
+`442cbd297cdd7166af091f56e892850029b4ad47` um CLI privado e transacional para
+criar, consultar e desativar uma fixture sintética identificada por manifesto.
+O mecanismo usa escopo explícito, evita hard delete e não adiciona rota pública
+ou migration. A execução real permaneceu condicionada a autorização posterior.
+
+## 0.8-MVP-09C/09D — Controle manual e publicação da imagem
+
+O PR #55 (`0a56a8aee7c64bda59a1981888418e1ad03950c0`) separou CI de publicação e passou
+a exigir dispatch manual, SHA completo e aprovação do Environment. Os PRs
+#56–#59 endureceram o lookup do tag e o vínculo do workflow; a publicação final
+única foi o run `32401997540` e produziu
+`sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb`.
+Manifesto e pacote sanitizados possuem, respectivamente, SHA-256
+`b492851312b3fb5e51542c4757b4da9835d9cf124c2f1ef21bd04c1dec2f580a` e
+`5c26b43099f44aa04ef22e5edd7ddf689d5967feb2eb4286fd6761bbb01fec43`.
+
+## 0.8-MVP-09E — Deployment observado da API
+
+Em 21 de agosto de 2026, a imagem `b45425d7…` foi promovida com KEEP e
+`a4dafefa…` foi preservada como rollback. API, PostgreSQL e Traefik terminaram
+saudáveis; nenhuma migration foi executada. O resultado foi
+`TASK_09E_DEPLOYED_AND_OBSERVED`.
+
+O script executado possui SHA-256
+`e99dee6fb4610f9ca470aca8e12f00c4076e60ea45de3f9fb7a4f762208b6db6`; o
+manifesto e o pacote possuem SHA-256
+`035ce98be31cd870162104748bf1178e7c1bdc4ccf18603ed52494751f41bb33` e
+`2cbc48f6454e20ee0042aeda194c250d90665952b2458ac896075174201cc683`.
+O artefato exato está em custódia operacional externa, não está
+comprovadamente versionado na `main` e não deve ser reconstruído a partir da
+branch local 09E. Um futuro deployment exige reconciliar e versionar novamente
+o procedimento.
+
+## 0.8-MVP-09F–09I — Ativação, usabilidade, desativação e closure
+
+A fixture foi ativada de forma controlada, usada em uma sessão de usabilidade
+com dados exclusivamente sintéticos e reconciliada antes da desativação. A 09H
+encerrou em `DEACTIVATED`, com zero Leads, Sessions e Refresh Tokens sintéticos
+ativos, sem hard delete, migration ou alteração de dado real. O manifesto final
+e o pacote possuem SHA-256
+`2504986f63a348fd560843173fbb6d0935d55a24a31de5e5c42739426c977680` e
+`dbc8185512793d8fbaa192612ee8488157f8495f77e5ae7862faebb6ef941ae5`.
+
+A 09I encerrou com
+`TASK_09I_CLOSED_MVP_LIVE_WITH_USABILITY_GAPS` e veredito
+`MVP_LIVE_VALIDATED_WITH_USABILITY_GAPS`. Manifesto e pacote possuem SHA-256
+`b0e7f78b13f0283dfe1005883a22527f31d4e0aed44c036d71229403a3d56c26` e
+`9edb9b350db89f1c1ba8e06eaff9df1a28ea38bed8679d253c84ef5f85f95fe5`.
+Os três gaps observados foram resolvidos posteriormente pela 10B no Web.
+
+## 0.8-MVP-10A — Onboarding privado de OWNER
+
+Em 21 de agosto de 2026, o PR #61 incorporou no squash
+`f5a11c6ad5b6f4817198730b8311d27117ee01a7` o CLI privado
+`npm run operator:owner -- create/status`. Ele exige TTY, senha mascarada,
+autorização literal, role operacional atestada, prevenção de conflito e
+transação `SERIALIZABLE`; não adiciona endpoint, migration, Lead, Session ou
+Refresh Token.
+
+Uma operação humana autorizada criou a organização Porto e exatamente um OWNER
+real ativo; o status e o login humano passaram. Nenhuma PII, credencial, cookie
+ou token é preservado neste histórico. O resultado foi
+`TASK_10A_PRODUCTION_OWNER_ONBOARDED`; manifesto e pacote sanitizados possuem
+SHA-256 `48804774393a6eceeb454b57219e00b3ec75d37911c05030f9a622f60912d725` e
+`232455043b866a14ff45c463db2e484a6c413a7e23ed2b394450ca2283995192`.
