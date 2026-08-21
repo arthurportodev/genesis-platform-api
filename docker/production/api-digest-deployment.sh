@@ -28,8 +28,10 @@ docker_config_device_inode=''
 cleanup_effective=0
 cleanup_marker=''
 raw_evidence_dir=''
+cookie_jar=''
 deploymentStartedAt=''
 observationEndedAt=''
+last_sanitized_log=''
 target_mutated=0
 keep_committed=0
 rollback_complete=0
@@ -39,6 +41,10 @@ traefik_id_before=''
 rollback_in_progress=0
 rollback_baseline_relative=''
 rollback_baseline_image=''
+previous_http5xx_total=0
+http5xx_breach_streak=0
+latency_breach_streak=0
+resource_breach_streak=0
 
 fatal() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -121,12 +127,31 @@ cleanup_registry_auth() {
   return "$cleanup_status"
 }
 
+cleanup_synthetic_cookie() {
+  local cleanup_status=0 resolved
+  [ -n "${cookie_jar:-}" ] || return 0
+  if [ -z "${raw_evidence_dir:-}" ] || [ -L "$cookie_jar" ]; then
+    cleanup_status=1
+  elif [ -e "$cookie_jar" ]; then
+    resolved="$(realpath -e -- "$cookie_jar")" || cleanup_status=1
+    if [ "$cleanup_status" -eq 0 ] && [ "$(dirname -- "$resolved")" = "$raw_evidence_dir" ] &&
+      [ "$(basename -- "$resolved")" = 'csrf-cookie.jar' ] && [ -f "$resolved" ]; then
+      rm -f -- "$resolved" || cleanup_status=1
+    else
+      cleanup_status=1
+    fi
+  fi
+  cookie_jar=''
+  return "$cleanup_status"
+}
+
 cleanup_on_exit() {
   local original_status=$?
   trap - EXIT INT TERM HUP
   if [ "$target_mutated" -eq 1 ] && [ "$keep_committed" -eq 0 ] && [ "$rollback_complete" -eq 0 ]; then
     rollback_09e || original_status=125
   fi
+  cleanup_synthetic_cookie || original_status=125
   cleanup_registry_auth || true
   if [ -n "${raw_evidence_dir:-}" ] && [ -d "$raw_evidence_dir" ] && [ ! -L "$raw_evidence_dir" ]; then
     rm -rf -- "$raw_evidence_dir"
@@ -366,13 +391,13 @@ PY
 sanitize_log_snapshot() {
   local raw="$1" sanitized="$2" interval_start="$3" interval_end="$4"
   awk '
-    BEGIN { IGNORECASE=1 }
     {
       timestamp=$1
+      line=tolower($0)
       severity="other"
-      if ($0 ~ /fatal|unhandled|uncaught/) severity="fatal"
-      else if ($0 ~ /ECONNREFUSED|database.*(error|failed|timeout)|connection.*(lost|terminated)/) severity="database-error"
-      else if ($0 ~ /(^|[^0-9])5[0-9][0-9]([^0-9]|$)/) severity="http-5xx"
+      if (line ~ /fatal|unhandled|uncaught/) severity="fatal"
+      else if (line ~ /econnrefused|database.*(error|failed|timeout)|connection.*(lost|terminated)/) severity="database-error"
+      else if (line ~ /(^|[^0-9])5[0-9][0-9]([^0-9]|$)/) severity="http-5xx"
       if (timestamp ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}T/ && timestamp >= start && timestamp <= finish) print timestamp "|" severity
     }
   ' start="$interval_start" finish="$interval_end" "$raw" > "$sanitized"
@@ -407,6 +432,33 @@ shift_utc_nanosecond() {
   printf '%s.%09dZ\n' "$second" "$fraction"
 }
 
+docker_observe() {
+  if [ -n "${GENESIS_09E_DOCKER_BIN:-}" ]; then
+    [ "${GENESIS_09E_TEST_MODE:-0}" = 1 ] || return 1
+    "$GENESIS_09E_DOCKER_BIN" "$@"
+  else
+    docker "$@"
+  fi
+}
+
+curl_observe() {
+  if [ -n "${GENESIS_09E_CURL_BIN:-}" ]; then
+    [ "${GENESIS_09E_TEST_MODE:-0}" = 1 ] || return 1
+    "$GENESIS_09E_CURL_BIN" "$@"
+  else
+    curl "$@"
+  fi
+}
+
+python_observe() {
+  if [ -n "${GENESIS_09E_PYTHON_BIN:-}" ]; then
+    [ "${GENESIS_09E_TEST_MODE:-0}" = 1 ] || return 1
+    "$GENESIS_09E_PYTHON_BIN" "$@"
+  else
+    python3 "$@"
+  fi
+}
+
 collect_cumulative_logs() {
   local label="$1" interval_end="${2:-}" raw sanitized digest captured_at query_since query_until
   [ -n "$deploymentStartedAt" ] || return 1
@@ -416,13 +468,64 @@ collect_cumulative_logs() {
   query_until="$(shift_utc_nanosecond "$interval_end" after)" || return 1
   raw="$raw_evidence_dir/${label}.raw"
   sanitized="$GENESIS_STATE_ROOT/evidence/${label}.sanitized.log"
-  docker logs --timestamps --since "$query_since" --until "$query_until" genesis-api-1 > "$raw" 2>&1 || return 1
+  docker_observe logs --timestamps --since "$query_since" --until "$query_until" genesis-api-1 > "$raw" 2>&1 || return 1
   sanitize_log_snapshot "$raw" "$sanitized" "$deploymentStartedAt" "$interval_end"
   digest="$(sha256sum -- "$sanitized" | awk '{print $1}')"
   printf '%s  %s\n' "$digest" "$(basename -- "$sanitized")" > "$sanitized.sha256"
   chmod 0600 -- "$sanitized.sha256"
+  last_sanitized_log="$sanitized"
   printf 'checkpoint=%s deploymentStartedAt=%s capturedAt=%s sha256=%s\n' \
     "$label" "$deploymentStartedAt" "$captured_at" "$digest"
+}
+
+evaluate_sanitized_logs() {
+  local snapshot="$1" fatal_count db_error_count http5xx_count
+  [ -f "$snapshot" ] && [ ! -L "$snapshot" ] || return 1
+  fatal_count="$(awk -F '|' '$2 == "fatal" { count++ } END { print count + 0 }' "$snapshot")" || return 1
+  db_error_count="$(awk -F '|' '$2 == "database-error" { count++ } END { print count + 0 }' "$snapshot")" || return 1
+  http5xx_count="$(awk -F '|' '$2 == "http-5xx" { count++ } END { print count + 0 }' "$snapshot")" || return 1
+  [ "$fatal_count" -eq 0 ] || return 1
+  [ "$db_error_count" -eq 0 ] || return 1
+  [ "$http5xx_count" -ge "$previous_http5xx_total" ] || return 1
+  if [ "$http5xx_count" -gt "$previous_http5xx_total" ]; then
+    http5xx_breach_streak=$((http5xx_breach_streak + 1))
+  else
+    http5xx_breach_streak=0
+  fi
+  previous_http5xx_total="$http5xx_count"
+  [ "$http5xx_breach_streak" -lt 2 ] || return 1
+  printf 'logs=fatal:%s,database-error:%s,http-5xx:%s,new-5xx-streak:%s\n' \
+    "$fatal_count" "$db_error_count" "$http5xx_count" "$http5xx_breach_streak"
+}
+
+negative_auth_smoke() {
+  local csrf_json='' csrf_token='' auth_status='' status=0
+  [ -n "${raw_evidence_dir:-}" ] && [ -d "$raw_evidence_dir" ] && [ ! -L "$raw_evidence_dir" ] || return 1
+  cookie_jar="$raw_evidence_dir/csrf-cookie.jar"
+  [ ! -e "$cookie_jar" ] && [ ! -L "$cookie_jar" ] || return 1
+  csrf_json="$(curl_observe -fsS --max-time 10 -c "$cookie_jar" \
+    https://app.agenciagenesismkt.com.br/api/v1/auth/csrf)" || status=1
+  if [ "$status" -eq 0 ]; then
+    csrf_token="$(printf '%s' "$csrf_json" | python_observe -c \
+      'import json,sys; value=json.load(sys.stdin); token=value.get("csrfToken"); assert isinstance(token,str) and token; print(token)')" || status=1
+  fi
+  if [ "$status" -eq 0 ]; then
+    auth_status="$(curl_observe -sS --max-time 10 -o /dev/null -w '%{http_code}' -b "$cookie_jar" \
+      -H "X-CSRF-Token: $csrf_token" -H 'Content-Type: application/json' \
+      --data '{"email":"mvp09e-invalid@invalid.example","password":"synthetic-invalid-09e"}' \
+      https://app.agenciagenesismkt.com.br/api/v1/auth/login)" || status=1
+  fi
+  [ "$status" -ne 0 ] || [ "$auth_status" = 401 ] || status=1
+  unset csrf_json csrf_token auth_status
+  cleanup_synthetic_cookie || status=1
+  return "$status"
+}
+
+reset_observation_streaks() {
+  previous_http5xx_total=0
+  http5xx_breach_streak=0
+  latency_breach_streak=0
+  resource_breach_streak=0
 }
 
 create_raw_evidence_directory() {
@@ -447,14 +550,76 @@ compose_base() {
     -f "$GENESIS_RELEASE_ROOT/compose.production.functional.yml" "$@"
 }
 
+valid_finite_nonnegative_decimal() {
+  local value="${1:-}"
+  printf '%s\n' "$value" | LC_ALL=C grep -Eq '^[0-9]+([.][0-9]+)?$' || return 1
+  LC_ALL=C awk -v value="$value" 'BEGIN {
+    numeric=value + 0
+    rendered=tolower(sprintf("%.17g", numeric))
+    exit (rendered ~ /inf|nan/ || numeric < 0)
+  }'
+}
+
 checkpoint() {
-  local label="$1" expected_image="$2" observed
-  observed="$(docker inspect --format '{{.Config.Image}}|{{.State.Status}}|{{.State.Health.Status}}|{{.RestartCount}}' genesis-api-1)"
-  [ "$observed" = "$expected_image|running|healthy|$api_restarts_before" ]
-  [ "$(docker inspect --format '{{.Id}}' genesis-postgres-1)" = "$postgres_id_before" ]
-  [ "$(docker inspect --format '{{.Id}}' genesis-traefik-1)" = "$traefik_id_before" ]
-  curl -fsS --max-time 10 https://api.agenciagenesismkt.com.br/health >/dev/null
-  collect_cumulative_logs "$label"
+  # Contract failureAction: rollback-and-block-keep.
+  local label="$1" expected_image="$2" interval_end="${3:-}" observed container_image_id ready_status
+  local public_probe public_status latency missing_status method_status stats cpu_pct mem_pct resource_breach=0
+  export GENESIS_09E_CHECKPOINT_LABEL="$label"
+  observed="$(docker_observe inspect --format '{{.Config.Image}}|{{.State.Status}}|{{.State.Health.Status}}|{{.RestartCount}}' genesis-api-1)" || return 1
+  [ "$observed" = "$expected_image|running|healthy|$api_restarts_before" ] || return 1
+  container_image_id="$(docker_observe inspect --format '{{.Image}}' genesis-api-1)" || return 1
+  docker_observe image inspect --format '{{json .RepoDigests}}' "$container_image_id" | grep -F -- "$expected_image" >/dev/null || return 1
+  [ "$(docker_observe inspect --format '{{.Id}}' genesis-postgres-1)" = "$postgres_id_before" ] || return 1
+  [ "$(docker_observe inspect --format '{{.Id}}' genesis-traefik-1)" = "$traefik_id_before" ] || return 1
+
+  ready_status="$(docker_observe exec genesis-api-1 node -e \
+    "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(()=>process.exit(2))")" || return 1
+  [ "$ready_status" = 200 ] || return 1
+  public_probe="$(curl_observe -sS --max-time 10 -o /dev/null -w '%{http_code}|%{time_total}' \
+    https://api.agenciagenesismkt.com.br/health)" || return 1
+  IFS='|' read -r public_status latency <<< "$public_probe"
+  [ "$public_probe" = "$public_status|$latency" ] || return 1
+  [ "$public_status" = 200 ] || return 1
+  valid_finite_nonnegative_decimal "$latency" || return 1
+  missing_status="$(curl_observe -sS --max-time 10 -o /dev/null -w '%{http_code}' \
+    https://api.agenciagenesismkt.com.br/__genesis_09e_missing)" || return 1
+  [ "$missing_status" = 404 ] || return 1
+  method_status="$(curl_observe -sS --max-time 10 -o /dev/null -w '%{http_code}' -X POST \
+    https://api.agenciagenesismkt.com.br/health)" || return 1
+  [ "$method_status" = 404 ] || return 1
+  negative_auth_smoke || return 1
+
+  if awk -v value="$latency" 'BEGIN { exit !(value > 2.0) }'; then
+    latency_breach_streak=$((latency_breach_streak + 1))
+  else
+    latency_breach_streak=0
+  fi
+  [ "$latency_breach_streak" -lt 2 ] || return 1
+
+  stats="$(docker_observe stats --no-stream --format '{{.CPUPerc}}|{{.MemPerc}}' genesis-api-1)" || return 1
+  IFS='|' read -r cpu_pct mem_pct <<< "$stats"
+  [ "$stats" = "$cpu_pct|$mem_pct" ] || return 1
+  case "$cpu_pct|$mem_pct" in
+    *%\|*%) ;;
+    *) return 1 ;;
+  esac
+  cpu_pct="${cpu_pct%%%}"
+  mem_pct="${mem_pct%%%}"
+  valid_finite_nonnegative_decimal "$cpu_pct" || return 1
+  valid_finite_nonnegative_decimal "$mem_pct" || return 1
+  awk -v value="$cpu_pct" 'BEGIN { exit !(value > 90.0) }' && resource_breach=1
+  awk -v value="$mem_pct" 'BEGIN { exit !(value > 85.0) }' && resource_breach=1
+  if [ "$resource_breach" -eq 1 ]; then
+    resource_breach_streak=$((resource_breach_streak + 1))
+  else
+    resource_breach_streak=0
+  fi
+  [ "$resource_breach_streak" -lt 2 ] || return 1
+
+  collect_cumulative_logs "$label" "$interval_end" || return 1
+  evaluate_sanitized_logs "$last_sanitized_log" || return 1
+  printf 'checkpoint=%s status=PASS latency=%s latency-streak=%s cpu=%s%% memory=%s%% resource-streak=%s\n' \
+    "$label" "$latency" "$latency_breach_streak" "$cpu_pct" "$mem_pct" "$resource_breach_streak"
 }
 
 rollback_09e() {
@@ -468,19 +633,31 @@ rollback_09e() {
   rollback_in_progress=1
   if [ "${GENESIS_09E_TEST_MODE:-0}" = 1 ]; then
     [ "${GENESIS_09E_FAIL_ROLLBACK_STAGE:-}" != recreate ] || return 1
+    if [ "${GENESIS_09E_SIMULATE_CRASH_RECOVERY:-0}" = 1 ]; then
+      printf '%s\n' "$rollback_baseline_image" > "${GENESIS_09E_LIVE_IMAGE_FILE:?}"
+      printf 'rollback-recreated\n' >> "${GENESIS_09E_RECOVERY_TRACE:?}"
+    fi
   elif ! compose_base -f "$GENESIS_RELEASE_ROOT/$rollback_baseline_relative/compose.api-image.json" \
     up -d --no-deps --pull never --wait --wait-timeout 120 api; then
     return 1
   fi
   if [ "${GENESIS_09E_TEST_MODE:-0}" = 1 ]; then
     [ "${GENESIS_09E_FAIL_ROLLBACK_STAGE:-}" != health ] || return 1
-  elif ! checkpoint rollback "$rollback_baseline_image"; then
-    return 1
+    if [ "${GENESIS_09E_SIMULATE_CRASH_RECOVERY:-0}" = 1 ]; then
+      [ "$(cat -- "${GENESIS_09E_LIVE_IMAGE_FILE:?}")" = "$rollback_baseline_image" ] || return 1
+      printf 'rollback-health-validated\n' >> "${GENESIS_09E_RECOVERY_TRACE:?}"
+    fi
+  else
+    reset_observation_streaks
+    if ! checkpoint rollback "$rollback_baseline_image"; then
+      return 1
+    fi
   fi
   if [ "${GENESIS_09E_TEST_MODE:-0}" = 1 ]; then
     [ "${GENESIS_09E_FAIL_ROLLBACK_STAGE:-}" != pointer ] || return 1
   fi
-  if [ "${GENESIS_09E_TEST_MODE:-0}" != 1 ] || [ "${GENESIS_09E_SIMULATE_POINTER_CYCLE:-0}" = 1 ]; then
+  if [ "${GENESIS_09E_TEST_MODE:-0}" != 1 ] || [ "${GENESIS_09E_SIMULATE_POINTER_CYCLE:-0}" = 1 ] ||
+    [ "${GENESIS_09E_SIMULATE_CRASH_RECOVERY:-0}" = 1 ]; then
     atomic_pointer_update "$rollback_baseline_relative" "deployment-state/overlays/$TARGET_DIGEST" \
       "$rollback_baseline_image" "$TARGET_IMAGE" || return 1
   fi
@@ -489,6 +666,52 @@ rollback_09e() {
   if [ -n "${GENESIS_09E_ROLLBACK_MARKER:-}" ]; then
     printf 'rollback-complete\n' > "$GENESIS_09E_ROLLBACK_MARKER"
   fi
+  return 0
+}
+
+image_for_overlay_relative() {
+  case "$1" in
+    "deployment-state/overlays/$TARGET_DIGEST") printf '%s\n' "$TARGET_IMAGE" ;;
+    "deployment-state/overlays/$ROLLBACK_DIGEST") printf '%s\n' "$ROLLBACK_IMAGE" ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_pointer_bundles() {
+  local pointer_pair="$1" current_relative previous_relative current_image previous_image
+  current_relative="${pointer_pair%%|*}"
+  previous_relative="${pointer_pair#*|}"
+  validate_pointer_document "$current_relative" "$previous_relative" || return 1
+  current_image="$(image_for_overlay_relative "$current_relative")" || return 1
+  previous_image="$(image_for_overlay_relative "$previous_relative")" || return 1
+  validate_overlay "${current_relative##*/}" "$current_image" || return 1
+  validate_overlay "${previous_relative##*/}" "$previous_image" || return 1
+}
+
+recover_interrupted_activation() {
+  local live_image="$1" pointer_pair="$2" current_relative previous_relative
+  current_relative="${pointer_pair%%|*}"
+  previous_relative="${pointer_pair#*|}"
+  [ "$live_image" = "$TARGET_IMAGE" ] || return 2
+  [ "$current_relative" = "deployment-state/overlays/$ROLLBACK_DIGEST" ] || return 2
+  case "$previous_relative" in
+    "deployment-state/overlays/$TARGET_DIGEST"|"deployment-state/overlays/$ROLLBACK_DIGEST") ;;
+    *) return 1 ;;
+  esac
+  validate_pointer_bundles "$pointer_pair" || return 1
+  rollback_baseline_relative="$current_relative"
+  rollback_baseline_image="$ROLLBACK_IMAGE"
+  if [ "${GENESIS_09E_TEST_MODE:-0}" != 1 ]; then
+    [ -n "${raw_evidence_dir:-}" ] || create_raw_evidence_directory || return 1
+    deploymentStartedAt="$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)"
+  fi
+  reset_observation_streaks
+  rollback_complete=0
+  target_mutated=1
+  rollback_09e || return 1
+  rollback_complete=0
+  rollback_in_progress=0
+  printf 'INTERRUPTED_TARGET_RECOVERED_TO_BASELINE\n'
   return 0
 }
 
@@ -526,7 +749,6 @@ run_authorized_deployment() {
   api_restarts_before="$(docker inspect --format '{{.RestartCount}}' genesis-api-1)"
   postgres_id_before="$(docker inspect --format '{{.Id}}' genesis-postgres-1)"
   traefik_id_before="$(docker inspect --format '{{.Id}}' genesis-traefik-1)"
-  [ "$api_restarts_before" = 0 ] || fatal 'baseline restart count is not zero'
   docker image inspect "$ROLLBACK_IMAGE" >/dev/null
   [ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$ROLLBACK_IMAGE")" = linux/amd64 ]
   if [ -e "$GENESIS_POINTER_FILE" ]; then
@@ -534,11 +756,23 @@ run_authorized_deployment() {
     case "$live_image|$pointer_pair" in
       "$TARGET_IMAGE|$target_relative|$rollback_relative")
         validate_pointer_document "$target_relative" "$rollback_relative"
+        [ "$api_restarts_before" = 0 ] || fatal 'kept target restart count is not zero'
         printf 'TARGET_ALREADY_KEPT\n'
         return 0
         ;;
+      "$TARGET_IMAGE|$rollback_relative|$target_relative"|"$TARGET_IMAGE|$rollback_relative|$rollback_relative")
+        api_restarts_before=0
+        recover_interrupted_activation "$live_image" "$pointer_pair" ||
+          fatal 'interrupted target activation could not recover its current baseline' 125
+        live_image="$(docker inspect --format '{{.Config.Image}}' genesis-api-1)"
+        pointer_pair="$(read_pointer_pair)" || fatal 'recovered pointer document is invalid'
+        [ "$live_image|$pointer_pair" = "$ROLLBACK_IMAGE|$rollback_relative|$target_relative" ] ||
+          fatal 'interrupted target recovery did not converge' 125
+        bind_rollback_baseline "$live_image" "$pointer_pair"
+        ;;
       "$ROLLBACK_IMAGE|$rollback_relative|$target_relative"|"$ROLLBACK_IMAGE|$rollback_relative|$rollback_relative")
         validate_pointer_document "${pointer_pair%%|*}" "${pointer_pair#*|}"
+        [ "$api_restarts_before" = 0 ] || fatal 'baseline restart count is not zero'
         bind_rollback_baseline "$live_image" "$pointer_pair"
         ;;
       *) fatal 'live image and current/previous pointers diverge' ;;
@@ -547,6 +781,7 @@ run_authorized_deployment() {
     [ "$live_image" = "$ROLLBACK_IMAGE" ] || fatal 'pointer initialization requires the rollback live image'
     atomic_pointer_update "$rollback_relative" "$rollback_relative" "$ROLLBACK_IMAGE" "$ROLLBACK_IMAGE"
     pointer_pair="$rollback_relative|$rollback_relative"
+    [ "$api_restarts_before" = 0 ] || fatal 'baseline restart count is not zero'
     bind_rollback_baseline "$live_image" "$pointer_pair"
   fi
   curl -fsS --max-time 10 https://api.agenciagenesismkt.com.br/health >/dev/null
@@ -563,9 +798,12 @@ run_authorized_deployment() {
   docker image inspect --format '{{json .RepoDigests}}' "$TARGET_IMAGE" | grep -F -- "$TARGET_IMAGE" >/dev/null
   unset DOCKER_CONFIG
   cleanup_registry_auth
-  create_raw_evidence_directory
+  [ -n "${raw_evidence_dir:-}" ] || create_raw_evidence_directory
 
   deploymentStartedAt="$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)"
+  reset_observation_streaks
+  rollback_complete=0
+  rollback_in_progress=0
   target_mutated=1
   compose_base -f "$GENESIS_RELEASE_ROOT/$target_relative/compose.api-image.json" \
     up -d --no-deps --pull never --wait --wait-timeout 120 api
@@ -628,6 +866,74 @@ run_pointer_cycle_simulation() {
   return 42
 }
 
+run_crash_state_simulation() {
+  [ "$#" -eq 3 ] || fatal 'crash-state simulation requires root, live image file and trace'
+  export GENESIS_09E_TEST_MODE=1
+  [ "$1" = "$GENESIS_RELEASE_ROOT" ] || return 1
+  prepare_state_directories
+  publish_overlay_no_replace "$ROLLBACK_DIGEST" "$ROLLBACK_IMAGE"
+  publish_overlay_no_replace "$TARGET_DIGEST" "$TARGET_IMAGE"
+  local target_relative="deployment-state/overlays/$TARGET_DIGEST"
+  local rollback_relative="deployment-state/overlays/$ROLLBACK_DIGEST"
+  atomic_pointer_update "$rollback_relative" "$target_relative" "$ROLLBACK_IMAGE" "$TARGET_IMAGE"
+  printf '%s\n' "$TARGET_IMAGE" > "$2"
+  printf 'target-live-current-baseline\n' >> "$3"
+  sync
+  kill -KILL "$$"
+}
+
+run_crash_recovery_simulation() {
+  [ "$#" -eq 3 ] || fatal 'crash recovery simulation requires root, live image file and trace'
+  export GENESIS_09E_TEST_MODE=1
+  export GENESIS_09E_SIMULATE_CRASH_RECOVERY=1
+  export GENESIS_09E_LIVE_IMAGE_FILE="$2"
+  export GENESIS_09E_RECOVERY_TRACE="$3"
+  [ "$1" = "$GENESIS_RELEASE_ROOT" ] || return 1
+  prepare_state_directories
+  publish_overlay_no_replace "$ROLLBACK_DIGEST" "$ROLLBACK_IMAGE"
+  publish_overlay_no_replace "$TARGET_DIGEST" "$TARGET_IMAGE"
+  validate_overlay "$ROLLBACK_DIGEST" "$ROLLBACK_IMAGE"
+  validate_overlay "$TARGET_DIGEST" "$TARGET_IMAGE"
+  local pointer_pair live_image rollback_relative target_relative
+  rollback_relative="deployment-state/overlays/$ROLLBACK_DIGEST"
+  target_relative="deployment-state/overlays/$TARGET_DIGEST"
+  pointer_pair="$(read_pointer_pair)" || return 1
+  live_image="$(cat -- "$GENESIS_09E_LIVE_IMAGE_FILE")" || return 1
+  [ "$live_image|$pointer_pair" = "$TARGET_IMAGE|$rollback_relative|$target_relative" ] || return 1
+  recover_interrupted_activation "$live_image" "$pointer_pair" || return 1
+  [ "$(cat -- "$GENESIS_09E_LIVE_IMAGE_FILE")" = "$ROLLBACK_IMAGE" ] || return 1
+  validate_pointer_document "$rollback_relative" "$target_relative" || return 1
+  printf 'new-attempt-allowed\n' >> "$GENESIS_09E_RECOVERY_TRACE"
+}
+
+run_observation_simulation() {
+  [ "$#" -eq 4 ] || fatal 'observation simulation requires root, scenario, rollback marker and keep marker'
+  export GENESIS_09E_TEST_MODE=1
+  export GENESIS_09E_OBSERVATION_SCENARIO="$2"
+  export GENESIS_09E_ROLLBACK_MARKER="$3"
+  [ "$1" = "$GENESIS_RELEASE_ROOT" ] || return 1
+  raw_evidence_dir="$1/raw"
+  [ -d "$raw_evidence_dir" ] && [ -d "$GENESIS_STATE_ROOT/evidence" ] || return 1
+  deploymentStartedAt='2026-08-20T20:00:00.000000000Z'
+  api_restarts_before=0
+  postgres_id_before='postgres-stable-id'
+  traefik_id_before='traefik-stable-id'
+  rollback_baseline_relative="deployment-state/overlays/$ROLLBACK_DIGEST"
+  rollback_baseline_image="$ROLLBACK_IMAGE"
+  reset_observation_streaks
+  rollback_complete=0
+  target_mutated=1
+  install_cleanup_traps
+  checkpoint t-plus-0 "$TARGET_IMAGE" '2026-08-20T20:00:00.000000000Z'
+  checkpoint t-plus-2 "$TARGET_IMAGE" '2026-08-20T20:02:00.000000000Z'
+  checkpoint t-plus-5 "$TARGET_IMAGE" '2026-08-20T20:05:00.000000000Z'
+  checkpoint t-plus-10 "$TARGET_IMAGE" '2026-08-20T20:10:00.000000000Z'
+  checkpoint t-plus-15 "$TARGET_IMAGE" '2026-08-20T20:15:00.000000000Z'
+  printf 'keep-allowed\n' > "$4"
+  keep_committed=1
+  target_mutated=0
+}
+
 run_raw_cleanup_simulation() {
   [ "$#" -eq 2 ] || fatal 'raw cleanup simulation requires scenario and parent'
   export GENESIS_09E_TEST_MODE=1
@@ -651,6 +957,12 @@ run_log_collection_simulation() {
   collect_cumulative_logs "$4" "$observationEndedAt"
 }
 
+run_log_sanitizer_simulation() {
+  [ "$#" -eq 4 ] || fatal 'log sanitizer simulation requires raw, sanitized, start and end'
+  export GENESIS_09E_TEST_MODE=1
+  sanitize_log_snapshot "$1" "$2" "$3" "$4"
+}
+
 case "${1:-}" in
   --execute)
     run_authorized_deployment
@@ -671,6 +983,18 @@ case "${1:-}" in
     shift
     run_pointer_cycle_simulation "$@"
     ;;
+  --simulate-crash-state)
+    shift
+    run_crash_state_simulation "$@"
+    ;;
+  --simulate-crash-recovery)
+    shift
+    run_crash_recovery_simulation "$@"
+    ;;
+  --simulate-observation)
+    shift
+    run_observation_simulation "$@"
+    ;;
   --simulate-raw-cleanup)
     shift
     run_raw_cleanup_simulation "$@"
@@ -678,6 +1002,10 @@ case "${1:-}" in
   --simulate-log-collection)
     shift
     run_log_collection_simulation "$@"
+    ;;
+  --simulate-log-sanitizer)
+    shift
+    run_log_sanitizer_simulation "$@"
     ;;
   *)
     printf 'Prepared only. Usage after separate approval: %s --execute\n' "$0" >&2

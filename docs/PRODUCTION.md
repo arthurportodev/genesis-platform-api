@@ -899,6 +899,15 @@ no ciclo keep → rollback → nova tentativa. Current e previous nunca entram n
 validados, não referenciados e fora da observação podem ser removidos, e não há
 deleção automática.
 
+Uma interrupção não capturável (`SIGKILL` ou reboot) entre o recreate do target
+e o commit do pointer deixa um estado reconhecível: imagem live no digest target,
+`current` ainda no baseline rollback e `previous` em um bundle conhecido e
+validado. Na próxima invocação, esse estado não pode continuar nem iniciar pull:
+o helper recria primeiro somente `api` a partir de `current`, com `--no-deps` e
+`--pull never`, valida digest, health/readiness, dependências e smoke, converge o
+pointer para baseline/target e somente então permite uma nova tentativa. Qualquer
+ambiguidade ou falha nessa recuperação termina em status `125`.
+
 Esse namespace é estado operacional da promoção API-only e não substitui o
 contrato de ativação integral de committed releases do ADR-018. Criá-lo ou
 alterá-lo na VPS é mutação de produção e exige Gate humano próprio. O merge
@@ -934,10 +943,31 @@ Logs brutos permanecem apenas em diretório temporário root-only e são apagado
 no exit. Os traps são armados antes de qualquer criação desse diretório, e o
 no-op de target já mantido retorna antes de criá-lo. Antes de persistir evidência, a sanitização descarta a mensagem e
 preserva somente timestamp UTC e classificação operacional (`other`, `fatal`,
-`database-error` ou `http-5xx`). Cada snapshot sanitizado recebe SHA-256. Testes
+`database-error` ou `http-5xx`). A classificação normaliza cada linha com o
+`tolower` POSIX do `awk`, sem depender da extensão `IGNORECASE` do GNU awk; caixa
+alta ou mista não altera a decisão. Cada snapshot sanitizado recebe SHA-256. Testes
 cobrem início, fronteiras, pontos imediatamente posteriores, intervalos,
 checkpoint falho e timestamp final inclusivo, sem corpo, token, email ou dado
 pessoal na evidência.
+
+Cada checkpoint T+0, T+2, T+5, T+10 e T+15 executa o mesmo conjunto obrigatório:
+digest efetivo, container running/healthy, restart count zero, readiness interna
+com PostgreSQL, health público `200`, rota inexistente `404`, método inválido
+`404`, login inválido sintético com CSRF válido retornando `401`, IDs de
+PostgreSQL/Traefik inalterados, recursos e snapshot cumulativo. Nenhum usuário,
+credencial ou dado real é usado; cookie e token CSRF transitórios ficam no
+diretório root-only e são removidos sem serem impressos.
+
+`fatal` e `database-error` no snapshot sanitizado falham imediatamente. Novos
+tokens `http-5xx` em dois intervalos consecutivos, latência pública acima de
+2 segundos em dois checkpoints consecutivos, ou CPU acima de 90% / memória acima
+de 85% em dois checkpoints consecutivos também falham. Os totais 5xx são
+comparados monotonicamente entre snapshots cumulativos, para não confundir uma
+linha histórica duplicada com um erro novo. Qualquer smoke, captura ou threshold
+falho aciona rollback; `KEEP` permanece bloqueado. Latência, CPU e memória só
+entram nos streaks depois de validar o valor completo como decimal finito e não
+negativo; saída ausente, parcial, `N/A`, `nan`, `inf` ou qualquer texto inválido
+falha fechada sem zerar streak.
 
 ### Sequência futura — não executada por este contrato
 
@@ -949,8 +979,9 @@ pessoal na evidência.
    plataforma; remover toda autenticação antes da mutação.
 5. Fixar `deploymentStartedAt` e recriar somente `api` com `--no-deps` e
    `--pull never`.
-6. Provar digest executado, health local/público, rotas fail-closed, IDs das
-   dependências, restart count e checkpoints cumulativos.
+6. Em cada T+0/T+2/T+5/T+10/T+15, provar digest executado, health/readiness com
+   banco, rotas fail-closed, autenticação negativa sintética, IDs das dependências,
+   restart count, thresholds e logs cumulativos sanitizados.
 7. Em qualquer falha ou sinal, restaurar o baseline live validado que `current`
    apontava antes da tentativa, validar health e somente depois registrar o
    target falho em `previous`.

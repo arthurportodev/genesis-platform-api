@@ -39,7 +39,7 @@
     "schemaVersion": "1.0.0",
     "fields": ["current", "previous"],
     "atomicUpdate": "write-fsync-replace-fsync-directory",
-    "interruptionRecovery": "validate-last-complete-document-remove-temporary-files",
+    "interruptionRecovery": "validate-document-remove-temporaries-recover-live-target-to-current-baseline",
     "fileMode": "0644"
   },
   "evidence": {
@@ -79,10 +79,42 @@
     "cleanupPolicy": "remove-only-unreferenced-validated-bundles-after-observation",
     "automaticDeletion": false
   },
+  "observation": {
+    "checkpointsMinutes": [0, 2, 5, 10, 15],
+    "requiredSmokes": [
+      "immutable-runtime-digest",
+      "running-healthy-zero-restarts",
+      "ready-with-database",
+      "public-health-200",
+      "missing-route-404",
+      "invalid-method-404",
+      "csrf-valid-synthetic-invalid-auth-401",
+      "dependency-identities-unchanged",
+      "cumulative-sanitized-log-evaluation",
+      "latency-threshold",
+      "resource-threshold"
+    ],
+    "logWindow": "closed-cumulative-deployment-start-to-checkpoint",
+    "logClassification": "portable-case-insensitive",
+    "metricValidation": "finite-nonnegative-decimal-fail-closed",
+    "thresholds": {
+      "fatalCount": 0,
+      "databaseErrorCount": 0,
+      "consecutiveHttp5xxCheckpoints": 2,
+      "healthLatencySeconds": 2,
+      "consecutiveLatencyBreaches": 2,
+      "cpuPercent": 90,
+      "memoryPercent": 85,
+      "consecutiveResourceBreaches": 2
+    },
+    "failureAction": "rollback-and-block-keep"
+  },
   "rollback": {
     "source": "pre-deployment-current-pointer",
     "validateBeforeActivation": true,
     "activatePointerAfterHealth": true,
-    "pullPolicy": "never"
+    "pullPolicy": "never",
+    "interruptedState": "live-target-current-baseline-previous-validated",
+    "interruptedAction": "rollback-baseline-before-new-attempt"
   }
 }

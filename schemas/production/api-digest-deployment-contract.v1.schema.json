@@ -16,6 +16,7 @@
     "service",
     "policy",
     "retention",
+    "observation",
     "rollback"
   ],
   "properties": {
@@ -30,6 +31,7 @@
     "service": { "const": "api" },
     "policy": { "$ref": "#/$defs/policy" },
     "retention": { "$ref": "#/$defs/retention" },
+    "observation": { "$ref": "#/$defs/observation" },
     "rollback": { "$ref": "#/$defs/rollback" }
   },
   "$defs": {
@@ -145,7 +147,7 @@
         },
         "atomicUpdate": { "const": "write-fsync-replace-fsync-directory" },
         "interruptionRecovery": {
-          "const": "validate-last-complete-document-remove-temporary-files"
+          "const": "validate-document-remove-temporaries-recover-live-target-to-current-baseline"
         },
         "fileMode": { "const": "0644" }
       }
@@ -253,6 +255,83 @@
         "automaticDeletion": { "const": false }
       }
     },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpointsMinutes",
+        "requiredSmokes",
+        "logWindow",
+        "logClassification",
+        "metricValidation",
+        "thresholds",
+        "failureAction"
+      ],
+      "properties": {
+        "checkpointsMinutes": {
+          "type": "array",
+          "prefixItems": [
+            { "const": 0 },
+            { "const": 2 },
+            { "const": 5 },
+            { "const": 10 },
+            { "const": 15 }
+          ],
+          "items": false
+        },
+        "requiredSmokes": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "immutable-runtime-digest" },
+            { "const": "running-healthy-zero-restarts" },
+            { "const": "ready-with-database" },
+            { "const": "public-health-200" },
+            { "const": "missing-route-404" },
+            { "const": "invalid-method-404" },
+            { "const": "csrf-valid-synthetic-invalid-auth-401" },
+            { "const": "dependency-identities-unchanged" },
+            { "const": "cumulative-sanitized-log-evaluation" },
+            { "const": "latency-threshold" },
+            { "const": "resource-threshold" }
+          ],
+          "items": false
+        },
+        "logWindow": {
+          "const": "closed-cumulative-deployment-start-to-checkpoint"
+        },
+        "logClassification": {
+          "const": "portable-case-insensitive"
+        },
+        "metricValidation": {
+          "const": "finite-nonnegative-decimal-fail-closed"
+        },
+        "thresholds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fatalCount",
+            "databaseErrorCount",
+            "consecutiveHttp5xxCheckpoints",
+            "healthLatencySeconds",
+            "consecutiveLatencyBreaches",
+            "cpuPercent",
+            "memoryPercent",
+            "consecutiveResourceBreaches"
+          ],
+          "properties": {
+            "fatalCount": { "const": 0 },
+            "databaseErrorCount": { "const": 0 },
+            "consecutiveHttp5xxCheckpoints": { "const": 2 },
+            "healthLatencySeconds": { "const": 2 },
+            "consecutiveLatencyBreaches": { "const": 2 },
+            "cpuPercent": { "const": 90 },
+            "memoryPercent": { "const": 85 },
+            "consecutiveResourceBreaches": { "const": 2 }
+          }
+        },
+        "failureAction": { "const": "rollback-and-block-keep" }
+      }
+    },
     "rollback": {
       "type": "object",
       "additionalProperties": false,
@@ -260,13 +339,21 @@
         "source",
         "validateBeforeActivation",
         "activatePointerAfterHealth",
-        "pullPolicy"
+        "pullPolicy",
+        "interruptedState",
+        "interruptedAction"
       ],
       "properties": {
         "source": { "const": "pre-deployment-current-pointer" },
         "validateBeforeActivation": { "const": true },
         "activatePointerAfterHealth": { "const": true },
-        "pullPolicy": { "const": "never" }
+        "pullPolicy": { "const": "never" },
+        "interruptedState": {
+          "const": "live-target-current-baseline-previous-validated"
+        },
+        "interruptedAction": {
+          "const": "rollback-baseline-before-new-attempt"
+        }
       }
     }
   }

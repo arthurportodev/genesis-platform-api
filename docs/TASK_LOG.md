@@ -899,3 +899,26 @@ Esta remediação não realizou login no GHCR, pull remoto, escrita na VPS,
 deployment, restart, migration, fixture, alteração de banco, DNS, firewall ou
 Traefik. A criação do namespace remoto e a execução do helper continuam
 dependentes de autorização humana específica após os Gates técnicos.
+
+O Gate 3 do PR #60 rejeitou a primeira entrega porque o helper havia reduzido o
+checkpoint ao health básico e não reconhecia o estado pós-`SIGKILL` em que o
+target já estava live mas `current` ainda apontava ao baseline. A rodada 5
+restaurou como contrato executável, em todos os cinco checkpoints, readiness com
+banco, rotas negativas, autenticação inválida sintética com CSRF válido, digest,
+restart/dependências, logs cumulativos classificados e streaks de 5xx, latência,
+CPU e memória. Falha em qualquer critério executa rollback e impede `KEEP`.
+
+A recuperação de interrupção agora valida o par current/previous e, para o estado
+exato live=target/current=rollback, restaura e valida o baseline antes de pull ou
+nova tentativa; divergência permanece fail-closed. Testes determinísticos cobrem
+cada critério, ausência de segredo/PII na evidência e um ciclo Linux real no qual
+a primeira invocação morre por `SIGKILL` e a seguinte converge para rollback antes
+de registrar `new-attempt-allowed`. Nenhuma dessas provas acessa produção ou GHCR.
+
+O Gate 2 da rodada 5 encontrou dois últimos caminhos fail-open no observador:
+`IGNORECASE` não é portátil no `awk` padrão do Ubuntu, e strings inválidas de
+latência/CPU/memória eram coercidas a zero. A rodada 6 substituiu a extensão por
+normalização POSIX com `tolower`, validou shape decimal finito e não negativo
+antes de qualquer comparação ou reset de streak, e adicionou regressões Linux
+para caixa alta/mista, `N/A`, `nan`, `inf`, campo ausente e saída parcial. Todas
+essas entradas agora executam rollback e impedem `KEEP`.

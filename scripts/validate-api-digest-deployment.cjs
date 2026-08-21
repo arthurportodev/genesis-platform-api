@@ -116,6 +116,7 @@ function validateContract(contract) {
       'service',
       'policy',
       'retention',
+      'observation',
       'rollback',
     ],
     'contract',
@@ -206,12 +207,41 @@ function validateContract(contract) {
     'retention',
   );
   exactKeys(
+    contract.observation,
+    [
+      'checkpointsMinutes',
+      'requiredSmokes',
+      'logWindow',
+      'logClassification',
+      'metricValidation',
+      'thresholds',
+      'failureAction',
+    ],
+    'observation',
+  );
+  exactKeys(
+    contract.observation.thresholds,
+    [
+      'fatalCount',
+      'databaseErrorCount',
+      'consecutiveHttp5xxCheckpoints',
+      'healthLatencySeconds',
+      'consecutiveLatencyBreaches',
+      'cpuPercent',
+      'memoryPercent',
+      'consecutiveResourceBreaches',
+    ],
+    'observation thresholds',
+  );
+  exactKeys(
     contract.rollback,
     [
       'source',
       'validateBeforeActivation',
       'activatePointerAfterHealth',
       'pullPolicy',
+      'interruptedState',
+      'interruptedAction',
     ],
     'rollback',
   );
@@ -268,7 +298,7 @@ function validateContract(contract) {
     contract.pointers.temporaryPrefix !== '.pointers.' ||
     contract.pointers.schemaVersion !== '1.0.0' ||
     contract.pointers.interruptionRecovery !==
-      'validate-last-complete-document-remove-temporary-files'
+      'validate-document-remove-temporaries-recover-live-target-to-current-baseline'
   ) {
     fail('pointer metadata contract mismatch');
   }
@@ -316,10 +346,51 @@ function validateContract(contract) {
     fail('retention contract mismatch');
   }
   if (
+    JSON.stringify(contract.observation.checkpointsMinutes) !==
+      JSON.stringify([0, 2, 5, 10, 15]) ||
+    JSON.stringify(contract.observation.requiredSmokes) !==
+      JSON.stringify([
+        'immutable-runtime-digest',
+        'running-healthy-zero-restarts',
+        'ready-with-database',
+        'public-health-200',
+        'missing-route-404',
+        'invalid-method-404',
+        'csrf-valid-synthetic-invalid-auth-401',
+        'dependency-identities-unchanged',
+        'cumulative-sanitized-log-evaluation',
+        'latency-threshold',
+        'resource-threshold',
+      ]) ||
+    contract.observation.logWindow !==
+      'closed-cumulative-deployment-start-to-checkpoint' ||
+    contract.observation.logClassification !== 'portable-case-insensitive' ||
+    contract.observation.metricValidation !==
+      'finite-nonnegative-decimal-fail-closed' ||
+    JSON.stringify(contract.observation.thresholds) !==
+      JSON.stringify({
+        fatalCount: 0,
+        databaseErrorCount: 0,
+        consecutiveHttp5xxCheckpoints: 2,
+        healthLatencySeconds: 2,
+        consecutiveLatencyBreaches: 2,
+        cpuPercent: 90,
+        memoryPercent: 85,
+        consecutiveResourceBreaches: 2,
+      }) ||
+    contract.observation.failureAction !== 'rollback-and-block-keep'
+  ) {
+    fail('observation contract mismatch');
+  }
+  if (
     contract.rollback.source !== 'pre-deployment-current-pointer' ||
     contract.rollback.validateBeforeActivation !== true ||
     contract.rollback.activatePointerAfterHealth !== true ||
-    contract.rollback.pullPolicy !== 'never'
+    contract.rollback.pullPolicy !== 'never' ||
+    contract.rollback.interruptedState !==
+      'live-target-current-baseline-previous-validated' ||
+    contract.rollback.interruptedAction !==
+      'rollback-baseline-before-new-attempt'
   ) {
     fail('rollback contract mismatch');
   }
@@ -375,12 +446,21 @@ function validateStaticOrder(script) {
     'deploymentStartedAt',
     'observationEndedAt',
     'collect_cumulative_logs',
+    'line=tolower($0)',
+    'valid_finite_nonnegative_decimal',
     '--since "$query_since"',
     '--until "$query_until"',
     'collect_cumulative_logs final "$observationEndedAt"',
     'RESOLVED_AS_NON_REQUIRED_CHECK',
     'stat -c \'%u:%g:%a\' -- "$GENESIS_RELEASE_ROOT"',
     'bind_rollback_baseline',
+    'recover_interrupted_activation',
+    'negative_auth_smoke',
+    'evaluate_sanitized_logs',
+    'latency_breach_streak',
+    'resource_breach_streak',
+    'http5xx_breach_streak',
+    'rollback-and-block-keep',
   ]) {
     if (!script.includes(requiredToken))
       fail(`script contract token missing: ${requiredToken}`);

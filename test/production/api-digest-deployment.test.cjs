@@ -98,6 +98,124 @@ function assertNoCredentialResidue(parent) {
   );
 }
 
+function observationSimulation(scenario) {
+  const root = mkdtempSync(join(tmpdir(), 'genesis-09e-observation-'));
+  const release = join(root, 'release');
+  const stub = join(root, 'bin');
+  const rollbackMarker = join(root, 'rollback.marker');
+  const keepMarker = join(root, 'keep.marker');
+  const invocations = join(root, 'invocations.log');
+  mkdirSync(join(release, 'deployment-state', 'evidence'), { recursive: true });
+  mkdirSync(join(release, 'raw'));
+  mkdirSync(stub);
+  const dockerStub = join(stub, 'docker');
+  writeFileSync(
+    dockerStub,
+    [
+      '#!/bin/bash',
+      'set -euo pipefail',
+      'label="${GENESIS_09E_CHECKPOINT_LABEL:-none}"',
+      'scenario="${GENESIS_09E_OBSERVATION_SCENARIO:-success}"',
+      'record() { printf "%s:%s\\n" "$1" "$label" >> "$GENESIS_09E_INVOCATIONS"; }',
+      'case "${1:-}" in',
+      '  inspect)',
+      '    case "$*" in',
+      '      *".Config.Image}}|"*) record state; restarts=0; health=healthy; [ "$scenario:$label" != restart:t-plus-5 ] || restarts=1; [ "$scenario:$label" != container-health:t-plus-5 ] || health=unhealthy; printf "%s|running|%s|%s\\n" "$GENESIS_09E_TARGET_IMAGE" "$health" "$restarts" ;;',
+      '      *"{{.Image}}"*) record image-id; printf "sha256:runtime-image-id\\n" ;;',
+      '      *genesis-postgres-1*) record dependency-postgres; if [ "$scenario:$label" = dependency:t-plus-5 ]; then printf "postgres-drift\\n"; else printf "postgres-stable-id\\n"; fi ;;',
+      '      *genesis-traefik-1*) record dependency-traefik; printf "traefik-stable-id\\n" ;;',
+      '      *) exit 91 ;;',
+      '    esac ;;',
+      '  image)',
+      '    record digest; if [ "$scenario:$label" = digest:t-plus-5 ]; then printf "[]\\n"; else printf "[\\"%s\\"]\\n" "$GENESIS_09E_TARGET_IMAGE"; fi ;;',
+      '  exec)',
+      '    record ready; if [ "$scenario:$label" = ready:t-plus-5 ]; then printf "503\\n"; else printf "200\\n"; fi ;;',
+      '  stats)',
+      '    record resources; case "$scenario:$label" in resource:t-plus-2|resource:t-plus-5) printf "91.0%%|10.0%%\\n" ;; memory:t-plus-2|memory:t-plus-5) printf "10.0%%|86.0%%\\n" ;; resource-malformed:t-plus-5) printf "N/A|20.0%%\\n" ;; resource-nan:t-plus-5) printf "nan%%|20.0%%\\n" ;; resource-inf:t-plus-5) printf "inf%%|20.0%%\\n" ;; resource-missing:t-plus-5) printf "|20.0%%\\n" ;; resource-partial:t-plus-5) printf "10.0%%|20.0%%|partial\\n" ;; resource-negative:t-plus-5) printf "-1.0%%|20.0%%\\n" ;; memory-malformed:t-plus-5) printf "10.0%%|N/A\\n" ;; memory-nan:t-plus-5) printf "10.0%%|nan%%\\n" ;; memory-inf:t-plus-5) printf "10.0%%|inf%%\\n" ;; memory-missing:t-plus-5) printf "10.0%%|\\n" ;; memory-partial:t-plus-5) printf "10.0%%|20.0%%|partial\\n" ;; memory-negative:t-plus-5) printf "10.0%%|-1.0%%\\n" ;; *) printf "10.0%%|20.0%%\\n" ;; esac ;;',
+      '  logs)',
+      '    record logs',
+      "    printf '%s\\n' '2026-08-20T20:00:00.000000000Z request-body=private email@example.test token=hidden'",
+      '    case "$label" in t-plus-2|t-plus-5|t-plus-10|t-plus-15) printf "%s\\n" "2026-08-20T20:01:00.000000000Z status 500" ;; esac',
+      '    case "$scenario" in http5xx|http5xx-uppercase) case "$label" in t-plus-5|t-plus-10|t-plus-15) printf "%s\\n" "2026-08-20T20:04:00.000000000Z HTTP STATUS 503" ;; esac ;; esac',
+      '    if [ "$scenario:$label" = fatal:t-plus-5 ]; then printf "%s\\n" "2026-08-20T20:04:00.000000000Z fatal private payload"; fi',
+      '    if [ "$scenario:$label" = database:t-plus-5 ]; then printf "%s\\n" "2026-08-20T20:04:00.000000000Z database connection failed user@example.test"; fi',
+      '    if [ "$scenario:$label" = fatal-uppercase:t-plus-5 ]; then printf "%s\\n" "2026-08-20T20:04:00.000000000Z FATAL private payload"; fi',
+      '    if [ "$scenario:$label" = fatal-mixed:t-plus-5 ]; then printf "%s\\n" "2026-08-20T20:04:00.000000000Z UnHaNdLeD private payload"; fi',
+      '    if [ "$scenario:$label" = database-uppercase:t-plus-5 ]; then printf "%s\\n" "2026-08-20T20:04:00.000000000Z DATABASE CONNECTION FAILED"; fi',
+      '    if [ "$scenario:$label" = database-mixed:t-plus-5 ]; then printf "%s\\n" "2026-08-20T20:04:00.000000000Z DaTaBaSe ErRoR"; fi',
+      '    [ "$scenario:$label" != log-capture:t-plus-5 ] || exit 23 ;;',
+      '  *) exit 92 ;;',
+      'esac',
+      '',
+    ].join('\n'),
+  );
+  chmodSync(dockerStub, 0o755);
+  const curlStub = join(stub, 'curl');
+  writeFileSync(
+    curlStub,
+    [
+      '#!/bin/bash',
+      'set -euo pipefail',
+      'label="${GENESIS_09E_CHECKPOINT_LABEL:-none}"',
+      'scenario="${GENESIS_09E_OBSERVATION_SCENARIO:-success}"',
+      'args="$*"',
+      'record() { printf "%s:%s\\n" "$1" "$label" >> "$GENESIS_09E_INVOCATIONS"; }',
+      'case "$args" in',
+      '  *auth/csrf*)',
+      '    record csrf; previous=""; for value in "$@"; do if [ "$previous" = -c ]; then printf "synthetic-cookie\\n" > "$value"; fi; previous="$value"; done; printf "%s\\n" \'{"csrfToken":"synthetic-csrf"}\' ;;',
+      '  *auth/login*) record auth; if [ "$scenario:$label" = auth:t-plus-5 ]; then printf 403; else printf 401; fi ;;',
+      '  *__genesis_09e_missing*) record missing; if [ "$scenario:$label" = route:t-plus-5 ]; then printf 500; else printf 404; fi ;;',
+      '  *"-X POST"*) record method; if [ "$scenario:$label" = method:t-plus-5 ]; then printf 405; else printf 404; fi ;;',
+      '  *api.agenciagenesismkt.com.br/health*)',
+      '    record health; status=200; [ "$scenario:$label" != health:t-plus-5 ] || status=503',
+      '    latency=0.100; case "$scenario:$label" in latency:t-plus-2|latency:t-plus-5) latency=2.500 ;; latency-malformed:t-plus-5) latency=N/A ;; latency-nan:t-plus-5) latency=nan ;; latency-inf:t-plus-5) latency=inf ;; latency-missing:t-plus-5) latency= ;; latency-partial:t-plus-5) latency="0.100|partial" ;; latency-negative:t-plus-5) latency=-1.0 ;; esac',
+      '    printf "%s|%s" "$status" "$latency" ;;',
+      '  *) exit 93 ;;',
+      'esac',
+      '',
+    ].join('\n'),
+  );
+  chmodSync(curlStub, 0o755);
+  const pythonStub = join(stub, 'python3');
+  writeFileSync(
+    pythonStub,
+    [
+      '#!/bin/bash',
+      'set -euo pipefail',
+      'cat >/dev/null',
+      "printf 'synthetic-csrf\\n'",
+      '',
+    ].join('\n'),
+  );
+  chmodSync(pythonStub, 0o755);
+  const result = spawnSync(
+    BASH,
+    [
+      SCRIPT.replaceAll('\\', '/'),
+      '--simulate-observation',
+      release.replaceAll('\\', '/'),
+      scenario,
+      rollbackMarker.replaceAll('\\', '/'),
+      keepMarker.replaceAll('\\', '/'),
+    ],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: process.env.PATH,
+        GENESIS_09E_TEST_MODE: '1',
+        GENESIS_09E_TEST_RELEASE_ROOT: release.replaceAll('\\', '/'),
+        GENESIS_09E_INVOCATIONS: invocations.replaceAll('\\', '/'),
+        GENESIS_09E_TARGET_IMAGE: CONTRACT.images.target,
+        GENESIS_09E_DOCKER_BIN: dockerStub.replaceAll('\\', '/'),
+        GENESIS_09E_CURL_BIN: curlStub.replaceAll('\\', '/'),
+        GENESIS_09E_PYTHON_BIN: pythonStub.replaceAll('\\', '/'),
+      },
+    },
+  );
+  return { root, release, rollbackMarker, keepMarker, invocations, result };
+}
+
 test('versioned contract and static executable order are fail-closed', () => {
   assert.deepEqual(validateRepository(), {
     status: 'passed',
@@ -157,6 +275,7 @@ test('schema and semantic validator reject extras in every closed nested object'
     'images',
     'policy',
     'retention',
+    'observation',
     'rollback',
   ]) {
     const invalid = clone(CONTRACT);
@@ -173,6 +292,40 @@ test('schema and semantic validator reject extras in every closed nested object'
   ]) {
     const invalid = clone(CONTRACT);
     invalid.retention[secretField] = 'forbidden';
+    assert.throws(() => applySchema(invalid, SCHEMA, SCHEMA));
+    assert.throws(() => validateContract(invalid));
+  }
+  const nested = clone(CONTRACT);
+  nested.observation.thresholds.token = 'forbidden';
+  assert.throws(() => applySchema(nested, SCHEMA, SCHEMA));
+  assert.throws(() => validateContract(nested));
+});
+
+test('observation and interrupted recovery criteria are closed and exact', () => {
+  assert.deepEqual(CONTRACT.observation.checkpointsMinutes, [0, 2, 5, 10, 15]);
+  assert.equal(CONTRACT.observation.failureAction, 'rollback-and-block-keep');
+  assert.equal(
+    CONTRACT.observation.logClassification,
+    'portable-case-insensitive',
+  );
+  assert.equal(
+    CONTRACT.observation.metricValidation,
+    'finite-nonnegative-decimal-fail-closed',
+  );
+  assert.equal(
+    CONTRACT.rollback.interruptedAction,
+    'rollback-baseline-before-new-attempt',
+  );
+  for (const mutate of [
+    (value) => value.observation.checkpointsMinutes.splice(1, 1),
+    (value) => (value.observation.thresholds.cpuPercent = 91),
+    (value) => (value.observation.logClassification = 'gawk-ignorecase'),
+    (value) => (value.observation.metricValidation = 'coerce-to-zero'),
+    (value) => (value.observation.failureAction = 'continue'),
+    (value) => (value.rollback.interruptedAction = 'continue-ambiguously'),
+  ]) {
+    const invalid = clone(CONTRACT);
+    mutate(invalid);
     assert.throws(() => applySchema(invalid, SCHEMA, SCHEMA));
     assert.throws(() => validateContract(invalid));
   }
@@ -243,7 +396,7 @@ for (const [signal, expectedStatus] of [
       writeFileSync(input, `${SECRET}\n`);
       const command = [
         `export GENESIS_09E_READY_FILE='${ready.replaceAll('\\', '/')}'`,
-        `exec timeout --preserve-status -s ${signal} 1 bash '${SCRIPT.replaceAll('\\', '/')}' --simulate-credential-cleanup wait-signal '${parent.replaceAll('\\', '/')}' '${marker.replaceAll('\\', '/')}' < '${input.replaceAll('\\', '/')}'`,
+        `exec timeout --preserve-status -s ${signal} 3 bash '${SCRIPT.replaceAll('\\', '/')}' --simulate-credential-cleanup wait-signal '${parent.replaceAll('\\', '/')}' '${marker.replaceAll('\\', '/')}' < '${input.replaceAll('\\', '/')}'`,
       ].join('\n');
       const result = spawnSync(BASH, ['-c', command], {
         encoding: 'utf8',
@@ -394,6 +547,35 @@ test(
 );
 
 test(
+  'Linux mawk classifies uppercase and mixed-case fatal, database and HTTP 5xx logs',
+  { skip: process.env.GENESIS_09E_LINUX_TESTS !== '1', timeout: 30_000 },
+  () => {
+    const result = spawnSync(
+      'docker',
+      [
+        'run',
+        '--rm',
+        '--mount',
+        `type=bind,src=${SCRIPT.replaceAll('\\', '/')},dst=/repo/api-digest-deployment.sh,readonly`,
+        'debian:trixie-slim',
+        'bash',
+        '-c',
+        [
+          'set -euo pipefail',
+          'awk -W version 2>&1 | grep -qi mawk',
+          "printf '%s\\n' '2026-08-20T20:00:00.000000000Z FATAL event' '2026-08-20T20:01:00.000000000Z UnHaNdLeD event' '2026-08-20T20:02:00.000000000Z DATABASE CONNECTION FAILED' '2026-08-20T20:03:00.000000000Z DaTaBaSe ErRoR' '2026-08-20T20:04:00.000000000Z HTTP STATUS 503' > /tmp/raw.log",
+          'bash /repo/api-digest-deployment.sh --simulate-log-sanitizer /tmp/raw.log /tmp/sanitized.log 2026-08-20T20:00:00.000000000Z 2026-08-20T20:04:00.000000000Z',
+          "expected='2026-08-20T20:00:00.000000000Z|fatal\\n2026-08-20T20:01:00.000000000Z|fatal\\n2026-08-20T20:02:00.000000000Z|database-error\\n2026-08-20T20:03:00.000000000Z|database-error\\n2026-08-20T20:04:00.000000000Z|http-5xx'",
+          '[ "$(cat /tmp/sanitized.log)" = "$(printf "$expected")" ]',
+        ].join('\n'),
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  },
+);
+
+test(
   'KEEP to rollback to failed redeploy restores the pre-deployment current baseline',
   { skip: process.env.GENESIS_09E_LINUX_TESTS !== '1', timeout: 30_000 },
   () => {
@@ -485,6 +667,170 @@ for (const stage of ['recreate', 'health', 'pointer']) {
     }
   });
 }
+
+test('all five checkpoints execute every smoke and allow KEEP only after success', () => {
+  const state = observationSimulation('success');
+  try {
+    assert.equal(
+      state.result.status,
+      0,
+      `${state.result.stdout}\n${state.result.stderr}`,
+    );
+    assert.equal(existsSync(state.keepMarker), true);
+    assert.equal(existsSync(state.rollbackMarker), false);
+    const calls = readFileSync(state.invocations, 'utf8')
+      .trim()
+      .split(/\r?\n/u);
+    for (const checkpoint of [
+      't-plus-0',
+      't-plus-2',
+      't-plus-5',
+      't-plus-10',
+      't-plus-15',
+    ]) {
+      for (const required of [
+        'state',
+        'image-id',
+        'digest',
+        'dependency-postgres',
+        'dependency-traefik',
+        'ready',
+        'health',
+        'missing',
+        'method',
+        'csrf',
+        'auth',
+        'resources',
+        'logs',
+      ]) {
+        assert.ok(
+          calls.includes(`${required}:${checkpoint}`),
+          `${required}:${checkpoint}`,
+        );
+      }
+    }
+    const evidenceDirectory = join(
+      state.release,
+      'deployment-state',
+      'evidence',
+    );
+    const evidence = readdirSync(evidenceDirectory)
+      .filter((name) => name.endsWith('.sanitized.log'))
+      .map((name) => readFileSync(join(evidenceDirectory, name), 'utf8'))
+      .join('\n');
+    assert.equal(readdirSync(evidenceDirectory).length, 10);
+    assert.equal(evidence.includes('request-body'), false);
+    assert.equal(evidence.includes('email@'), false);
+    assert.equal(evidence.includes('token='), false);
+    assert.equal(evidence.includes('synthetic-invalid'), false);
+    assert.equal(existsSync(join(state.release, 'raw')), false);
+  } finally {
+    rmSync(state.root, { recursive: true, force: true });
+  }
+});
+
+for (const scenario of [
+  'restart',
+  'container-health',
+  'digest',
+  'dependency',
+  'ready',
+  'health',
+  'route',
+  'method',
+  'auth',
+  'latency',
+  'resource',
+  'memory',
+  'fatal',
+  'database',
+  'http5xx',
+  'fatal-uppercase',
+  'fatal-mixed',
+  'database-uppercase',
+  'database-mixed',
+  'http5xx-uppercase',
+  'latency-malformed',
+  'latency-nan',
+  'latency-inf',
+  'latency-missing',
+  'latency-partial',
+  'latency-negative',
+  'resource-malformed',
+  'resource-nan',
+  'resource-inf',
+  'resource-missing',
+  'resource-partial',
+  'resource-negative',
+  'memory-malformed',
+  'memory-nan',
+  'memory-inf',
+  'memory-missing',
+  'memory-partial',
+  'memory-negative',
+  'log-capture',
+]) {
+  test(`${scenario} observation failure rolls back and blocks KEEP`, () => {
+    const state = observationSimulation(scenario);
+    try {
+      assert.notEqual(
+        state.result.status,
+        0,
+        `${state.result.stdout}\n${state.result.stderr}`,
+      );
+      assert.equal(existsSync(state.keepMarker), false);
+      assert.equal(
+        readFileSync(state.rollbackMarker, 'utf8'),
+        'rollback-complete\n',
+      );
+      assert.equal(existsSync(join(state.release, 'raw')), false);
+    } finally {
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+}
+
+test(
+  'SIGKILL state live target with current rollback recovers baseline before a new attempt',
+  { skip: process.env.GENESIS_09E_LINUX_TESTS !== '1', timeout: 30_000 },
+  () => {
+    const result = spawnSync(
+      'docker',
+      [
+        'run',
+        '--rm',
+        '--mount',
+        `type=bind,src=${SCRIPT.replaceAll('\\', '/')},dst=/repo/api-digest-deployment.sh,readonly`,
+        'python:3.13-slim-trixie',
+        'bash',
+        '-c',
+        [
+          'set -euo pipefail',
+          'mkdir -p -m 0755 /work/release',
+          'set +e',
+          'GENESIS_09E_TEST_MODE=1 GENESIS_09E_TEST_RELEASE_ROOT=/work/release bash /repo/api-digest-deployment.sh --simulate-crash-state /work/release /work/live.image /work/recovery.trace',
+          'crash_status=$?',
+          'set -e',
+          '[ "$crash_status" -eq 137 ]',
+          `target='${CONTRACT.images.target}'`,
+          `rollback='${CONTRACT.images.rollback}'`,
+          `target_relative='deployment-state/overlays/${CONTRACT.images.target.split('sha256:')[1]}'`,
+          `rollback_relative='deployment-state/overlays/${CONTRACT.images.rollback.split('sha256:')[1]}'`,
+          '[ "$(cat /work/live.image)" = "$target" ]',
+          'expected_before="{\\"schemaVersion\\":\\"1.0.0\\",\\"current\\":\\"$rollback_relative\\",\\"previous\\":\\"$target_relative\\"}"',
+          '[ "$(cat /work/release/deployment-state/pointers.json)" = "$expected_before" ]',
+          'GENESIS_09E_TEST_MODE=1 GENESIS_09E_TEST_RELEASE_ROOT=/work/release bash /repo/api-digest-deployment.sh --simulate-crash-recovery /work/release /work/live.image /work/recovery.trace',
+          '[ "$(cat /work/live.image)" = "$rollback" ]',
+          '[ "$(cat /work/release/deployment-state/pointers.json)" = "$expected_before" ]',
+          "expected_trace='target-live-current-baseline\\nrollback-recreated\\nrollback-health-validated\\nnew-attempt-allowed'",
+          '[ "$(cat /work/recovery.trace)" = "$(printf "$expected_trace")" ]',
+        ].join('\n'),
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  },
+);
 
 function sanitize(lines) {
   return lines.map(({ at, message }) => {
@@ -602,6 +948,7 @@ test('real shell collector overlaps exclusive Docker bounds and filters to the c
           GENESIS_09E_INVOCATIONS: invocations.replaceAll('\\', '/'),
           GENESIS_09E_FAIL_ONCE: failOnce ? '1' : '0',
           GENESIS_09E_FAILED_ONCE: failed.replaceAll('\\', '/'),
+          GENESIS_09E_DOCKER_BIN: dockerStub.replaceAll('\\', '/'),
         },
       },
     );
