@@ -860,3 +860,65 @@ ao validator e, em Linux, ao manager; o candidato e seus fingerprints anteriores
 foram invalidados. A comparação do par também exige o mesmo `sourceCommit` e
 igualdade integral dos demais artefatos; drift não-Compose é rejeitado mesmo
 quando o manifesto divergente se auto-recalcula de forma consistente.
+
+## 0.8-MVP-09E-R1 — hardening do plano de deployment por digest
+
+O plano 09E foi transformado em contrato versionado e procedimento executável,
+mas não executado. A correção instala cleanup e traps antes de qualquer leitura
+ou persistência de credencial, limita `DOCKER_CONFIG` a um diretório privado
+exato em `/run`, preserva status de saída e cobre `EXIT`, `INT`, `TERM` e `HUP`
+com testes sem login real.
+
+Os checkpoints deixaram de usar janelas relativas móveis. Todos os snapshots
+partem do mesmo `deploymentStartedAt` UTC, o fechamento usa
+`observationEndedAt`, e a evidência persistida contém somente timestamps e
+classificações sanitizadas com SHA-256. Falha de checkpoint não avança cursor e
+não produz lacuna.
+
+A revisão independente também endureceu as fronteiras do plano: componentes do
+namespace são rejeitados sem seguir links antes de qualquer mutação; rollback
+falha fechado em cada etapa e só conclui após recreate, health e pointer; a
+consulta de logs sobrepõe um nanossegundo aos limites exclusivos do Docker e
+filtra depois o intervalo fechado. O schema fecha todos os objetos aninhados e
+as evidências sanitizadas e seus hashes persistem root-only em `0600`.
+
+A rodada final passou a verificar a própria raiz como `root:root 0755` antes de
+criar filhos, vinculou rollback ao `current` live pré-tentativa para manter o
+ciclo keep → rollback → redeploy fail-closed, e armou traps antes de qualquer
+evidência bruta. No-op e falha pré-credencial não deixam diretório temporário.
+
+Overlays, current/previous e retenção agora possuem schema e validator sob a
+raiz fixa `/opt/genesis/release/deployment-state`. O overlay aceita somente a
+imagem por digest do serviço `api`; pointers são atualizados em um documento
+único por replace atômico com `fsync`; traversal, path externo, link, tag
+mutável, campo de credencial e expansão a PostgreSQL/Traefik/migrate falham
+fechado. A consulta administrativa de exclusão foi removida do gate como
+`F-09E-L01: RESOLVED_AS_NON_REQUIRED_CHECK` sem ampliar permissões.
+
+Esta remediação não realizou login no GHCR, pull remoto, escrita na VPS,
+deployment, restart, migration, fixture, alteração de banco, DNS, firewall ou
+Traefik. A criação do namespace remoto e a execução do helper continuam
+dependentes de autorização humana específica após os Gates técnicos.
+
+O Gate 3 do PR #60 rejeitou a primeira entrega porque o helper havia reduzido o
+checkpoint ao health básico e não reconhecia o estado pós-`SIGKILL` em que o
+target já estava live mas `current` ainda apontava ao baseline. A rodada 5
+restaurou como contrato executável, em todos os cinco checkpoints, readiness com
+banco, rotas negativas, autenticação inválida sintética com CSRF válido, digest,
+restart/dependências, logs cumulativos classificados e streaks de 5xx, latência,
+CPU e memória. Falha em qualquer critério executa rollback e impede `KEEP`.
+
+A recuperação de interrupção agora valida o par current/previous e, para o estado
+exato live=target/current=rollback, restaura e valida o baseline antes de pull ou
+nova tentativa; divergência permanece fail-closed. Testes determinísticos cobrem
+cada critério, ausência de segredo/PII na evidência e um ciclo Linux real no qual
+a primeira invocação morre por `SIGKILL` e a seguinte converge para rollback antes
+de registrar `new-attempt-allowed`. Nenhuma dessas provas acessa produção ou GHCR.
+
+O Gate 2 da rodada 5 encontrou dois últimos caminhos fail-open no observador:
+`IGNORECASE` não é portátil no `awk` padrão do Ubuntu, e strings inválidas de
+latência/CPU/memória eram coercidas a zero. A rodada 6 substituiu a extensão por
+normalização POSIX com `tolower`, validou shape decimal finito e não negativo
+antes de qualquer comparação ou reset de streak, e adicionou regressões Linux
+para caixa alta/mista, `N/A`, `nan`, `inf`, campo ausente e saída parcial. Todas
+essas entradas agora executam rollback e impedem `KEEP`.
