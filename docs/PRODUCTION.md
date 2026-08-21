@@ -34,6 +34,33 @@ Operar uma instância pequena, compreensível e recuperável do frontend, da API
 do PostgreSQL. A abertura para usuários exige os controles mínimos deste
 documento; requisitos avançados permanecem no backlog pós-MVP.
 
+## Contrato, execução histórica e runtime
+
+Este runbook define o procedimento durável. A execução histórica bem-sucedida
+da 09E promoveu a imagem
+`ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb`
+e preservou
+`ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a`
+como rollback. O resultado foi `TASK_09E_DEPLOYED_AND_OBSERVED`, sem migration,
+e API, PostgreSQL e Traefik terminaram saudáveis.
+
+A imagem live deriva da application revision
+`0a56a8aee7c64bda59a1981888418e1ad03950c0`; o API `main`
+`f5a11c6ad5b6f4817198730b8311d27117ee01a7` adiciona o tooling privado de
+onboarding posterior e não é a revisão fonte do runtime implantado. O estado
+temporal completo, inclusive digests vigentes, continua na
+[memória canônica](memory/project-state.v1.json).
+
+O script exato executado na 09E tem SHA-256
+`e99dee6fb4610f9ca470aca8e12f00c4076e60ea45de3f9fb7a4f762208b6db6`
+e está preservado sob custódia operacional externa em
+`0.8-MVP-09E/deployment-execution/deploy-api-digest.sh`. Esse artefato não está
+comprovadamente versionado na `main`; a branch operacional local e suas
+modificações posteriores não são o procedimento oficial. Antes de qualquer
+futuro deployment da API, o procedimento deve ser reconciliado, revisado e
+versionado novamente, com nova autorização humana. Essa lacuna de
+rastreabilidade futura não representa incidente no runtime atual.
+
 <!-- genesis-memory-history:start -->
 
 ## Snapshot histórico da baseline incorporada
@@ -131,10 +158,11 @@ Redis, n8n, Evolution API, Portainer e outros serviços só entram quando uma
 funcionalidade do MVP demonstrar dependência real. A primeira topologia usa
 uma réplica da API enquanto rate limits e semáforos forem process-local.
 
-### Container e Compose de produção
+### Container e Compose versionados
 
 A stack base possui somente `postgres`, `migrate` e `api`, sob o projeto fixo
-`genesis`. API e migration usam exatamente a imagem
+`genesis`. O Compose versionado na `main` ainda usa para API e migration a
+imagem de baseline
 `ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a`;
 PostgreSQL usa o índice oficial
 `postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193`,
@@ -143,7 +171,8 @@ cuja variante `linux/amd64` é
 Tags e `build:` são proibidos. A API e o PostgreSQL não publicam portas; a API
 declara apenas exposição interna na porta 3000.
 
-Esse binding distingue três identidades. A application revision da imagem é
+Esse binding versionado distingue três identidades. A application revision da
+imagem de baseline é
 `9402d067897ab727fb369d7e696a11ba3b9cf68f`; seu config digest é
 `sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9`;
 e a release-manifest revision é o containing commit que incorpora o contrato
@@ -151,8 +180,9 @@ versionado. O commit corretivo não é apresentado como origem da imagem.
 `ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
 permanece somente como rollback/recovery anterior e é rejeitada pelo caminho
 normal de promoção. O rollback representa o release operacional anterior;
-incorporar esta correção versionada não faz deploy, não executa migration, não
-acessa o banco e não cria ou lê secret.
+incorporar esse contrato versionado, isoladamente, não faz deploy, migration ou
+acesso ao banco. O runtime live posterior da 09E é registrado separadamente
+acima e na memória canônica; não o infira do Compose de baseline.
 
 O PostgreSQL usa o volume externo `genesis-postgres-data`, que deve existir
 antes do `up` e não é removido por `docker compose down -v`. Bootstrap/admin,
@@ -385,7 +415,7 @@ Preserve a imagem e esse digest até a desativação da fixture. Exclusão,
 limpeza ou alteração de retenção do digest exige Gate posterior. Um deployment
 futuro deve consumir a referência por digest, nunca depender apenas da tag.
 
-### Estado remoto verificado e habilitação pendente
+### Controle remoto e habilitação de uma futura publicação
 
 A inspeção read-only de 20/08/2026 confirmou que o Environment
 `ghcr-production-release` existe e tem três proteções: required reviewer humano,
@@ -455,7 +485,7 @@ com essa tag não alcança o push.
 Essa entrega não depende de cadeia customizada de evidências. Controles
 avançados de supply chain são backlog pós-MVP.
 
-## Deploy manual
+## Deploy manual — procedimento durável
 
 O fluxo inicial é:
 
@@ -469,8 +499,11 @@ O fluxo inicial é:
 7. validar health, logs e smoke sintético;
 8. manter o novo digest ou executar rollback.
 
-O deploy permanece manual e documentado. Nenhuma etapa deste documento prova
-que a operação já ocorreu.
+O deploy permanece manual. A execução 09E já ocorreu conforme a seção de
+execução histórica acima; esta sequência não autoriza repetição nem transforma
+o helper local posterior em procedimento oficial. Cada novo deployment requer
+imagem e rollback imutáveis, procedimento novamente versionado, smoke,
+evidência e autorização humana próprios.
 
 ## Migrations
 
@@ -479,6 +512,14 @@ Migrations versionadas são a única fonte do schema; `synchronize` e
 credencial não fica disponível ao runtime. O job de migration é único e
 bloqueante. Rollback da aplicação não reverte schema automaticamente; uma
 migration incompatível exige plano específico antes do deploy.
+
+## Onboarding privado de OWNER
+
+A criação inicial autorizada de uma organização e de seu OWNER usa o CLI
+`npm run operator:owner`, nunca o seed legado ou uma rota pública. Pré-condições,
+autorização literal, TTY mascarado, transação `SERIALIZABLE`, verificação por
+`status` e smoke humano estão no
+[runbook de onboarding](PRODUCTION_OWNER_ONBOARDING.md).
 
 Bootstrap/admin é superuser somente durante inicialização e recuperação
 excepcional. A migration owner possui o database/schema, mas é explicitamente
@@ -762,7 +803,9 @@ autorização de usuários/dados reais são resolvidos exclusivamente em
 `docs/memory/project-state.v1.json`; não mantenha uma segunda lista temporal
 neste documento.
 
-## Candidato 0.8-MVP-06A — Traefik, TLS e modos de exposição
+<!-- genesis-memory-history:start -->
+
+## Snapshot histórico — candidato 0.8-MVP-06A e plano de exposição
 
 Este contrato está preparado na branch candidata e aguarda Gate 2; não está
 incorporado à `main` e não autoriza execução na VPS. A imagem oficial selecionada
@@ -814,9 +857,11 @@ Traefik ou recriá-lo em `internal`; se ele sair da topologia, restaurar
 estado ACME, tocar no volume PostgreSQL ou inferir privacidade pela ausência de
 regra UFW.
 
-Produção, DNS, firewall, GHCR, Vercel, certificados, usuários e dados reais
-continuam inalterados. HTTPS permanece não observado e o gate `RG-TLS` segue
-pendente.
+Naquele snapshot, produção, DNS, firewall, GHCR, Vercel, certificados, usuários
+e dados reais permaneciam inalterados. HTTPS ainda não havia sido observado e
+o gate `RG-TLS` seguia pendente; tarefas posteriores supersederam esse estado.
+
+<!-- genesis-memory-history:end -->
 
 ## Recovery incorporado — estado operacional
 

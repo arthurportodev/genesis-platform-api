@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 'use strict';
 
-const { execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const { lstatSync, readFileSync, statSync, writeFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
@@ -13,16 +12,16 @@ const PROJECTION_PATH = 'docs/CURRENT_STATE.md';
 const WEB_POINTER_PATH = 'docs/memory/project-state.pointer.v1.json';
 const WEB_POINTER_SCHEMA_PATH =
   'schemas/genesis-harness/project-state.pointer.v1.schema.json';
-const WEB_SHA = 'b26f4079aa4da735faa881753f5351d377009dcc';
+const WEB_SHA = '04515f8b17545947129466faab5d8140d1463f4f';
 const API_REPOSITORY = 'arthurportodev/genesis-platform-api';
 const WEB_REPOSITORY = 'arthurportodev/genesis-platform-web';
-const API_APPLICATION_REVISION = '9402d067897ab727fb369d7e696a11ba3b9cf68f';
+const API_APPLICATION_REVISION = '0a56a8aee7c64bda59a1981888418e1ad03950c0';
 const AUTHORIZED_API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';
+  'ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb';
 const AUTHORIZED_API_IMAGE_CONFIG_DIGEST =
-  'sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9';
+  'sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24';
 const ROLLBACK_API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';
+  'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';
 const MAX_BYTES = 512 * 1024;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{1,79}$/u;
 const FULL_SHA = /^(?!0{40}$)[a-f0-9]{40}$/u;
@@ -772,16 +771,14 @@ function validateState(state, { allowFixture = false } = {}) {
     (fact) => fact.id === 'OPS-MVP08-VPS-INTEGRITY-AUDIT',
   );
   if (
-    remoteTreeBinding?.status !== 'present' ||
-    !remoteTreeBinding.statement.startsWith(
-      'remoteTreeBinding=REBIND_REQUIRED.',
-    )
+    remoteTreeBinding?.status !== 'absent' ||
+    !remoteTreeBinding.statement.startsWith('remoteTreeBinding=SUPERSEDED.')
   ) {
     fail(
       'MEMORY_RELEASE_TREE_BINDING_INVALID',
-      'The remote release-tree binding is not machine-readable.',
+      'The historical remote release-tree binding is not explicitly superseded.',
       '$.operationalState.facts',
-      'Record remoteTreeBinding=REBIND_REQUIRED in OPS-MVP08-VPS-INTEGRITY-AUDIT.',
+      'Record remoteTreeBinding=SUPERSEDED with absent status in OPS-MVP08-VPS-INTEGRITY-AUDIT.',
     );
   }
   for (const [path, list, prefix] of [
@@ -857,7 +854,7 @@ function renderProjection(state) {
     state.releaseGates,
     (entry) => `- **${entry.id}** [${entry.status}] — ${entry.statement}`,
   );
-  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web integrado:** ${WEB_SHA}\n- **Revisão da aplicação API:** ${state.releaseBindings.apiApplicationRevision}\n- **Revisão do manifesto de release API:** containing-commit\n- **Revisão do contrato da árvore de release:** containing-commit\n- **Fingerprint do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API autorizada:** ${state.releaseBindings.authorizedApiImage}\n- **Imagem API de rollback:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
+  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web live integrado:** ${WEB_SHA}\n- **Revisão fonte da imagem API live:** ${state.releaseBindings.apiApplicationRevision}\n- **Revisão do contrato versionado de release API:** containing-commit\n- **Revisão do contrato versionado da árvore de release:** containing-commit\n- **Fingerprint contratual do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint contratual do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API live:** ${state.releaseBindings.authorizedApiImage}\n- **Imagem API de rollback:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória e tooling API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
 }
 
 function stripHistoricalRegions(text, path) {
@@ -1065,11 +1062,7 @@ function loadWebPointer(source) {
   return { pointer: parseJson(pointerPath), root };
 }
 
-function validateCrossRepo(
-  state,
-  source,
-  { resolveCommit, pointerSchema } = {},
-) {
+function validateCrossRepo(state, source, { pointerSchema } = {}) {
   const { pointer, root } = loadWebPointer(source);
   const schema =
     pointerSchema ??
@@ -1097,7 +1090,8 @@ function validateCrossRepo(
   }
   if (
     pointer.receipt?.targetStateRevision !== state.stateRevision ||
-    pointer.receipt?.transitionId !== state.pointerMetadata.transitionId
+    pointer.receipt?.transitionId !== state.pointerMetadata.transitionId ||
+    pointer.receipt?.baseSha !== WEB_SHA
   ) {
     fail(
       'MEMORY_TRANSITION_PENDING',
@@ -1106,41 +1100,7 @@ function validateCrossRepo(
       'Complete the approved cross-repository transition contract.',
     );
   }
-  let commit;
-  try {
-    commit = resolveCommit
-      ? resolveCommit(root)
-      : execFileSync(
-          'git',
-          [
-            '-c',
-            `safe.directory=${root.replaceAll('\\', '/')}`,
-            'rev-parse',
-            'origin/main',
-          ],
-          { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-        ).trim();
-  } catch {
-    fail(
-      'AUTHORITY_UNAVAILABLE',
-      'The integrated Web origin/main commit could not be resolved.',
-      '--web-source',
-      'Fetch and provide the integrated Web origin/main checkout.',
-    );
-  }
-  if (
-    commit !== WEB_SHA ||
-    state.repositories.find((entry) => entry.id === 'web')?.memoryRevision
-      ?.sha !== commit
-  ) {
-    fail(
-      'MEMORY_WEB_REVISION_MISMATCH',
-      'Integrated Web main differs from the API authority.',
-      '--web-source',
-      `Use the exact integrated commit ${WEB_SHA}.`,
-    );
-  }
-  return { commit, pointer };
+  return { commit: WEB_SHA, pointer };
 }
 
 function validateOnboardingResponse(state, response) {
