@@ -4,13 +4,13 @@
 
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
-- **Revisão de estado:** MVP-10B-LIVE-2026-08-21
-- **Atualização documentada:** 2026-08-21T20:32:57.3293060Z
+- **Revisão de estado:** MVP-10D-WEB-INTEGRATED-2026-08-24
+- **Atualização documentada:** 2026-08-24T17:27:36Z
 - **Fase:** 0.8-MVP — Primeira produção mínima viável
-- **Último trabalho concluído:** 0.8-MVP-10B — Correções de usabilidade do frontend em produção
-- **Trabalho vigente:** none — Nenhum trabalho de engenharia está ativo. O MVP está disponível para uso normal inicial do CRM pela organização Porto; novas melhorias devem ser priorizadas por experiência real.
-- **Próxima tarefa:** NORMAL-CRM-USE — Uso normal do CRM e avaliações orientadas por experiência real
-- **Web live integrado:** 04515f8b17545947129466faab5d8140d1463f4f
+- **Último trabalho concluído:** 0.8-MVP-10D — Correção do ETag de Lead enfraquecido pelo hosting integrada no Web
+- **Trabalho vigente:** none — Nenhum trabalho de engenharia está ativo nesta autoridade. A revisão Web e1ecc23 está integrada na main, mas não foi promovida nem observada em produção; qualquer promoção pertence a uma tarefa separada e ainda não autorizada.
+- **Próxima tarefa:** WEB-PRODUCTION-PROMOTION — Planejar, autorizar, promover e validar a revisão Web integrada em produção
+- **Web integrado na main:** e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e
 - **Revisão fonte da imagem API live:** 0a56a8aee7c64bda59a1981888418e1ad03950c0
 - **Revisão do contrato versionado de release API:** containing-commit
 - **Revisão do contrato versionado da árvore de release:** containing-commit
@@ -22,7 +22,7 @@ Esta projeção é gerada deterministicamente. Não edite manualmente; a autorid
 
 ## Estado operacional
 
-O MVP está live em app.agenciagenesismkt.com.br. O frontend 04515f8 está no deployment Vercel aprovado dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z; o proxy same-origin, login, API b45425d7, PostgreSQL e Traefik estão saudáveis. A organização Porto e exatamente um OWNER real estão ativos, sem registrar PII; a fixture sintética está DEACTIVATED e não há trabalho de engenharia ativo.
+A última produção Web observada permanece no commit 04515f8 e no deployment Vercel aprovado dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z. A main Web integra e1ecc23, incluindo a correção Weak ETag e as correções de auto-deadlock e refresh loop, mas essa revisão não foi promovida nem observada em produção. O proxy same-origin, login, API b45425d7, PostgreSQL e Traefik permanecem descritos pela última evidência operacional; nenhuma mutação de produção faz parte desta reconciliação.
 
 - **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
 - **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
@@ -61,7 +61,7 @@ O MVP está live em app.agenciagenesismkt.com.br. O frontend 04515f8 está no de
 - **OPS-REAL-DATA** [observed/partial] — Existe uma identidade OWNER real e a organização Porto está ativa. A 10A criou zero Leads, Sessions e Refresh Tokens; nenhum Lead de negócio foi criado durante 10A ou 10B.
 - **OPS-MVP08-API-RELEASE-BINDING** [observed/present] — O binding runtime atual seleciona a imagem b45425d7, derivada da application revision 0a56a8ae. O API main f5a11c6 contém tooling de onboarding posterior e não é apresentada como origem da imagem implantada.
 - **OPS-MVP08-API-ROLLBACK-BINDING** [observed/present] — A imagem a4dafefa é o rollback atual da API para o deployment 09E; a imagem 56ada pertence ao histórico anterior e não é o rollback operacional vigente.
-- **OPS-MVP08-WEB-INTEGRATED** [observed/present] — A revisão Web integrada e live é 04515f8b17545947129466faab5d8140d1463f4f, squash do PR #16; b26f4079 permanece somente como revisão histórica anterior.
+- **OPS-MVP08-WEB-INTEGRATED** [documented/present] — A revisão Web integrada na main é e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e, squash do PR #19. A revisão 04515f8 permanece como a última Web comprovadamente promovida e observada em produção; integração e deployment são estados distintos.
 - **OPS-MVP08-PREFLIGHT-BLOCKED** [observed/present] — Os gaps do preflight 08B foram fechados dentro dos Gates autorizados: bundle versionado, árvore atômica, Vercel Hobby, domínio, DNS, chave de origem, router protegido, smokes e rehearsal foram comprovados sem dados reais.
 - **OPS-MVP08-VPS-INTEGRITY-AUDIT** [observed/absent] — remoteTreeBinding=SUPERSEDED. Registro histórico: a auditoria MVP08 vinculava a árvore remota a df7fca7 e registrava REBIND_REQUIRED para aquele closeout. Não se infere nem se reconstrói um rebind. O deployment 09E posterior promoveu a imagem b45425d7, fonte 0a56a8a, preservou a4dafefa como rollback e observou API, PostgreSQL e Traefik saudáveis; esse é o estado runtime vigente.
 - **OPS-MVP08-RELEASE-TREE-CONTRACT** [documented/present] — O bundle v2 define onze diretórios, staging root-only, papéis current/rollback, quarentena e renameat2(RENAME_EXCHANGE). O rollback deriva do mesmo containing commit por duas substituições fechadas para a imagem previous-approved. O par exige papéis, imagens e fingerprints distintos, sourceCommit idêntico e todos os demais artefatos iguais; o contrato foi usado no rebuild atômico autorizado e permanece inalterado por esta reconciliação.
@@ -85,6 +85,8 @@ O MVP está live em app.agenciagenesismkt.com.br. O frontend 04515f8 está no de
 - **OPS-MVP10A-OWNER-ONBOARDED** [observed/present] — A organização Porto está ativa com exatamente um OWNER real e ativo. A criação privada foi atômica, o login humano passou e nenhuma PII ou credencial da conta é registrada nesta memória.
 - **OPS-MVP10A-API-MAIN** [documented/present] — O API main f5a11c6ad5b6f4817198730b8311d27117ee01a7 contém o CLI privado de onboarding OWNER. Essa revisão de tooling não substitui a application revision 0a56a8ae da imagem API live.
 - **OPS-MVP10B-USABILITY-CORRECTIONS** [observed/present] — A 10B resolveu em produção o 404 da raiz com / para /app, tornou a etapa do Lead imediatamente persistida e confirmada pelo servidor com restauração em falha, e passou a hidratar o e-mail atual no editor por identidade do Lead.
+- **OPS-MVP10D-WEB-INTEGRATED** [observed/present] — O PR Web #18 integrou a correção de equivalência do Weak ETag em ac87eb7 e o PR Web #19 integrou em e1ecc23 a reconciliação Web-first, o bloqueio de auto-deadlock e a preservação do snapshot autenticado durante refresh; ambas as CIs pós-merge passaram.
+- **OPS-MVP10D-PRODUCTION-UNCHANGED** [documented/not-authorized] — Nenhuma promoção Vercel, redeploy manual ou nova observação funcional de produção foi executada para ac87eb7 ou e1ecc23; as correções integradas não são declaradas como implantadas.
 - **OPS-MVP09E-HELPER-PROVENANCE** [documented/partial] — O deployment 09E foi executado com script aprovado SHA-256 e99dee6fb4610f9ca470aca8e12f00c4076e60ea45de3f9fb7a4f762208b6db6, preservado na custódia externa 0.8-MVP-09E/deployment-execution. O artefato exato não está comprovadamente versionado na main; isso não afeta o runtime atual, mas exige reconciliar e versionar novamente o procedimento antes de qualquer futuro deployment API.
 
 ## Blockers abertos
@@ -96,12 +98,14 @@ O MVP está live em app.agenciagenesismkt.com.br. O frontend 04515f8 está no de
 - **HD-MONITORING** — Qual política de alertas, destinatários e escalonamento será aprovada para o UptimeRobot e os sinais internos?
 - **HD-EXTERNAL-ONBOARDING** — Qual política aprovará novos usuários externos e dados comerciais além do uso inicial da organização Porto?
 - **HD-COMMERCIAL-HOSTING-PLAN** — Antes de onboarding externo ou uso comercial ampliado, o plano Vercel atual continua técnica e contratualmente compatível?
+- **HD-WEB-PRODUCTION-PROMOTION** — Qual janela, rollback e validação pós-deploy autorizarão a promoção da revisão Web e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e?
 
 ## Release gates
 
 - **RG-TLS** [passed] — TLS, hostname, CNAME e o caminho funcional same-origin protegido foram comprovados no domínio final; o acesso direto à API sem a chave continua 404.
 - **RG-RECOVERY** [passed] — Backup recuperável e restore sintético devem passar antes de dados reais.
 - **RG-CROSS-TENANT** [pending] — A evidência atual não é suficiente para aprovar o gate adversarial cross-tenant. Ele permanece pendente para expansão de usuários e dados e não invalida o estado live atual com um OWNER efetivo.
+- **RG-WEB-PRODUCTION-PROMOTION** [pending] — A revisão Web e1ecc23 deve receber autorização, promoção controlada, rollback verificável e observação funcional antes de qualquer afirmação de correção em produção.
 
 ## Restrições atuais
 
@@ -112,5 +116,6 @@ O MVP está live em app.agenciagenesismkt.com.br. O frontend 04515f8 está no de
 - **OR-FUNCTIONAL-API-ORIGIN-PROTECTED** — A API funcional é acessível somente pelo proxy same-origin /api/v1 do domínio final e pelo Traefik protegido; a origem direta sem chave permanece 404.
 - **OR-VERCEL-HOBBY-TECHNICAL-MVP** — O frontend live e o OWNER real foram aprovados no plano Vercel atual; a adequação técnica e contratual para onboarding externo ou uso comercial ampliado permanece decisão específica pendente.
 - **OR-FUTURE-PRODUCTION-MUTATION** — Qualquer futura alteração de produção continua exigindo escopo, rollback e autorização humana explícitos; esta reconciliação documental não concede autorização operacional.
+- **OR-WEB-INTEGRATED-NOT-DEPLOYED** — A revisão Web integrada e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e não pode ser tratada como deployed ou observada em produção; a última revisão Web promovida comprovada permanece 04515f8b17545947129466faab5d8140d1463f4f.
 - **OR-API-DEPLOYMENT-HELPER-PROVENANCE** — O script exato executado na 09E está preservado somente na custódia operacional externa e não está comprovadamente versionado na main atual.
 - **OR-RHO-OUT-OF-SCOPE** — RHO permanece fora do escopo desta release e não foi consultado ou alterado.

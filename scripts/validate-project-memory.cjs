@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
+const { execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const { lstatSync, readFileSync, statSync, writeFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
@@ -12,7 +13,12 @@ const PROJECTION_PATH = 'docs/CURRENT_STATE.md';
 const WEB_POINTER_PATH = 'docs/memory/project-state.pointer.v1.json';
 const WEB_POINTER_SCHEMA_PATH =
   'schemas/genesis-harness/project-state.pointer.v1.schema.json';
-const WEB_SHA = '04515f8b17545947129466faab5d8140d1463f4f';
+const WEB_SHA = 'e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e';
+const WEB_RECEIPT_BASE_SHA = 'ac87eb78640e641c67bf6e354ad497b421d487f8';
+const WEB_TRANSITION_ID = 'MVP-10E-CROSS-REPO';
+const TARGET_STATE_REVISION = 'MVP-10D-WEB-INTEGRATED-2026-08-24';
+const WEB_POINTER_SCHEMA_FINGERPRINT =
+  'b871059879b7bef315e1e2d354a8a343bbcf99588181ff87a29e92baaec89b64';
 const API_REPOSITORY = 'arthurportodev/genesis-platform-api';
 const WEB_REPOSITORY = 'arthurportodev/genesis-platform-web';
 const API_APPLICATION_REVISION = '0a56a8aee7c64bda59a1981888418e1ad03950c0';
@@ -327,6 +333,29 @@ function schemaEqual(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (isObject(value))
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
+  return JSON.stringify(value);
+}
+
+function validatePointerSchemaContract(schema) {
+  const fingerprint = createHash('sha256')
+    .update(canonicalJson(schema), 'utf8')
+    .digest('hex');
+  if (fingerprint !== WEB_POINTER_SCHEMA_FINGERPRINT)
+    fail(
+      'MEMORY_POINTER_SCHEMA_MISMATCH',
+      'The Web pointer schema does not match the reviewed closed contract.',
+      WEB_POINTER_SCHEMA_PATH,
+      `Use the pointer schema from the integrated Web revision ${WEB_SHA}.`,
+    );
+}
+
 function resolveSchemaRef(rootSchema, reference, path, code) {
   if (typeof reference !== 'string' || !reference.startsWith('#/')) {
     fail(
@@ -617,6 +646,13 @@ function validateState(state, { allowFixture = false } = {}) {
       'Restore the canonical Genesis project identity.',
     );
   }
+  if (state.stateRevision !== TARGET_STATE_REVISION)
+    fail(
+      'MEMORY_STATE_REVISION_MISMATCH',
+      'The authority state revision does not activate the approved Web receipt target.',
+      '$.stateRevision',
+      `Use ${TARGET_STATE_REVISION}.`,
+    );
   validateTimestamp(state.updatedAt, '$.updatedAt');
   if (
     JSON.stringify(state.authority) !==
@@ -815,13 +851,15 @@ function validateState(state, { allowFixture = false } = {}) {
     state.pointerMetadata?.repository !== WEB_REPOSITORY ||
     state.pointerMetadata?.path !== WEB_POINTER_PATH ||
     state.pointerMetadata?.mode !== 'pointer-only' ||
+    state.pointerMetadata?.transitionId !== WEB_TRANSITION_ID ||
+    state.pointerMetadata?.targetStateRevision !== TARGET_STATE_REVISION ||
     state.pointerMetadata?.targetStateRevision !== state.stateRevision
   ) {
     fail(
       'MEMORY_POINTER_MISMATCH',
       'Pointer metadata does not match this authority.',
       '$.pointerMetadata',
-      'Restore the Web pointer-only receipt metadata.',
+      'Restore the exact Candidate A Web pointer-only receipt metadata.',
     );
   }
   validateReferenceIds(state);
@@ -854,7 +892,7 @@ function renderProjection(state) {
     state.releaseGates,
     (entry) => `- **${entry.id}** [${entry.status}] — ${entry.statement}`,
   );
-  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web live integrado:** ${WEB_SHA}\n- **Revisão fonte da imagem API live:** ${state.releaseBindings.apiApplicationRevision}\n- **Revisão do contrato versionado de release API:** containing-commit\n- **Revisão do contrato versionado da árvore de release:** containing-commit\n- **Fingerprint contratual do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint contratual do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API live:** ${state.releaseBindings.authorizedApiImage}\n- **Imagem API de rollback:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória e tooling API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
+  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web integrado na main:** ${WEB_SHA}\n- **Revisão fonte da imagem API live:** ${state.releaseBindings.apiApplicationRevision}\n- **Revisão do contrato versionado de release API:** containing-commit\n- **Revisão do contrato versionado da árvore de release:** containing-commit\n- **Fingerprint contratual do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint contratual do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API live:** ${state.releaseBindings.authorizedApiImage}\n- **Imagem API de rollback:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória e tooling API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
 }
 
 function stripHistoricalRegions(text, path) {
@@ -1062,11 +1100,56 @@ function loadWebPointer(source) {
   return { pointer: parseJson(pointerPath), root };
 }
 
-function validateCrossRepo(state, source, { pointerSchema } = {}) {
+function containingCommit(root) {
+  const provenancePaths = [WEB_POINTER_PATH, WEB_POINTER_SCHEMA_PATH];
+  try {
+    const status = execFileSync(
+      'git',
+      [
+        'status',
+        '--porcelain=v1',
+        '--untracked-files=all',
+        '--',
+        ...provenancePaths,
+      ],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
+    ).trim();
+    if (status !== '') return null;
+    const commit = execFileSync(
+      'git',
+      ['log', '-1', '--format=%H', '--', WEB_POINTER_PATH],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
+    ).trim();
+    if (!FULL_SHA.test(commit)) return null;
+    execFileSync('git', ['diff', '--quiet', commit, '--', ...provenancePaths], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return commit;
+  } catch {
+    return null;
+  }
+}
+
+function validateCrossRepo(
+  state,
+  source,
+  { pointerSchema, resolveContainingCommit = containingCommit } = {},
+) {
   const { pointer, root } = loadWebPointer(source);
   const schema =
     pointerSchema ??
     parseJson(join(root, ...WEB_POINTER_SCHEMA_PATH.split('/')));
+  validatePointerSchemaContract(schema);
   scanSecrets(pointer, '$web');
   validateJsonSchema(pointer, schema, {
     rootSchema: schema,
@@ -1090,8 +1173,11 @@ function validateCrossRepo(state, source, { pointerSchema } = {}) {
   }
   if (
     pointer.receipt?.targetStateRevision !== state.stateRevision ||
+    pointer.receipt?.targetStateRevision !== TARGET_STATE_REVISION ||
     pointer.receipt?.transitionId !== state.pointerMetadata.transitionId ||
-    pointer.receipt?.baseSha !== WEB_SHA
+    pointer.receipt?.transitionId !== WEB_TRANSITION_ID ||
+    pointer.receipt?.baseSha !== WEB_RECEIPT_BASE_SHA ||
+    pointer.receipt?.revisionSource !== 'containing-commit'
   ) {
     fail(
       'MEMORY_TRANSITION_PENDING',
@@ -1100,7 +1186,22 @@ function validateCrossRepo(state, source, { pointerSchema } = {}) {
       'Complete the approved cross-repository transition contract.',
     );
   }
-  return { commit: WEB_SHA, pointer };
+  const commit = resolveContainingCommit(root);
+  if (commit === null)
+    fail(
+      'MEMORY_POINTER_PROVENANCE_INVALID',
+      'The Web pointer is not available from a clean containing commit.',
+      '--web-source',
+      'Use the clean integrated Web main checkout.',
+    );
+  if (commit !== WEB_SHA)
+    fail(
+      'MEMORY_WEB_REVISION_MISMATCH',
+      'The Web pointer containing commit does not match the canonical API binding.',
+      '--web-source',
+      `Use the integrated Web revision ${WEB_SHA}.`,
+    );
+  return { commit, pointer };
 }
 
 function validateOnboardingResponse(state, response) {
@@ -1245,7 +1346,10 @@ function main() {
       const cross = validateCrossRepo(state, args.webSource);
       output({
         ok: true,
-        code: 'MEMORY_CROSS_REPO_VALID',
+        code: 'MEMORY_RESOLVED',
+        authorityResolved: true,
+        transitionPending: false,
+        staleFallbackUsed: false,
         stateRevision: state.stateRevision,
         webMemoryRevision: cross.commit,
         pointerOnly: true,
@@ -1291,6 +1395,7 @@ function main() {
       ok: false,
       code: failure.code,
       codes: [failure.code],
+      staleFallbackUsed: false,
       path: failure.path,
       nextAction: failure.nextAction,
     });
@@ -1306,13 +1411,19 @@ module.exports = {
   PROJECTION_PATH,
   SCHEMA_PATH,
   WEB_SHA,
+  WEB_RECEIPT_BASE_SHA,
+  WEB_TRANSITION_ID,
+  WEB_POINTER_SCHEMA_FINGERPRINT,
+  TARGET_STATE_REVISION,
   MemoryError,
   parseArguments,
   renderProjection,
   lintTemporalAssertions,
+  containingCommit,
   validateCrossRepo,
   validateLocal,
   validateOnboardingResponse,
+  validatePointerSchemaContract,
   validateRepositoryEvidence,
   validateSchemaContract,
   validateStableSources,

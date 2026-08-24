@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
   "instanceKind": "current",
-  "stateRevision": "MVP-10B-LIVE-2026-08-21",
+  "stateRevision": "MVP-10D-WEB-INTEGRATED-2026-08-24",
   "project": {
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-21T20:32:57.3293060Z",
+  "updatedAt": "2026-08-24T17:27:36Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -30,7 +30,7 @@
       "status": "integrated",
       "memoryRevision": {
         "kind": "commit",
-        "sha": "04515f8b17545947129466faab5d8140d1463f4f"
+        "sha": "e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e"
       }
     }
   ],
@@ -57,35 +57,35 @@
     "authorizedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb",
     "authorizedApiImageConfigDigest": "sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24",
     "rollbackApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a",
-    "webIntegratedRevision": "04515f8b17545947129466faab5d8140d1463f4f"
+    "webIntegratedRevision": "e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e"
   },
   "phase": {
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-10B",
-      "title": "Correções de usabilidade do frontend em produção",
-      "completedAt": "2026-08-21T20:32:57.3293060Z",
+      "id": "0.8-MVP-10D",
+      "title": "Correção do ETag de Lead enfraquecido pelo hosting integrada no Web",
+      "completedAt": "2026-08-24T17:27:36Z",
       "evidenceIds": [
-        "EV-MVP10B-WEB-PR16",
-        "EV-MVP10B-WEB-POSTMERGE-CI",
-        "EV-MVP10B-PRODUCTION-PROMOTION"
+        "EV-MVP10D-WEB-PR18",
+        "EV-MVP10D-WEB-POSTMERGE-CI",
+        "EV-MVP10E-WEB-PR19",
+        "EV-MVP10E-WEB-POSTMERGE-CI"
       ]
     }
   },
   "currentWork": {
     "status": "none",
-    "summary": "Nenhum trabalho de engenharia está ativo. O MVP está disponível para uso normal inicial do CRM pela organização Porto; novas melhorias devem ser priorizadas por experiência real."
+    "summary": "Nenhum trabalho de engenharia está ativo nesta autoridade. A revisão Web e1ecc23 está integrada na main, mas não foi promovida nem observada em produção; qualquer promoção pertence a uma tarefa separada e ainda não autorizada."
   },
   "nextTask": {
-    "id": "NORMAL-CRM-USE",
-    "title": "Uso normal do CRM e avaliações orientadas por experiência real"
+    "id": "WEB-PRODUCTION-PROMOTION",
+    "title": "Planejar, autorizar, promover e validar a revisão Web integrada em produção"
   },
   "operationalState": {
-    "summary": "O MVP está live em app.agenciagenesismkt.com.br. O frontend 04515f8 está no deployment Vercel aprovado dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z; o proxy same-origin, login, API b45425d7, PostgreSQL e Traefik estão saudáveis. A organização Porto e exatamente um OWNER real estão ativos, sem registrar PII; a fixture sintética está DEACTIVATED e não há trabalho de engenharia ativo.",
-    "basis": "observed",
-    "documentedAt": "2026-08-21T20:32:57.3293060Z",
-    "observedAt": "2026-08-21T20:32:57.3293060Z",
+    "summary": "A última produção Web observada permanece no commit 04515f8 e no deployment Vercel aprovado dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z. A main Web integra e1ecc23, incluindo a correção Weak ETag e as correções de auto-deadlock e refresh loop, mas essa revisão não foi promovida nem observada em produção. O proxy same-origin, login, API b45425d7, PostgreSQL e Traefik permanecem descritos pela última evidência operacional; nenhuma mutação de produção faz parte desta reconciliação.",
+    "basis": "documented",
+    "documentedAt": "2026-08-24T17:27:36Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -426,14 +426,15 @@
       {
         "id": "OPS-MVP08-WEB-INTEGRATED",
         "status": "present",
-        "statement": "A revisão Web integrada e live é 04515f8b17545947129466faab5d8140d1463f4f, squash do PR #16; b26f4079 permanece somente como revisão histórica anterior.",
-        "basis": "observed",
-        "documentedAt": "2026-08-21T20:32:57.3293060Z",
-        "observedAt": "2026-08-21T20:32:57.3293060Z",
+        "statement": "A revisão Web integrada na main é e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e, squash do PR #19. A revisão 04515f8 permanece como a última Web comprovadamente promovida e observada em produção; integração e deployment são estados distintos.",
+        "basis": "documented",
+        "documentedAt": "2026-08-24T17:27:36Z",
         "evidenceIds": [
           "EV-MVP10B-WEB-PR16",
           "EV-MVP10B-WEB-POSTMERGE-CI",
-          "EV-MVP10B-PRODUCTION-PROMOTION"
+          "EV-MVP10B-PRODUCTION-PROMOTION",
+          "EV-MVP10E-WEB-PR19",
+          "EV-MVP10E-WEB-POSTMERGE-CI"
         ]
       },
       {
@@ -669,6 +670,33 @@
           "EV-MVP10B-WEB-PR16",
           "EV-MVP10B-WEB-POSTMERGE-CI",
           "EV-MVP10B-PRODUCTION-PROMOTION"
+        ]
+      },
+      {
+        "id": "OPS-MVP10D-WEB-INTEGRATED",
+        "status": "present",
+        "statement": "O PR Web #18 integrou a correção de equivalência do Weak ETag em ac87eb7 e o PR Web #19 integrou em e1ecc23 a reconciliação Web-first, o bloqueio de auto-deadlock e a preservação do snapshot autenticado durante refresh; ambas as CIs pós-merge passaram.",
+        "basis": "observed",
+        "documentedAt": "2026-08-24T17:27:36Z",
+        "observedAt": "2026-08-24T17:27:36Z",
+        "evidenceIds": [
+          "EV-MVP10D-WEB-PR18",
+          "EV-MVP10D-WEB-POSTMERGE-CI",
+          "EV-MVP10E-WEB-PR19",
+          "EV-MVP10E-WEB-POSTMERGE-CI"
+        ]
+      },
+      {
+        "id": "OPS-MVP10D-PRODUCTION-UNCHANGED",
+        "status": "not-authorized",
+        "statement": "Nenhuma promoção Vercel, redeploy manual ou nova observação funcional de produção foi executada para ac87eb7 ou e1ecc23; as correções integradas não são declaradas como implantadas.",
+        "basis": "documented",
+        "documentedAt": "2026-08-24T17:27:36Z",
+        "evidenceIds": [
+          "EV-MVP10D-WEB-PR18",
+          "EV-MVP10D-WEB-POSTMERGE-CI",
+          "EV-MVP10E-WEB-PR19",
+          "EV-MVP10E-WEB-POSTMERGE-CI"
         ]
       },
       {
@@ -932,6 +960,30 @@
       "uri": "artifact://genesis-platform/0.8-MVP-10B/03-exceptional-promotion.json",
       "sha256": "c758288a3518cdbc369c5eb2a6d53638d8a54872e398bdfd2efeceeb12581859",
       "capturedAt": "2026-08-21T20:32:57.3293060Z"
+    },
+    {
+      "id": "EV-MVP10D-WEB-PR18",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/18",
+      "capturedAt": "2026-08-24T13:52:25Z"
+    },
+    {
+      "id": "EV-MVP10D-WEB-POSTMERGE-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/actions/runs/32735246934",
+      "capturedAt": "2026-08-24T13:56:50Z"
+    },
+    {
+      "id": "EV-MVP10E-WEB-PR19",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/19",
+      "capturedAt": "2026-08-24T17:22:58Z"
+    },
+    {
+      "id": "EV-MVP10E-WEB-POSTMERGE-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/actions/runs/32756302651",
+      "capturedAt": "2026-08-24T17:27:36Z"
     }
   ],
   "blockers": [
@@ -989,6 +1041,12 @@
       "question": "Antes de onboarding externo ou uso comercial ampliado, o plano Vercel atual continua técnica e contratualmente compatível?",
       "whyMaterial": "O MVP live e o OWNER real não comprovam, por si, adequação de plano, custo ou termos para expansão comercial.",
       "blockingTaskIds": ["FUTURE-EXTERNAL-ONBOARDING"]
+    },
+    {
+      "id": "HD-WEB-PRODUCTION-PROMOTION",
+      "question": "Qual janela, rollback e validação pós-deploy autorizarão a promoção da revisão Web e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e?",
+      "whyMaterial": "A integração em main não comprova deployment nem comportamento em produção; a promoção exige autorização e evidência operacionais próprias.",
+      "blockingTaskIds": ["WEB-PRODUCTION-PROMOTION"]
     }
   ],
   "supersededPlans": [
@@ -1043,6 +1101,16 @@
       "statement": "A evidência atual não é suficiente para aprovar o gate adversarial cross-tenant. Ele permanece pendente para expansão de usuários e dados e não invalida o estado live atual com um OWNER efetivo.",
       "status": "pending",
       "sourceEvidenceIds": ["EV-API-PRODUCTION-BASE"]
+    },
+    {
+      "id": "RG-WEB-PRODUCTION-PROMOTION",
+      "statement": "A revisão Web e1ecc23 deve receber autorização, promoção controlada, rollback verificável e observação funcional antes de qualquer afirmação de correção em produção.",
+      "status": "pending",
+      "sourceEvidenceIds": [
+        "EV-MVP10D-WEB-PR18",
+        "EV-MVP10E-WEB-PR19",
+        "EV-MVP10E-WEB-POSTMERGE-CI"
+      ]
     }
   ],
   "currentRestrictions": [
@@ -1107,6 +1175,17 @@
       ]
     },
     {
+      "id": "OR-WEB-INTEGRATED-NOT-DEPLOYED",
+      "statement": "A revisão Web integrada e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e não pode ser tratada como deployed ou observada em produção; a última revisão Web promovida comprovada permanece 04515f8b17545947129466faab5d8140d1463f4f.",
+      "reviewTrigger": "Reavaliar somente após Gate de promoção, deployment identificável, CI aplicável e validação pós-deploy da revisão e1ecc23.",
+      "sourceEvidenceIds": [
+        "EV-MVP10B-PRODUCTION-PROMOTION",
+        "EV-MVP10D-WEB-PR18",
+        "EV-MVP10E-WEB-PR19",
+        "EV-MVP10E-WEB-POSTMERGE-CI"
+      ]
+    },
+    {
       "id": "OR-API-DEPLOYMENT-HELPER-PROVENANCE",
       "statement": "O script exato executado na 09E está preservado somente na custódia operacional externa e não está comprovadamente versionado na main atual.",
       "reviewTrigger": "Antes de qualquer futuro deployment da API, reconciliar, revisar e versionar novamente o procedimento; não inferir o artefato a partir da branch local 09E.",
@@ -1127,7 +1206,7 @@
     "path": "docs/memory/project-state.pointer.v1.json",
     "schemaVersion": "1.0.0",
     "mode": "pointer-only",
-    "transitionId": "MVP-10C-CROSS-REPO",
-    "targetStateRevision": "MVP-10B-LIVE-2026-08-21"
+    "transitionId": "MVP-10E-CROSS-REPO",
+    "targetStateRevision": "MVP-10D-WEB-INTEGRATED-2026-08-24"
   }
 }
