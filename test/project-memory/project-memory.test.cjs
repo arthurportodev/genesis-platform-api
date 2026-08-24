@@ -17,7 +17,11 @@ const {
   AUTHORITY_PATH,
   PROJECTION_PATH,
   SCHEMA_PATH,
+  TARGET_STATE_REVISION,
+  WEB_RECEIPT_BASE_SHA,
   WEB_SHA,
+  WEB_TRANSITION_ID,
+  containingCommit,
   renderProjection,
   validateCrossRepo,
   validateOnboardingResponse,
@@ -46,6 +50,9 @@ const FIXTURES = [];
 const REPOSITORY_EVIDENCE_PREFIX =
   'repo://arthurportodev/genesis-platform-api/';
 const POINTER_SCHEMA = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: 'https://github.com/arthurportodev/genesis-platform-web/schemas/genesis-harness/project-state.pointer.v1.schema.json',
+  title: 'Genesis Platform Web canonical-state pointer v1',
   type: 'object',
   additionalProperties: false,
   required: [
@@ -77,13 +84,7 @@ const POINTER_SCHEMA = {
         path: { const: AUTHORITY_PATH },
         acceptedSchemaMajor: { const: 1 },
         resolutionOrder: {
-          type: 'array',
-          minItems: 1,
-          maxItems: 3,
-          uniqueItems: true,
-          items: {
-            enum: ['explicit-checkout', 'sibling-checkout', 'remote-read-only'],
-          },
+          const: ['explicit-checkout', 'sibling-checkout', 'remote-read-only'],
         },
       },
     },
@@ -98,15 +99,48 @@ const POINTER_SCHEMA = {
         'generatedAt',
       ],
       properties: {
-        transitionId: { type: 'string' },
-        targetStateRevision: { type: 'string' },
-        baseSha: { type: 'string', pattern: '^[a-f0-9]{40}$' },
-        revisionSource: { const: 'integrated-revision' },
+        transitionId: {
+          type: 'string',
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{1,79}$',
+        },
+        targetStateRevision: {
+          type: 'string',
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$',
+        },
+        baseSha: { type: 'string', pattern: '^(?!0{40}$)[a-f0-9]{40}$' },
+        revisionSource: { const: 'containing-commit' },
         generatedAt: { type: 'string', format: 'date-time' },
       },
     },
   },
 };
+
+function candidatePointer() {
+  return {
+    schemaVersion: '1.0.0',
+    instanceKind: 'current',
+    project: 'genesis-platform',
+    mode: 'pointer-only',
+    authority: {
+      repository: 'arthurportodev/genesis-platform-api',
+      branch: 'main',
+      path: AUTHORITY_PATH,
+      acceptedSchemaMajor: 1,
+      resolutionOrder: [
+        'explicit-checkout',
+        'sibling-checkout',
+        'remote-read-only',
+      ],
+    },
+    receipt: {
+      transitionId: WEB_TRANSITION_ID,
+      targetStateRevision: TARGET_STATE_REVISION,
+      baseSha: WEB_RECEIPT_BASE_SHA,
+      revisionSource: 'containing-commit',
+      generatedAt: '2026-08-24T14:18:54.2261794Z',
+    },
+  };
+}
 
 function target(root, path) {
   return join(root, ...path.split('/'));
@@ -158,6 +192,38 @@ function run(root, args = ['--mode', 'local']) {
   return { ...result, json: result.stdout ? JSON.parse(result.stdout) : null };
 }
 
+function git(root, args) {
+  const result = spawnSync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    shell: false,
+    windowsHide: true,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+}
+
+function gitWebFixture() {
+  const root = mkdtempSync(join(tmpdir(), 'genesis-web-provenance-'));
+  FIXTURES.push(root);
+  writeJson(
+    root,
+    candidatePointer(),
+    'docs/memory/project-state.pointer.v1.json',
+  );
+  writeJson(
+    root,
+    POINTER_SCHEMA,
+    'schemas/genesis-harness/project-state.pointer.v1.schema.json',
+  );
+  git(root, ['init']);
+  git(root, ['config', 'user.name', 'Genesis Memory Test']);
+  git(root, ['config', 'user.email', 'memory-test@example.invalid']);
+  git(root, ['add', '.']);
+  git(root, ['commit', '-m', 'Add Web pointer contract']);
+  return root;
+}
+
 function expectCode(result, code, status = 1) {
   assert.equal(result.status, status, result.stderr);
   assert.equal(result.json.ok, false);
@@ -175,7 +241,7 @@ test('accepts the complete API authority and generated projection', () => {
   assert.deepEqual(result.json, {
     ok: true,
     code: 'MEMORY_VALID',
-    stateRevision: 'MVP-10B-LIVE-2026-08-21',
+    stateRevision: TARGET_STATE_REVISION,
     schemaValidated: true,
     semanticRulesValidated: true,
     projectionCurrent: true,
@@ -284,6 +350,15 @@ test('requires the exact integrated Web memoryRevision', () => {
     'a'.repeat(40);
   writeJson(root, state);
   expectCode(run(root), 'MEMORY_WEB_REVISION_MISMATCH');
+});
+
+test('requires the exact Candidate A target state revision', () => {
+  const root = fixture();
+  const state = readJson(root);
+  state.stateRevision = 'MVP-10B-LIVE-2026-08-21';
+  state.pointerMetadata.targetStateRevision = state.stateRevision;
+  writeJson(root, state);
+  expectCode(run(root), 'MEMORY_STATE_REVISION_MISMATCH');
 });
 
 test('rejects observed facts without direct observation time', () => {
@@ -631,7 +706,7 @@ test('projection is derived only from the authority object', () => {
   assert.match(projection, /sha256:a4dafefab191/u);
 });
 
-test('cross-repo contract accepts the integrated Web live revision receipt', () => {
+test('cross-repo contract resolves the clean integrated Candidate A receipt', () => {
   const web = mkdtempSync(join(tmpdir(), 'genesis-web-pointer-'));
   FIXTURES.push(web);
   const pointerPath = target(web, 'docs/memory/project-state.pointer.v1.json');
@@ -655,20 +730,152 @@ test('cross-repo contract accepts the integrated Web live revision receipt', () 
         ],
       },
       receipt: {
-        transitionId: 'MVP-10C-CROSS-REPO',
-        targetStateRevision: 'MVP-10B-LIVE-2026-08-21',
-        baseSha: WEB_SHA,
-        revisionSource: 'integrated-revision',
-        generatedAt: '2026-08-10T12:28:06.317Z',
+        transitionId: WEB_TRANSITION_ID,
+        targetStateRevision: TARGET_STATE_REVISION,
+        baseSha: WEB_RECEIPT_BASE_SHA,
+        revisionSource: 'containing-commit',
+        generatedAt: '2026-08-24T14:18:54.2261794Z',
       },
     },
     'docs/memory/project-state.pointer.v1.json',
   );
   const result = validateCrossRepo(readJson(ROOT), web, {
     pointerSchema: POINTER_SCHEMA,
+    resolveContainingCommit: () => WEB_SHA,
   });
   assert.equal(result.commit, WEB_SHA);
   assert.equal(result.pointer.mode, 'pointer-only');
+});
+
+test('cross-repo contract rejects previous and arbitrary Web containing commits', () => {
+  for (const commit of [
+    '04515f8b17545947129466faab5d8140d1463f4f',
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  ]) {
+    const web = mkdtempSync(join(tmpdir(), 'genesis-web-revision-'));
+    FIXTURES.push(web);
+    writeJson(
+      web,
+      candidatePointer(),
+      'docs/memory/project-state.pointer.v1.json',
+    );
+    assert.throws(
+      () =>
+        validateCrossRepo(readJson(ROOT), web, {
+          pointerSchema: POINTER_SCHEMA,
+          resolveContainingCommit: () => commit,
+        }),
+      (error) => error.code === 'MEMORY_WEB_REVISION_MISMATCH',
+    );
+  }
+});
+
+test('cross-repo contract rejects unavailable containing-commit provenance', () => {
+  const web = mkdtempSync(join(tmpdir(), 'genesis-web-provenance-'));
+  FIXTURES.push(web);
+  writeJson(
+    web,
+    candidatePointer(),
+    'docs/memory/project-state.pointer.v1.json',
+  );
+  assert.throws(
+    () =>
+      validateCrossRepo(readJson(ROOT), web, {
+        pointerSchema: POINTER_SCHEMA,
+        resolveContainingCommit: () => null,
+      }),
+    (error) => error.code === 'MEMORY_POINTER_PROVENANCE_INVALID',
+  );
+});
+
+test('containing-commit provenance binds both the pointer and its schema', () => {
+  const web = gitWebFixture();
+  const pointerCommit = git(web, ['rev-parse', 'HEAD']);
+  assert.equal(containingCommit(web), pointerCommit);
+
+  const schemaPath =
+    'schemas/genesis-harness/project-state.pointer.v1.schema.json';
+  const schema = readJson(web, schemaPath);
+  schema.additionalProperties = true;
+  writeJson(web, schema, schemaPath);
+  assert.equal(containingCommit(web), null);
+
+  git(web, ['add', schemaPath]);
+  git(web, ['commit', '-m', 'Diverge pointer schema']);
+  assert.equal(containingCommit(web), null);
+});
+
+test('cross-repo contract rejects incompatible pointer schemas', () => {
+  const web = mkdtempSync(join(tmpdir(), 'genesis-web-schema-contract-'));
+  FIXTURES.push(web);
+  writeJson(
+    web,
+    candidatePointer(),
+    'docs/memory/project-state.pointer.v1.json',
+  );
+  const schemas = [
+    {},
+    { ...structuredClone(POINTER_SCHEMA), additionalProperties: true },
+    (() => {
+      const schema = structuredClone(POINTER_SCHEMA);
+      delete schema.properties.receipt.properties.revisionSource;
+      return schema;
+    })(),
+  ];
+  for (const pointerSchema of schemas)
+    assert.throws(
+      () =>
+        validateCrossRepo(readJson(ROOT), web, {
+          pointerSchema,
+          resolveContainingCommit: () => WEB_SHA,
+        }),
+      (error) => error.code === 'MEMORY_POINTER_SCHEMA_MISMATCH',
+    );
+});
+
+test('cross-repo contract rejects divergent receipt and authority identity', () => {
+  for (const mutate of [
+    (pointer) => {
+      pointer.receipt.targetStateRevision = 'MVP-10B-LIVE-2026-08-21';
+    },
+    (pointer) => {
+      pointer.receipt.transitionId = 'MVP-10C-CROSS-REPO';
+    },
+    (pointer) => {
+      pointer.receipt.baseSha = WEB_SHA;
+    },
+    (pointer) => {
+      pointer.authority.repository = 'example.invalid/wrong-authority';
+    },
+  ]) {
+    const web = mkdtempSync(join(tmpdir(), 'genesis-web-contract-'));
+    FIXTURES.push(web);
+    const pointer = candidatePointer();
+    mutate(pointer);
+    writeJson(web, pointer, 'docs/memory/project-state.pointer.v1.json');
+    assert.throws(
+      () =>
+        validateCrossRepo(readJson(ROOT), web, {
+          pointerSchema: POINTER_SCHEMA,
+          resolveContainingCommit: () => WEB_SHA,
+        }),
+      (error) =>
+        error.code === 'MEMORY_TRANSITION_PENDING' ||
+        error.code === 'MEMORY_POINTER_MISMATCH',
+    );
+  }
+});
+
+test('cross-repo source failure never falls back to the generated projection', () => {
+  const result = run(ROOT, [
+    '--mode',
+    'cross-repo',
+    '--web-source',
+    join(tmpdir(), 'genesis-missing-web-source'),
+  ]);
+  expectCode(result, 'AUTHORITY_UNAVAILABLE');
+  assert.equal(result.json.staleFallbackUsed, false);
+  assert.doesNotMatch(result.stdout, /Web integrado na main/iu);
 });
 
 test('cross-repo schema rejects extra temporal or secret-bearing pointer data', () => {
@@ -688,11 +895,11 @@ test('cross-repo schema rejects extra temporal or secret-bearing pointer data', 
         resolutionOrder: ['explicit-checkout'],
       },
       receipt: {
-        transitionId: 'MVP-10C-CROSS-REPO',
-        targetStateRevision: 'MVP-10B-LIVE-2026-08-21',
-        baseSha: WEB_SHA,
-        revisionSource: 'integrated-revision',
-        generatedAt: '2026-08-10T12:28:06.317Z',
+        transitionId: WEB_TRANSITION_ID,
+        targetStateRevision: TARGET_STATE_REVISION,
+        baseSha: WEB_RECEIPT_BASE_SHA,
+        revisionSource: 'containing-commit',
+        generatedAt: '2026-08-24T14:18:54.2261794Z',
       },
       [property]: property === 'phase' ? { id: 'forbidden' } : 'forbidden',
     };
