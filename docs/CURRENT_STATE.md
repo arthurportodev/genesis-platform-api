@@ -4,11 +4,11 @@
 
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
-- **Revisão de estado:** IF-MATCH-TRANSPORT-SHIM-V2-PRODUCTION-OBSERVED-2026-08-25
-- **Atualização documentada:** 2026-08-25T17:13:24.353Z
+- **Revisão de estado:** IF-MATCH-INCIDENT-FINAL-RETIREMENT-2026-08-25
+- **Atualização documentada:** 2026-08-25T18:16:23.996Z
 - **Fase:** 0.8-MVP — Primeira produção mínima viável
-- **Último trabalho concluído:** IF-MATCH-TRANSPORT-SHIM-V2-PRODUCTION-OBSERVED — Shim de transporte If-Match integrado, promovido e observado em produção
-- **Trabalho vigente:** none — Nenhuma correção deste incidente está ativa. O shim de transporte está integrado, promovido e observado técnica e funcionalmente; cleanup do probe e eventual envio do support packet permanecem tarefas separadas e não autorizadas por este closeout.
+- **Último trabalho concluído:** IF-MATCH-INCIDENT-FINAL-RETIREMENT — Incidente If-Match encerrado e probe temporário aposentado
+- **Trabalho vigente:** none — Nenhum trabalho deste incidente está ativo. O shim de transporte permanece integrado, promovido e observado técnica e funcionalmente; o chamado Vercel não será perseguido, os recursos temporários do probe foram aposentados e o incidente está encerrado.
 - **Próxima tarefa:** PENDING-ROADMAP-PRIORITIZATION — Priorizar o próximo marco do produto a partir dos planos versionados
 - **Web integrado na main:** 017ef0056d97147a5e5337494fa339a3f65986ac
 - **Revisão fonte da imagem API live:** 0a56a8aee7c64bda59a1981888418e1ad03950c0
@@ -22,7 +22,7 @@ Esta projeção é gerada deterministicamente. Não edite manualmente; a autorid
 
 ## Estado operacional
 
-A revisão Web 017ef005 está live no deployment Vercel dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr, com dpl_9Npu4VnyWatw1vMEforzUv8Mokke preservado para rollback. Smokes técnico, de transporte e funcional passaram; o falso 412 e o Weak ETag estão resolvidos em produção. API, imagem API, banco e concorrência otimista permaneceram inalterados. O probe está preservado e o support packet segue pronto, não enviado.
+A revisão Web 017ef005 está live em dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr; dpl_9Npu4VnyWatw1vMEforzUv8Mokke permanece como rollback. Smokes técnico, de transporte e funcional passaram; falso 412 e Weak ETag estão resolvidos, com concorrência otimista preservada. O chamado Vercel não será perseguido; probe deployment, probe branch e correction branch foram removidos, com seus identificadores preservados como história do incidente encerrado.
 
 - **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
 - **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
@@ -86,7 +86,8 @@ A revisão Web 017ef005 está live no deployment Vercel dpl_J6SwpHNDGHL9MUdXLZeN
 - **OPS-MVP10D-WEB-INTEGRATED** [observed/present] — O PR Web #18 integrou a correção de equivalência do Weak ETag em ac87eb7 e o PR Web #19 integrou em e1ecc23 a reconciliação Web-first, o bloqueio de auto-deadlock e a preservação do snapshot autenticado durante refresh; ambas as CIs pós-merge passaram.
 - **OPS-IFMATCH-WEB-INTEGRATED** [documented/present] — O PR Web #20 foi integrado por squash em 017ef0056d97147a5e5337494fa339a3f65986ac, árvore 5756fda028b91593473d8fe06238485dc24f7938; a CI pós-merge 32870003911 e Validate frontend passaram. Browser usa X-Genesis-If-Match e o proxy materializa If-Match upstream, sem mudança na API ou no banco.
 - **OPS-IFMATCH-FALSE-412-FORENSICS** [documented/present] — No evento real, o browser observou um PATCH 412 enquanto Traefik/API observaram o único PATCH como 200, sem retry ou segundo writer; o banco confirmou a mutação de serviceInterest e a revisão 18→19. O falso 412 foi localizado após a resposta da API, sem caminho API/PostgreSQL de commit seguido de stale 412 na mesma execução.
-- **OPS-IFMATCH-VERCEL-PROBE** [documented/present] — O probe isolado codex/vercel-if-match-probe em 45001ad8 e dpl_CrSiMzQBJD5ypbxNpKrkdh4MWqPk reproduziu R1: If-Match divergente transformou externamente handler 200 em 412, inclusive sem ETag explícito da resposta. Isso confirma a fronteira Vercel, não o componente interno exato nem uma correção do provedor; support packet pronto, não enviado.
+- **OPS-IFMATCH-VERCEL-PROBE** [observed/absent] — Registro histórico: o probe isolado codex/vercel-if-match-probe no commit 45001ad805c110b1bff4fbf3a0ba8a90fc67dd05 e deployment dpl_CrSiMzQBJD5ypbxNpKrkdh4MWqPk reproduziu R1 na fronteira Vercel. Por decisão humana, o chamado não será perseguido e a branch e o deployment foram removidos após o encerramento do incidente; os identificadores, a matriz forense e a conclusão limitada permanecem históricos.
+- **OPS-IFMATCH-INCIDENT-FINAL-RETIREMENT** [observed/present] — O incidente If-Match está encerrado. A decisão de suporte é NOT PURSUED BY HUMAN DECISION; a correction branch e a branch remota do probe estão ausentes, o deployment temporário do probe foi removido e nenhum recurso de produção foi alterado. A correção Web 017ef005 permanece ativa e observada, o smoke funcional passou, o falso 412 e o Weak ETag permanecem resolvidos e a concorrência otimista foi preservada.
 - **OPS-IFMATCH-PRODUCTION-PROMOTED** [observed/present] — O deployment dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr da revisão Web 017ef005 foi promovido em 2026-08-25T16:43:46.645Z e ficou Ready, Production e Current em app.agenciagenesismkt.com.br, sem novo build. dpl_9Npu4VnyWatw1vMEforzUv8Mokke permanece preservado para rollback.
 - **OPS-IFMATCH-TECHNICAL-CANARY** [documented/present] — Após a promoção, raiz, login, assets e health same-origin passaram com 200 e no-store; não houve 5xx, logs critical/error/fatal ou host_authority_mismatch público. O cookie CSRF sanitizado permaneceu __Host-, Secure, SameSite=Lax, Path=/ e sem Domain. Canary sem sessão, Authorization ou mutação atravessou X-Genesis-If-Match e alcançou auth/API com 401, sem PRECONDITION_FAILED.
 - **OPS-IFMATCH-FUNCTIONAL-SMOKE** [documented/present] — O smoke manual autenticado confirmou na primeira tentativa edição condicional de Interesse com X-Genesis-If-Match, sem If-Match no browser ou falso 412; GET 200 confirmou revisão 20 e valor persistido. Adicionar nota, criar próxima ação e mover etapa também passaram na granularidade informada. Weak ETag e falso 412 estão resolvidos em produção, com optimistic concurrency preservada.
@@ -101,7 +102,7 @@ A revisão Web 017ef005 está live no deployment Vercel dpl_J6SwpHNDGHL9MUdXLZeN
 - **HD-MONITORING** — Qual política de alertas, destinatários e escalonamento será aprovada para o UptimeRobot e os sinais internos?
 - **HD-EXTERNAL-ONBOARDING** — Qual política aprovará novos usuários externos e dados comerciais além do uso inicial da organização Porto?
 - **HD-COMMERCIAL-HOSTING-PLAN** — Antes de onboarding externo ou uso comercial ampliado, o plano Vercel atual continua técnica e contratualmente compatível?
-- **HD-NEXT-MILESTONE** — Qual marco versionado deve suceder o closeout observado do shim de transporte: cleanup operacional, melhoria 0.9/usability ou outro item priorizado?
+- **HD-NEXT-MILESTONE** — Qual marco versionado deve suceder o encerramento definitivo do incidente If-Match: melhoria 0.9/usability ou outro item priorizado?
 
 ## Release gates
 
@@ -119,6 +120,5 @@ A revisão Web 017ef005 está live no deployment Vercel dpl_J6SwpHNDGHL9MUdXLZeN
 - **OR-FUNCTIONAL-API-ORIGIN-PROTECTED** — A API funcional é acessível somente pelo proxy same-origin /api/v1 do domínio final e pelo Traefik protegido; a origem direta sem chave permanece 404.
 - **OR-VERCEL-HOBBY-TECHNICAL-MVP** — O frontend live e o OWNER real foram aprovados no plano Vercel atual; a adequação técnica e contratual para onboarding externo ou uso comercial ampliado permanece decisão específica pendente.
 - **OR-FUTURE-PRODUCTION-MUTATION** — Qualquer futura alteração de produção continua exigindo escopo, rollback e autorização humana explícitos; esta reconciliação documental não concede autorização operacional.
-- **OR-IFMATCH-PROBE-PRESERVED** — O probe Vercel e a branch diagnóstica permanecem preservados; o support packet está pronto e não enviado, e a mitigação local ativa não declara correção do provedor nem identifica seu componente interno.
 - **OR-API-DEPLOYMENT-HELPER-PROVENANCE** — O script exato executado na 09E está preservado somente na custódia operacional externa e não está comprovadamente versionado na main atual.
 - **OR-RHO-OUT-OF-SCOPE** — RHO permanece fora do escopo desta release e não foi consultado ou alterado.

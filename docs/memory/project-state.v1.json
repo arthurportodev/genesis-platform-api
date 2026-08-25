@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
   "instanceKind": "current",
-  "stateRevision": "IF-MATCH-TRANSPORT-SHIM-V2-PRODUCTION-OBSERVED-2026-08-25",
+  "stateRevision": "IF-MATCH-INCIDENT-FINAL-RETIREMENT-2026-08-25",
   "project": {
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-25T17:13:24.353Z",
+  "updatedAt": "2026-08-25T18:16:23.996Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -63,31 +63,29 @@
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "IF-MATCH-TRANSPORT-SHIM-V2-PRODUCTION-OBSERVED",
-      "title": "Shim de transporte If-Match integrado, promovido e observado em produção",
-      "completedAt": "2026-08-25T17:13:24.353Z",
+      "id": "IF-MATCH-INCIDENT-FINAL-RETIREMENT",
+      "title": "Incidente If-Match encerrado e probe temporário aposentado",
+      "completedAt": "2026-08-25T18:16:23.996Z",
       "evidenceIds": [
-        "EV-IFMATCH-WEB-PR20",
-        "EV-IFMATCH-WEB-POSTMERGE-CI",
         "EV-IFMATCH-VERCEL-PROBE-R1",
         "EV-IFMATCH-PRODUCTION-PROMOTION",
-        "EV-IFMATCH-TECHNICAL-CANARY",
-        "EV-IFMATCH-FUNCTIONAL-SMOKE"
+        "EV-IFMATCH-FUNCTIONAL-SMOKE",
+        "EV-IFMATCH-INCIDENT-FINAL-RETIREMENT"
       ]
     }
   },
   "currentWork": {
     "status": "none",
-    "summary": "Nenhuma correção deste incidente está ativa. O shim de transporte está integrado, promovido e observado técnica e funcionalmente; cleanup do probe e eventual envio do support packet permanecem tarefas separadas e não autorizadas por este closeout."
+    "summary": "Nenhum trabalho deste incidente está ativo. O shim de transporte permanece integrado, promovido e observado técnica e funcionalmente; o chamado Vercel não será perseguido, os recursos temporários do probe foram aposentados e o incidente está encerrado."
   },
   "nextTask": {
     "id": "PENDING-ROADMAP-PRIORITIZATION",
     "title": "Priorizar o próximo marco do produto a partir dos planos versionados"
   },
   "operationalState": {
-    "summary": "A revisão Web 017ef005 está live no deployment Vercel dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr, com dpl_9Npu4VnyWatw1vMEforzUv8Mokke preservado para rollback. Smokes técnico, de transporte e funcional passaram; o falso 412 e o Weak ETag estão resolvidos em produção. API, imagem API, banco e concorrência otimista permaneceram inalterados. O probe está preservado e o support packet segue pronto, não enviado.",
+    "summary": "A revisão Web 017ef005 está live em dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr; dpl_9Npu4VnyWatw1vMEforzUv8Mokke permanece como rollback. Smokes técnico, de transporte e funcional passaram; falso 412 e Weak ETag estão resolvidos, com concorrência otimista preservada. O chamado Vercel não será perseguido; probe deployment, probe branch e correction branch foram removidos, com seus identificadores preservados como história do incidente encerrado.",
     "basis": "documented",
-    "documentedAt": "2026-08-25T17:13:24.353Z",
+    "documentedAt": "2026-08-25T18:16:23.996Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -683,11 +681,29 @@
       },
       {
         "id": "OPS-IFMATCH-VERCEL-PROBE",
+        "status": "absent",
+        "statement": "Registro histórico: o probe isolado codex/vercel-if-match-probe no commit 45001ad805c110b1bff4fbf3a0ba8a90fc67dd05 e deployment dpl_CrSiMzQBJD5ypbxNpKrkdh4MWqPk reproduziu R1 na fronteira Vercel. Por decisão humana, o chamado não será perseguido e a branch e o deployment foram removidos após o encerramento do incidente; os identificadores, a matriz forense e a conclusão limitada permanecem históricos.",
+        "basis": "observed",
+        "documentedAt": "2026-08-25T18:16:23.996Z",
+        "observedAt": "2026-08-25T18:16:23.996Z",
+        "evidenceIds": [
+          "EV-IFMATCH-VERCEL-PROBE-R1",
+          "EV-IFMATCH-INCIDENT-FINAL-RETIREMENT"
+        ]
+      },
+      {
+        "id": "OPS-IFMATCH-INCIDENT-FINAL-RETIREMENT",
         "status": "present",
-        "statement": "O probe isolado codex/vercel-if-match-probe em 45001ad8 e dpl_CrSiMzQBJD5ypbxNpKrkdh4MWqPk reproduziu R1: If-Match divergente transformou externamente handler 200 em 412, inclusive sem ETag explícito da resposta. Isso confirma a fronteira Vercel, não o componente interno exato nem uma correção do provedor; support packet pronto, não enviado.",
-        "basis": "documented",
-        "documentedAt": "2026-08-25T17:13:24.353Z",
-        "evidenceIds": ["EV-IFMATCH-VERCEL-PROBE-R1"]
+        "statement": "O incidente If-Match está encerrado. A decisão de suporte é NOT PURSUED BY HUMAN DECISION; a correction branch e a branch remota do probe estão ausentes, o deployment temporário do probe foi removido e nenhum recurso de produção foi alterado. A correção Web 017ef005 permanece ativa e observada, o smoke funcional passou, o falso 412 e o Weak ETag permanecem resolvidos e a concorrência otimista foi preservada.",
+        "basis": "observed",
+        "documentedAt": "2026-08-25T18:16:23.996Z",
+        "observedAt": "2026-08-25T18:16:23.996Z",
+        "evidenceIds": [
+          "EV-IFMATCH-WEB-PR20",
+          "EV-IFMATCH-PRODUCTION-PROMOTION",
+          "EV-IFMATCH-FUNCTIONAL-SMOKE",
+          "EV-IFMATCH-INCIDENT-FINAL-RETIREMENT"
+        ]
       },
       {
         "id": "OPS-IFMATCH-PRODUCTION-PROMOTED",
@@ -1041,6 +1057,12 @@
       "kind": "external-observation",
       "uri": "artifact://genesis-platform/if-match-transport-shim-v2/functional-smoke",
       "capturedAt": "2026-08-25T17:13:24.353Z"
+    },
+    {
+      "id": "EV-IFMATCH-INCIDENT-FINAL-RETIREMENT",
+      "kind": "external-observation",
+      "uri": "artifact://genesis-platform/if-match-transport-shim-v2/final-retirement",
+      "capturedAt": "2026-08-25T18:16:23.996Z"
     }
   ],
   "blockers": [
@@ -1101,8 +1123,8 @@
     },
     {
       "id": "HD-NEXT-MILESTONE",
-      "question": "Qual marco versionado deve suceder o closeout observado do shim de transporte: cleanup operacional, melhoria 0.9/usability ou outro item priorizado?",
-      "whyMaterial": "Os planos versionados não estabelecem precedência suficiente entre essas opções; escolher uma delas redefiniria materialmente o roadmap.",
+      "question": "Qual marco versionado deve suceder o encerramento definitivo do incidente If-Match: melhoria 0.9/usability ou outro item priorizado?",
+      "whyMaterial": "O cleanup operacional está concluído, mas os planos versionados não estabelecem precedência suficiente entre os próximos marcos; escolher um deles redefiniria materialmente o roadmap.",
       "blockingTaskIds": ["PENDING-ROADMAP-PRIORITIZATION"]
     }
   ],
@@ -1231,15 +1253,6 @@
         "EV-MVP08-R2-RELEASE-TREE-CONTRACT",
         "EV-MVP09E-DEPLOYMENT-MANIFEST",
         "EV-MVP10B-PRODUCTION-PROMOTION"
-      ]
-    },
-    {
-      "id": "OR-IFMATCH-PROBE-PRESERVED",
-      "statement": "O probe Vercel e a branch diagnóstica permanecem preservados; o support packet está pronto e não enviado, e a mitigação local ativa não declara correção do provedor nem identifica seu componente interno.",
-      "reviewTrigger": "Qualquer envio a suporte ou cleanup de branch/deployment exige tarefa e autorização separadas.",
-      "sourceEvidenceIds": [
-        "EV-IFMATCH-VERCEL-PROBE-R1",
-        "EV-IFMATCH-PRODUCTION-PROMOTION"
       ]
     },
     {
