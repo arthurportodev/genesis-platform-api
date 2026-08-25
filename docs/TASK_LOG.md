@@ -929,3 +929,35 @@ ou token é preservado neste histórico. O resultado foi
 `TASK_10A_PRODUCTION_OWNER_ONBOARDED`; manifesto e pacote sanitizados possuem
 SHA-256 `48804774393a6eceeb454b57219e00b3ec75d37911c05030f9a622f60912d725` e
 `232455043b866a14ff45c463db2e484a6c413a7e23ed2b394450ca2283995192`.
+
+## If-Match Transport Shim V2 — integração e observação em produção
+
+Em 25 de agosto de 2026, o PR Web #20 foi integrado por squash em
+`017ef0056d97147a5e5337494fa339a3f65986ac`, árvore
+`5756fda028b91593473d8fe06238485dc24f7938`; a CI pós-merge 32870003911 e o
+check Validate frontend passaram. O browser passou a usar
+`X-Genesis-If-Match`, e os proxies Vercel/Vite validam esse valor de forma
+fail-closed e materializam `If-Match` somente no hop upstream. API, banco e
+semântica de concorrência otimista permaneceram inalterados.
+
+A investigação do falso 412 observou um único PATCH: o browser recebeu 412,
+Traefik/API registraram 200, não houve retry nem segundo writer, e o banco
+confirmou a mutação com revisão 18→19. O probe independente preservado na
+branch `codex/vercel-if-match-probe`, commit
+`45001ad805c110b1bff4fbf3a0ba8a90fc67dd05` e deployment
+`dpl_CrSiMzQBJD5ypbxNpKrkdh4MWqPk` reproduziu a transformação externa para 412
+com `If-Match` divergente. A evidência limita a conclusão à fronteira Vercel;
+não identifica o componente interno nem declara correção do provedor. O support
+packet permaneceu pronto e não enviado.
+
+O deployment `dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr`, fonte `017ef005…`, foi
+promovido em `2026-08-25T16:43:46.645Z` e ficou Ready, Production e Current no
+hostname aprovado; `dpl_9Npu4VnyWatw1vMEforzUv8Mokke` ficou preservado para
+rollback. Root, login, assets, health, cache e logs passaram no smoke técnico.
+O canary sem sessão chegou à fronteira auth/API com 401 esperado, sem
+`PRECONDITION_FAILED` e sem mutação. O smoke manual autenticado confirmou na
+primeira tentativa a edição condicional de Interesse e também as operações de
+nota, próxima ação e mudança de etapa, sem falso 412; refresh confirmou a nova
+revisão e o valor persistido. O Weak ETag e o falso 412 ficaram resolvidos e
+observados em produção. Nenhum cleanup remoto ou envio a suporte fez parte do
+closeout.
