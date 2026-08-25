@@ -961,3 +961,22 @@ nota, próxima ação e mudança de etapa, sem falso 412; refresh confirmou a no
 revisão e o valor persistido. O Weak ETag e o falso 412 ficaram resolvidos e
 observados em produção. Nenhum cleanup remoto ou envio a suporte fez parte do
 closeout.
+
+## If-Match / falso 412 — encerramento operacional definitivo
+
+Em 25 de agosto de 2026, a decisão humana final foi não perseguir um chamado
+Vercel. O support packet passou a `NOT PURSUED / INCIDENT CLOSED`. O deployment
+temporário `dpl_CrSiMzQBJD5ypbxNpKrkdh4MWqPk` foi removido após comprovação de
+que estava `Ready / Staged`, sem domínio custom e distinto do live e do
+rollback. A branch remota `codex/vercel-if-match-probe` e as branches locais
+temporárias do probe, da correction e do memory closeout também foram
+removidas.
+
+O histórico forense permanece: commit
+`45001ad805c110b1bff4fbf3a0ba8a90fc67dd05`, antigo deployment do probe,
+resultado R1, ADR-012, PR #20 e a conclusão limitada à fronteira Vercel. A
+correction branch remota já estava ausente. O live
+`dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr` continuou `Ready / Current` em
+`app.agenciagenesismkt.com.br`, e o rollback
+`dpl_9Npu4VnyWatw1vMEforzUv8Mokke` continuou `Ready`. Produção, API, banco,
+runtime e concorrência otimista não foram alterados.
