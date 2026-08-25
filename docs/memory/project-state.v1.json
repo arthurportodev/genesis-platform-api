@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
   "instanceKind": "current",
-  "stateRevision": "MVP-10D-WEB-INTEGRATED-2026-08-24",
+  "stateRevision": "IF-MATCH-TRANSPORT-SHIM-V2-PRODUCTION-OBSERVED-2026-08-25",
   "project": {
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-24T17:27:36Z",
+  "updatedAt": "2026-08-25T17:13:24.353Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -57,35 +57,37 @@
     "authorizedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb",
     "authorizedApiImageConfigDigest": "sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24",
     "rollbackApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a",
-    "webIntegratedRevision": "e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e"
+    "webIntegratedRevision": "017ef0056d97147a5e5337494fa339a3f65986ac"
   },
   "phase": {
     "id": "0.8-MVP",
     "title": "Primeira produção mínima viável",
     "lastCompleted": {
-      "id": "0.8-MVP-10D",
-      "title": "Correção do ETag de Lead enfraquecido pelo hosting integrada no Web",
-      "completedAt": "2026-08-24T17:27:36Z",
+      "id": "IF-MATCH-TRANSPORT-SHIM-V2-PRODUCTION-OBSERVED",
+      "title": "Shim de transporte If-Match integrado, promovido e observado em produção",
+      "completedAt": "2026-08-25T17:13:24.353Z",
       "evidenceIds": [
-        "EV-MVP10D-WEB-PR18",
-        "EV-MVP10D-WEB-POSTMERGE-CI",
-        "EV-MVP10E-WEB-PR19",
-        "EV-MVP10E-WEB-POSTMERGE-CI"
+        "EV-IFMATCH-WEB-PR20",
+        "EV-IFMATCH-WEB-POSTMERGE-CI",
+        "EV-IFMATCH-VERCEL-PROBE-R1",
+        "EV-IFMATCH-PRODUCTION-PROMOTION",
+        "EV-IFMATCH-TECHNICAL-CANARY",
+        "EV-IFMATCH-FUNCTIONAL-SMOKE"
       ]
     }
   },
   "currentWork": {
     "status": "none",
-    "summary": "Nenhum trabalho de engenharia está ativo nesta autoridade. A revisão Web e1ecc23 está integrada na main, mas não foi promovida nem observada em produção; qualquer promoção pertence a uma tarefa separada e ainda não autorizada."
+    "summary": "Nenhuma correção deste incidente está ativa. O shim de transporte está integrado, promovido e observado técnica e funcionalmente; cleanup do probe e eventual envio do support packet permanecem tarefas separadas e não autorizadas por este closeout."
   },
   "nextTask": {
-    "id": "WEB-PRODUCTION-PROMOTION",
-    "title": "Planejar, autorizar, promover e validar a revisão Web integrada em produção"
+    "id": "PENDING-ROADMAP-PRIORITIZATION",
+    "title": "Priorizar o próximo marco do produto a partir dos planos versionados"
   },
   "operationalState": {
-    "summary": "A última produção Web observada permanece no commit 04515f8 e no deployment Vercel aprovado dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z. A main Web integra e1ecc23, incluindo a correção Weak ETag e as correções de auto-deadlock e refresh loop, mas essa revisão não foi promovida nem observada em produção. O proxy same-origin, login, API b45425d7, PostgreSQL e Traefik permanecem descritos pela última evidência operacional; nenhuma mutação de produção faz parte desta reconciliação.",
+    "summary": "A revisão Web 017ef005 está live no deployment Vercel dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr, com dpl_9Npu4VnyWatw1vMEforzUv8Mokke preservado para rollback. Smokes técnico, de transporte e funcional passaram; o falso 412 e o Weak ETag estão resolvidos em produção. API, imagem API, banco e concorrência otimista permaneceram inalterados. O probe está preservado e o support packet segue pronto, não enviado.",
     "basis": "documented",
-    "documentedAt": "2026-08-24T17:27:36Z",
+    "documentedAt": "2026-08-25T17:13:24.353Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -424,20 +426,6 @@
         "evidenceIds": ["EV-MVP09E-DEPLOYMENT-MANIFEST"]
       },
       {
-        "id": "OPS-MVP08-WEB-INTEGRATED",
-        "status": "present",
-        "statement": "A revisão Web integrada na main é e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e, squash do PR #19. A revisão 04515f8 permanece como a última Web comprovadamente promovida e observada em produção; integração e deployment são estados distintos.",
-        "basis": "documented",
-        "documentedAt": "2026-08-24T17:27:36Z",
-        "evidenceIds": [
-          "EV-MVP10B-WEB-PR16",
-          "EV-MVP10B-WEB-POSTMERGE-CI",
-          "EV-MVP10B-PRODUCTION-PROMOTION",
-          "EV-MVP10E-WEB-PR19",
-          "EV-MVP10E-WEB-POSTMERGE-CI"
-        ]
-      },
-      {
         "id": "OPS-MVP08-PREFLIGHT-BLOCKED",
         "status": "present",
         "statement": "Os gaps do preflight 08B foram fechados dentro dos Gates autorizados: bundle versionado, árvore atômica, Vercel Hobby, domínio, DNS, chave de origem, router protegido, smokes e rehearsal foram comprovados sem dados reais.",
@@ -518,15 +506,6 @@
         "documentedAt": "2026-08-15T11:45:00Z",
         "observedAt": "2026-08-15T11:45:00Z",
         "evidenceIds": ["EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT"]
-      },
-      {
-        "id": "OPS-MVP08-VERCEL-DEPLOYMENTS",
-        "status": "present",
-        "statement": "O deployment Vercel live aprovado é dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z no commit 04515f8; dpl_AuunpMMmehaXdXFa5wu52DAMF99P é o rollback preservado. git.deploymentEnabled=false mantém merge e deployment separados.",
-        "basis": "observed",
-        "documentedAt": "2026-08-21T20:32:57.3293060Z",
-        "observedAt": "2026-08-21T20:32:57.3293060Z",
-        "evidenceIds": ["EV-MVP10B-PRODUCTION-PROMOTION"]
       },
       {
         "id": "OPS-MVP08-DNS-TLS",
@@ -687,17 +666,53 @@
         ]
       },
       {
-        "id": "OPS-MVP10D-PRODUCTION-UNCHANGED",
-        "status": "not-authorized",
-        "statement": "Nenhuma promoção Vercel, redeploy manual ou nova observação funcional de produção foi executada para ac87eb7 ou e1ecc23; as correções integradas não são declaradas como implantadas.",
+        "id": "OPS-IFMATCH-WEB-INTEGRATED",
+        "status": "present",
+        "statement": "O PR Web #20 foi integrado por squash em 017ef0056d97147a5e5337494fa339a3f65986ac, árvore 5756fda028b91593473d8fe06238485dc24f7938; a CI pós-merge 32870003911 e Validate frontend passaram. Browser usa X-Genesis-If-Match e o proxy materializa If-Match upstream, sem mudança na API ou no banco.",
         "basis": "documented",
-        "documentedAt": "2026-08-24T17:27:36Z",
-        "evidenceIds": [
-          "EV-MVP10D-WEB-PR18",
-          "EV-MVP10D-WEB-POSTMERGE-CI",
-          "EV-MVP10E-WEB-PR19",
-          "EV-MVP10E-WEB-POSTMERGE-CI"
-        ]
+        "documentedAt": "2026-08-25T17:13:24.353Z",
+        "evidenceIds": ["EV-IFMATCH-WEB-PR20", "EV-IFMATCH-WEB-POSTMERGE-CI"]
+      },
+      {
+        "id": "OPS-IFMATCH-FALSE-412-FORENSICS",
+        "status": "present",
+        "statement": "No evento real, o browser observou um PATCH 412 enquanto Traefik/API observaram o único PATCH como 200, sem retry ou segundo writer; o banco confirmou a mutação de serviceInterest e a revisão 18→19. O falso 412 foi localizado após a resposta da API, sem caminho API/PostgreSQL de commit seguido de stale 412 na mesma execução.",
+        "basis": "documented",
+        "documentedAt": "2026-08-25T17:13:24.353Z",
+        "evidenceIds": ["EV-IFMATCH-FALSE-412-FORENSICS"]
+      },
+      {
+        "id": "OPS-IFMATCH-VERCEL-PROBE",
+        "status": "present",
+        "statement": "O probe isolado codex/vercel-if-match-probe em 45001ad8 e dpl_CrSiMzQBJD5ypbxNpKrkdh4MWqPk reproduziu R1: If-Match divergente transformou externamente handler 200 em 412, inclusive sem ETag explícito da resposta. Isso confirma a fronteira Vercel, não o componente interno exato nem uma correção do provedor; support packet pronto, não enviado.",
+        "basis": "documented",
+        "documentedAt": "2026-08-25T17:13:24.353Z",
+        "evidenceIds": ["EV-IFMATCH-VERCEL-PROBE-R1"]
+      },
+      {
+        "id": "OPS-IFMATCH-PRODUCTION-PROMOTED",
+        "status": "present",
+        "statement": "O deployment dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr da revisão Web 017ef005 foi promovido em 2026-08-25T16:43:46.645Z e ficou Ready, Production e Current em app.agenciagenesismkt.com.br, sem novo build. dpl_9Npu4VnyWatw1vMEforzUv8Mokke permanece preservado para rollback.",
+        "basis": "observed",
+        "documentedAt": "2026-08-25T17:13:24.353Z",
+        "observedAt": "2026-08-25T16:43:46.645Z",
+        "evidenceIds": ["EV-IFMATCH-PRODUCTION-PROMOTION"]
+      },
+      {
+        "id": "OPS-IFMATCH-TECHNICAL-CANARY",
+        "status": "present",
+        "statement": "Após a promoção, raiz, login, assets e health same-origin passaram com 200 e no-store; não houve 5xx, logs critical/error/fatal ou host_authority_mismatch público. O cookie CSRF sanitizado permaneceu __Host-, Secure, SameSite=Lax, Path=/ e sem Domain. Canary sem sessão, Authorization ou mutação atravessou X-Genesis-If-Match e alcançou auth/API com 401, sem PRECONDITION_FAILED.",
+        "basis": "documented",
+        "documentedAt": "2026-08-25T17:13:24.353Z",
+        "evidenceIds": ["EV-IFMATCH-TECHNICAL-CANARY"]
+      },
+      {
+        "id": "OPS-IFMATCH-FUNCTIONAL-SMOKE",
+        "status": "present",
+        "statement": "O smoke manual autenticado confirmou na primeira tentativa edição condicional de Interesse com X-Genesis-If-Match, sem If-Match no browser ou falso 412; GET 200 confirmou revisão 20 e valor persistido. Adicionar nota, criar próxima ação e mover etapa também passaram na granularidade informada. Weak ETag e falso 412 estão resolvidos em produção, com optimistic concurrency preservada.",
+        "basis": "documented",
+        "documentedAt": "2026-08-25T17:13:24.353Z",
+        "evidenceIds": ["EV-IFMATCH-FUNCTIONAL-SMOKE"]
       },
       {
         "id": "OPS-MVP09E-HELPER-PROVENANCE",
@@ -984,6 +999,48 @@
       "kind": "github-run",
       "uri": "https://github.com/arthurportodev/genesis-platform-web/actions/runs/32756302651",
       "capturedAt": "2026-08-24T17:27:36Z"
+    },
+    {
+      "id": "EV-IFMATCH-WEB-PR20",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/20",
+      "capturedAt": "2026-08-25T17:13:24.353Z"
+    },
+    {
+      "id": "EV-IFMATCH-WEB-POSTMERGE-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/actions/runs/32870003911",
+      "capturedAt": "2026-08-25T17:13:24.353Z"
+    },
+    {
+      "id": "EV-IFMATCH-FALSE-412-FORENSICS",
+      "kind": "external-observation",
+      "uri": "artifact://genesis-platform/if-match-transport-shim-v2/false-412-forensics",
+      "capturedAt": "2026-08-25T17:13:24.353Z"
+    },
+    {
+      "id": "EV-IFMATCH-VERCEL-PROBE-R1",
+      "kind": "external-observation",
+      "uri": "artifact://genesis-platform/if-match-transport-shim-v2/vercel-probe-r1",
+      "capturedAt": "2026-08-25T17:13:24.353Z"
+    },
+    {
+      "id": "EV-IFMATCH-PRODUCTION-PROMOTION",
+      "kind": "external-observation",
+      "uri": "artifact://genesis-platform/if-match-transport-shim-v2/production-promotion",
+      "capturedAt": "2026-08-25T16:43:46.645Z"
+    },
+    {
+      "id": "EV-IFMATCH-TECHNICAL-CANARY",
+      "kind": "external-observation",
+      "uri": "artifact://genesis-platform/if-match-transport-shim-v2/technical-canary",
+      "capturedAt": "2026-08-25T17:13:24.353Z"
+    },
+    {
+      "id": "EV-IFMATCH-FUNCTIONAL-SMOKE",
+      "kind": "external-observation",
+      "uri": "artifact://genesis-platform/if-match-transport-shim-v2/functional-smoke",
+      "capturedAt": "2026-08-25T17:13:24.353Z"
     }
   ],
   "blockers": [
@@ -1043,10 +1100,10 @@
       "blockingTaskIds": ["FUTURE-EXTERNAL-ONBOARDING"]
     },
     {
-      "id": "HD-WEB-PRODUCTION-PROMOTION",
-      "question": "Qual janela, rollback e validação pós-deploy autorizarão a promoção da revisão Web e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e?",
-      "whyMaterial": "A integração em main não comprova deployment nem comportamento em produção; a promoção exige autorização e evidência operacionais próprias.",
-      "blockingTaskIds": ["WEB-PRODUCTION-PROMOTION"]
+      "id": "HD-NEXT-MILESTONE",
+      "question": "Qual marco versionado deve suceder o closeout observado do shim de transporte: cleanup operacional, melhoria 0.9/usability ou outro item priorizado?",
+      "whyMaterial": "Os planos versionados não estabelecem precedência suficiente entre essas opções; escolher uma delas redefiniria materialmente o roadmap.",
+      "blockingTaskIds": ["PENDING-ROADMAP-PRIORITIZATION"]
     }
   ],
   "supersededPlans": [
@@ -1104,12 +1161,14 @@
     },
     {
       "id": "RG-WEB-PRODUCTION-PROMOTION",
-      "statement": "A revisão Web e1ecc23 deve receber autorização, promoção controlada, rollback verificável e observação funcional antes de qualquer afirmação de correção em produção.",
-      "status": "pending",
+      "statement": "A revisão Web 017ef005 recebeu promoção controlada, rollback preservado e observações técnica, de transporte e funcional; o shim eliminou o falso 412 observado sem alterar a concorrência otimista da API.",
+      "status": "passed",
       "sourceEvidenceIds": [
-        "EV-MVP10D-WEB-PR18",
-        "EV-MVP10E-WEB-PR19",
-        "EV-MVP10E-WEB-POSTMERGE-CI"
+        "EV-IFMATCH-WEB-PR20",
+        "EV-IFMATCH-WEB-POSTMERGE-CI",
+        "EV-IFMATCH-PRODUCTION-PROMOTION",
+        "EV-IFMATCH-TECHNICAL-CANARY",
+        "EV-IFMATCH-FUNCTIONAL-SMOKE"
       ]
     }
   ],
@@ -1175,14 +1234,12 @@
       ]
     },
     {
-      "id": "OR-WEB-INTEGRATED-NOT-DEPLOYED",
-      "statement": "A revisão Web integrada e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e não pode ser tratada como deployed ou observada em produção; a última revisão Web promovida comprovada permanece 04515f8b17545947129466faab5d8140d1463f4f.",
-      "reviewTrigger": "Reavaliar somente após Gate de promoção, deployment identificável, CI aplicável e validação pós-deploy da revisão e1ecc23.",
+      "id": "OR-IFMATCH-PROBE-PRESERVED",
+      "statement": "O probe Vercel e a branch diagnóstica permanecem preservados; o support packet está pronto e não enviado, e a mitigação local ativa não declara correção do provedor nem identifica seu componente interno.",
+      "reviewTrigger": "Qualquer envio a suporte ou cleanup de branch/deployment exige tarefa e autorização separadas.",
       "sourceEvidenceIds": [
-        "EV-MVP10B-PRODUCTION-PROMOTION",
-        "EV-MVP10D-WEB-PR18",
-        "EV-MVP10E-WEB-PR19",
-        "EV-MVP10E-WEB-POSTMERGE-CI"
+        "EV-IFMATCH-VERCEL-PROBE-R1",
+        "EV-IFMATCH-PRODUCTION-PROMOTION"
       ]
     },
     {

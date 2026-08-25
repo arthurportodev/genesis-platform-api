@@ -13,7 +13,10 @@ const PROJECTION_PATH = 'docs/CURRENT_STATE.md';
 const WEB_POINTER_PATH = 'docs/memory/project-state.pointer.v1.json';
 const WEB_POINTER_SCHEMA_PATH =
   'schemas/genesis-harness/project-state.pointer.v1.schema.json';
+// Provenance of the stable pointer receipt established by the MVP-10E
+// transition. Later Web application revisions do not rewrite this receipt.
 const WEB_SHA = 'e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e';
+const WEB_INTEGRATED_SHA = '017ef0056d97147a5e5337494fa339a3f65986ac';
 const WEB_RECEIPT_BASE_SHA = 'ac87eb78640e641c67bf6e354ad497b421d487f8';
 const WEB_TRANSITION_ID = 'MVP-10E-CROSS-REPO';
 const TARGET_STATE_REVISION = 'MVP-10D-WEB-INTEGRATED-2026-08-24';
@@ -646,13 +649,6 @@ function validateState(state, { allowFixture = false } = {}) {
       'Restore the canonical Genesis project identity.',
     );
   }
-  if (state.stateRevision !== TARGET_STATE_REVISION)
-    fail(
-      'MEMORY_STATE_REVISION_MISMATCH',
-      'The authority state revision does not activate the approved Web receipt target.',
-      '$.stateRevision',
-      `Use ${TARGET_STATE_REVISION}.`,
-    );
   validateTimestamp(state.updatedAt, '$.updatedAt');
   if (
     JSON.stringify(state.authority) !==
@@ -710,7 +706,7 @@ function validateState(state, { allowFixture = false } = {}) {
   ) {
     fail(
       'MEMORY_WEB_REVISION_MISMATCH',
-      'Web memoryRevision is not the integrated Web commit.',
+      'Web memoryRevision is not the stable pointer containing commit.',
       '$.repositories[web].memoryRevision',
       `Use ${WEB_SHA}.`,
     );
@@ -734,7 +730,7 @@ function validateState(state, { allowFixture = false } = {}) {
     authorizedApiImage: AUTHORIZED_API_IMAGE,
     authorizedApiImageConfigDigest: AUTHORIZED_API_IMAGE_CONFIG_DIGEST,
     rollbackApiImage: ROLLBACK_API_IMAGE,
-    webIntegratedRevision: WEB_SHA,
+    webIntegratedRevision: WEB_INTEGRATED_SHA,
   };
   if (
     JSON.stringify(state.releaseBindings) !==
@@ -852,8 +848,7 @@ function validateState(state, { allowFixture = false } = {}) {
     state.pointerMetadata?.path !== WEB_POINTER_PATH ||
     state.pointerMetadata?.mode !== 'pointer-only' ||
     state.pointerMetadata?.transitionId !== WEB_TRANSITION_ID ||
-    state.pointerMetadata?.targetStateRevision !== TARGET_STATE_REVISION ||
-    state.pointerMetadata?.targetStateRevision !== state.stateRevision
+    state.pointerMetadata?.targetStateRevision !== TARGET_STATE_REVISION
   ) {
     fail(
       'MEMORY_POINTER_MISMATCH',
@@ -892,7 +887,7 @@ function renderProjection(state) {
     state.releaseGates,
     (entry) => `- **${entry.id}** [${entry.status}] — ${entry.statement}`,
   );
-  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web integrado na main:** ${WEB_SHA}\n- **Revisão fonte da imagem API live:** ${state.releaseBindings.apiApplicationRevision}\n- **Revisão do contrato versionado de release API:** containing-commit\n- **Revisão do contrato versionado da árvore de release:** containing-commit\n- **Fingerprint contratual do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint contratual do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API live:** ${state.releaseBindings.authorizedApiImage}\n- **Imagem API de rollback:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória e tooling API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
+  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web integrado na main:** ${state.releaseBindings.webIntegratedRevision}\n- **Revisão fonte da imagem API live:** ${state.releaseBindings.apiApplicationRevision}\n- **Revisão do contrato versionado de release API:** containing-commit\n- **Revisão do contrato versionado da árvore de release:** containing-commit\n- **Fingerprint contratual do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint contratual do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API live:** ${state.releaseBindings.authorizedApiImage}\n- **Imagem API de rollback:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória e tooling API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
 }
 
 function stripHistoricalRegions(text, path) {
@@ -1172,7 +1167,8 @@ function validateCrossRepo(
     );
   }
   if (
-    pointer.receipt?.targetStateRevision !== state.stateRevision ||
+    pointer.receipt?.targetStateRevision !==
+      state.pointerMetadata.targetStateRevision ||
     pointer.receipt?.targetStateRevision !== TARGET_STATE_REVISION ||
     pointer.receipt?.transitionId !== state.pointerMetadata.transitionId ||
     pointer.receipt?.transitionId !== WEB_TRANSITION_ID ||
@@ -1181,7 +1177,7 @@ function validateCrossRepo(
   ) {
     fail(
       'MEMORY_TRANSITION_PENDING',
-      'Web receipt target does not match the API state revision.',
+      'Web receipt does not match the stable pointer transition metadata.',
       '$web.receipt',
       'Complete the approved cross-repository transition contract.',
     );
@@ -1197,9 +1193,9 @@ function validateCrossRepo(
   if (commit !== WEB_SHA)
     fail(
       'MEMORY_WEB_REVISION_MISMATCH',
-      'The Web pointer containing commit does not match the canonical API binding.',
+      'The Web pointer containing commit does not match its canonical provenance binding.',
       '--web-source',
-      `Use the integrated Web revision ${WEB_SHA}.`,
+      `Use the pointer revision ${WEB_SHA}.`,
     );
   return { commit, pointer };
 }
@@ -1411,6 +1407,7 @@ module.exports = {
   PROJECTION_PATH,
   SCHEMA_PATH,
   WEB_SHA,
+  WEB_INTEGRATED_SHA,
   WEB_RECEIPT_BASE_SHA,
   WEB_TRANSITION_ID,
   WEB_POINTER_SCHEMA_FINGERPRINT,

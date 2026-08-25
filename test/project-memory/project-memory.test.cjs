@@ -18,6 +18,7 @@ const {
   PROJECTION_PATH,
   SCHEMA_PATH,
   TARGET_STATE_REVISION,
+  WEB_INTEGRATED_SHA,
   WEB_RECEIPT_BASE_SHA,
   WEB_SHA,
   WEB_TRANSITION_ID,
@@ -238,10 +239,11 @@ test.after(() => {
 test('accepts the complete API authority and generated projection', () => {
   const result = run(ROOT);
   assert.equal(result.status, 0, result.stderr);
+  const state = readJson(ROOT);
   assert.deepEqual(result.json, {
     ok: true,
     code: 'MEMORY_VALID',
-    stateRevision: TARGET_STATE_REVISION,
+    stateRevision: state.stateRevision,
     schemaValidated: true,
     semanticRulesValidated: true,
     projectionCurrent: true,
@@ -343,7 +345,7 @@ test('rejects a second authority and an API future SHA', () => {
   }
 });
 
-test('requires the exact integrated Web memoryRevision', () => {
+test('requires the exact Web pointer memoryRevision', () => {
   const root = fixture();
   const state = readJson(root);
   state.repositories.find((entry) => entry.id === 'web').memoryRevision.sha =
@@ -352,13 +354,16 @@ test('requires the exact integrated Web memoryRevision', () => {
   expectCode(run(root), 'MEMORY_WEB_REVISION_MISMATCH');
 });
 
-test('requires the exact Candidate A target state revision', () => {
-  const root = fixture();
-  const state = readJson(root);
-  state.stateRevision = 'MVP-10B-LIVE-2026-08-21';
+test('keeps the pointer receipt stable across later authority revisions', () => {
+  const state = readJson(ROOT);
+  state.stateRevision = 'LATER-AUTHORITY-REVISION-2026-08-26';
+  assert.equal(validateState(state), state);
+
   state.pointerMetadata.targetStateRevision = state.stateRevision;
-  writeJson(root, state);
-  expectCode(run(root), 'MEMORY_STATE_REVISION_MISMATCH');
+  assert.throws(
+    () => validateState(state),
+    (error) => error.code === 'MEMORY_POINTER_MISMATCH',
+  );
 });
 
 test('rejects observed facts without direct observation time', () => {
@@ -416,7 +421,7 @@ test('binds application, containing release contracts, derived bundle, images an
       'sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24',
     rollbackApiImage:
       'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a',
-    webIntegratedRevision: WEB_SHA,
+    webIntegratedRevision: WEB_INTEGRATED_SHA,
   });
 
   for (const mutate of [
@@ -704,6 +709,7 @@ test('projection is derived only from the authority object', () => {
   assert.match(projection, /0a56a8aee7c64bda59a1981888418e1ad03950c0/u);
   assert.match(projection, /sha256:b45425d7f6ea63/u);
   assert.match(projection, /sha256:a4dafefab191/u);
+  assert.match(projection, new RegExp(WEB_INTEGRATED_SHA, 'u'));
 });
 
 test('cross-repo contract resolves the clean integrated Candidate A receipt', () => {
