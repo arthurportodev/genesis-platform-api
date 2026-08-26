@@ -980,3 +980,18 @@ correction branch remota já estava ausente. O live
 `app.agenciagenesismkt.com.br`, e o rollback
 `dpl_9Npu4VnyWatw1vMEforzUv8Mokke` continuou `Ready`. Produção, API, banco,
 runtime e concorrência otimista não foram alterados.
+
+## Pipeline Experience V2 — Fase 0 financeira
+
+- Classe/perfil: Critical / critical.
+- Base API reconciliada: `1a61d4b2f9beb0666346461936f12f2e39e43f09`.
+- Estado: Gate 1 aprovado; candidato documental local reconciliado para novo
+  Gate 2, sem implementação de produto, migration, operação de banco ou mudança
+  de memória pela Fase 0.
+- Decisão candidata: valor esperado BRL em centavos pertence ao ciclo comercial
+  atual, usa transporte decimal por string, histórico tipado e agregação
+  backend independente da paginação.
+- Limites: sem nova entidade Opportunity, multi-currency, endpoint, DTO,
+  alteração de autorização, deploy ou operação remota.
+- Operação: manifesto e Task Packet V2 ignorados; fallback documental aplicado
+  porque as Skills Genesis não estavam expostas pelo runtime.
