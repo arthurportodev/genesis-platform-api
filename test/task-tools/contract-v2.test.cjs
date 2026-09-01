@@ -437,5 +437,5 @@ test('validates the canonical repository contract set', () => {
   const result = validateRepositoryContracts({ cwd: process.cwd() });
   assert.equal(result.status, 'passed');
   assert.equal(result.schemas, 5);
-  assert.equal(result.skills, 2);
+  assert.equal(result.skills, 3);
 });

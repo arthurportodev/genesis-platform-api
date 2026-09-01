@@ -47,6 +47,8 @@ Não existe uma hierarquia linear única para perguntas de domínios diferentes:
 - **projeção humana:** [CURRENT_STATE.md](docs/CURRENT_STATE.md), sempre derivada
   da autoridade temporal e nunca editada manualmente;
 - **decisões e justificativas arquiteturais:** ADRs aceitos;
+- **direção durável de produto:**
+  [PRODUCT_DIRECTION.md](docs/PRODUCT_DIRECTION.md);
 - **histórico:** [TASK_LOG.md](docs/TASK_LOG.md), snapshots explicitamente
   históricos e o roadmap integralmente superseded;
 - **evidência de colaboração:** Issues e Pull Requests;
@@ -67,6 +69,11 @@ Use `$genesis-task-orchestrator` para intake e reidratação e
 `$genesis-independent-verifier` para revisão independente. A invocação das duas
 Skills é explícita em tarefas Critical. Skills orientam o processo; schemas,
 scripts, testes e CI permanecem o enforcement determinístico.
+
+Quando o delta envolver frontend, produto ou experiência, use
+`$genesis-frontend-product-engineer` como lente especializada do builder. Ela
+não é memória, papel operacional nem autoridade de produto e consulta somente
+as fontes canônicas exigidas pelo delta.
 
 Os gates são: Gate 1 para arquitetura quando exigida, Gate 2 para aprovação da implementação e Gate 3 para autorização explícita do merge. Interrompa quando surgir decisão ausente, elevação de classe, expansão material de escopo ou correção fora da autonomia aprovada.
 

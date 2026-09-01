@@ -59,6 +59,11 @@ Uma mesma pessoa ou agente pode acumular papéis quando a classificação permit
 
 Arquitetura e contexto, qualidade e testes, segurança e documentação são lentes aplicadas pelos papéis operacionais, não papéis permanentes adicionais. O coordenador atribui uma lente especializada quando o risco exigir. Segurança e isolamento multi-tenant devem ser avaliados por um verifier independente em tarefas Critical.
 
+`genesis-frontend-product-engineer` é uma lente especializada para o builder em
+deltas de frontend, produto ou experiência. Ela resolve progressivamente as
+autoridades roteadas pelo repositório, não transforma o builder em Skill, não
+ganha ownership próprio e não substitui coordenação ou verificação independente.
+
 ## Topologia por classe
 
 - **Simple:** um builder pode acumular coordenação e verifier por checklist; não usa Task Packet nem Gate 1 separado. O operador atua somente quando autorizado.
@@ -172,11 +177,13 @@ Evidence Manifest e autorização próprios.
 
 ## Skills e fallback
 
-`genesis-task-orchestrator` produz o plano mínimo de reidratação e
-`genesis-independent-verifier` conduz a revisão read-only. Ambas são
-repo-local e explicitamente invocadas em Critical. Elas nunca substituem
-manifesto, schemas, preflight, fingerprint, testes, CI ou Gates. Sem suporte a
-Skills, os mesmos contratos são aplicados pelos documentos e scripts.
+`genesis-task-orchestrator` produz o plano mínimo de reidratação,
+`genesis-frontend-product-engineer` aplica a lente especializada quando o delta
+exige e `genesis-independent-verifier` conduz a revisão read-only. As Skills são
+repo-local; Orchestrator e Verifier são explicitamente invocadas em Critical.
+Elas nunca substituem manifesto, papéis, schemas, preflight, fingerprint,
+testes, CI ou Gates. Sem suporte a Skills, os mesmos contratos são aplicados
+pelos documentos e scripts.
 
 ## Métricas do piloto
 

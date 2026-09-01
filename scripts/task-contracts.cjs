@@ -16,7 +16,11 @@ const CONTRACT_SCHEMAS = [
   'handoff.v1.schema.json',
   'evidence-manifest.v1.schema.json',
 ];
-const SKILLS = ['genesis-task-orchestrator', 'genesis-independent-verifier'];
+const SKILLS = [
+  'genesis-task-orchestrator',
+  'genesis-frontend-product-engineer',
+  'genesis-independent-verifier',
+];
 const SHARED_CONTRACT_FILES = [
   ...SKILLS.flatMap((name) => [
     `.agents/skills/${name}/SKILL.md`,

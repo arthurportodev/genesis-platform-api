@@ -40,6 +40,9 @@ Handoff esperado:
 
 Em Critical, comece com `$genesis-task-orchestrator` e encerre a revisão com
 `$genesis-independent-verifier`. Não dependa de invocação implícita.
+Quando o delta envolver frontend, produto ou experiência, aplique
+`$genesis-frontend-product-engineer` como lente do builder, sem criar outro
+papel ou ampliar as fontes além do necessário.
 
 ## Tarefa Simple
 
