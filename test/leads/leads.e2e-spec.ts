@@ -541,11 +541,16 @@ describe('Lead HTTP contract (e2e)', () => {
         {
           stage: LeadStage.NEW,
           total: 1,
+          expectedValueTotalMinor: '9007199254740993',
+          withoutExpectedValue: 0,
           items: [{ id: leadId, expectedValueMinor: '9007199254740993' }],
           page: { nextCursor: null, limit: 20 },
         },
       ],
       asOf: '2026-07-27T12:00:00.000Z',
+      currency: 'BRL',
+      expectedValueTotalMinor: '9007199254740993',
+      withoutExpectedValue: 0,
     });
     leads.timeline.mockResolvedValue({
       items: [
@@ -588,10 +593,24 @@ describe('Lead HTTP contract (e2e)', () => {
       .get('/api/v1/leads/kanban?limit=20')
       .expect(200);
     const kanbanBody = kanban.body as {
+      currency: string;
+      expectedValueTotalMinor: string;
+      withoutExpectedValue: number;
       columns: Array<{
+        expectedValueTotalMinor: string;
+        withoutExpectedValue: number;
         items: Array<{ expectedValueMinor: string | null }>;
       }>;
     };
+    expect(kanbanBody).toMatchObject({
+      currency: 'BRL',
+      expectedValueTotalMinor: '9007199254740993',
+      withoutExpectedValue: 0,
+    });
+    expect(kanbanBody.columns[0]).toMatchObject({
+      expectedValueTotalMinor: '9007199254740993',
+      withoutExpectedValue: 0,
+    });
     expect(kanbanBody.columns[0]?.items[0]?.expectedValueMinor).toBe(
       '9007199254740993',
     );
@@ -800,6 +819,9 @@ describe('Lead HTTP contract (e2e)', () => {
     });
     reads.kanban.mockResolvedValue({
       asOf: '2026-07-27T12:00:00.000Z',
+      currency: 'BRL',
+      expectedValueTotalMinor: '0',
+      withoutExpectedValue: 0,
       columns: [],
     });
     reads.returnReviews.mockResolvedValue({

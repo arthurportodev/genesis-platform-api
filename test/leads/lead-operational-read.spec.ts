@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   HttpException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
@@ -243,6 +244,90 @@ describe('Lead operational reads', () => {
     await expect(
       service.metrics(tenant, { from: '2026-07-27', to: '2026-07-27' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('maps exact server-side Kanban aggregates without JavaScript number conversion', async () => {
+    const aggregateBeyondBigint = '18446744073709551614';
+    const { service, query } = createService([
+      {
+        actorRole: MembershipRole.OWNER,
+        targetExists: true,
+        asOf: '2026-07-27T12:00:00.000Z',
+        stage: LeadStage.NEW,
+        total: '3',
+        expectedValueTotalMinor: '9007199254740993',
+        withoutExpectedValue: '1',
+        pipelineExpectedValueTotalMinor: aggregateBeyondBigint,
+        pipelineWithoutExpectedValue: '2',
+        items: [],
+      },
+      {
+        actorRole: MembershipRole.OWNER,
+        targetExists: true,
+        asOf: '2026-07-27T12:00:00.000Z',
+        stage: LeadStage.PROPOSAL,
+        total: '1',
+        expectedValueTotalMinor: '9439544818963770621',
+        withoutExpectedValue: '1',
+        pipelineExpectedValueTotalMinor: aggregateBeyondBigint,
+        pipelineWithoutExpectedValue: '2',
+        items: [],
+      },
+    ]);
+
+    await expect(service.kanban(tenant, { limit: 20 })).resolves.toEqual({
+      asOf: '2026-07-27T12:00:00.000Z',
+      currency: 'BRL',
+      expectedValueTotalMinor: aggregateBeyondBigint,
+      withoutExpectedValue: 2,
+      columns: [
+        expect.objectContaining({
+          stage: LeadStage.NEW,
+          total: 3,
+          expectedValueTotalMinor: '9007199254740993',
+          withoutExpectedValue: 1,
+        }),
+        expect.objectContaining({
+          stage: LeadStage.PROPOSAL,
+          total: 1,
+          expectedValueTotalMinor: '9439544818963770621',
+          withoutExpectedValue: 1,
+        }),
+      ],
+    });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('stage_aggregates AS MATERIALIZED'),
+      expect.any(Array),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('sum(candidate."expectedValueMinor"::numeric)'),
+      expect.any(Array),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('CROSS JOIN pipeline_aggregate'),
+      expect.any(Array),
+    );
+  });
+
+  it('fails closed when PostgreSQL returns a non-canonical financial total', async () => {
+    const { service } = createService([
+      {
+        actorRole: MembershipRole.OWNER,
+        targetExists: true,
+        asOf: '2026-07-27T12:00:00.000Z',
+        stage: LeadStage.NEW,
+        total: '1',
+        expectedValueTotalMinor: '1e3',
+        withoutExpectedValue: '0',
+        pipelineExpectedValueTotalMinor: '1000',
+        pipelineWithoutExpectedValue: '0',
+        items: [],
+      },
+    ]);
+
+    await expect(service.kanban(tenant, { limit: 20 })).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
   });
 
   it('drives my-actions through the pending-action responsible index key', async () => {

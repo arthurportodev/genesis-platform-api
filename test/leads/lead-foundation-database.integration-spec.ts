@@ -823,6 +823,294 @@ describe('Lead foundation database integration', () => {
     ).rejects.toMatchObject({ status: 403 });
   });
 
+  it('aggregates the complete authorized Kanban snapshot with exact financial precision', async () => {
+    const fixture = await createFixture();
+    const otherFixture = await createFixture();
+    const commands = createLeadService();
+    const reads = createReadService();
+    const ownerView = ownerTenant(fixture);
+    const assigned = await ingest(
+      fixture,
+      randomUUID(),
+      '1'.repeat(64),
+      LeadSource.MANUAL,
+      fixture.memberships[1].id,
+      uniquePhone(),
+    );
+    await ingest(
+      fixture,
+      randomUUID(),
+      '2'.repeat(64),
+      LeadSource.CAMPAIGN,
+      null,
+      uniquePhone(),
+    );
+    const explicitZero = await ingest(
+      fixture,
+      randomUUID(),
+      '3'.repeat(64),
+      LeadSource.LEAD_MAGNET,
+      null,
+      uniquePhone(),
+    );
+    const proposalMaximum = await ingest(
+      fixture,
+      randomUUID(),
+      '4'.repeat(64),
+      LeadSource.MANUAL,
+      null,
+      uniquePhone(),
+    );
+    const negotiationMaximum = await ingest(
+      fixture,
+      randomUUID(),
+      '5'.repeat(64),
+      LeadSource.MANUAL,
+      null,
+      uniquePhone(),
+    );
+    const otherTenantMaximum = await ingest(
+      otherFixture,
+      randomUUID(),
+      '6'.repeat(64),
+      LeadSource.MANUAL,
+      null,
+      uniquePhone(),
+    );
+
+    await owner.query(
+      `UPDATE public.lead_commercial_cycles cycle
+       SET expected_value_minor = CASE cycle.lead_id
+         WHEN $1::uuid THEN 7::bigint
+         WHEN $2::uuid THEN 0::bigint
+         WHEN $3::uuid THEN 9223372036854775807::bigint
+         WHEN $4::uuid THEN 9223372036854775807::bigint
+         ELSE cycle.expected_value_minor
+       END
+       WHERE cycle.organization_id = $5
+         AND cycle.lead_id = ANY($6::uuid[])`,
+      [
+        assigned.leadId,
+        explicitZero.leadId,
+        proposalMaximum.leadId,
+        negotiationMaximum.leadId,
+        fixture.organization.id,
+        [
+          assigned.leadId,
+          explicitZero.leadId,
+          proposalMaximum.leadId,
+          negotiationMaximum.leadId,
+        ],
+      ],
+    );
+    await owner.query(
+      `UPDATE public.lead_commercial_cycles
+       SET expected_value_minor = 9223372036854775807::bigint
+       WHERE organization_id = $1 AND lead_id = $2`,
+      [otherFixture.organization.id, otherTenantMaximum.leadId],
+    );
+    await commands.move(
+      ownerView,
+      explicitZero.leadId,
+      explicitZero.revision,
+      randomUUID(),
+      LeadStage.PROPOSAL,
+    );
+    await commands.move(
+      ownerView,
+      proposalMaximum.leadId,
+      proposalMaximum.revision,
+      randomUUID(),
+      LeadStage.PROPOSAL,
+    );
+    await commands.move(
+      ownerView,
+      negotiationMaximum.leadId,
+      negotiationMaximum.revision,
+      randomUUID(),
+      LeadStage.NEGOTIATION,
+    );
+    const [proposalLead] = await owner.query<Array<{ phone: string }>>(
+      `SELECT primary_phone AS phone FROM public.leads WHERE id = $1`,
+      [proposalMaximum.leadId],
+    );
+    if (proposalLead === undefined) throw new Error('Proposal lead missing.');
+    await ingest(
+      fixture,
+      randomUUID(),
+      '7'.repeat(64),
+      LeadSource.CAMPAIGN,
+      null,
+      proposalLead.phone,
+    );
+
+    const board = await reads.kanban(ownerView, { limit: 20 });
+    expect(board).toMatchObject({
+      currency: 'BRL',
+      expectedValueTotalMinor: '18446744073709551621',
+      withoutExpectedValue: 1,
+    });
+    expect(board.columns).toHaveLength(5);
+    expect(board.columns.reduce((sum, column) => sum + column.total, 0)).toBe(
+      5,
+    );
+    expect(
+      board.columns.find(({ stage }) => stage === LeadStage.NEW),
+    ).toMatchObject({
+      total: 2,
+      expectedValueTotalMinor: '7',
+      withoutExpectedValue: 1,
+    });
+    expect(
+      board.columns.find(({ stage }) => stage === LeadStage.PROPOSAL),
+    ).toMatchObject({
+      total: 2,
+      expectedValueTotalMinor: '9223372036854775807',
+      withoutExpectedValue: 0,
+    });
+    expect(
+      board.columns.find(({ stage }) => stage === LeadStage.NEGOTIATION),
+    ).toMatchObject({
+      total: 1,
+      expectedValueTotalMinor: '9223372036854775807',
+      withoutExpectedValue: 0,
+    });
+    expect(
+      board.columns.find(({ stage }) => stage === LeadStage.DIAGNOSIS),
+    ).toMatchObject({
+      total: 0,
+      expectedValueTotalMinor: '0',
+      withoutExpectedValue: 0,
+    });
+
+    const firstPage = await reads.kanban(ownerView, { limit: 1 });
+    expect(firstPage).toMatchObject({
+      expectedValueTotalMinor: board.expectedValueTotalMinor,
+      withoutExpectedValue: board.withoutExpectedValue,
+    });
+    const newColumn = firstPage.columns.find(
+      ({ stage }) => stage === LeadStage.NEW,
+    );
+    expect(newColumn?.page.nextCursor).toEqual(expect.any(String));
+    const continuation = await reads.kanban(ownerView, {
+      stage: LeadStage.NEW,
+      cursor: newColumn?.page.nextCursor as string,
+      limit: 1,
+    });
+    expect(continuation).toMatchObject({
+      expectedValueTotalMinor: board.expectedValueTotalMinor,
+      withoutExpectedValue: board.withoutExpectedValue,
+      columns: [
+        expect.objectContaining({
+          stage: LeadStage.NEW,
+          total: 2,
+          expectedValueTotalMinor: '7',
+          withoutExpectedValue: 1,
+        }),
+      ],
+    });
+
+    const missingOnly = await reads.kanban(ownerView, {
+      source: LeadSource.CAMPAIGN,
+      limit: 20,
+    });
+    expect(missingOnly).toMatchObject({
+      expectedValueTotalMinor: '0',
+      withoutExpectedValue: 1,
+    });
+    expect(
+      missingOnly.columns.find(({ stage }) => stage === LeadStage.NEW),
+    ).toMatchObject({
+      total: 1,
+      expectedValueTotalMinor: '0',
+      withoutExpectedValue: 1,
+    });
+    const explicitZeroOnly = await reads.kanban(ownerView, {
+      source: LeadSource.LEAD_MAGNET,
+      limit: 20,
+    });
+    expect(explicitZeroOnly).toMatchObject({
+      expectedValueTotalMinor: '0',
+      withoutExpectedValue: 0,
+    });
+    expect(
+      explicitZeroOnly.columns.find(
+        ({ stage }) => stage === LeadStage.PROPOSAL,
+      ),
+    ).toMatchObject({
+      total: 1,
+      expectedValueTotalMinor: '0',
+      withoutExpectedValue: 0,
+    });
+    const empty = await reads.kanban(ownerView, {
+      source: LeadSource.LANDING_PAGE,
+      limit: 20,
+    });
+    expect(empty).toMatchObject({
+      expectedValueTotalMinor: '0',
+      withoutExpectedValue: 0,
+    });
+    expect(empty.columns).toHaveLength(5);
+    expect(
+      empty.columns.every(
+        (column) =>
+          column.total === 0 &&
+          column.expectedValueTotalMinor === '0' &&
+          column.withoutExpectedValue === 0,
+      ),
+    ).toBe(true);
+
+    const memberView = await reads.kanban(
+      {
+        userId: fixture.users[1].id,
+        membershipId: fixture.memberships[1].id,
+        organizationId: fixture.organization.id,
+        role: MembershipRole.MEMBER,
+      },
+      { limit: 20 },
+    );
+    expect(memberView).toMatchObject({
+      expectedValueTotalMinor: '7',
+      withoutExpectedValue: 0,
+    });
+    expect(
+      memberView.columns.reduce((sum, column) => sum + column.total, 0),
+    ).toBe(1);
+
+    const adminUser = await owner.getRepository(User).save({
+      email: `lead-admin-${randomUUID()}@example.com`,
+      name: 'Lead admin',
+      status: UserStatus.ACTIVE,
+    });
+    const adminMembership = await owner.getRepository(Membership).save({
+      userId: adminUser.id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.ADMIN,
+      status: MembershipStatus.ACTIVE,
+    });
+    await expect(
+      reads.kanban(
+        {
+          userId: adminUser.id,
+          membershipId: adminMembership.id,
+          organizationId: fixture.organization.id,
+          role: MembershipRole.ADMIN,
+        },
+        { limit: 20 },
+      ),
+    ).resolves.toMatchObject({
+      expectedValueTotalMinor: board.expectedValueTotalMinor,
+      withoutExpectedValue: board.withoutExpectedValue,
+    });
+
+    await expect(
+      reads.kanban(ownerTenant(otherFixture), { limit: 20 }),
+    ).resolves.toMatchObject({
+      expectedValueTotalMinor: '9223372036854775807',
+      withoutExpectedValue: 0,
+    });
+  });
+
   it('denies runtime DML, keeps history append-only, and clears assignment on offboarding', async () => {
     const fixture = await createFixture();
     const result = await ingest(
