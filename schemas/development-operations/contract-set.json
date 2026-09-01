@@ -12,6 +12,14 @@
       "sha256": "50fc2078dcaf27c721f962b1df323a49b3bc02104136499ef7e11b75d11db97f"
     },
     {
+      "path": ".agents/skills/genesis-frontend-product-engineer/SKILL.md",
+      "sha256": "d5a79c0eadd9debc4600ac4fca120d7851725695f31e28ab740c8d658797bc6f"
+    },
+    {
+      "path": ".agents/skills/genesis-frontend-product-engineer/agents/openai.yaml",
+      "sha256": "505c0b5da0bcec3a6c53d934334da94b4ed8a9c37c5546de240a229441def75d"
+    },
+    {
       "path": ".agents/skills/genesis-independent-verifier/SKILL.md",
       "sha256": "ac54adf9f8a293b5064f294d80e06345c1a8553d8f8a4374c4a67f6499e8910b"
     },

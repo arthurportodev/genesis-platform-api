@@ -18,7 +18,8 @@ sem um gatilho concreto.
 - **Arquitetura:** [arquitetura](ARCHITECTURE.md),
   [segurança](SECURITY.md), [produção](PRODUCTION.md) e
   [ADRs aceitos](decisions/README.md) preservam contratos e justificativas.
-- **Produto:** [visão do produto](PROJECT_OVERVIEW.md) e
+- **Produto:** [direção de produto](PRODUCT_DIRECTION.md) preserva a tese e os
+  critérios de escopo; [visão do produto](PROJECT_OVERVIEW.md) e
   [modelo de domínio](DOMAIN_MODEL.md) descrevem propósito, limites e entidades.
 - **Histórico:** [histórico de tarefas](TASK_LOG.md) é append-only e o
   [roadmap](ROADMAP.md) é integralmente histórico/superseded.
@@ -37,6 +38,9 @@ Para intake, classificação e plano mínimo, invoque explicitamente
 `$genesis-task-orchestrator` em tarefas Critical. Para a revisão Critical final,
 invoque `$genesis-independent-verifier`. O fallback sem Skills é aplicar
 diretamente `AGENTS.md`, a classificação, o fluxo e os templates versionados.
+Em deltas de frontend, produto ou experiência, aplique
+`$genesis-frontend-product-engineer` somente como lente especializada do
+builder e carregue as autoridades adicionais apenas quando o delta exigir.
 
 ## Como recuperar contexto
 

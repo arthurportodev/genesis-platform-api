@@ -1,0 +1,6 @@
+interface:
+  display_name: 'Genesis Frontend Product Engineer'
+  short_description: 'Apply Genesis direction to frontend work'
+  default_prompt: 'Use $genesis-frontend-product-engineer as the specialized product and experience lens for this scoped frontend task.'
+policy:
+  allow_implicit_invocation: true
