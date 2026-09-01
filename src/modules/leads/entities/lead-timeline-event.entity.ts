@@ -125,6 +125,18 @@ export class LeadTimelineEvent {
   previousDueAt!: Date | null;
   @Column({ name: 'new_due_at', type: 'timestamptz', nullable: true })
   newDueAt!: Date | null;
+  @Column({
+    name: 'previous_expected_value_minor',
+    type: 'bigint',
+    nullable: true,
+  })
+  previousExpectedValueMinor!: string | null;
+  @Column({
+    name: 'new_expected_value_minor',
+    type: 'bigint',
+    nullable: true,
+  })
+  newExpectedValueMinor!: string | null;
   @Column({ name: 'next_action_revision', type: 'bigint', nullable: true })
   nextActionRevision!: string | null;
   @Column({

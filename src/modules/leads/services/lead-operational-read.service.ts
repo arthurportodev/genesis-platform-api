@@ -339,7 +339,9 @@ export class LeadOperationalReadService {
       lead.primary_phone AS "primaryPhone", lead.email,
       lead.company_name AS "companyName",
       lead.responsible_membership_id AS "responsibleMembershipId",
-      lead.status, lead.stage, first_entry.source,
+      lead.status, lead.stage,
+      latest_cycle.expected_value_minor::text AS "expectedValueMinor",
+      first_entry.source,
       last_entry.received_at AS "lastEntryAt",
       CASE WHEN pending_action.id IS NULL THEN NULL ELSE jsonb_build_object(
         'id', pending_action.id, 'type', pending_action.type,
@@ -377,7 +379,11 @@ export class LeadOperationalReadService {
      AND last_entry.sequence = lead.next_entry_sequence - 1
     LEFT JOIN public.lead_next_actions pending_action
       ON pending_action.organization_id = lead.organization_id
-     AND pending_action.lead_id = lead.id AND pending_action.status = 'pending'`;
+     AND pending_action.lead_id = lead.id AND pending_action.status = 'pending'
+    JOIN public.lead_commercial_cycles latest_cycle
+      ON latest_cycle.organization_id = lead.organization_id
+     AND latest_cycle.lead_id = lead.id
+     AND latest_cycle.cycle_number = lead.next_cycle_number - 1`;
   }
 
   private addSearch(parts: SqlParts, rawQuery: string | undefined): void {
@@ -517,6 +523,7 @@ export class LeadOperationalReadService {
       responsibleMembershipId: row.responsibleMembershipId ?? null,
       status: row.status as LeadStatus,
       stage: row.stage as LeadStage,
+      expectedValueMinor: row.expectedValueMinor ?? null,
       source: row.source as string,
       lastEntryAt: this.iso(row.lastEntryAt as Date | string),
       nextAction: row.nextAction ?? null,
@@ -1204,6 +1211,7 @@ export class LeadOperationalReadService {
         LEFT JOIN LATERAL (
           SELECT jsonb_build_object('id', cycle.id,
             'cycleNumber', cycle.cycle_number::text,
+            'expectedValueMinor', cycle.expected_value_minor::text,
             'openingReason', cycle.opening_reason, 'startingStage', cycle.starting_stage,
             'openedByMembershipId', cycle.opened_by_membership_id,
             'openedAt', cycle.opened_at, 'closedByMembershipId', cycle.closed_by_membership_id,
@@ -1288,6 +1296,7 @@ export class LeadOperationalReadService {
         )
         SELECT authorized.id IS NOT NULL AS "leadVisible",
           cycle.id, cycle.cycle_number::text AS "cycleNumber",
+          cycle.expected_value_minor::text AS "expectedValueMinor",
           cycle.opening_reason AS "openingReason", cycle.starting_stage AS "startingStage",
           cycle.opened_by_membership_id AS "openedByMembershipId",
           cycle.opened_at AS "openedAt", cycle.closed_by_membership_id AS "closedByMembershipId",

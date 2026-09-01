@@ -109,6 +109,17 @@ export class OperationalLeadReadiness implements LeadReadiness {
             AND to_regclass('public.lead_notes') IS NOT NULL
             AND to_regclass('public.lead_next_actions') IS NOT NULL
             AND to_regclass('public.lead_follow_up_idempotency') IS NOT NULL
+            AND EXISTS (SELECT 1 FROM information_schema.columns column_catalog
+              WHERE column_catalog.table_schema = 'public'
+                AND column_catalog.table_name = 'lead_commercial_cycles'
+                AND column_catalog.column_name = 'expected_value_minor'
+                AND column_catalog.data_type = 'bigint')
+            AND (SELECT count(*) = 2 FROM information_schema.columns column_catalog
+              WHERE column_catalog.table_schema = 'public'
+                AND column_catalog.table_name = 'lead_timeline_events'
+                AND column_catalog.column_name IN (
+                  'previous_expected_value_minor','new_expected_value_minor'
+                ) AND column_catalog.data_type = 'bigint')
             AND NOT EXISTS (
               SELECT 1 FROM public.organizations organization
               WHERE NOT EXISTS (
@@ -125,6 +136,8 @@ export class OperationalLeadReadiness implements LeadReadiness {
             AND has_function_privilege(current_user, 'app_private.assign_lead(uuid,uuid,uuid,uuid,uuid,bigint)', 'EXECUTE')
             AND to_regprocedure('app_private.execute_lead_command(uuid,uuid,uuid,uuid,app_private.lead_command_enum,bigint,uuid,smallint,text,jsonb,lead_stage_enum,lead_lost_reason_enum,lead_archive_reason_enum,text)') IS NOT NULL
             AND has_function_privilege(current_user, 'app_private.execute_lead_command(uuid,uuid,uuid,uuid,app_private.lead_command_enum,bigint,uuid,smallint,text,jsonb,lead_stage_enum,lead_lost_reason_enum,lead_archive_reason_enum,text)', 'EXECUTE')
+            AND to_regprocedure('app_private.execute_lead_expected_value_command(uuid,uuid,uuid,uuid,bigint,uuid,smallint,text,jsonb,bigint)') IS NOT NULL
+            AND has_function_privilege(current_user, 'app_private.execute_lead_expected_value_command(uuid,uuid,uuid,uuid,bigint,uuid,smallint,text,jsonb,bigint)', 'EXECUTE')
             AND to_regprocedure('app_private.required_lead_fingerprint_key_versions()') IS NOT NULL
             AND has_function_privilege(current_user, 'app_private.required_lead_fingerprint_key_versions()', 'EXECUTE')
             AND to_regprocedure('app_private.execute_lead_follow_up_command(uuid,uuid,uuid,uuid,app_private.lead_follow_up_command_enum,bigint,uuid,smallint,text,jsonb,lead_activity_type_enum,timestamptz,text,text,lead_next_action_type_enum,text,timestamptz,text)') IS NOT NULL
@@ -209,7 +222,7 @@ export class OperationalLeadReadiness implements LeadReadiness {
               AND has_function_privilege(current_user, procedure.oid, 'EXECUTE')
             ORDER BY procedure.oid::regprocedure::text
           ) AS "executableFunctions",
-          (SELECT count(*) = 20
+          (SELECT count(*) = 21
            FROM pg_proc AS procedure
            WHERE procedure.oid = ANY(ARRAY[
               to_regprocedure('app_private.ingest_lead(uuid,uuid,uuid,text,text,text,text,text,text,text,text,uuid,text,text,text,text,text,text,text,uuid,smallint,text,jsonb)'),
@@ -222,6 +235,7 @@ export class OperationalLeadReadiness implements LeadReadiness {
              to_regprocedure('app_private.reject_lead_append_only()'),
              to_regprocedure('app_private.reject_lead_truncate()'),
              to_regprocedure('app_private.execute_lead_command(uuid,uuid,uuid,uuid,app_private.lead_command_enum,bigint,uuid,smallint,text,jsonb,lead_stage_enum,lead_lost_reason_enum,lead_archive_reason_enum,text)'),
+             to_regprocedure('app_private.execute_lead_expected_value_command(uuid,uuid,uuid,uuid,bigint,uuid,smallint,text,jsonb,bigint)'),
              to_regprocedure('app_private.enforce_lead_state_transition()'),
              to_regprocedure('app_private.protect_lead_cycle_history()'),
              to_regprocedure('app_private.protect_lead_return_review_history()'),
@@ -251,6 +265,7 @@ export class OperationalLeadReadiness implements LeadReadiness {
                 'clear_lead_assignments_for_inactive_user',
                 'reject_lead_append_only', 'reject_lead_truncate',
                 'execute_lead_command', 'enforce_lead_state_transition',
+                'execute_lead_expected_value_command',
                 'protect_lead_cycle_history', 'protect_lead_return_review_history',
                 'assert_lead_cycle_consistency'
                 ,'execute_lead_follow_up_command'
@@ -268,6 +283,7 @@ export class OperationalLeadReadiness implements LeadReadiness {
               AND procedure.proname IN (
                 'ingest_lead', 'update_lead', 'assign_lead',
                 'required_lead_fingerprint_key_versions', 'execute_lead_command'
+                ,'execute_lead_expected_value_command'
                 ,'execute_lead_follow_up_command'
                 ,'required_lead_follow_up_fingerprint_key_versions'
               )

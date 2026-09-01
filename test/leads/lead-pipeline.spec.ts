@@ -14,8 +14,10 @@ import {
 } from '../../src/modules/leads/enums/lead.enums';
 import {
   leadCommandFingerprint,
+  leadExpectedValueFingerprint,
   leadFollowUpFingerprint,
   LeadCommandFingerprintInput,
+  LeadExpectedValueFingerprintInput,
   LeadFollowUpFingerprintInput,
 } from '../../src/modules/leads/security/lead-fingerprint';
 import { LeadsService } from '../../src/modules/leads/services/leads.service';
@@ -72,6 +74,93 @@ describe('Lead commercial pipeline', () => {
     expect(
       leadCommandFingerprint({ ...input, reasonNote: 'Outro motivo' }, key),
     ).not.toBe(fingerprint);
+  });
+
+  it('keeps the legacy command fingerprint stable and isolates financial fingerprints', () => {
+    const fixedInput: LeadCommandFingerprintInput = {
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      actorMembershipId: '22222222-2222-4222-8222-222222222222',
+      leadId: '33333333-3333-4333-8333-333333333333',
+      command: LeadCommand.LOSE,
+      expectedRevision: '12',
+      stage: null,
+      lostReason: LeadLostReason.OTHER,
+      archiveReason: null,
+      reasonNote: 'Cliente adiou',
+    };
+    expect(leadCommandFingerprint(fixedInput, key)).toBe(
+      '69bd9c869cc78ba972aa048eb55f6c40e9bf85694746115f8c2e947fb5944c46',
+    );
+
+    const financialInput: LeadExpectedValueFingerprintInput = {
+      organizationId: fixedInput.organizationId,
+      actorMembershipId: fixedInput.actorMembershipId,
+      leadId: fixedInput.leadId,
+      expectedRevision: fixedInput.expectedRevision,
+      expectedValueMinor: '9007199254740993',
+    };
+    expect(leadExpectedValueFingerprint(financialInput, key)).toBe(
+      '07e2c65c4baee19c4b2fadec5df941d528f033cfa7e2f9b9e41d2e37c19967cb',
+    );
+    expect(
+      leadExpectedValueFingerprint(
+        { ...financialInput, expectedValueMinor: null },
+        key,
+      ),
+    ).not.toBe(leadExpectedValueFingerprint(financialInput, key));
+  });
+
+  it.each([null, '0', '125000', '9223372036854775807'])(
+    'sends canonical expected value %p without numeric conversion',
+    async (expectedValueMinor) => {
+      let sql = '';
+      let parameters: unknown[] | undefined;
+      const service = serviceWith((statement, values) => {
+        sql = statement;
+        parameters = values;
+        return Promise.resolve([
+          { revision: '2', replayed: false, responseStatus: 204 },
+        ]);
+      });
+      await expect(
+        service.setExpectedValue(tenant, leadId, '1', randomUUID(), {
+          expectedValueMinor,
+        }),
+      ).resolves.toEqual({
+        revision: '2',
+        replayed: false,
+        responseStatus: 204,
+      });
+      expect(sql).toContain('execute_lead_expected_value_command');
+      expect(parameters?.[9]).toBe(expectedValueMinor);
+      expect(parameters?.[7]).toEqual(expect.stringMatching(/^[0-9a-f]{64}$/u));
+    },
+  );
+
+  it.each([
+    '',
+    '-1',
+    ' 1',
+    '1 ',
+    '+1',
+    '1.0',
+    '1e3',
+    '00',
+    '9223372036854775808',
+    'NaN',
+    'Infinity',
+  ])('rejects non-canonical expected value %p before SQL', async (value) => {
+    let called = false;
+    const service = serviceWith(() => {
+      called = true;
+      return Promise.resolve([]);
+    });
+    await expect(
+      service.setExpectedValue(tenant, leadId, '1', randomUUID(), {
+        expectedValueMinor: value,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(called).toBe(false);
   });
 
   it('requires other notes and rejects controls or malformed Unicode before SQL', () => {

@@ -165,7 +165,7 @@ describe('private operator OWNER CLI contract', () => {
       /operator-owner|operator:owner/u,
     );
     expect(cli).not.toMatch(/@(Controller|Get|Post|Put|Patch|Delete)\b/u);
-    expect(migrations).toHaveLength(10);
+    expect(migrations).toHaveLength(11);
     expect(migrations).not.toEqual(
       expect.arrayContaining([
         expect.stringMatching(/operator|owner-onboarding/iu),

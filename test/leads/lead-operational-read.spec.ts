@@ -65,6 +65,7 @@ describe('Lead operational reads', () => {
         responsibleMembershipId: null,
         status: LeadStatus.ACTIVE,
         stage: LeadStage.NEW,
+        expectedValueMinor: '9007199254740993',
         source: 'manual',
         lastEntryAt: '2026-07-27T11:00:00.000Z',
         nextAction: null,
@@ -106,6 +107,7 @@ describe('Lead operational reads', () => {
       sort: LeadListSort.CREATED_AT_DESC,
     });
     expect(first.page).toMatchObject({ total: 2, limit: 1 });
+    expect(first.items[0]?.expectedValueMinor).toBe('9007199254740993');
     expect(first.page.nextCursor).toEqual(expect.any(String));
     expect(first.page.nextCursor).not.toContain('Ága');
     expect(first.page.nextCursor).not.toContain('+5562');
@@ -127,6 +129,12 @@ describe('Lead operational reads', () => {
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining(
         'LEFT JOIN public.lead_next_actions pending_action',
+      ),
+      expect.any(Array),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'latest_cycle.expected_value_minor::text AS "expectedValueMinor"',
       ),
       expect.any(Array),
     );

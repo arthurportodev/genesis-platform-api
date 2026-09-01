@@ -6,6 +6,7 @@ import { CreateLeadFoundation1785346800000 } from '../../src/database/migrations
 import { ManageLeadCommercialPipeline1785433200000 } from '../../src/database/migrations/1785433200000-ManageLeadCommercialPipeline';
 import { ManageLeadActivitiesFollowUp1785519600000 } from '../../src/database/migrations/1785519600000-ManageLeadActivitiesFollowUp';
 import { AddLeadOperationalReadIndexes1785606000000 } from '../../src/database/migrations/1785606000000-AddLeadOperationalReadIndexes';
+import { ManageLeadCommercialCycleExpectedValue1788289200000 } from '../../src/database/migrations/1788289200000-ManageLeadCommercialCycleExpectedValue';
 import { OperationalInvitationActivationReadiness } from '../../src/modules/invitations/ports/invitation-activation-readiness.port';
 import { Membership } from '../../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../../src/modules/memberships/enums/membership-role.enum';
@@ -18,8 +19,10 @@ import {
   LeadNextActionType,
   LeadSource,
   LeadStage,
+  LeadStatus,
 } from '../../src/modules/leads/enums/lead.enums';
 import { OperationalLeadReadiness } from '../../src/modules/leads/ports/lead-readiness.port';
+import { leadExpectedValueFingerprint } from '../../src/modules/leads/security/lead-fingerprint';
 import { LeadsService } from '../../src/modules/leads/services/leads.service';
 import { LeadOperationalReadService } from '../../src/modules/leads/services/lead-operational-read.service';
 import { Organization } from '../../src/modules/organizations/entities/organization.entity';
@@ -64,6 +67,9 @@ describe('Lead foundation database integration', () => {
     await new ManageLeadCommercialPipeline1785433200000().up(migrationRunner);
     await new ManageLeadActivitiesFollowUp1785519600000().up(migrationRunner);
     await new AddLeadOperationalReadIndexes1785606000000().up(migrationRunner);
+    await new ManageLeadCommercialCycleExpectedValue1788289200000().up(
+      migrationRunner,
+    );
     configureIntegrationRuntimeEnvironment();
     runtime = createIntegrationRuntimeDataSource();
     await runtime.initialize();
@@ -153,8 +159,13 @@ describe('Lead foundation database integration', () => {
   it('reverts and reapplies the additive pipeline migration before lifecycle data exists', async () => {
     const migration = new ManageLeadCommercialPipeline1785433200000();
     const followUpMigration = new ManageLeadActivitiesFollowUp1785519600000();
+    const financialMigration =
+      new ManageLeadCommercialCycleExpectedValue1788289200000();
     await migrationRunner.startTransaction();
     try {
+      await expect(
+        financialMigration.down(migrationRunner),
+      ).resolves.toBeUndefined();
       await expect(
         followUpMigration.down(migrationRunner),
       ).resolves.toBeUndefined();
@@ -213,6 +224,9 @@ describe('Lead foundation database integration', () => {
       await expect(
         followUpMigration.up(migrationRunner),
       ).resolves.toBeUndefined();
+      await expect(
+        financialMigration.up(migrationRunner),
+      ).resolves.toBeUndefined();
       const [backfilled] = (await migrationRunner.query(
         `SELECT lead.status, lead.stage, lead.revision::text AS revision,
           cycle.cycle_number::text AS "cycleNumber",
@@ -237,6 +251,57 @@ describe('Lead foundation database integration', () => {
         cycleNumber: '1',
         openingReason: 'created',
         openedAtMatches: true,
+      });
+    } finally {
+      await migrationRunner.rollbackTransaction();
+    }
+  });
+
+  it('reverts and reapplies the financial migration before financial data exists', async () => {
+    const migration = new ManageLeadCommercialCycleExpectedValue1788289200000();
+    await migrationRunner.startTransaction();
+    try {
+      await expect(migration.down(migrationRunner)).resolves.toBeUndefined();
+      const [removed] = (await migrationRunner.query(
+        `SELECT
+          EXISTS (SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'lead_commercial_cycles'
+              AND column_name = 'expected_value_minor') AS "cycleColumn",
+          EXISTS (SELECT 1 FROM pg_enum value
+            JOIN pg_type type ON type.oid = value.enumtypid
+            JOIN pg_namespace namespace ON namespace.oid = type.typnamespace
+            WHERE namespace.nspname = 'app_private'
+              AND type.typname = 'lead_command_enum'
+              AND value.enumlabel = 'set_expected_value') AS "commandValue",
+          to_regprocedure('app_private.execute_lead_expected_value_command(uuid,uuid,uuid,uuid,bigint,uuid,smallint,text,jsonb,bigint)') IS NOT NULL AS "commandFunction"`,
+      )) as Array<{
+        cycleColumn: boolean;
+        commandValue: boolean;
+        commandFunction: boolean;
+      }>;
+      expect(removed).toEqual({
+        cycleColumn: false,
+        commandValue: false,
+        commandFunction: false,
+      });
+
+      await expect(migration.up(migrationRunner)).resolves.toBeUndefined();
+      const [restored] = (await migrationRunner.query(
+        `SELECT current_setting('server_encoding') AS encoding,
+          EXISTS (SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'lead_commercial_cycles'
+              AND column_name = 'expected_value_minor' AND data_type = 'bigint'
+              AND is_nullable = 'YES') AS "cycleColumn",
+          to_regprocedure('app_private.execute_lead_expected_value_command(uuid,uuid,uuid,uuid,bigint,uuid,smallint,text,jsonb,bigint)') IS NOT NULL AS "commandFunction"`,
+      )) as Array<{
+        encoding: string;
+        cycleColumn: boolean;
+        commandFunction: boolean;
+      }>;
+      expect(restored).toEqual({
+        encoding: 'UTF8',
+        cycleColumn: true,
+        commandFunction: true,
       });
     } finally {
       await migrationRunner.rollbackTransaction();
@@ -1161,6 +1226,370 @@ describe('Lead foundation database integration', () => {
       returnReviewPending: false,
       revision: '10',
     });
+  });
+
+  it('persists, replays, clears, historizes, and projects expected cycle value exactly', async () => {
+    const fixture = await createFixture();
+    const phone = '+5562555555555';
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      'a'.repeat(64),
+      'manual',
+      fixture.memberships[1].id,
+      phone,
+    );
+    const config = leadConfig();
+    const readiness = new OperationalLeadReadiness(config, runtime);
+    const service = new LeadsService(
+      runtime,
+      { getOrThrow: () => config } as unknown as ConfigService,
+      readiness,
+    );
+    const reads = new LeadOperationalReadService(
+      runtime,
+      { getOrThrow: () => config } as unknown as ConfigService,
+      readiness,
+    );
+    const ownerTenant = {
+      userId: fixture.users[0].id,
+      membershipId: fixture.memberships[0].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.OWNER,
+    };
+    const memberTenant = {
+      userId: fixture.users[1].id,
+      membershipId: fixture.memberships[1].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.MEMBER,
+    };
+
+    await expect(
+      service.cycles(ownerTenant, created.leadId, { limit: 20 }),
+    ).resolves.toMatchObject({
+      items: [{ expectedValueMinor: null }],
+    });
+    await expect(
+      owner.query(
+        `UPDATE public.lead_commercial_cycles
+         SET expected_value_minor = -1 WHERE lead_id = $1`,
+        [created.leadId],
+      ),
+    ).rejects.toMatchObject({ driverError: { code: '23514' } });
+
+    const incompleteKey = randomUUID();
+    const incompleteInput = {
+      organizationId: memberTenant.organizationId,
+      actorMembershipId: memberTenant.membershipId,
+      leadId: created.leadId,
+      expectedRevision: created.revision,
+      expectedValueMinor: '10',
+    };
+    await owner.query(
+      `INSERT INTO public.lead_command_idempotency (
+        organization_id, actor_membership_id, lead_id, command,
+        idempotency_key, fingerprint_key_version, request_fingerprint, status
+      ) VALUES ($1,$2,$3,'set_expected_value',$4,1,$5,'processing')`,
+      [
+        memberTenant.organizationId,
+        memberTenant.membershipId,
+        created.leadId,
+        incompleteKey,
+        leadExpectedValueFingerprint(
+          incompleteInput,
+          config.idempotencyKeys.get(1) as Buffer,
+        ),
+      ],
+    );
+    await expect(
+      service.setExpectedValue(
+        memberTenant,
+        created.leadId,
+        created.revision,
+        incompleteKey,
+        { expectedValueMinor: '10' },
+      ),
+    ).rejects.toMatchObject({ status: 503 });
+
+    const originalKey = randomUUID();
+    await expect(
+      service.setExpectedValue(
+        memberTenant,
+        created.leadId,
+        created.revision,
+        originalKey,
+        { expectedValueMinor: '9007199254740993' },
+      ),
+    ).resolves.toEqual({
+      revision: '2',
+      replayed: false,
+      responseStatus: 204,
+    });
+    await expect(
+      service.setExpectedValue(
+        memberTenant,
+        created.leadId,
+        created.revision,
+        originalKey,
+        { expectedValueMinor: '9007199254740993' },
+      ),
+    ).resolves.toEqual({
+      revision: '2',
+      replayed: true,
+      responseStatus: 204,
+    });
+    await expect(
+      service.setExpectedValue(
+        memberTenant,
+        created.leadId,
+        '2',
+        randomUUID(),
+        { expectedValueMinor: '9007199254740993' },
+      ),
+    ).resolves.toEqual({
+      revision: '2',
+      replayed: false,
+      responseStatus: 204,
+    });
+    await expect(
+      service.setExpectedValue(
+        memberTenant,
+        created.leadId,
+        created.revision,
+        originalKey,
+        { expectedValueMinor: '1' },
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      service.setExpectedValue(
+        memberTenant,
+        created.leadId,
+        created.revision,
+        randomUUID(),
+        { expectedValueMinor: '1' },
+      ),
+    ).rejects.toMatchObject({ status: 412 });
+
+    const detail = await reads.detail(ownerTenant, created.leadId);
+    expect(detail.latestCycle.expectedValueMinor).toBe('9007199254740993');
+    const cycles = await reads.cycles(ownerTenant, created.leadId, {
+      limit: 20,
+    });
+    expect(cycles.items[0]?.expectedValueMinor).toBe('9007199254740993');
+    const list = await reads.list(ownerTenant, {
+      limit: 25,
+      sort: LeadListSort.CREATED_AT_DESC,
+    });
+    expect(
+      list.items.find((item) => item.id === created.leadId)?.expectedValueMinor,
+    ).toBe('9007199254740993');
+    const kanban = await reads.kanban(ownerTenant, { limit: 20 });
+    expect(
+      kanban.columns
+        .flatMap((column) => column.items)
+        .find((item) => item.id === created.leadId)?.expectedValueMinor,
+    ).toBe('9007199254740993');
+    const timeline = await service.timeline(ownerTenant, created.leadId, {
+      limit: 50,
+    });
+    const financialEvents = timeline.items.filter(
+      (event) => event.eventType === 'lead.expected_value.changed',
+    );
+    expect(financialEvents).toEqual([
+      expect.objectContaining({
+        cycleId: detail.latestCycle.id,
+        previousExpectedValueMinor: null,
+        newExpectedValueMinor: '9007199254740993',
+      }),
+    ]);
+
+    await expect(
+      service.setExpectedValue(ownerTenant, created.leadId, '2', randomUUID(), {
+        expectedValueMinor: null,
+      }),
+    ).resolves.toMatchObject({ revision: '3', replayed: false });
+    await expect(
+      service.setExpectedValue(ownerTenant, created.leadId, '3', randomUUID(), {
+        expectedValueMinor: '0',
+      }),
+    ).resolves.toMatchObject({ revision: '4', replayed: false });
+    await expect(
+      service.setExpectedValue(ownerTenant, created.leadId, '4', randomUUID(), {
+        expectedValueMinor: '125000',
+      }),
+    ).resolves.toMatchObject({ revision: '5', replayed: false });
+
+    await owner.getRepository(Membership).update(fixture.memberships[1].id, {
+      role: MembershipRole.ADMIN,
+    });
+    const adminTenant = { ...memberTenant, role: MembershipRole.ADMIN };
+    await expect(
+      service.setExpectedValue(adminTenant, created.leadId, '5', randomUUID(), {
+        expectedValueMinor: '125001',
+      }),
+    ).resolves.toMatchObject({ revision: '6' });
+
+    const duplicate = await ingest(
+      fixture,
+      randomUUID(),
+      'b'.repeat(64),
+      'campaign',
+      null,
+      phone,
+    );
+    expect(duplicate.leadId).toBe(created.leadId);
+    expect(
+      (await reads.detail(ownerTenant, created.leadId)).latestCycle
+        .expectedValueMinor,
+    ).toBe('125001');
+
+    await expect(
+      service.win(
+        ownerTenant,
+        created.leadId,
+        duplicate.revision,
+        randomUUID(),
+      ),
+    ).resolves.toMatchObject({ replayed: false });
+    const closed = await service.get(ownerTenant, created.leadId);
+    await expect(
+      service.setExpectedValue(
+        ownerTenant,
+        created.leadId,
+        closed.revision,
+        randomUUID(),
+        { expectedValueMinor: '2' },
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      owner.query(
+        `UPDATE public.lead_commercial_cycles
+         SET expected_value_minor = 2
+         WHERE lead_id = $1 AND closed_at IS NOT NULL`,
+        [created.leadId],
+      ),
+    ).rejects.toMatchObject({ driverError: { code: 'P3006' } });
+    await expect(
+      service.reactivate(
+        ownerTenant,
+        created.leadId,
+        closed.revision,
+        randomUUID(),
+      ),
+    ).resolves.toMatchObject({ replayed: false });
+    const reactivatedCycles = await reads.cycles(ownerTenant, created.leadId, {
+      limit: 20,
+    });
+    expect(reactivatedCycles.items[0]).toMatchObject({
+      openingReason: 'reactivated',
+      expectedValueMinor: null,
+    });
+    expect(reactivatedCycles.items[1]?.expectedValueMinor).toBe('125001');
+
+    await expect(
+      new ManageLeadCommercialCycleExpectedValue1788289200000().down(
+        migrationRunner,
+      ),
+    ).rejects.toThrow(
+      'Unsafe rollback: lead expected-value data or history already exists.',
+    );
+  });
+
+  it('preserves financial authorization, tenant isolation, and close-race serialization', async () => {
+    const fixture = await createFixture();
+    const otherTenant = await createFixture();
+    const created = await ingest(
+      fixture,
+      randomUUID(),
+      'c'.repeat(64),
+      'manual',
+      fixture.memberships[1].id,
+      '+5562444444444',
+    );
+    const config = leadConfig();
+    const service = new LeadsService(
+      runtime,
+      { getOrThrow: () => config } as unknown as ConfigService,
+      new OperationalLeadReadiness(config, runtime),
+    );
+    const ownerTenant = {
+      userId: fixture.users[0].id,
+      membershipId: fixture.memberships[0].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.OWNER,
+    };
+    const memberTenant = {
+      userId: fixture.users[1].id,
+      membershipId: fixture.memberships[1].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.MEMBER,
+    };
+    const foreignTenant = {
+      userId: otherTenant.users[1].id,
+      membershipId: otherTenant.memberships[1].id,
+      organizationId: otherTenant.organization.id,
+      role: MembershipRole.MEMBER,
+    };
+
+    await expect(
+      service.setExpectedValue(
+        foreignTenant,
+        created.leadId,
+        created.revision,
+        randomUUID(),
+        { expectedValueMinor: '1' },
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      service.assign(ownerTenant, created.leadId, created.revision, null),
+    ).resolves.toMatchObject({ revision: '2' });
+    await expect(
+      service.setExpectedValue(
+        memberTenant,
+        created.leadId,
+        '2',
+        randomUUID(),
+        { expectedValueMinor: '1' },
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+
+    const assigned = await service.assign(
+      ownerTenant,
+      created.leadId,
+      '2',
+      fixture.memberships[1].id,
+    );
+    const results = await Promise.allSettled([
+      service.setExpectedValue(
+        memberTenant,
+        created.leadId,
+        assigned.revision,
+        randomUUID(),
+        { expectedValueMinor: '500' },
+      ),
+      service.win(
+        memberTenant,
+        created.leadId,
+        assigned.revision,
+        randomUUID(),
+      ),
+    ]);
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === 'rejected'),
+    ).toHaveLength(1);
+    const current = await service.get(ownerTenant, created.leadId);
+    const cycles = await service.cycles(ownerTenant, created.leadId, {
+      limit: 20,
+    });
+    if (current.status === LeadStatus.ACTIVE) {
+      expect(cycles.items[0]?.expectedValueMinor).toBe('500');
+    } else {
+      expect(current.status).toBe(LeadStatus.WON);
+      expect(cycles.items[0]?.expectedValueMinor).toBeNull();
+    }
   });
 
   it('serializes concurrent commands and records a same-stage move as an idempotent no-op', async () => {
