@@ -79,6 +79,8 @@ export interface LeadListItem {
 export interface LeadKanbanColumn {
   stage: LeadStage;
   total: number;
+  expectedValueTotalMinor: string;
+  withoutExpectedValue: number;
   items: LeadListItem[];
   page: { nextCursor: string | null; limit: number };
 }
@@ -86,6 +88,9 @@ export interface LeadKanbanColumn {
 export interface LeadKanbanResponse {
   columns: LeadKanbanColumn[];
   asOf: string;
+  currency: 'BRL';
+  expectedValueTotalMinor: string;
+  withoutExpectedValue: number;
 }
 
 export interface LeadReturnReviewItem {

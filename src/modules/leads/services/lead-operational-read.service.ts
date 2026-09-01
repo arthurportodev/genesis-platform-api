@@ -88,6 +88,7 @@ interface SqlParts {
 const CONTROL_OR_SEPARATOR = /[\p{Cc}\p{Zl}\p{Zp}]/u;
 const PHONE_LIKE = /^[+\d().\s-]+$/u;
 const CURSOR_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/u;
+const NON_NEGATIVE_INTEGER = /^(0|[1-9]\d*)$/u;
 const STAGES = Object.values(LeadStage);
 
 @Injectable()
@@ -722,6 +723,13 @@ export class LeadOperationalReadService {
     return count;
   }
 
+  private financialTotal(value: string): string {
+    if (!NON_NEGATIVE_INTEGER.test(value)) {
+      throw new ServiceUnavailableException('Lead read is unavailable.');
+    }
+    return value;
+  }
+
   private iso(value: Date | string): string {
     return value instanceof Date
       ? value.toISOString()
@@ -826,11 +834,40 @@ export class LeadOperationalReadService {
           ${this.listSelectSql()}
           ${parts.joins.join('\n')}
           WHERE ${parts.predicates.join(' AND ')}
+        ), stage_aggregates AS MATERIALIZED (
+          SELECT candidate.stage, count(*)::text AS total,
+            COALESCE(
+              sum(candidate."expectedValueMinor"::numeric), 0::numeric
+            )::text AS "expectedValueTotalMinor",
+            count(*) FILTER (
+              WHERE candidate."expectedValueMinor" IS NULL
+            )::text AS "withoutExpectedValue"
+          FROM filtered candidate
+          GROUP BY candidate.stage
+        ), pipeline_aggregate AS (
+          SELECT COALESCE(
+              sum(stage_aggregate."expectedValueTotalMinor"::numeric),
+              0::numeric
+            )::text AS "expectedValueTotalMinor",
+            COALESCE(
+              sum(stage_aggregate."withoutExpectedValue"::numeric),
+              0::numeric
+            )::text AS "withoutExpectedValue"
+          FROM stage_aggregates stage_aggregate
         ), requested_stage(stage) AS (VALUES ${stageValues})
         SELECT actor.role AS "actorRole", ${targetExists} AS "targetExists",
           actor.as_of AS "asOf", requested_stage.stage,
-          (SELECT count(*)::text FROM filtered candidate
-            WHERE candidate.stage = requested_stage.stage) AS total,
+          COALESCE(stage_aggregate.total, '0') AS total,
+          COALESCE(
+            stage_aggregate."expectedValueTotalMinor", '0'
+          ) AS "expectedValueTotalMinor",
+          COALESCE(
+            stage_aggregate."withoutExpectedValue", '0'
+          ) AS "withoutExpectedValue",
+          pipeline_aggregate."expectedValueTotalMinor"
+            AS "pipelineExpectedValueTotalMinor",
+          pipeline_aggregate."withoutExpectedValue"
+            AS "pipelineWithoutExpectedValue",
           COALESCE((SELECT jsonb_agg(to_jsonb(page_candidate)
             - 'nextActionDueAt' ORDER BY page_candidate."createdAt" DESC,
               page_candidate.id DESC)
@@ -839,6 +876,9 @@ export class LeadOperationalReadService {
               ORDER BY candidate."createdAt" DESC, candidate.id DESC
               LIMIT ${limit}) page_candidate), '[]'::jsonb) AS items
         FROM authorized_actor actor CROSS JOIN requested_stage
+        LEFT JOIN stage_aggregates stage_aggregate
+          ON stage_aggregate.stage = requested_stage.stage
+        CROSS JOIN pipeline_aggregate
         ORDER BY array_position(
           ARRAY['new','qualification','diagnosis','proposal','negotiation']::lead_stage_enum[],
           requested_stage.stage
@@ -850,6 +890,10 @@ export class LeadOperationalReadService {
         asOf: Date | string;
         stage: LeadStage;
         total: string;
+        expectedValueTotalMinor: string;
+        withoutExpectedValue: string;
+        pipelineExpectedValueTotalMinor: string;
+        pipelineWithoutExpectedValue: string;
         items: ListQueryRow[];
       }>;
       const first = rows[0];
@@ -868,6 +912,13 @@ export class LeadOperationalReadService {
       }
       return {
         asOf: this.iso(first.asOf),
+        currency: 'BRL',
+        expectedValueTotalMinor: this.financialTotal(
+          first.pipelineExpectedValueTotalMinor,
+        ),
+        withoutExpectedValue: this.safeCount(
+          first.pipelineWithoutExpectedValue,
+        ),
         columns: rows.map((row) => {
           const hasMore = row.items.length > query.limit;
           const candidates = hasMore
@@ -878,6 +929,10 @@ export class LeadOperationalReadService {
           return {
             stage: row.stage,
             total: this.safeCount(row.total),
+            expectedValueTotalMinor: this.financialTotal(
+              row.expectedValueTotalMinor,
+            ),
+            withoutExpectedValue: this.safeCount(row.withoutExpectedValue),
             items,
             page: {
               limit: query.limit,
