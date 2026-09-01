@@ -4,12 +4,12 @@
 
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
-- **Revisão de estado:** IF-MATCH-INCIDENT-FINAL-RETIREMENT-2026-08-25
-- **Atualização documentada:** 2026-08-25T18:16:23.996Z
-- **Fase:** 0.8-MVP — Primeira produção mínima viável
-- **Último trabalho concluído:** IF-MATCH-INCIDENT-FINAL-RETIREMENT — Incidente If-Match encerrado e probe temporário aposentado
-- **Trabalho vigente:** none — Nenhum trabalho deste incidente está ativo. O shim de transporte permanece integrado, promovido e observado técnica e funcionalmente; o chamado Vercel não será perseguido, os recursos temporários do probe foram aposentados e o incidente está encerrado.
-- **Próxima tarefa:** PENDING-ROADMAP-PRIORITIZATION — Priorizar o próximo marco do produto a partir dos planos versionados
+- **Revisão de estado:** PIPE-V2-02-COMPLETE-2026-09-01
+- **Atualização documentada:** 2026-09-01T21:21:35.220Z
+- **Fase:** PIPE-V2 — Pipeline Experience V2
+- **Último trabalho concluído:** PIPE-V2-02 — Financial Aggregates
+- **Trabalho vigente:** none — Nenhuma implementação está ativa. PIPE-V2-03 — Presentation V2 é o próximo trabalho, autorizado somente para planejamento/Gate 1, e ainda não foi iniciado.
+- **Próxima tarefa:** PIPE-V2-03 — Presentation V2
 - **Web integrado na main:** 017ef0056d97147a5e5337494fa339a3f65986ac
 - **Revisão fonte da imagem API live:** 0a56a8aee7c64bda59a1981888418e1ad03950c0
 - **Revisão do contrato versionado de release API:** containing-commit
@@ -22,7 +22,7 @@ Esta projeção é gerada deterministicamente. Não edite manualmente; a autorid
 
 ## Estado operacional
 
-A revisão Web 017ef005 está live em dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr; dpl_9Npu4VnyWatw1vMEforzUv8Mokke permanece como rollback. Smokes técnico, de transporte e funcional passaram; falso 412 e Weak ETag estão resolvidos, com concorrência otimista preservada. O chamado Vercel não será perseguido; probe deployment, probe branch e correction branch foram removidos, com seus identificadores preservados como história do incidente encerrado.
+O programa PIPE-V2 está vigente. A Genesis Frontend Program Foundation, PIPE-V2-01 — Financial Domain e PIPE-V2-02 — Financial Aggregates estão concluídos e incorporados. PIPE-V2-03 — Presentation V2 é o próximo trabalho autorizado somente para planejamento/Gate 1 e ainda não foi iniciado.
 
 - **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
 - **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
@@ -92,6 +92,9 @@ A revisão Web 017ef005 está live em dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr; dpl_9Npu
 - **OPS-IFMATCH-TECHNICAL-CANARY** [documented/present] — Após a promoção, raiz, login, assets e health same-origin passaram com 200 e no-store; não houve 5xx, logs critical/error/fatal ou host_authority_mismatch público. O cookie CSRF sanitizado permaneceu __Host-, Secure, SameSite=Lax, Path=/ e sem Domain. Canary sem sessão, Authorization ou mutação atravessou X-Genesis-If-Match e alcançou auth/API com 401, sem PRECONDITION_FAILED.
 - **OPS-IFMATCH-FUNCTIONAL-SMOKE** [documented/present] — O smoke manual autenticado confirmou na primeira tentativa edição condicional de Interesse com X-Genesis-If-Match, sem If-Match no browser ou falso 412; GET 200 confirmou revisão 20 e valor persistido. Adicionar nota, criar próxima ação e mover etapa também passaram na granularidade informada. Weak ETag e falso 412 estão resolvidos em produção, com optimistic concurrency preservada.
 - **OPS-MVP09E-HELPER-PROVENANCE** [documented/partial] — O deployment 09E foi executado com script aprovado SHA-256 e99dee6fb4610f9ca470aca8e12f00c4076e60ea45de3f9fb7a4f762208b6db6, preservado na custódia externa 0.8-MVP-09E/deployment-execution. O artefato exato não está comprovadamente versionado na main; isso não afeta o runtime atual, mas exige reconciliar e versionar novamente o procedimento antes de qualquer futuro deployment API.
+- **OPS-FRONTEND-PROGRAM-FOUNDATION-COMPLETE** [documented/present] — A Genesis Frontend Program Foundation está concluída: a autoridade API foi incorporada no PR #67 (43d45d68ccf6f6663334c18a660a4608ac304507) e o consumidor Web no PR #22 (2118e33f6506378dc029861783d11403e06c761f).
+- **OPS-PIPE-V2-01-COMPLETE** [documented/present] — PIPE-V2-01 — Financial Domain está concluída e incorporada na API pelo PR #68 (785ec54c273437f40d9ff4a6aaf6bd81b90aeb08).
+- **OPS-PIPE-V2-02-COMPLETE** [documented/present] — PIPE-V2-02 — Financial Aggregates está concluída e incorporada na API pelo PR #69 (ac2f8cd96ae02c1cad52366871bdde8ca651631d).
 
 ## Blockers abertos
 
@@ -102,7 +105,6 @@ A revisão Web 017ef005 está live em dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr; dpl_9Npu
 - **HD-MONITORING** — Qual política de alertas, destinatários e escalonamento será aprovada para o UptimeRobot e os sinais internos?
 - **HD-EXTERNAL-ONBOARDING** — Qual política aprovará novos usuários externos e dados comerciais além do uso inicial da organização Porto?
 - **HD-COMMERCIAL-HOSTING-PLAN** — Antes de onboarding externo ou uso comercial ampliado, o plano Vercel atual continua técnica e contratualmente compatível?
-- **HD-NEXT-MILESTONE** — Qual marco versionado deve suceder o encerramento definitivo do incidente If-Match: melhoria 0.9/usability ou outro item priorizado?
 
 ## Release gates
 

@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
   "instanceKind": "current",
-  "stateRevision": "IF-MATCH-INCIDENT-FINAL-RETIREMENT-2026-08-25",
+  "stateRevision": "PIPE-V2-02-COMPLETE-2026-09-01",
   "project": {
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-08-25T18:16:23.996Z",
+  "updatedAt": "2026-09-01T21:21:35.220Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -60,32 +60,29 @@
     "webIntegratedRevision": "017ef0056d97147a5e5337494fa339a3f65986ac"
   },
   "phase": {
-    "id": "0.8-MVP",
-    "title": "Primeira produção mínima viável",
+    "id": "PIPE-V2",
+    "title": "Pipeline Experience V2",
     "lastCompleted": {
-      "id": "IF-MATCH-INCIDENT-FINAL-RETIREMENT",
-      "title": "Incidente If-Match encerrado e probe temporário aposentado",
-      "completedAt": "2026-08-25T18:16:23.996Z",
+      "id": "PIPE-V2-02",
+      "title": "Financial Aggregates",
+      "completedAt": "2026-09-01T19:46:45Z",
       "evidenceIds": [
-        "EV-IFMATCH-VERCEL-PROBE-R1",
-        "EV-IFMATCH-PRODUCTION-PROMOTION",
-        "EV-IFMATCH-FUNCTIONAL-SMOKE",
-        "EV-IFMATCH-INCIDENT-FINAL-RETIREMENT"
+        "EV-PIPE-V2-02-API-PR69"
       ]
     }
   },
   "currentWork": {
     "status": "none",
-    "summary": "Nenhum trabalho deste incidente está ativo. O shim de transporte permanece integrado, promovido e observado técnica e funcionalmente; o chamado Vercel não será perseguido, os recursos temporários do probe foram aposentados e o incidente está encerrado."
+    "summary": "Nenhuma implementação está ativa. PIPE-V2-03 — Presentation V2 é o próximo trabalho, autorizado somente para planejamento/Gate 1, e ainda não foi iniciado."
   },
   "nextTask": {
-    "id": "PENDING-ROADMAP-PRIORITIZATION",
-    "title": "Priorizar o próximo marco do produto a partir dos planos versionados"
+    "id": "PIPE-V2-03",
+    "title": "Presentation V2"
   },
   "operationalState": {
-    "summary": "A revisão Web 017ef005 está live em dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr; dpl_9Npu4VnyWatw1vMEforzUv8Mokke permanece como rollback. Smokes técnico, de transporte e funcional passaram; falso 412 e Weak ETag estão resolvidos, com concorrência otimista preservada. O chamado Vercel não será perseguido; probe deployment, probe branch e correction branch foram removidos, com seus identificadores preservados como história do incidente encerrado.",
+    "summary": "O programa PIPE-V2 está vigente. A Genesis Frontend Program Foundation, PIPE-V2-01 — Financial Domain e PIPE-V2-02 — Financial Aggregates estão concluídos e incorporados. PIPE-V2-03 — Presentation V2 é o próximo trabalho autorizado somente para planejamento/Gate 1 e ainda não foi iniciado.",
     "basis": "documented",
-    "documentedAt": "2026-08-25T18:16:23.996Z",
+    "documentedAt": "2026-09-01T21:21:35.220Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -740,6 +737,37 @@
           "EV-MVP09E-EXECUTED-SCRIPT",
           "EV-MVP09E-DEPLOYMENT-MANIFEST"
         ]
+      },
+      {
+        "id": "OPS-FRONTEND-PROGRAM-FOUNDATION-COMPLETE",
+        "status": "present",
+        "statement": "A Genesis Frontend Program Foundation está concluída: a autoridade API foi incorporada no PR #67 (43d45d68ccf6f6663334c18a660a4608ac304507) e o consumidor Web no PR #22 (2118e33f6506378dc029861783d11403e06c761f).",
+        "basis": "documented",
+        "documentedAt": "2026-09-01T21:21:35.220Z",
+        "evidenceIds": [
+          "EV-FRONTEND-FOUNDATION-API-PR67",
+          "EV-FRONTEND-FOUNDATION-WEB-PR22"
+        ]
+      },
+      {
+        "id": "OPS-PIPE-V2-01-COMPLETE",
+        "status": "present",
+        "statement": "PIPE-V2-01 — Financial Domain está concluída e incorporada na API pelo PR #68 (785ec54c273437f40d9ff4a6aaf6bd81b90aeb08).",
+        "basis": "documented",
+        "documentedAt": "2026-09-01T21:21:35.220Z",
+        "evidenceIds": [
+          "EV-PIPE-V2-01-API-PR68"
+        ]
+      },
+      {
+        "id": "OPS-PIPE-V2-02-COMPLETE",
+        "status": "present",
+        "statement": "PIPE-V2-02 — Financial Aggregates está concluída e incorporada na API pelo PR #69 (ac2f8cd96ae02c1cad52366871bdde8ca651631d).",
+        "basis": "documented",
+        "documentedAt": "2026-09-01T21:21:35.220Z",
+        "evidenceIds": [
+          "EV-PIPE-V2-02-API-PR69"
+        ]
       }
     ]
   },
@@ -1063,6 +1091,30 @@
       "kind": "external-observation",
       "uri": "artifact://genesis-platform/if-match-transport-shim-v2/final-retirement",
       "capturedAt": "2026-08-25T18:16:23.996Z"
+    },
+    {
+      "id": "EV-FRONTEND-FOUNDATION-API-PR67",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/pull/67",
+      "capturedAt": "2026-09-01T12:37:55Z"
+    },
+    {
+      "id": "EV-FRONTEND-FOUNDATION-WEB-PR22",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/22",
+      "capturedAt": "2026-09-01T14:08:09Z"
+    },
+    {
+      "id": "EV-PIPE-V2-01-API-PR68",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/pull/68",
+      "capturedAt": "2026-09-01T17:35:18Z"
+    },
+    {
+      "id": "EV-PIPE-V2-02-API-PR69",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/pull/69",
+      "capturedAt": "2026-09-01T19:46:45Z"
     }
   ],
   "blockers": [
@@ -1120,12 +1172,6 @@
       "question": "Antes de onboarding externo ou uso comercial ampliado, o plano Vercel atual continua técnica e contratualmente compatível?",
       "whyMaterial": "O MVP live e o OWNER real não comprovam, por si, adequação de plano, custo ou termos para expansão comercial.",
       "blockingTaskIds": ["FUTURE-EXTERNAL-ONBOARDING"]
-    },
-    {
-      "id": "HD-NEXT-MILESTONE",
-      "question": "Qual marco versionado deve suceder o encerramento definitivo do incidente If-Match: melhoria 0.9/usability ou outro item priorizado?",
-      "whyMaterial": "O cleanup operacional está concluído, mas os planos versionados não estabelecem precedência suficiente entre os próximos marcos; escolher um deles redefiniria materialmente o roadmap.",
-      "blockingTaskIds": ["PENDING-ROADMAP-PRIORITIZATION"]
     }
   ],
   "supersededPlans": [
