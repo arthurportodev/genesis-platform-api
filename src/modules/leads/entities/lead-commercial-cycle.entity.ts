@@ -45,6 +45,8 @@ export class LeadCommercialCycle {
   @Column({ name: 'opened_by_membership_id', type: 'uuid', nullable: true })
   openedByMembershipId!: string | null;
   @Column({ name: 'opened_at', type: 'timestamptz' }) openedAt!: Date;
+  @Column({ name: 'expected_value_minor', type: 'bigint', nullable: true })
+  expectedValueMinor!: string | null;
   @Column({ name: 'closed_by_membership_id', type: 'uuid', nullable: true })
   closedByMembershipId!: string | null;
   @Column({ name: 'closed_at', type: 'timestamptz', nullable: true })

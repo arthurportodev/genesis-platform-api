@@ -375,6 +375,15 @@ export class ArchiveLeadDto {
 
 export class EmptyLeadCommandDto {}
 
+export class SetLeadExpectedValueDto {
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(19)
+  @Matches(/^(0|[1-9]\d*)$/u)
+  expectedValueMinor!: string | null;
+}
+
 export class ListLeadCyclesDto {
   @IsOptional()
   @IsString()

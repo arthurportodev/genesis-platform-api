@@ -45,6 +45,7 @@ import {
   ArchiveLeadDto,
   EmptyLeadCommandDto,
   RescheduleLeadNextActionDto,
+  SetLeadExpectedValueDto,
   UpdateLeadDto,
 } from '../dto/lead.dto';
 import { LeadsService } from '../services/leads.service';
@@ -379,6 +380,25 @@ export class LeadsController {
       this.expectedRevision(ifMatch, params.leadId),
       this.idempotencyKey(idempotencyKey),
       dto.stage,
+    );
+    this.commandResponse(response, params.leadId, result);
+  }
+
+  @Post(':leadId/expected-value')
+  async setExpectedValue(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: SetLeadExpectedValueDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.setExpectedValue(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
     );
     this.commandResponse(response, params.leadId, result);
   }

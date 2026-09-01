@@ -27,6 +27,7 @@ import {
   ListLeadsDto,
   LoseLeadDto,
   RescheduleLeadNextActionDto,
+  SetLeadExpectedValueDto,
   UpdateLeadDto,
 } from '../dto/lead.dto';
 import {
@@ -46,8 +47,10 @@ import { LEAD_READINESS, LeadReadiness } from '../ports/lead-readiness.port';
 import {
   leadRequestFingerprint,
   leadCommandFingerprint,
+  leadExpectedValueFingerprint,
   leadFollowUpFingerprint,
   LeadCommandFingerprintInput,
+  LeadExpectedValueFingerprintInput,
   LeadFollowUpFingerprintInput,
   normalizeLeadInput,
 } from '../security/lead-fingerprint';
@@ -309,9 +312,11 @@ export class LeadsService {
               event.new_next_action_status AS "newNextActionStatus",
               to_char(event.previous_due_at AT TIME ZONE 'UTC',
                 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "previousDueAt",
-              to_char(event.new_due_at AT TIME ZONE 'UTC',
-                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "newDueAt",
-              event.next_action_revision::text AS "nextActionRevision",
+               to_char(event.new_due_at AT TIME ZONE 'UTC',
+                 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "newDueAt",
+               event.previous_expected_value_minor::text AS "previousExpectedValueMinor",
+               event.new_expected_value_minor::text AS "newExpectedValueMinor",
+               event.next_action_revision::text AS "nextActionRevision",
               event.next_action_cancellation_reason AS "nextActionCancellationReason",
               CASE WHEN activity.id IS NULL THEN NULL ELSE jsonb_build_object(
                 'id', activity.id, 'type', activity.type,
@@ -462,9 +467,10 @@ export class LeadsService {
       `SELECT cycle.id, cycle.cycle_number::text AS "cycleNumber",
               cycle.opening_reason AS "openingReason",
               cycle.starting_stage AS "startingStage",
-              cycle.opened_by_membership_id AS "openedByMembershipId",
-              cycle.opened_at AS "openedAt",
-              cycle.closed_by_membership_id AS "closedByMembershipId",
+               cycle.opened_by_membership_id AS "openedByMembershipId",
+               cycle.opened_at AS "openedAt",
+               cycle.expected_value_minor::text AS "expectedValueMinor",
+               cycle.closed_by_membership_id AS "closedByMembershipId",
               cycle.closed_at AS "closedAt",
               cycle.closing_status AS "closingStatus",
               cycle.stage_at_close AS "stageAtClose",
@@ -868,6 +874,67 @@ export class LeadsService {
     );
   }
 
+  async setExpectedValue(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+    dto: SetLeadExpectedValueDto,
+  ): Promise<LeadCommandResult> {
+    await this.readiness.assertManualReady();
+    const expectedValueMinor = this.normalizeExpectedValueMinor(
+      dto.expectedValueMinor,
+    );
+    const version = this.config.idempotencyCurrentKeyVersion as number;
+    const input: LeadExpectedValueFingerprintInput = {
+      organizationId: tenant.organizationId,
+      actorMembershipId: tenant.membershipId,
+      leadId,
+      expectedRevision,
+      expectedValueMinor,
+    };
+    const fingerprints = Object.fromEntries(
+      [...this.config.idempotencyKeys.entries()].map(
+        ([candidateVersion, candidateKey]) => [
+          String(candidateVersion),
+          leadExpectedValueFingerprint(input, candidateKey),
+        ],
+      ),
+    );
+    let rows: CommandRow[];
+    try {
+      rows = await this.dataSource.query<CommandRow[]>(
+        `SELECT revision::text AS revision, replayed,
+                response_status AS "responseStatus"
+         FROM app_private.execute_lead_expected_value_command(
+           $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::bigint,$6::uuid,
+           $7::smallint,$8::text,$9::jsonb,$10::bigint)`,
+        [
+          tenant.userId,
+          tenant.membershipId,
+          tenant.organizationId,
+          leadId,
+          expectedRevision,
+          idempotencyKey,
+          version,
+          leadExpectedValueFingerprint(
+            input,
+            this.config.idempotencyKeys.get(version) as Buffer,
+          ),
+          JSON.stringify(fingerprints),
+          expectedValueMinor,
+        ],
+      );
+    } catch (error) {
+      this.mapDatabaseError(error);
+    }
+    const result = rows[0];
+    if (result === undefined) {
+      throw new ServiceUnavailableException('Lead command is unavailable.');
+    }
+    return result;
+  }
+
   private async executeCreateFollowUp(
     tenant: TenantContext,
     leadId: string,
@@ -1086,6 +1153,17 @@ export class LeadsService {
       throw new BadRequestException('Invalid reason note.');
     }
     return normalized;
+  }
+
+  private normalizeExpectedValueMinor(value: string | null): string | null {
+    if (value === null) return null;
+    if (!/^(0|[1-9]\d*)$/u.test(value)) {
+      throw new BadRequestException('Invalid expected value.');
+    }
+    if (BigInt(value) > 9_223_372_036_854_775_807n) {
+      throw new BadRequestException('Invalid expected value.');
+    }
+    return value;
   }
 
   private isWellFormedUnicode(value: string): boolean {

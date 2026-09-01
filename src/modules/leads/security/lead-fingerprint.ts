@@ -137,6 +137,34 @@ export function leadCommandFingerprint(
     .digest('hex');
 }
 
+export interface LeadExpectedValueFingerprintInput {
+  organizationId: string;
+  actorMembershipId: string;
+  leadId: string;
+  expectedRevision: string;
+  expectedValueMinor: string | null;
+}
+
+export function leadExpectedValueFingerprint(
+  input: LeadExpectedValueFingerprintInput,
+  key: Buffer,
+): string {
+  return createHmac('sha256', key)
+    .update(
+      JSON.stringify([
+        1,
+        input.organizationId,
+        input.actorMembershipId,
+        input.leadId,
+        LeadCommand.SET_EXPECTED_VALUE,
+        input.expectedRevision,
+        input.expectedValueMinor,
+      ]),
+      'utf8',
+    )
+    .digest('hex');
+}
+
 export interface LeadFollowUpFingerprintInput {
   organizationId: string;
   actorMembershipId: string;

@@ -12,6 +12,7 @@ export type RuntimeExecutableFunction =
 export const LEAD_RUNTIME_EXECUTABLE_FUNCTIONS = [
   'app_private.assign_lead(uuid,uuid,uuid,uuid,uuid,bigint)',
   'app_private.execute_lead_command(uuid,uuid,uuid,uuid,app_private.lead_command_enum,bigint,uuid,smallint,text,jsonb,lead_stage_enum,lead_lost_reason_enum,lead_archive_reason_enum,text)',
+  'app_private.execute_lead_expected_value_command(uuid,uuid,uuid,uuid,bigint,uuid,smallint,text,jsonb,bigint)',
   'app_private.execute_lead_follow_up_command(uuid,uuid,uuid,uuid,app_private.lead_follow_up_command_enum,bigint,uuid,smallint,text,jsonb,lead_activity_type_enum,timestamp with time zone,text,text,lead_next_action_type_enum,text,timestamp with time zone,text)',
   'app_private.ingest_lead(uuid,uuid,uuid,text,text,text,text,text,text,text,text,uuid,text,text,text,text,text,text,text,uuid,smallint,text,jsonb)',
   'app_private.required_lead_fingerprint_key_versions()',

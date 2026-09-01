@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   CanActivate,
+  ConflictException,
   ExecutionContext,
   INestApplication,
   NotFoundException,
@@ -101,6 +102,7 @@ describe('Lead HTTP contract (e2e)', () => {
     update: jest.fn(),
     assign: jest.fn(),
     move: jest.fn(),
+    setExpectedValue: jest.fn(),
     win: jest.fn(),
     lose: jest.fn(),
     archive: jest.fn(),
@@ -208,6 +210,19 @@ describe('Lead HTTP contract (e2e)', () => {
     });
   });
 
+  it('does not accept expected value through Lead creation', async () => {
+    await request(app.getHttpServer() as Server)
+      .post('/api/v1/leads')
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        displayName: 'Maria',
+        primaryPhone: '+5562999999999',
+        expectedValueMinor: '100',
+      })
+      .expect(400);
+    expect(leads.createManual).not.toHaveBeenCalled();
+  });
+
   it('always returns opaque 204 for member success, including hidden duplicate', async () => {
     tenantGuard.role = MembershipRole.MEMBER;
     leads.createManual.mockResolvedValue({
@@ -293,6 +308,98 @@ describe('Lead HTTP contract (e2e)', () => {
       key,
       'qualification',
     );
+  });
+
+  it('sets expected value as an exact string with conditional replay semantics', async () => {
+    tenantGuard.role = MembershipRole.OWNER;
+    leads.setExpectedValue.mockResolvedValue({
+      responseStatus: 204,
+      revision: '2',
+      replayed: true,
+    });
+    const key = randomUUID();
+    const response = await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/expected-value`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', key)
+      .send({ expectedValueMinor: '9007199254740993' })
+      .expect(204)
+      .expect('ETag', `"lead:${leadId}:2"`)
+      .expect('Idempotency-Replayed', 'true')
+      .expect('Cache-Control', 'no-store');
+    expect(response.text).toBe('');
+    expect(leads.setExpectedValue).toHaveBeenCalledWith(
+      expect.any(Object),
+      leadId,
+      '1',
+      key,
+      { expectedValueMinor: '9007199254740993' },
+    );
+  });
+
+  it.each([
+    {},
+    { expectedValueMinor: 1 },
+    { expectedValueMinor: '-1' },
+    { expectedValueMinor: ' 1' },
+    { expectedValueMinor: '+1' },
+    { expectedValueMinor: '1.0' },
+    { expectedValueMinor: '1e3' },
+    { expectedValueMinor: '00' },
+  ])('rejects invalid expected-value request %p', async (body) => {
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/expected-value`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', randomUUID())
+      .send(body)
+      .expect(400);
+    expect(leads.setExpectedValue).not.toHaveBeenCalled();
+  });
+
+  it('requires command headers, accepts null, and propagates state conflicts', async () => {
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/expected-value`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ expectedValueMinor: null })
+      .expect(428);
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/expected-value`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .send({ expectedValueMinor: null })
+      .expect(400);
+
+    leads.setExpectedValue.mockRejectedValueOnce(
+      new BadRequestException('Invalid expected value.'),
+    );
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/expected-value`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ expectedValueMinor: '9223372036854775808' })
+      .expect(400);
+
+    leads.setExpectedValue.mockResolvedValueOnce({
+      responseStatus: 204,
+      revision: '1',
+      replayed: false,
+    });
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/expected-value`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ expectedValueMinor: null })
+      .expect(204)
+      .expect('ETag', `"lead:${leadId}:1"`);
+
+    leads.setExpectedValue.mockRejectedValueOnce(
+      new ConflictException('Lead request conflicts with existing state.'),
+    );
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/expected-value`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ expectedValueMinor: '1' })
+      .expect(409);
   });
 
   it('validates command preconditions, closed reason notes, and empty bodies', async () => {
@@ -400,6 +507,107 @@ describe('Lead HTTP contract (e2e)', () => {
     await request(app.getHttpServer() as Server)
       .get(`/api/v1/leads/${leadId}/timeline?limit=101`)
       .expect(400);
+  });
+
+  it('serializes expected value as string or null on every approved read projection', async () => {
+    reads.detail.mockResolvedValue({
+      ...view,
+      latestEntry: { id: randomUUID() },
+      latestCycle: {
+        id: randomUUID(),
+        expectedValueMinor: '9007199254740993',
+      },
+      pendingReturn: null,
+      counts: { timeline: 1, cycles: 1, activities: 0, notes: 0 },
+    });
+    reads.cycles.mockResolvedValue({
+      items: [
+        { id: randomUUID(), expectedValueMinor: '9007199254740993' },
+        { id: randomUUID(), expectedValueMinor: null },
+      ],
+      page: { nextCursor: null, limit: 20 },
+    });
+    reads.list.mockResolvedValue({
+      items: [{ id: leadId, expectedValueMinor: '9007199254740993' }],
+      page: {
+        nextCursor: null,
+        limit: 25,
+        total: 1,
+        asOf: '2026-07-27T12:00:00.000Z',
+      },
+    });
+    reads.kanban.mockResolvedValue({
+      columns: [
+        {
+          stage: LeadStage.NEW,
+          total: 1,
+          items: [{ id: leadId, expectedValueMinor: '9007199254740993' }],
+          page: { nextCursor: null, limit: 20 },
+        },
+      ],
+      asOf: '2026-07-27T12:00:00.000Z',
+    });
+    leads.timeline.mockResolvedValue({
+      items: [
+        {
+          id: randomUUID(),
+          eventType: 'lead.expected_value.changed',
+          previousExpectedValueMinor: null,
+          newExpectedValueMinor: '9007199254740993',
+        },
+      ],
+      page: { nextCursor: null, limit: 50 },
+    });
+
+    const detail = await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}`)
+      .expect(200);
+    const detailBody = detail.body as {
+      latestCycle: { expectedValueMinor: string | null };
+    };
+    expect(detailBody.latestCycle.expectedValueMinor).toBe('9007199254740993');
+    const cycles = await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}/cycles?limit=20`)
+      .expect(200);
+    const cyclesBody = cycles.body as {
+      items: Array<{ expectedValueMinor: string | null }>;
+    };
+    expect(
+      cyclesBody.items.map(
+        (item: { expectedValueMinor: unknown }) => item.expectedValueMinor,
+      ),
+    ).toEqual(['9007199254740993', null]);
+    const list = await request(app.getHttpServer() as Server)
+      .get('/api/v1/leads?limit=25')
+      .expect(200);
+    const listBody = list.body as {
+      items: Array<{ expectedValueMinor: string | null }>;
+    };
+    expect(listBody.items[0]?.expectedValueMinor).toBe('9007199254740993');
+    const kanban = await request(app.getHttpServer() as Server)
+      .get('/api/v1/leads/kanban?limit=20')
+      .expect(200);
+    const kanbanBody = kanban.body as {
+      columns: Array<{
+        items: Array<{ expectedValueMinor: string | null }>;
+      }>;
+    };
+    expect(kanbanBody.columns[0]?.items[0]?.expectedValueMinor).toBe(
+      '9007199254740993',
+    );
+    const timeline = await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}/timeline?limit=50`)
+      .expect(200);
+    const timelineBody = timeline.body as {
+      items: Array<{
+        previousExpectedValueMinor: string | null;
+        newExpectedValueMinor: string | null;
+      }>;
+    };
+    expect(timelineBody.items[0]).toMatchObject({
+      previousExpectedValueMinor: null,
+      newExpectedValueMinor: '9007199254740993',
+    });
   });
 
   it('creates activities, notes and next actions with stable replay responses', async () => {

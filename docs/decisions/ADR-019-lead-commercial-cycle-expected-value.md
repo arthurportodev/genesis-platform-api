@@ -1,6 +1,6 @@
 # ADR-019 — Valor esperado da oportunidade no ciclo comercial de Lead
 
-- **Status:** Proposed — candidato para Gate 1
+- **Status:** Accepted
 - **Data:** 2026-08-25
 
 ## Contexto

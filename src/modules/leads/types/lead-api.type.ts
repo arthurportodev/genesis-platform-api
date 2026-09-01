@@ -65,6 +65,7 @@ export interface LeadListItem {
   responsibleMembershipId: string | null;
   status: LeadStatus;
   stage: LeadStage;
+  expectedValueMinor: string | null;
   source: string;
   lastEntryAt: string;
   nextAction: LeadNextActionSummary | null;
@@ -173,6 +174,8 @@ export interface LeadTimelineView {
   newNextActionStatus: LeadNextActionStatus | null;
   previousDueAt: string | null;
   newDueAt: string | null;
+  previousExpectedValueMinor: string | null;
+  newExpectedValueMinor: string | null;
   nextActionRevision: string | null;
   nextActionCancellationReason: LeadNextActionCancellationReason | null;
   activity: LeadActivityView | null;
@@ -249,6 +252,7 @@ export interface LeadCommercialCycleView {
   startingStage: LeadStage;
   openedByMembershipId: string | null;
   openedAt: Date;
+  expectedValueMinor: string | null;
   closedByMembershipId: string | null;
   closedAt: Date | null;
   closingStatus: Exclude<LeadStatus, LeadStatus.ACTIVE> | null;

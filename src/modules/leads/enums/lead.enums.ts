@@ -61,6 +61,7 @@ export enum LeadCommand {
   ARCHIVE = 'archive',
   REACTIVATE = 'reactivate',
   DISMISS_RETURN = 'dismiss_return',
+  SET_EXPECTED_VALUE = 'set_expected_value',
 }
 
 export enum LeadActivityType {
@@ -136,4 +137,5 @@ export enum LeadTimelineEventType {
   NEXT_ACTION_RESCHEDULED = 'lead.next_action.rescheduled',
   NEXT_ACTION_COMPLETED = 'lead.next_action.completed',
   NEXT_ACTION_CANCELED = 'lead.next_action.canceled',
+  EXPECTED_VALUE_CHANGED = 'lead.expected_value.changed',
 }
