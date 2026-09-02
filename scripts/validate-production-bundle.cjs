@@ -3,6 +3,7 @@ const { createHash } = require('node:crypto');
 const { lstatSync, readFileSync, readdirSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { calculateFingerprint } = require('./task-fingerprint.cjs');
+const { migrationInventory } = require('./build-production-bundle.cjs');
 const {
   BUNDLE_CONTRACT_VERSION,
   RELEASE_DIRECTORIES,
@@ -66,6 +67,11 @@ const EXPECTED_ARTIFACTS = [
   {
     path: 'docker/production/migrate-entrypoint.sh',
     sourcePath: 'docker/production/migrate-entrypoint.sh',
+    mode: '0644',
+  },
+  {
+    path: 'docker/production/deploy-api-release.py',
+    sourcePath: 'docker/production/deploy-api-release.py',
     mode: '0644',
   },
   {
@@ -611,6 +617,21 @@ function validateProductionBundle(
     'recovery provenance metadata mismatch',
     failures,
   );
+  try {
+    const expectedMigrations = migrationInventory({
+      cwd,
+      mode: manifest.bundleMode,
+      sourceCommit: manifest.sourceCommit ?? null,
+    });
+    check(
+      JSON.stringify(manifest.migrations) ===
+        JSON.stringify(expectedMigrations),
+      'migration inventory mismatch',
+      failures,
+    );
+  } catch (error) {
+    failures.push(`migration inventory cannot be verified: ${error.message}`);
+  }
   check(
     JSON.stringify(manifest.releaseTree) === JSON.stringify(RELEASE_TREE),
     'release-tree policy mismatch',

@@ -6,6 +6,7 @@ const {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } = require('node:fs');
@@ -34,6 +35,8 @@ const POSTGRES_LINUX_AMD64_MANIFEST =
   'sha256:af194ccf3e2d7fe367012c7b88ce8b816c5c889b18a5b316799a1f0d7eac746a';
 const POSTGRES_VERSION = '17.10-alpine3.24';
 const POSTGRES_SOURCE_REVISION = '4f9ced003ba58a854656ba150d146243d27ae3ac';
+const MIGRATION_DIRECTORY = 'src/database/migrations';
+const MIGRATION_FILE_PATTERN = /^(\d{13})-([A-Za-z][A-Za-z0-9]*)\.ts$/u;
 const ARTIFACTS = [
   {
     source: 'compose.production.yml',
@@ -78,6 +81,11 @@ const ARTIFACTS = [
   {
     source: 'docker/production/migrate-entrypoint.sh',
     path: 'docker/production/migrate-entrypoint.sh',
+    mode: '0644',
+  },
+  {
+    source: 'docker/production/deploy-api-release.py',
+    path: 'docker/production/deploy-api-release.py',
     mode: '0644',
   },
   {
@@ -238,6 +246,74 @@ function gitOutput(args, cwd, encoding = 'utf8') {
 
 function gitText(args, cwd) {
   return gitOutput(args, cwd, 'utf8').trim();
+}
+
+function migrationInventory({ cwd, mode, sourceCommit = null }) {
+  let paths;
+  if (mode === 'committed-release') {
+    paths = gitOutput(
+      [
+        'ls-tree',
+        '-r',
+        '--name-only',
+        '-z',
+        sourceCommit,
+        '--',
+        MIGRATION_DIRECTORY,
+      ],
+      cwd,
+      'utf8',
+    )
+      .split('\0')
+      .filter(Boolean);
+  } else {
+    paths = readdirSync(join(cwd, ...MIGRATION_DIRECTORY.split('/')), {
+      withFileTypes: true,
+    }).map((entry) => {
+      if (!entry.isFile()) {
+        throw new Error(
+          `migration source contains an irregular entry: ${entry.name}`,
+        );
+      }
+      return `${MIGRATION_DIRECTORY}/${entry.name}`;
+    });
+  }
+  if (paths.length === 0) throw new Error('migration inventory is empty.');
+  const entries = paths.map((path) => {
+    const filename = path.slice(MIGRATION_DIRECTORY.length + 1);
+    const match = MIGRATION_FILE_PATTERN.exec(filename);
+    if (!match || path !== `${MIGRATION_DIRECTORY}/${filename}`) {
+      throw new Error(`migration source path is invalid: ${path}`);
+    }
+    const className = `${match[2]}${match[1]}`;
+    const content =
+      mode === 'committed-release'
+        ? gitOutput(['show', `${sourceCommit}:${path}`], cwd, 'utf8')
+        : readFileSync(join(cwd, ...path.split('/')), 'utf8');
+    const classPattern = new RegExp(
+      `export\\s+class\\s+${className}\\s+implements\\s+MigrationInterface\\b`,
+      'u',
+    );
+    if (!classPattern.test(content)) {
+      throw new Error(
+        `migration class does not match its source path: ${path}`,
+      );
+    }
+    return { timestamp: match[1], name: className, path };
+  });
+  entries.sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+  if (
+    new Set(entries.map((entry) => entry.timestamp)).size !== entries.length
+  ) {
+    throw new Error('migration timestamps are not unique.');
+  }
+  if (new Set(entries.map((entry) => entry.name)).size !== entries.length) {
+    throw new Error('migration class names are not unique.');
+  }
+  return {
+    sourcePath: MIGRATION_DIRECTORY,
+    orderedNames: entries.map((entry) => entry.name),
+  };
 }
 
 function validateCommit(value, cwd) {
@@ -528,6 +604,11 @@ function buildProductionBundle({
         productionMutationCount: 0,
         driveMutationCount: 0,
       },
+      migrations: migrationInventory({
+        cwd,
+        mode,
+        sourceCommit: identity.sourceCommit ?? null,
+      }),
       releaseTree: RELEASE_TREE,
       directories: RELEASE_DIRECTORIES,
       manifestEntry: RELEASE_MANIFEST_ENTRY,
@@ -613,9 +694,11 @@ module.exports = {
   POSTGRES_LINUX_AMD64_MANIFEST,
   POSTGRES_SOURCE_REVISION,
   POSTGRES_VERSION,
+  MIGRATION_DIRECTORY,
   buildProductionBundle,
   candidateProvenance,
   materializeArtifact,
+  migrationInventory,
   obviousSecretFailure,
   readCommittedArtifact,
   resolveGenerationTime,

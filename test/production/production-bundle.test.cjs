@@ -7,6 +7,7 @@ const {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } = require('node:fs');
@@ -16,6 +17,7 @@ const test = require('node:test');
 const {
   ARTIFACTS,
   buildProductionBundle,
+  MIGRATION_DIRECTORY,
   obviousSecretFailure,
 } = require('../../scripts/build-production-bundle.cjs');
 const {
@@ -27,8 +29,14 @@ const {
 } = require('../../scripts/validate-production-bundle.cjs');
 const { calculateFingerprint } = require('../../scripts/task-fingerprint.cjs');
 
+const MIGRATION_FIXTURE_INPUTS = readdirSync(
+  join(process.cwd(), ...MIGRATION_DIRECTORY.split('/')),
+)
+  .map((name) => `${MIGRATION_DIRECTORY}/${name}`)
+  .sort();
 const VERSIONED_FIXTURE_INPUTS = [
   ...ARTIFACTS.map((artifact) => artifact.source),
+  ...MIGRATION_FIXTURE_INPUTS,
   'package.json',
 ].sort();
 
@@ -54,6 +62,14 @@ function committedFixture(root) {
     writeFileSync(
       target,
       readFileSync(join(process.cwd(), ...artifact.source.split('/'))),
+    );
+  }
+  for (const source of MIGRATION_FIXTURE_INPUTS) {
+    const target = join(repository, ...source.split('/'));
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(
+      target,
+      readFileSync(join(process.cwd(), ...source.split('/'))),
     );
   }
   runGit(repository, ['init', '--quiet']);
@@ -268,6 +284,22 @@ test('builds a deterministic non-operational candidate with current bindings', (
     platform: 'linux/amd64',
   });
   assert.equal(builtFirst.manifest.contractVersion, '0.8-MVP-08.v2');
+  assert.deepEqual(builtFirst.manifest.migrations, {
+    sourcePath: MIGRATION_DIRECTORY,
+    orderedNames: [
+      'CreateMultiTenantCore1784400000000',
+      'CreateAuthSessions1784486400000',
+      'CreateOrganizationInvitations1785004800000',
+      'DeliverInvitationAcceptance1785087600000',
+      'ActivateNewInvitationUser1785174000000',
+      'ManageMembershipOwnership1785260400000',
+      'CreateLeadFoundation1785346800000',
+      'ManageLeadCommercialPipeline1785433200000',
+      'ManageLeadActivitiesFollowUp1785519600000',
+      'AddLeadOperationalReadIndexes1785606000000',
+      'ManageLeadCommercialCycleExpectedValue1788289200000',
+    ],
+  });
   assert.deepEqual(builtFirst.manifest.releaseTree, RELEASE_TREE);
   assert.deepEqual(builtFirst.manifest.directories, RELEASE_DIRECTORIES);
   assert.deepEqual(builtFirst.manifest.manifestEntry, RELEASE_MANIFEST_ENTRY);
@@ -276,6 +308,18 @@ test('builds a deterministic non-operational candidate with current bindings', (
     builtFirst.manifest.artifacts.every(
       (entry) =>
         entry.type === 'file' && entry.owner === 0 && entry.group === 0,
+    ),
+  );
+  const operator = builtFirst.manifest.artifacts.find(
+    (entry) => entry.path === 'docker/production/deploy-api-release.py',
+  );
+  assert.equal(operator?.mode, '0644');
+  assert.equal(
+    operator?.sha256,
+    sha256(
+      readFileSync(
+        join(first, 'docker', 'production', 'deploy-api-release.py'),
+      ),
     ),
   );
   assert.deepEqual(builtFirst.manifest.images.traefik, {
@@ -305,6 +349,27 @@ test('builds a deterministic non-operational candidate with current bindings', (
       `${path} is absent from the bundle`,
     );
   }
+});
+
+test('rejects migration inventory drift independently of manifest self-hash', (t) => {
+  const fixture = candidateFixture(t);
+  const output = join(fixture.root, 'migration-drift');
+  buildProductionBundle({
+    cwd: fixture.repository,
+    output,
+    mode: 'candidate',
+    env: { ...process.env, SOURCE_DATE_EPOCH: '1700000000' },
+  });
+  const manifestPath = join(output, 'release-manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  manifest.migrations.orderedNames.push('UnapprovedMigration');
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  assert.match(
+    validateProductionBundle(output, { cwd: fixture.repository }).failures.join(
+      '\n',
+    ),
+    /migration inventory mismatch/u,
+  );
 });
 
 test('bundle generation cannot execute migration, database or container operations', () => {

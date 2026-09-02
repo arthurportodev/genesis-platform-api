@@ -487,23 +487,93 @@ avançados de supply chain são backlog pós-MVP.
 
 ## Deploy manual — procedimento durável
 
-O fluxo inicial é:
+O operador oficial e versionado para uma futura promoção da API é
+`docker/production/deploy-api-release.py`. Ele usa somente Python 3 e a
+biblioteca padrão e expõe exatamente `prepare`, `preflight` e `execute`. Sua
+presença, mode e hash integram os bundles `committed-release` current/rollback;
+um bundle `candidate` continua não operacional.
+
+O fluxo é:
 
 1. selecionar commit aprovado e CI essencial verde;
 2. publicar ou selecionar a imagem no GHCR por tag do commit e digest;
-3. obter aprovação humana para a execução;
-4. validar o bundle, criar o volume externo separadamente e confirmar secrets,
-   persistência, backup recuperável e capacidade da VPS;
-5. executar uma migration controlada com credencial própria;
-6. iniciar ou atualizar uma réplica da API atrás do Traefik;
-7. validar health, logs e smoke sintético;
-8. manter o novo digest ou executar rollback.
+3. formar um plano JSON não secreto e obter aprovação humana de seus bytes,
+   SHA-256 e `authorizationId`;
+4. executar `prepare` localmente para validar os dois bundles e seus
+   fingerprints, formar archives determinísticos, calcular hashes e, quando
+   explicitamente pedido, transferir somente os cinco artefatos allowlisted
+   por SSH com `BatchMode`, host key estrita e alias aprovado;
+5. executar `prepare --from-transport` no host para extrair os archives em
+   `<remoteWorkspace>/materialized/{current,rollback}` com a validação segura
+   do operador, rejeitando traversal, symlink, tipo especial e path extra;
+6. executar `preflight` no host para provar hostname `srv1870064`,
+   `linux/amd64`, release/digest ativos, rollback, containers, labels, volume,
+   migration baseline e pending set exatos, secret metadata e capacidade;
+7. obter autorização humana específica para a mutação e executar `execute`;
+8. observar health, smoke e runtime até o estado
+   `CANDIDATE_OBSERVED / READY_FOR_KEEP`, ou executar application rollback.
 
 O deploy permanece manual. A execução 09E já ocorreu conforme a seção de
 execução histórica acima; esta sequência não autoriza repetição nem transforma
-o helper local posterior em procedimento oficial. Cada novo deployment requer
-imagem e rollback imutáveis, procedimento novamente versionado, smoke,
-evidência e autorização humana próprios.
+o helper histórico em procedimento atual. Cada novo deployment requer imagem e
+rollback imutáveis, plano, smoke, evidência e autorização humana próprios.
+
+No host, `preflight` e `execute` aceitam somente os dois paths materializados
+acima e `<remoteWorkspace>/evidence.jsonl`; um path arbitrário é recusado.
+
+### Plano e fronteira de mutação
+
+O plano `genesis-api-deployment-plan.v1` é fechado: campos extras ou defaults
+implícitos são recusados. Ele vincula run ID de 16 hex, authorization ID,
+source commit, alias/fingerprint SSH, paths fixos, digests e fingerprints
+current/rollback, baseline Compose, ordered migrations, referências de secrets,
+smoke e a janela de observation. Secret files são apenas referenciados; seus
+valores, hashes, cookies, tokens e bodies nunca entram no plano nem no JSONL de
+evidência.
+
+`preflight` é read-only e termina em `PRE_MUTATION_READY` ou
+`STOP BEFORE MUTATION`. `execute` exige simultaneamente:
+
+- `--authorize-production-mutation`;
+- `GENESIS_PRODUCTION_MUTATION_AUTHORIZED=true`;
+- `--authorization-id` igual ao plano;
+- `--approved-plan-sha` igual ao SHA-256 dos bytes do plano.
+
+O operador valida esses fatores antes do lock e novamente depois de adquirir
+`/run/lock/genesis-api-deployment.lock` e repetir o preflight. Somente então
+emite `MUTATION_AUTHORIZED`; antes desse evento, registry auth/pull, migration,
+activation e recreate são impossíveis. O Docker config temporário de registry
+fica root-only sob `/run`, recebe a senha por stdin e é removido mesmo em falha.
+
+Após o pull por digest, o operador executa apenas o service Compose canônico
+`migrate`, que chama TypeORM `migration:run` com a role dedicada. O applied
+baseline e o pending set ordenado devem ser exatos antes, e o post-head deve ser
+exato depois. Falha ou estado ambíguo impede activation; `migration:revert` não
+é executado.
+
+Activation delega a troca atômica a `release-tree-manager.py activate`. Em
+seguida, o único recreate permitido é `docker compose ... up -d --no-deps
+--force-recreate api`; os IDs de PostgreSQL e Traefik são comparados antes e
+depois. Health interno/público, liveness, readiness, TLS, CSRF/login/session,
+tenant e Kanban são validados sem registrar payloads. O contrato financeiro do
+smoke aceita dados genéricos e valida BRL, totais minor em string, contagem sem
+valor, agregados de estágio e `expectedValueMinor` string/null.
+
+### Observation, rollback e KEEP
+
+A execução real observa por 900 segundos nos checkpoints T+0, T+2, T+5,
+T+10 e T+15. Health/readiness, restart count, 5xx, CPU, memória, disco,
+PostgreSQL, Traefik e logs sanitizados são gates. Digest divergente, health ou
+readiness falhos, restart inesperado, 5xx persistente, regressão de auth,
+tenant/Kanban ou observabilidade acionam application rollback atômico para o
+bundle/digest anterior, seguido apenas do recreate da API e smoke mínimo.
+
+O rollback mantém o schema já expandido; nunca há database revert automático,
+nem segunda tentativa de deployment. Falha no rollback preserva evidência e
+termina em escalation. Sucesso da observation declara somente
+`CANDIDATE_OBSERVED / READY_FOR_KEEP`: o candidate permanece ativo e o rollback
+permanece preservado. `KEEP` e cleanup do rollback exigem autorizações humanas
+separadas e nunca são emitidos por este operador.
 
 ## Migrations
 
@@ -535,7 +605,8 @@ Ele não recompila a aplicação, não depende do Nest CLI e não executa seed.
 
 `scripts/build-production-bundle.cjs` gera um diretório novo com allowlist
 fechada de Compose, configuração não secreta, wrappers, Traefik, recovery,
-gerenciador da árvore e `release-manifest.json`. Existem exatamente dois modos:
+operador de deployment, gerenciador da árvore e `release-manifest.json`.
+Existem exatamente dois modos:
 
 - `candidate` é não operacional, copia a worktree somente para validação local
   e registra `baseSha`, `candidateId` e `contentFingerprint`. Ele não declara
