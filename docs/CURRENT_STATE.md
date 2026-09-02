@@ -4,12 +4,12 @@
 
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
-- **Revisão de estado:** PIPE-V2-02-COMPLETE-2026-09-01
-- **Atualização documentada:** 2026-09-01T21:21:35.220Z
+- **Revisão de estado:** PIPE-V2-03-COMPLETE-2026-09-02
+- **Atualização documentada:** 2026-09-02T10:03:18.404Z
 - **Fase:** PIPE-V2 — Pipeline Experience V2
-- **Último trabalho concluído:** PIPE-V2-02 — Financial Aggregates
-- **Trabalho vigente:** none — Nenhuma implementação está ativa. PIPE-V2-03 — Presentation V2 é o próximo trabalho, autorizado somente para planejamento/Gate 1, e ainda não foi iniciado.
-- **Próxima tarefa:** PIPE-V2-03 — Presentation V2
+- **Último trabalho concluído:** PIPE-V2-03 — Presentation V2
+- **Trabalho vigente:** none — Nenhuma execução de produção está ativa. O próximo trabalho autorizado é preparar e promover em produção as revisões PIPE-V2 já incorporadas; nenhuma mutação de produção ocorreu.
+- **Próxima tarefa:** PIPE-V2-PRODUCTION-DEPLOYMENT — Production Deployment
 - **Web integrado na main:** 017ef0056d97147a5e5337494fa339a3f65986ac
 - **Revisão fonte da imagem API live:** 0a56a8aee7c64bda59a1981888418e1ad03950c0
 - **Revisão do contrato versionado de release API:** containing-commit
@@ -22,7 +22,7 @@ Esta projeção é gerada deterministicamente. Não edite manualmente; a autorid
 
 ## Estado operacional
 
-O programa PIPE-V2 está vigente. A Genesis Frontend Program Foundation, PIPE-V2-01 — Financial Domain e PIPE-V2-02 — Financial Aggregates estão concluídos e incorporados. PIPE-V2-03 — Presentation V2 é o próximo trabalho autorizado somente para planejamento/Gate 1 e ainda não foi iniciado.
+O programa PIPE-V2 está vigente. A Genesis Frontend Program Foundation, PIPE-V2-01 — Financial Domain, PIPE-V2-02 — Financial Aggregates e PIPE-V2-03 — Presentation V2 estão concluídos e incorporados. A preparação e promoção de produção dessas revisões é o próximo trabalho autorizado; nenhuma mutação de produção ocorreu.
 
 - **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
 - **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
@@ -95,6 +95,7 @@ O programa PIPE-V2 está vigente. A Genesis Frontend Program Foundation, PIPE-V2
 - **OPS-FRONTEND-PROGRAM-FOUNDATION-COMPLETE** [documented/present] — A Genesis Frontend Program Foundation está concluída: a autoridade API foi incorporada no PR #67 (43d45d68ccf6f6663334c18a660a4608ac304507) e o consumidor Web no PR #22 (2118e33f6506378dc029861783d11403e06c761f).
 - **OPS-PIPE-V2-01-COMPLETE** [documented/present] — PIPE-V2-01 — Financial Domain está concluída e incorporada na API pelo PR #68 (785ec54c273437f40d9ff4a6aaf6bd81b90aeb08).
 - **OPS-PIPE-V2-02-COMPLETE** [documented/present] — PIPE-V2-02 — Financial Aggregates está concluída e incorporada na API pelo PR #69 (ac2f8cd96ae02c1cad52366871bdde8ca651631d).
+- **OPS-PIPE-V2-03-COMPLETE** [documented/present] — PIPE-V2-03 — Presentation V2 está concluída e incorporada no Web pelo PR #24 (6f53180e6c3947bd778e47c8fdb734567802e0d8); post-merge CI e visual sanity foram aprovados.
 
 ## Blockers abertos
 
