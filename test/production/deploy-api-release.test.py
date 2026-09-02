@@ -15,6 +15,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -474,6 +475,7 @@ class OperatorTest(unittest.TestCase):
         next(secret for secret in registry_plan["secrets"] if secret["purpose"] == "registry")["path"] = str(credentials)
         calls, config_paths = [], []
         original = deploy.SystemRuntime.__dict__["_run"]
+        original_temporary_directory = deploy.tempfile.TemporaryDirectory
 
         def fake_run(argv, *, input_text=None, timeout=120):
             calls.append((list(argv), input_text))
@@ -484,9 +486,16 @@ class OperatorTest(unittest.TestCase):
                 return json.dumps([{"Os": "linux", "Architecture": "amd64", "RepoDigests": [image]}])
             return ""
 
+        def fixture_temporary_directory(*args, **kwargs):
+            kwargs["dir"] = self.root
+            return original_temporary_directory(*args, **kwargs)
+
         deploy.SystemRuntime._run = staticmethod(fake_run)
         try:
-            deploy.SystemRuntime().registry_pull(registry_plan)
+            with mock.patch.object(deploy.os, "geteuid", return_value=0), mock.patch.object(
+                deploy.tempfile, "TemporaryDirectory", side_effect=fixture_temporary_directory,
+            ):
+                deploy.SystemRuntime().registry_pull(registry_plan)
         finally:
             deploy.SystemRuntime._run = original
         self.assertTrue(config_paths)
