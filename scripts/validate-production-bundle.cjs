@@ -11,12 +11,9 @@ const {
   RELEASE_TREE,
 } = require('./lib/release-tree-contract.cjs');
 const {
-  API_APPLICATION_REVISION,
-  API_IMAGE,
-  API_IMAGE_CONFIG_DIGEST,
+  API_RELEASE_BINDINGS,
   PLATFORM,
   POSTGRES_IMAGE,
-  ROLLBACK_API_IMAGE,
   TRAEFIK_IMAGE,
 } = require('./validate-production-compose.cjs');
 const {
@@ -374,20 +371,27 @@ function validateReleaseIdentity(manifest, artifactsByPath, cwd, failures) {
         expected.path === 'compose.production.yml'
       ) {
         const source = snapshot.content.toString('utf8');
-        const replacements = source.split(API_IMAGE).length - 1;
-        if (replacements !== 2 || source.includes(ROLLBACK_API_IMAGE)) {
+        const replacements =
+          source.split(API_RELEASE_BINDINGS.current.image).length - 1;
+        if (
+          replacements !== 2 ||
+          source.includes(API_RELEASE_BINDINGS.rollback.image)
+        ) {
           failures.push(
             'rollback Compose source does not have the exact derivation shape',
           );
         } else {
           expectedContent = Buffer.from(
-            source.replaceAll(API_IMAGE, ROLLBACK_API_IMAGE),
+            source.replaceAll(
+              API_RELEASE_BINDINGS.current.image,
+              API_RELEASE_BINDINGS.rollback.image,
+            ),
           );
           expectedDerivation = {
             kind: 'exact-api-image-replacement',
             sourceSha256: sha256(snapshot.content),
-            from: API_IMAGE,
-            to: ROLLBACK_API_IMAGE,
+            from: API_RELEASE_BINDINGS.current.image,
+            to: API_RELEASE_BINDINGS.rollback.image,
             replacements: 2,
           };
         }
@@ -506,29 +510,29 @@ function validateProductionBundle(
     failures,
   );
   check(manifest.platform === PLATFORM, 'bundle platform mismatch', failures);
-  const selectedApiImage =
-    manifest.releaseRole === 'rollback' ? ROLLBACK_API_IMAGE : API_IMAGE;
+  const selectedApiBinding = API_RELEASE_BINDINGS[manifest.releaseRole];
   check(
-    manifest.images?.api?.reference === selectedApiImage,
+    manifest.images?.api?.reference === selectedApiBinding?.image,
     'API reference mismatch for release role',
     failures,
   );
   check(
-    manifest.images?.api?.digest === selectedApiImage.split('@')[1],
+    manifest.images?.api?.digest === selectedApiBinding?.image.split('@')[1],
     'API digest mismatch for release role',
     failures,
   );
+  check(
+    manifest.images?.api?.configDigest === selectedApiBinding?.configDigest,
+    'API config digest mismatch',
+    failures,
+  );
+  check(
+    manifest.images?.api?.applicationRevision ===
+      selectedApiBinding?.applicationRevision,
+    'API application revision mismatch',
+    failures,
+  );
   if (manifest.releaseRole === 'current') {
-    check(
-      manifest.images?.api?.configDigest === API_IMAGE_CONFIG_DIGEST,
-      'API config digest mismatch',
-      failures,
-    );
-    check(
-      manifest.images?.api?.applicationRevision === API_APPLICATION_REVISION,
-      'API application revision mismatch',
-      failures,
-    );
     check(
       manifest.images?.api?.relation === undefined,
       'current API must not declare rollback relation',
@@ -536,9 +540,7 @@ function validateProductionBundle(
     );
   } else if (manifest.releaseRole === 'rollback') {
     check(
-      manifest.images?.api?.configDigest === undefined &&
-        manifest.images?.api?.applicationRevision === undefined &&
-        manifest.images?.api?.relation === 'previous-approved',
+      manifest.images?.api?.relation === 'previous-approved',
       'rollback API provenance metadata mismatch',
       failures,
     );
@@ -549,23 +551,33 @@ function validateProductionBundle(
     failures,
   );
   check(
-    manifest.rollback?.api?.reference === ROLLBACK_API_IMAGE,
+    manifest.rollback?.api?.reference === API_RELEASE_BINDINGS.rollback.image,
     'rollback API reference mismatch',
     failures,
   );
   check(
-    manifest.rollback?.api?.digest === ROLLBACK_API_IMAGE.split('@')[1],
+    manifest.rollback?.api?.digest ===
+      API_RELEASE_BINDINGS.rollback.image.split('@')[1],
     'rollback API digest mismatch',
     failures,
   );
   check(
-    manifest.rollback?.api?.relation === 'previous-approved' &&
+    manifest.rollback?.api?.applicationRevision ===
+      API_RELEASE_BINDINGS.rollback.applicationRevision &&
+      manifest.rollback?.api?.configDigest ===
+        API_RELEASE_BINDINGS.rollback.configDigest &&
+      manifest.rollback?.api?.relation === 'previous-approved' &&
       manifest.rollback?.api?.platform === PLATFORM,
     'rollback API metadata mismatch',
     failures,
   );
   check(
-    API_IMAGE !== ROLLBACK_API_IMAGE,
+    API_RELEASE_BINDINGS.current.image !==
+      API_RELEASE_BINDINGS.rollback.image &&
+      API_RELEASE_BINDINGS.current.applicationRevision !==
+        API_RELEASE_BINDINGS.rollback.applicationRevision &&
+      API_RELEASE_BINDINGS.current.configDigest !==
+        API_RELEASE_BINDINGS.rollback.configDigest,
     'API image bindings must be distinct',
     failures,
   );

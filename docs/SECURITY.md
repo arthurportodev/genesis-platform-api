@@ -182,11 +182,12 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   WWW-Authenticate, token, senha, auth Docker e credencial são redigidos; os
   canais brutos e o Docker config não são artifacts. Incapacidade de preservar
   o diagnóstico falha fechado e não habilita o push.
-- `workflowRef` e `imageSourceSha` são autoridades independentes. Para esta
-  remediação, o workflow vem do candidato futuro de `main`, o
-  `imageSourceSha` continua
-  `0a56a8aee7c64bda59a1981888418e1ad03950c0` e
-  `sourceShaChanged=false`.
+- `workflowRef` e `imageSourceSha` são autoridades independentes. Na janela de
+  publicação autorizada concluída pelo run `33661648091`, o source selecionado
+  foi `ac2f8cd96ae02c1cad52366871bdde8ca651631d`; a revisão
+  `0a56a8aee7c64bda59a1981888418e1ad03950c0` permanece como source histórico
+  anterior. Essa seleção é evidência daquela janela, não uma regra universal
+  nem afirmação de deployment.
 - `scripts/dispatch-release-image.cjs` recebe essas duas autoridades
   explicitamente, mas envia somente `imageSourceSha` em `inputs.full_sha` e usa
   `ref: main`. Imediatamente antes da única chamada mutável, ele exige que a

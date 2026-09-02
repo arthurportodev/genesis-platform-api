@@ -267,19 +267,22 @@ test('builds a deterministic non-operational candidate with current bindings', (
   assert.equal(builtFirst.manifest.generatedAtSemantics, 'source-date-epoch');
   assert.deepEqual(builtFirst.manifest.images.api, {
     reference:
-      'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a',
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7',
     digest:
-      'sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a',
+      'sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7',
     configDigest:
-      'sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9',
-    applicationRevision: '9402d067897ab727fb369d7e696a11ba3b9cf68f',
+      'sha256:17e5b82451b78a20c6934b5dc2bb0cc00fa10252665245ed49b2f7c09a7fc629',
+    applicationRevision: 'ac2f8cd96ae02c1cad52366871bdde8ca651631d',
     platform: 'linux/amd64',
   });
   assert.deepEqual(builtFirst.manifest.rollback.api, {
     reference:
-      'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659',
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb',
     digest:
-      'sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659',
+      'sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb',
+    configDigest:
+      'sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24',
+    applicationRevision: '0a56a8aee7c64bda59a1981888418e1ad03950c0',
     relation: 'previous-approved',
     platform: 'linux/amd64',
   });
@@ -480,6 +483,10 @@ test('builds and validates a committed release only from a matching Git snapshot
   assert.equal(built.manifest.releaseRole, 'current');
   assert.equal(built.manifest.operational, true);
   assert.equal(built.manifest.sourceCommit, fixture.sourceCommit);
+  assert.notEqual(
+    built.manifest.sourceCommit,
+    built.manifest.images.api.applicationRevision,
+  );
   assert.equal(built.manifest.baseSha, undefined);
   assert.equal(built.manifest.candidateId, undefined);
   assert.deepEqual(
@@ -494,6 +501,27 @@ test('builds and validates a committed release only from a matching Git snapshot
     }).status,
     'passed',
   );
+});
+
+test('builds a candidate through the operational CLI without circular exports', (t) => {
+  const fixture = candidateFixture(t);
+  const output = join(fixture.root, 'cli-candidate');
+  const script = join(process.cwd(), 'scripts', 'build-production-bundle.cjs');
+  const result = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [script, '--output', output, '--mode', 'candidate'],
+      {
+        cwd: fixture.repository,
+        encoding: 'utf8',
+        windowsHide: true,
+      },
+    ),
+  );
+  assert.equal(result.status, 'passed');
+  assert.equal(result.bundleMode, 'candidate');
+  assert.equal(result.releaseRole, 'current');
+  assert.equal(result.candidateId, fixture.fingerprint.candidateId);
 });
 
 test('builds a real rollback committed release accepted by validator and manager', (t) => {
@@ -525,8 +553,23 @@ test('builds a real rollback committed release accepted by validator and manager
     rollback.manifest.rollback.api.reference,
   );
   assert.equal(rollback.manifest.images.api.relation, 'previous-approved');
-  assert.equal(rollback.manifest.images.api.configDigest, undefined);
-  assert.equal(rollback.manifest.images.api.applicationRevision, undefined);
+  assert.equal(
+    rollback.manifest.images.api.configDigest,
+    'sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24',
+  );
+  assert.equal(
+    rollback.manifest.images.api.applicationRevision,
+    '0a56a8aee7c64bda59a1981888418e1ad03950c0',
+  );
+  assert.equal(current.manifest.sourceCommit, rollback.manifest.sourceCommit);
+  assert.notEqual(
+    current.manifest.sourceCommit,
+    current.manifest.images.api.applicationRevision,
+  );
+  assert.notEqual(
+    rollback.manifest.sourceCommit,
+    rollback.manifest.images.api.applicationRevision,
+  );
   const rollbackCompose = readFileSync(
     join(rollbackOutput, 'compose.production.yml'),
     'utf8',
@@ -609,6 +652,58 @@ test('builds a real rollback committed release accepted by validator and manager
     }).failures.join('\n'),
     /derivation metadata mismatch/u,
   );
+});
+
+test('rejects stale or mismatched rollback provenance for the next release pair', (t) => {
+  const root = tempRoot();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const fixture = committedFixture(root);
+  const output = join(root, 'rollback-release');
+  buildProductionBundle({
+    cwd: fixture.repository,
+    output,
+    mode: 'committed-release',
+    releaseRole: 'rollback',
+    sourceCommit: fixture.sourceCommit,
+    env: {},
+  });
+  const manifestPath = join(output, 'release-manifest.json');
+  const original = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const cases = [
+    {
+      mutate: (manifest) => {
+        manifest.images.api.applicationRevision = '1'.repeat(40);
+      },
+      expected: /API application revision mismatch/u,
+    },
+    {
+      mutate: (manifest) => {
+        manifest.images.api.configDigest = `sha256:${'2'.repeat(64)}`;
+      },
+      expected: /API config digest mismatch/u,
+    },
+    {
+      mutate: (manifest) => {
+        const stale =
+          'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';
+        manifest.images.api.reference = stale;
+        manifest.images.api.digest = stale.split('@')[1];
+      },
+      expected: /API reference mismatch|API digest mismatch/u,
+    },
+  ];
+  for (const scenario of cases) {
+    const mutated = structuredClone(original);
+    scenario.mutate(mutated);
+    writeFileSync(manifestPath, `${JSON.stringify(mutated, null, 2)}\n`);
+    assert.match(
+      validateProductionBundle(output, {
+        cwd: fixture.repository,
+        requiredMode: 'committed-release',
+      }).failures.join('\n'),
+      scenario.expected,
+    );
+  }
 });
 
 test('rejects dirty release worktree bytes in builder and validator', (t) => {
@@ -887,6 +982,27 @@ test('rejects unexpected files, hash drift and mutable image references', (t) =>
       cwd: fixture.repository,
     }).failures.join('\n'),
     /API reference mismatch|API digest mismatch|must remain distinct/u,
+  );
+
+  const staleCurrent = join(fixture.root, 'stale-current');
+  buildProductionBundle({ cwd: fixture.repository, output: staleCurrent });
+  const staleCurrentManifestPath = join(staleCurrent, 'release-manifest.json');
+  const staleCurrentManifest = JSON.parse(
+    readFileSync(staleCurrentManifestPath, 'utf8'),
+  );
+  staleCurrentManifest.images.api.reference =
+    'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';
+  staleCurrentManifest.images.api.digest =
+    'sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';
+  writeFileSync(
+    staleCurrentManifestPath,
+    `${JSON.stringify(staleCurrentManifest, null, 2)}\n`,
+  );
+  assert.match(
+    validateProductionBundle(staleCurrent, {
+      cwd: fixture.repository,
+    }).failures.join('\n'),
+    /API reference mismatch|API digest mismatch/u,
   );
 
   const provenanceDrift = join(fixture.root, 'provenance-drift');
