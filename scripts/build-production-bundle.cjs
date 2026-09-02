@@ -19,12 +19,9 @@ const {
   RELEASE_TREE,
 } = require('./lib/release-tree-contract.cjs');
 const {
-  API_APPLICATION_REVISION,
-  API_IMAGE,
-  API_IMAGE_CONFIG_DIGEST,
+  API_RELEASE_BINDINGS,
   PLATFORM,
   POSTGRES_IMAGE,
-  ROLLBACK_API_IMAGE,
   TRAEFIK_IMAGE,
 } = require('./validate-production-compose.cjs');
 
@@ -444,20 +441,29 @@ function materializeArtifact(content, artifact, releaseRole) {
     return { content, derivation: undefined };
   }
   const source = content.toString('utf8');
-  const occurrences = source.split(API_IMAGE).length - 1;
-  if (occurrences !== 2 || source.includes(ROLLBACK_API_IMAGE)) {
+  const occurrences =
+    source.split(API_RELEASE_BINDINGS.current.image).length - 1;
+  if (
+    occurrences !== 2 ||
+    source.includes(API_RELEASE_BINDINGS.rollback.image)
+  ) {
     throw new Error(
       'rollback Compose derivation requires exactly two current API image bindings and no pre-existing rollback binding.',
     );
   }
-  const derived = Buffer.from(source.replaceAll(API_IMAGE, ROLLBACK_API_IMAGE));
+  const derived = Buffer.from(
+    source.replaceAll(
+      API_RELEASE_BINDINGS.current.image,
+      API_RELEASE_BINDINGS.rollback.image,
+    ),
+  );
   return {
     content: derived,
     derivation: {
       kind: 'exact-api-image-replacement',
       sourceSha256: sha256(content),
-      from: API_IMAGE,
-      to: ROLLBACK_API_IMAGE,
+      from: API_RELEASE_BINDINGS.current.image,
+      to: API_RELEASE_BINDINGS.rollback.image,
       replacements: 2,
     },
   };
@@ -547,18 +553,14 @@ function buildProductionBundle({
       });
     }
 
-    const selectedApiImage =
-      releaseRole === 'rollback' ? ROLLBACK_API_IMAGE : API_IMAGE;
+    const selectedApiBinding = API_RELEASE_BINDINGS[releaseRole];
     const apiMetadata = {
-      reference: selectedApiImage,
-      digest: selectedApiImage.split('@')[1],
+      reference: selectedApiBinding.image,
+      digest: selectedApiBinding.image.split('@')[1],
+      configDigest: selectedApiBinding.configDigest,
+      applicationRevision: selectedApiBinding.applicationRevision,
       platform: PLATFORM,
-      ...(releaseRole === 'current'
-        ? {
-            configDigest: API_IMAGE_CONFIG_DIGEST,
-            applicationRevision: API_APPLICATION_REVISION,
-          }
-        : { relation: 'previous-approved' }),
+      ...(releaseRole === 'rollback' ? { relation: 'previous-approved' } : {}),
     };
 
     const manifest = {
@@ -591,8 +593,11 @@ function buildProductionBundle({
       },
       rollback: {
         api: {
-          reference: ROLLBACK_API_IMAGE,
-          digest: ROLLBACK_API_IMAGE.split('@')[1],
+          reference: API_RELEASE_BINDINGS.rollback.image,
+          digest: API_RELEASE_BINDINGS.rollback.image.split('@')[1],
+          configDigest: API_RELEASE_BINDINGS.rollback.configDigest,
+          applicationRevision:
+            API_RELEASE_BINDINGS.rollback.applicationRevision,
           relation: 'previous-approved',
           platform: PLATFORM,
         },
@@ -684,8 +689,6 @@ function main() {
   }
 }
 
-if (require.main === module) main();
-
 module.exports = {
   ARTIFACTS,
   BUNDLE_MODES,
@@ -704,3 +707,5 @@ module.exports = {
   resolveGenerationTime,
   sha256,
 };
+
+if (require.main === module) main();

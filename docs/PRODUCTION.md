@@ -161,9 +161,9 @@ uma réplica da API enquanto rate limits e semáforos forem process-local.
 ### Container e Compose versionados
 
 A stack base possui somente `postgres`, `migrate` e `api`, sob o projeto fixo
-`genesis`. O Compose versionado na `main` ainda usa para API e migration a
-imagem de baseline
-`ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a`;
+`genesis`. O Compose versionado representa o role prospectivo `current` e usa
+para API e migration a imagem candidata publicada, ainda não implantada,
+`ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7`;
 PostgreSQL usa o índice oficial
 `postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193`,
 cuja variante `linux/amd64` é
@@ -171,18 +171,25 @@ cuja variante `linux/amd64` é
 Tags e `build:` são proibidos. A API e o PostgreSQL não publicam portas; a API
 declara apenas exposição interna na porta 3000.
 
-Esse binding versionado distingue três identidades. A application revision da
-imagem de baseline é
-`9402d067897ab727fb369d7e696a11ba3b9cf68f`; seu config digest é
-`sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9`;
-e a release-manifest revision é o containing commit que incorpora o contrato
-versionado. O commit corretivo não é apresentado como origem da imagem.
-`ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659`
-permanece somente como rollback/recovery anterior e é rejeitada pelo caminho
-normal de promoção. O rollback representa o release operacional anterior;
-incorporar esse contrato versionado, isoladamente, não faz deploy, migration ou
-acesso ao banco. O runtime live posterior da 09E é registrado separadamente
-acima e na memória canônica; não o infira do Compose de baseline.
+Esse binding versionado distingue a identidade da aplicação, a identidade OCI
+e o containing commit do release. O role prospectivo `current` liga a
+application revision `ac2f8cd96ae02c1cad52366871bdde8ca651631d` ao manifest
+digest `sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7`
+e ao config digest
+`sha256:17e5b82451b78a20c6934b5dc2bb0cc00fa10252665245ed49b2f7c09a7fc629`.
+O rollback imediato do próximo deployment é a aplicação atualmente live:
+revision `0a56a8aee7c64bda59a1981888418e1ad03950c0`, manifest digest
+`sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb`
+e config digest
+`sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24`.
+Ambos os bundles `committed-release` usam o mesmo future containing commit como
+`sourceCommit`; esse SHA não é a `applicationRevision` de nenhuma imagem.
+
+O antigo digest `a4dafefa...` continua válido em registros históricos, e
+`56ada3e6...` conserva sua função independente no tooling de recovery. Nenhum
+deles compõe o próximo par current/rollback. Incorporar este contrato
+versionado, isoladamente, não faz deploy, migration ou acesso ao banco; o
+runtime live continua registrado separadamente acima e na memória canônica.
 
 O PostgreSQL usa o volume externo `genesis-postgres-data`, que deve existir
 antes do `up` e não é removido por `docker compose down -v`. Bootstrap/admin,
@@ -404,12 +411,15 @@ transitória. A fonte durável de verdade para promoção e rollback é:
 
 `ghcr.io/arthurportodev/genesis-platform-api@sha256:<digest>`
 
-O `workflowRef` identifica a futura revisão da `main` que contém este controle;
+O `workflowRef` identifica a revisão da `main` que contém o controle de release;
 o input `full_sha` é o `imageSourceSha` aprovado separadamente. Corrigir ou
 executar o workflow a partir de uma `main` futura não muda silenciosamente a
 fonte da imagem: `workflowRef` ocupa `release-control`, enquanto
-`imageSourceSha` ocupa `image-source`. Para esta remediação, o `imageSourceSha` permanece
-`0a56a8aee7c64bda59a1981888418e1ad03950c0` (`sourceShaChanged=false`).
+`imageSourceSha` ocupa `image-source`. Na janela autorizada concluída pelo run
+`33661648091`, o source selecionado foi
+`ac2f8cd96ae02c1cad52366871bdde8ca651631d`; a publicação resultou no digest
+imutável `sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7`
+e não constitui deployment.
 
 Preserve a imagem e esse digest até a desativação da fixture. Exclusão,
 limpeza ou alteração de retenção do digest exige Gate posterior. Um deployment
@@ -619,15 +629,16 @@ Existem exatamente dois modos:
 Todo bundle também declara `releaseRole`. `candidate` aceita apenas `current`.
 Após o merge, `committed-release --release-role current` produz o release a
 promover; `--release-role rollback` produz um segundo release operacional
-ligado exclusivamente à imagem `previous-approved`. Nesse segundo papel, o
-builder deriva somente `compose.production.yml` do mesmo snapshot contendo o
-contrato: exige exatamente duas referências da imagem corrente, substitui ambas
-pela imagem de rollback e registra no manifesto o hash fonte, `from`, `to` e a
-contagem. Não existe override de imagem livre. Antes de qualquer ativação,
+ligado à aplicação, manifest digest e config digest `previous-approved`. Nesse
+segundo papel, o builder deriva somente `compose.production.yml` do mesmo
+snapshot contendo o contrato: exige exatamente duas referências da imagem
+corrente, substitui ambas pela imagem de rollback e registra no manifesto o
+hash fonte, `from`, `to` e a contagem. Não existe override de imagem livre.
+Antes de qualquer ativação,
 `release-tree-manager.py verify-pair` revalida os dois bundles e prova que o
 Compose rollback é exatamente o Compose current com essas duas substituições,
-que ambos declaram o mesmo `sourceCommit` e que todos os demais bytes e
-metadados são idênticos.
+que ambos declaram o mesmo `sourceCommit` — distinto das application revisions
+das imagens — e que todos os demais bytes e metadados são idênticos.
 
 O manifesto v2 também registra hashes, type/owner/group/mode de arquivos,
 metadata dos onze diretórios, digests, `linux/amd64`, versão do contrato e

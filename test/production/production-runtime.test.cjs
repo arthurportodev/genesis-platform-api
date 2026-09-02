@@ -12,7 +12,6 @@ const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const test = require('node:test');
 const {
-  API_IMAGE,
   POSTGRES_IMAGE,
   SERVICE_SECRETS,
   TRAEFIK_IMAGE,

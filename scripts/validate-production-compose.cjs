@@ -2,13 +2,22 @@ const { spawnSync } = require('node:child_process');
 const { existsSync, readFileSync } = require('node:fs');
 const { basename, resolve } = require('node:path');
 
-const API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';
-const API_APPLICATION_REVISION = '9402d067897ab727fb369d7e696a11ba3b9cf68f';
-const API_IMAGE_CONFIG_DIGEST =
-  'sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9';
-const ROLLBACK_API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:56ada3e6bea3ab96b0bbb77fa456b8107663f92e82f8724ea05cb04d8b5cf659';
+const API_RELEASE_BINDINGS = Object.freeze({
+  current: Object.freeze({
+    applicationRevision: 'ac2f8cd96ae02c1cad52366871bdde8ca651631d',
+    image:
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7',
+    configDigest:
+      'sha256:17e5b82451b78a20c6934b5dc2bb0cc00fa10252665245ed49b2f7c09a7fc629',
+  }),
+  rollback: Object.freeze({
+    applicationRevision: '0a56a8aee7c64bda59a1981888418e1ad03950c0',
+    image:
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb',
+    configDigest:
+      'sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24',
+  }),
+});
 const POSTGRES_IMAGE =
   'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const TRAEFIK_IMAGE =
@@ -212,12 +221,12 @@ function validateProductionCompose(
     );
   }
   check(
-    api.image === API_IMAGE,
+    api.image === API_RELEASE_BINDINGS.current.image,
     'api image must use the approved digest',
     failures,
   );
   check(
-    migrate.image === API_IMAGE,
+    migrate.image === API_RELEASE_BINDINGS.current.image,
     'migrate image must use the approved digest',
     failures,
   );
@@ -1221,16 +1230,13 @@ function main() {
 if (require.main === module) main();
 
 module.exports = {
-  API_APPLICATION_REVISION,
-  API_IMAGE,
-  API_IMAGE_CONFIG_DIGEST,
+  API_RELEASE_BINDINGS,
   BASE_COMPOSE,
   FUNCTIONAL_COMPOSE,
   MODE_CONTRACTS,
   PLATFORM,
   POSTGRES_IMAGE,
   PUBLIC_HTTP_STATIC_CONFIGS,
-  ROLLBACK_API_IMAGE,
   TRAEFIK_IMAGE,
   SECRET_FILES,
   SERVICE_SECRETS,

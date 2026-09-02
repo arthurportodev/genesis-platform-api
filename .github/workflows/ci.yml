@@ -187,7 +187,7 @@ jobs:
           const { readFileSync, statSync } = require('node:fs');
           const { join } = require('node:path');
           const config = JSON.parse(readFileSync(process.env.PRODUCTION_CI_RENDER_FILE, 'utf8'));
-          const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';
+          const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7';
           const postgresImage = 'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
           if (config.services.api.image !== apiImage || config.services.migrate.image !== apiImage) throw new Error('synthetic API image mismatch');
           if (config.services.postgres.image !== postgresImage) throw new Error('synthetic PostgreSQL image mismatch');
