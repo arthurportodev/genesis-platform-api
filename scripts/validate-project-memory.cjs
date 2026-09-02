@@ -89,6 +89,9 @@ const HISTORY_START = '<!-- genesis-memory-history:start -->';
 const HISTORY_END = '<!-- genesis-memory-history:end -->';
 const REPOSITORY_EVIDENCE_PREFIX =
   'repo://arthurportodev/genesis-platform-api/';
+const HISTORICAL_REPOSITORY_EVIDENCE_PREFIX =
+  'https://github.com/arthurportodev/genesis-platform-api/blob/';
+const REPOSITORY_PATH_SEGMENT = /^[A-Za-z0-9._-]+$/u;
 const TEMPORAL_ASSERTION_RULES = [
   {
     label: 'PENDING HUMAN DECISION expression',
@@ -973,22 +976,154 @@ function lintTemporalAssertions(text, path) {
   }
 }
 
+function validateRepositoryPath(evidence, relative) {
+  const segments = relative.split('/');
+  if (
+    relative.length === 0 ||
+    relative.startsWith('/') ||
+    relative.endsWith('/') ||
+    relative.includes('\\') ||
+    relative.includes('%') ||
+    segments.some(
+      (segment) =>
+        segment.length === 0 ||
+        segment === '.' ||
+        segment === '..' ||
+        !REPOSITORY_PATH_SEGMENT.test(segment),
+    )
+  )
+    fail(
+      'MEMORY_EVIDENCE_PATH_INVALID',
+      `${evidence.id} has an unsafe repository evidence path.`,
+      `$.evidence.${evidence.id}.uri`,
+      'Use a canonical repository-relative path with safe path segments.',
+    );
+  return relative;
+}
+
+function gitEvidence(root, args, { allowFailure = false } = {}) {
+  try {
+    return execFileSync('git', args, {
+      cwd: root,
+      encoding: null,
+      env: { ...process.env, GIT_NO_LAZY_FETCH: '1' },
+      maxBuffer: MAX_BYTES + 1024,
+      shell: false,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+  } catch (error) {
+    if (allowFailure) return null;
+    throw error;
+  }
+}
+
+function historicalBlob(root, evidence, revision, relative) {
+  const revisionPath = `$.evidence.${evidence.id}.uri`;
+  if (
+    gitEvidence(root, ['cat-file', '-e', `${revision}^{commit}`], {
+      allowFailure: true,
+    }) === null
+  )
+    fail(
+      'MEMORY_EVIDENCE_REVISION_INVALID',
+      `${evidence.id} references an unavailable Git commit.`,
+      revisionPath,
+      'Provide a full commit SHA that exists in the local Git object database.',
+    );
+
+  const type = gitEvidence(root, ['cat-file', '-t', revision], {
+    allowFailure: true,
+  });
+  if (type === null || type.toString('ascii').trim() !== 'commit')
+    fail(
+      'MEMORY_EVIDENCE_REVISION_INVALID',
+      `${evidence.id} does not reference a commit object.`,
+      revisionPath,
+      'Reference an immutable full commit SHA.',
+    );
+
+  const tree = gitEvidence(
+    root,
+    ['ls-tree', '-z', '--full-tree', revision, '--', relative],
+    { allowFailure: true },
+  );
+  const entries =
+    tree === null
+      ? []
+      : tree
+          .toString('utf8')
+          .split('\0')
+          .filter((entry) => entry.length > 0);
+  const [metadata, foundPath] = entries[0]?.split('\t') ?? [];
+  const [mode, objectType, objectId] = metadata?.split(' ') ?? [];
+  if (
+    entries.length !== 1 ||
+    foundPath !== relative ||
+    objectType !== 'blob' ||
+    !['100644', '100755'].includes(mode) ||
+    !FULL_SHA.test(objectId ?? '')
+  )
+    fail(
+      'MEMORY_EVIDENCE_OBJECT_INVALID',
+      `${evidence.id} does not reference a regular historical file.`,
+      revisionPath,
+      'Reference an existing regular blob at the immutable commit.',
+    );
+
+  const content = gitEvidence(root, ['cat-file', 'blob', objectId], {
+    allowFailure: true,
+  });
+  if (content === null)
+    fail(
+      'MEMORY_EVIDENCE_OBJECT_INVALID',
+      `${evidence.id} historical blob is unavailable.`,
+      revisionPath,
+      'Ensure the referenced blob exists in the local Git object database.',
+    );
+  return content;
+}
+
 function validateRepositoryEvidence(root, state) {
   for (const evidence of state.evidence) {
-    if (!evidence.uri.startsWith(REPOSITORY_EVIDENCE_PREFIX)) continue;
-    const relative = evidence.uri.slice(REPOSITORY_EVIDENCE_PREFIX.length);
-    if (
-      relative.length === 0 ||
-      relative.includes('\\') ||
-      relative.startsWith('/') ||
-      relative.split('/').includes('..')
-    )
-      fail(
-        'MEMORY_EVIDENCE_PATH_INVALID',
-        `${evidence.id} has an unsafe repository evidence path.`,
-        `$.evidence.${evidence.id}.uri`,
-        'Use a normalized repository-relative path.',
+    if (evidence.kind !== 'repository-file') continue;
+    let content;
+    let relative;
+    if (evidence.uri.startsWith(REPOSITORY_EVIDENCE_PREFIX)) {
+      relative = validateRepositoryPath(
+        evidence,
+        evidence.uri.slice(REPOSITORY_EVIDENCE_PREFIX.length),
       );
+      content = Buffer.from(
+        safeRead(join(root, ...relative.split('/'))),
+        'utf8',
+      );
+    } else if (evidence.uri.startsWith(HISTORICAL_REPOSITORY_EVIDENCE_PREFIX)) {
+      const reference = evidence.uri.slice(
+        HISTORICAL_REPOSITORY_EVIDENCE_PREFIX.length,
+      );
+      const separator = reference.indexOf('/');
+      const revision = reference.slice(0, separator);
+      if (separator !== 40 || !FULL_SHA.test(revision))
+        fail(
+          'MEMORY_EVIDENCE_REVISION_INVALID',
+          `${evidence.id} has an invalid historical Git revision.`,
+          `$.evidence.${evidence.id}.uri`,
+          'Use a full 40-character lowercase commit SHA.',
+        );
+      relative = validateRepositoryPath(
+        evidence,
+        reference.slice(separator + 1),
+      );
+      content = historicalBlob(root, evidence, revision, relative);
+    } else {
+      fail(
+        'MEMORY_EVIDENCE_REPOSITORY_UNSUPPORTED',
+        `${evidence.id} uses an unsupported repository evidence URI.`,
+        `$.evidence.${evidence.id}.uri`,
+        'Use the allowlisted current or immutable historical repository URI.',
+      );
+    }
     if (!evidence.sha256)
       fail(
         'MEMORY_EVIDENCE_HASH_REQUIRED',
@@ -996,8 +1131,7 @@ function validateRepositoryEvidence(root, state) {
         `$.evidence.${evidence.id}.sha256`,
         'Record the SHA-256 of the referenced repository file.',
       );
-    const content = safeRead(join(root, ...relative.split('/')));
-    const actual = createHash('sha256').update(content, 'utf8').digest('hex');
+    const actual = createHash('sha256').update(content).digest('hex');
     if (actual !== evidence.sha256)
       fail(
         'MEMORY_EVIDENCE_HASH_MISMATCH',

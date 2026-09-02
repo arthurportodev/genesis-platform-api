@@ -885,7 +885,7 @@
     {
       "id": "EV-MVP08-R1-RELEASE-BINDING",
       "kind": "repository-file",
-      "uri": "repo://arthurportodev/genesis-platform-api/compose.production.yml",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/blob/ca82e44aaec44bc9080c2aa627dc4dc1f0e35949/compose.production.yml",
       "sha256": "09ee24584afecef641cb075c6e0488f86bdb0e771abf5ad168357715f3b0e4f4",
       "capturedAt": "2026-08-14T07:58:01.159Z"
     },

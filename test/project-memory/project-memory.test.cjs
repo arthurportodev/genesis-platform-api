@@ -2,8 +2,10 @@
 
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -22,10 +24,12 @@ const {
   WEB_RECEIPT_BASE_SHA,
   WEB_SHA,
   WEB_TRANSITION_ID,
+  MemoryError,
   containingCommit,
   renderProjection,
   validateCrossRepo,
   validateOnboardingResponse,
+  validateRepositoryEvidence,
   validateState,
 } = require('../../scripts/validate-project-memory.cjs');
 
@@ -50,6 +54,17 @@ const STABLE = [
 const FIXTURES = [];
 const REPOSITORY_EVIDENCE_PREFIX =
   'repo://arthurportodev/genesis-platform-api/';
+const HISTORICAL_REPOSITORY_EVIDENCE_PREFIX =
+  'https://github.com/arthurportodev/genesis-platform-api/blob/';
+const HISTORICAL_GIT_ROOT = mkdtempSync(
+  join(tmpdir(), 'genesis-memory-objects-'),
+);
+const ROOT_GIT_DIR = join(HISTORICAL_GIT_ROOT, 'repository.git').replaceAll(
+  '\\',
+  '/',
+);
+FIXTURES.push(HISTORICAL_GIT_ROOT);
+git(ROOT, ['clone', '--quiet', '--bare', '--shared', '.', ROOT_GIT_DIR]);
 const POINTER_SCHEMA = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://github.com/arthurportodev/genesis-platform-web/schemas/genesis-harness/project-state.pointer.v1.schema.json',
@@ -162,12 +177,24 @@ function fixture() {
   const repositoryEvidence = authority.evidence
     .filter((entry) => entry.uri.startsWith(REPOSITORY_EVIDENCE_PREFIX))
     .map((entry) => entry.uri.slice(REPOSITORY_EVIDENCE_PREFIX.length));
+  const historicalRepositoryEvidence = authority.evidence
+    .filter((entry) =>
+      entry.uri.startsWith(HISTORICAL_REPOSITORY_EVIDENCE_PREFIX),
+    )
+    .map((entry) => {
+      const reference = entry.uri.slice(
+        HISTORICAL_REPOSITORY_EVIDENCE_PREFIX.length,
+      );
+      return reference.slice(reference.indexOf('/') + 1);
+    });
+  writeFileSync(join(root, '.git'), `gitdir: ${ROOT_GIT_DIR}\n`, 'utf8');
   for (const path of new Set([
     AUTHORITY_PATH,
     SCHEMA_PATH,
     PROJECTION_PATH,
     ...STABLE,
     ...repositoryEvidence,
+    ...historicalRepositoryEvidence,
   ]))
     copy(root, path);
   return root;
@@ -230,6 +257,42 @@ function expectCode(result, code, status = 1) {
   assert.equal(result.json.ok, false);
   assert.equal(result.json.code, code);
   assert.ok(result.stderr.length > 0);
+}
+
+function evidence(uri, sha256) {
+  return {
+    evidence: [
+      {
+        id: 'EV-TEST-REPOSITORY',
+        kind: 'repository-file',
+        uri,
+        sha256,
+      },
+    ],
+  };
+}
+
+function expectEvidenceCode(root, state, code) {
+  assert.throws(
+    () => validateRepositoryEvidence(root, state),
+    (error) => error instanceof MemoryError && error.code === code,
+  );
+}
+
+function historicalFixture() {
+  const root = mkdtempSync(join(tmpdir(), 'genesis-history-evidence-'));
+  FIXTURES.push(root);
+  git(root, ['init']);
+  git(root, ['config', 'user.name', 'Genesis Memory Test']);
+  git(root, ['config', 'user.email', 'memory-test@example.invalid']);
+  writeFileSync(target(root, 'evidence.txt'), 'historical bytes\n', 'utf8');
+  git(root, ['add', 'evidence.txt']);
+  git(root, ['commit', '-m', 'Record historical evidence']);
+  return {
+    root,
+    revision: git(root, ['rev-parse', 'HEAD']),
+    hash: createHash('sha256').update('historical bytes\n').digest('hex'),
+  };
 }
 
 test.after(() => {
@@ -650,6 +713,164 @@ test('binds canonical decision evidence to the corrected ADR bytes', () => {
   );
   writeFileSync(path, `${readFileSync(path, 'utf8')}\nchanged\n`, 'utf8');
   expectCode(run(root), 'MEMORY_EVIDENCE_HASH_MISMATCH');
+});
+
+test('keeps repo evidence bound to current regular-file bytes', () => {
+  const root = mkdtempSync(join(tmpdir(), 'genesis-current-evidence-'));
+  FIXTURES.push(root);
+  writeFileSync(target(root, 'current.txt'), 'current bytes\n', 'utf8');
+  const state = evidence(
+    `${REPOSITORY_EVIDENCE_PREFIX}current.txt`,
+    createHash('sha256').update('current bytes\n').digest('hex'),
+  );
+  assert.doesNotThrow(() => validateRepositoryEvidence(root, state));
+  writeFileSync(target(root, 'current.txt'), 'mutated bytes\n', 'utf8');
+  expectEvidenceCode(root, state, 'MEMORY_EVIDENCE_HASH_MISMATCH');
+});
+
+test('validates immutable historical bytes after the worktree evolves', () => {
+  const { root, revision, hash } = historicalFixture();
+  const state = evidence(
+    `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/evidence.txt`,
+    hash,
+  );
+  writeFileSync(
+    target(root, 'evidence.txt'),
+    'current bytes changed\n',
+    'utf8',
+  );
+  assert.doesNotThrow(() => validateRepositoryEvidence(root, state));
+  expectEvidenceCode(
+    root,
+    evidence(state.evidence[0].uri, '0'.repeat(64)),
+    'MEMORY_EVIDENCE_HASH_MISMATCH',
+  );
+});
+
+test('fails closed for missing historical revisions, paths, and non-commit objects', () => {
+  const { root, revision, hash } = historicalFixture();
+  expectEvidenceCode(
+    root,
+    evidence(
+      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${'f'.repeat(40)}/evidence.txt`,
+      hash,
+    ),
+    'MEMORY_EVIDENCE_REVISION_INVALID',
+  );
+  expectEvidenceCode(
+    root,
+    evidence(
+      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/missing.txt`,
+      hash,
+    ),
+    'MEMORY_EVIDENCE_OBJECT_INVALID',
+  );
+  const blob = git(root, ['rev-parse', `${revision}:evidence.txt`]);
+  expectEvidenceCode(
+    root,
+    evidence(
+      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${blob}/evidence.txt`,
+      hash,
+    ),
+    'MEMORY_EVIDENCE_REVISION_INVALID',
+  );
+});
+
+test('rejects unsafe or unsupported historical repository references', () => {
+  const { root, revision, hash } = historicalFixture();
+  const invalid = [
+    [
+      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}ABC/evidence.txt`,
+      'MEMORY_EVIDENCE_REVISION_INVALID',
+    ],
+    [
+      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/../evidence.txt`,
+      'MEMORY_EVIDENCE_PATH_INVALID',
+    ],
+    [
+      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}//absolute.txt`,
+      'MEMORY_EVIDENCE_PATH_INVALID',
+    ],
+    [
+      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/dir\\file.txt`,
+      'MEMORY_EVIDENCE_PATH_INVALID',
+    ],
+    [
+      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/bad%2Fpath.txt`,
+      'MEMORY_EVIDENCE_PATH_INVALID',
+    ],
+    [
+      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/evidence;touch-pwned`,
+      'MEMORY_EVIDENCE_PATH_INVALID',
+    ],
+    [
+      `https://github.com/other/repository/blob/${revision}/evidence.txt`,
+      'MEMORY_EVIDENCE_REPOSITORY_UNSUPPORTED',
+    ],
+  ];
+  for (const [uri, code] of invalid)
+    expectEvidenceCode(root, evidence(uri, hash), code);
+  assert.equal(existsSync(target(root, 'touch-pwned')), false);
+});
+
+test('rejects a historical symlink entry', () => {
+  const { root, hash } = historicalFixture();
+  const blob = git(root, ['hash-object', '-w', 'evidence.txt']);
+  git(root, [
+    'update-index',
+    '--add',
+    '--cacheinfo',
+    '120000',
+    blob,
+    'evidence-link',
+  ]);
+  git(root, ['commit', '-m', 'Record symlink entry']);
+  const revision = git(root, ['rev-parse', 'HEAD']);
+  expectEvidenceCode(
+    root,
+    evidence(
+      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/evidence-link`,
+      hash,
+    ),
+    'MEMORY_EVIDENCE_OBJECT_INVALID',
+  );
+});
+
+test('preserves the exact MVP08 historical binding while current Compose evolves', () => {
+  const canonical = readJson(ROOT).evidence.find(
+    (entry) => entry.id === 'EV-MVP08-R1-RELEASE-BINDING',
+  );
+  assert.deepEqual(canonical, {
+    id: 'EV-MVP08-R1-RELEASE-BINDING',
+    kind: 'repository-file',
+    uri: `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}ca82e44aaec44bc9080c2aa627dc4dc1f0e35949/compose.production.yml`,
+    sha256: '09ee24584afecef641cb075c6e0488f86bdb0e771abf5ad168357715f3b0e4f4',
+    capturedAt: '2026-08-14T07:58:01.159Z',
+  });
+  const root = fixture();
+  writeFileSync(
+    target(root, 'compose.production.yml'),
+    'legitimate future Compose bytes\n',
+    'utf8',
+  );
+  const result = run(root);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.json.code, 'MEMORY_VALID');
+});
+
+test('memory validation CI checkout includes immutable evidence history', () => {
+  const workflow = readFileSync(
+    target(ROOT, '.github/workflows/ci.yml'),
+    'utf8',
+  );
+  const validateJob = workflow.match(
+    /^  validate:\r?\n[\s\S]*?(?=^  build-and-scan:)/mu,
+  )?.[0];
+  assert.ok(validateJob);
+  assert.match(
+    validateJob,
+    /uses: actions\/checkout@[a-f0-9]{40}[^\r\n]*\r?\n\s+with:\r?\n\s+fetch-depth: 0/u,
+  );
 });
 
 test('records approved destinations as documented without reopening resolved choices', () => {
