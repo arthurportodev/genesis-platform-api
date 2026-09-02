@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
   "instanceKind": "current",
-  "stateRevision": "PIPE-V2-02-COMPLETE-2026-09-01",
+  "stateRevision": "PIPE-V2-03-COMPLETE-2026-09-02",
   "project": {
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-09-01T21:21:35.220Z",
+  "updatedAt": "2026-09-02T10:03:18.404Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -63,26 +63,26 @@
     "id": "PIPE-V2",
     "title": "Pipeline Experience V2",
     "lastCompleted": {
-      "id": "PIPE-V2-02",
-      "title": "Financial Aggregates",
-      "completedAt": "2026-09-01T19:46:45Z",
+      "id": "PIPE-V2-03",
+      "title": "Presentation V2",
+      "completedAt": "2026-09-02T08:38:04Z",
       "evidenceIds": [
-        "EV-PIPE-V2-02-API-PR69"
+        "EV-PIPE-V2-03-WEB-PR24"
       ]
     }
   },
   "currentWork": {
     "status": "none",
-    "summary": "Nenhuma implementação está ativa. PIPE-V2-03 — Presentation V2 é o próximo trabalho, autorizado somente para planejamento/Gate 1, e ainda não foi iniciado."
+    "summary": "Nenhuma execução de produção está ativa. O próximo trabalho autorizado é preparar e promover em produção as revisões PIPE-V2 já incorporadas; nenhuma mutação de produção ocorreu."
   },
   "nextTask": {
-    "id": "PIPE-V2-03",
-    "title": "Presentation V2"
+    "id": "PIPE-V2-PRODUCTION-DEPLOYMENT",
+    "title": "Production Deployment"
   },
   "operationalState": {
-    "summary": "O programa PIPE-V2 está vigente. A Genesis Frontend Program Foundation, PIPE-V2-01 — Financial Domain e PIPE-V2-02 — Financial Aggregates estão concluídos e incorporados. PIPE-V2-03 — Presentation V2 é o próximo trabalho autorizado somente para planejamento/Gate 1 e ainda não foi iniciado.",
+    "summary": "O programa PIPE-V2 está vigente. A Genesis Frontend Program Foundation, PIPE-V2-01 — Financial Domain, PIPE-V2-02 — Financial Aggregates e PIPE-V2-03 — Presentation V2 estão concluídos e incorporados. A preparação e promoção de produção dessas revisões é o próximo trabalho autorizado; nenhuma mutação de produção ocorreu.",
     "basis": "documented",
-    "documentedAt": "2026-09-01T21:21:35.220Z",
+    "documentedAt": "2026-09-02T10:03:18.404Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -768,6 +768,16 @@
         "evidenceIds": [
           "EV-PIPE-V2-02-API-PR69"
         ]
+      },
+      {
+        "id": "OPS-PIPE-V2-03-COMPLETE",
+        "status": "present",
+        "statement": "PIPE-V2-03 — Presentation V2 está concluída e incorporada no Web pelo PR #24 (6f53180e6c3947bd778e47c8fdb734567802e0d8); post-merge CI e visual sanity foram aprovados.",
+        "basis": "documented",
+        "documentedAt": "2026-09-02T10:03:18.404Z",
+        "evidenceIds": [
+          "EV-PIPE-V2-03-WEB-PR24"
+        ]
       }
     ]
   },
@@ -1115,6 +1125,12 @@
       "kind": "github-pr",
       "uri": "https://github.com/arthurportodev/genesis-platform-api/pull/69",
       "capturedAt": "2026-09-01T19:46:45Z"
+    },
+    {
+      "id": "EV-PIPE-V2-03-WEB-PR24",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/24",
+      "capturedAt": "2026-09-02T08:38:04Z"
     }
   ],
   "blockers": [
