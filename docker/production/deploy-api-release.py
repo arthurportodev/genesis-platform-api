@@ -50,11 +50,15 @@ SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 IMAGE_RE = re.compile(r"^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$")
 FINGERPRINT_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+ALLOWED_RELEASE_SIBLING_RE = re.compile(
+    r"^\.genesis-release-(?:rollback|quarantine|staging)-[0-9a-f]{16}$"
+)
 SSH_ALIAS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$")
 MIGRATION_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,127}[0-9]{10,20}$")
 SAFE_ABSOLUTE_RE = re.compile(r"^/[A-Za-z0-9._/-]+$")
 OBSERVATION_SECONDS = 900
 OBSERVATION_CHECKPOINTS = (0, 120, 300, 600, 900)
+SMOKE_MODES = {"full", "observation", "rollback"}
 SENSITIVE_WORDS = re.compile(
     r"password|passwd|secret|token|cookie|authorization|credential|set-cookie",
     re.IGNORECASE,
@@ -170,7 +174,7 @@ def validate_plan(plan: Any) -> dict[str, Any]:
     if not isinstance(siblings, list) or len(set(siblings)) != len(siblings):
         raise StopBeforeMutation("INVALID_ALLOWED_SIBLINGS")
     for sibling in siblings:
-        require_string(sibling, re.compile(r"^\.genesis-release-(?:rollback|quarantine)-[A-Za-z0-9._-]{1,96}$"), "INVALID_ALLOWED_SIBLING")
+        require_string(sibling, ALLOWED_RELEASE_SIBLING_RE, "INVALID_ALLOWED_SIBLING")
 
     for label in ("candidate", "rollback"):
         release = plan[label]
@@ -212,13 +216,14 @@ def validate_plan(plan: Any) -> dict[str, Any]:
     for key in ("database", "bootstrapUser"):
         require_string(migrations[key], re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$"), "INVALID_DATABASE_IDENTITY")
     before, pending = migrations["appliedBefore"], migrations["pending"]
-    if not isinstance(before, list) or not isinstance(pending, list) or not pending:
+    if not isinstance(before, list) or not before or not isinstance(pending, list):
         raise StopBeforeMutation("INVALID_MIGRATION_SETS")
     for migration in before + pending:
         require_string(migration, MIGRATION_RE, "INVALID_MIGRATION_ID")
     if len(set(before + pending)) != len(before) + len(pending):
         raise StopBeforeMutation("DUPLICATE_MIGRATION_ID")
-    if migrations["postHead"] != pending[-1] or migrations["applicationRollbackCompatible"] is not True:
+    expected_post_head = pending[-1] if pending else before[-1]
+    if migrations["postHead"] != expected_post_head or migrations["applicationRollbackCompatible"] is not True:
         raise StopBeforeMutation("INVALID_MIGRATION_ROLLBACK_CONTRACT")
 
     secrets = plan["secrets"]
@@ -329,6 +334,90 @@ def load_bundle_manifest(bundle: Path, expected_fingerprint: str, role: str, ima
 def is_safe_relative(value: str) -> bool:
     path = PurePosixPath(value)
     return bool(value) and not path.is_absolute() and ".." not in path.parts and "\\" not in value and str(path) == value
+
+
+def release_manifest_identity(bundle: Path) -> tuple[str, str, str]:
+    """Read only the closed identity of a real committed release tree."""
+    try:
+        bundle_metadata = os.lstat(bundle)
+        manifest_path = bundle / "release-manifest.json"
+        manifest_metadata = os.lstat(manifest_path)
+    except OSError as exc:
+        raise StopBeforeMutation("INVALID_RELEASE_IDENTITY") from exc
+    if not stat.S_ISDIR(bundle_metadata.st_mode) or stat.S_ISLNK(bundle_metadata.st_mode):
+        raise StopBeforeMutation("INVALID_RELEASE_IDENTITY")
+    if not stat.S_ISREG(manifest_metadata.st_mode) or stat.S_ISLNK(manifest_metadata.st_mode):
+        raise StopBeforeMutation("INVALID_RELEASE_MANIFEST")
+    try:
+        raw = manifest_path.read_bytes()
+    except OSError as exc:
+        raise StopBeforeMutation("INVALID_RELEASE_MANIFEST") from exc
+    manifest = load_json(manifest_path)
+    if not isinstance(manifest, dict):
+        raise StopBeforeMutation("INVALID_RELEASE_MANIFEST")
+    if manifest.get("bundleMode") != "committed-release" or manifest.get("operational") is not True:
+        raise StopBeforeMutation("INVALID_RELEASE_MANIFEST")
+    role = manifest.get("releaseRole")
+    if role not in {"current", "rollback"}:
+        raise StopBeforeMutation("INVALID_ACTIVE_RELEASE_ROLE")
+    require_string(manifest.get("sourceCommit"), GIT_SHA_RE, "INVALID_RELEASE_SOURCE_COMMIT")
+    image = manifest.get("images", {}).get("api", {}).get("reference")
+    require_string(image, IMAGE_RE, "INVALID_RELEASE_IMAGE")
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list) or not artifacts:
+        raise StopBeforeMutation("INVALID_RELEASE_ARTIFACTS")
+    seen: set[str] = set()
+    for entry in artifacts:
+        if not isinstance(entry, dict):
+            raise StopBeforeMutation("INVALID_RELEASE_ARTIFACT")
+        relative = entry.get("path")
+        if not isinstance(relative, str) or not is_safe_relative(relative) or relative in seen:
+            raise StopBeforeMutation("INVALID_RELEASE_ARTIFACT_PATH")
+        seen.add(relative)
+        require_string(entry.get("sha256"), SHA_RE, "INVALID_RELEASE_ARTIFACT_HASH")
+        require_string(entry.get("mode"), re.compile(r"^0[0-7]{3}$"), "INVALID_RELEASE_ARTIFACT_MODE")
+    return f"sha256:{sha256_bytes(raw)}", image, role
+
+
+def validate_preserved_staging(
+    path: Path,
+    run_id: str,
+    *,
+    expected_fingerprint: str | None = None,
+    expected_image: str | None = None,
+) -> None:
+    """Accept a preserved staging tree only when its marker and manifest bind it."""
+    if path.name != f".genesis-release-staging-{run_id}":
+        raise StopBeforeMutation("INVALID_STAGING_NAME")
+    try:
+        metadata = os.lstat(path)
+        marker_path = path / ".genesis-untrusted-release.json"
+        marker_metadata = os.lstat(marker_path)
+    except OSError as exc:
+        raise StopBeforeMutation("INVALID_STAGING_IDENTITY") from exc
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or stat.S_ISLNK(metadata.st_mode)
+        or metadata.st_uid != 0
+    ):
+        raise StopBeforeMutation("INVALID_STAGING_IDENTITY")
+    if not stat.S_ISREG(marker_metadata.st_mode) or stat.S_ISLNK(marker_metadata.st_mode):
+        raise StopBeforeMutation("INVALID_STAGING_MARKER")
+    marker = load_json(marker_path)
+    if not isinstance(marker, dict):
+        raise StopBeforeMutation("INVALID_STAGING_MARKER")
+    require_exact_keys(marker, {"state", "runId", "reason"}, "staging_marker")
+    if marker != {
+        "state": "UNTRUSTED",
+        "runId": run_id,
+        "reason": "previous-active-tree",
+    }:
+        raise StopBeforeMutation("INVALID_STAGING_MARKER")
+    fingerprint, image, _ = release_manifest_identity(path)
+    if expected_fingerprint is not None and fingerprint != expected_fingerprint:
+        raise StopBeforeMutation("STAGING_FINGERPRINT_MISMATCH")
+    if expected_image is not None and image != expected_image:
+        raise StopBeforeMutation("STAGING_IMAGE_MISMATCH")
 
 
 def validate_bundle_pair(current: Path, rollback: Path, plan: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -577,13 +666,13 @@ class Runtime(Protocol):
     mutations: list[str]
 
     def verify_pair(self, plan: Mapping[str, Any], current: Path, rollback: Path) -> None: ...
-    def verify_active(self, plan: Mapping[str, Any], fingerprint: str, image: str, role: str = "current") -> None: ...
+    def verify_active(self, plan: Mapping[str, Any], fingerprint: str, image: str, role: str | None = None) -> None: ...
     def snapshot(self, plan: Mapping[str, Any], release_root: Path) -> Mapping[str, Any]: ...
     def registry_pull(self, plan: Mapping[str, Any]) -> None: ...
     def migrate(self, plan: Mapping[str, Any], release_root: Path) -> None: ...
     def activate(self, plan: Mapping[str, Any], current: Path, rollback: Path) -> None: ...
     def recreate_api(self, plan: Mapping[str, Any], release_root: Path) -> None: ...
-    def smoke(self, plan: Mapping[str, Any], minimal: bool = False) -> None: ...
+    def smoke(self, plan: Mapping[str, Any], mode: str = "full") -> None: ...
     def observe(self, plan: Mapping[str, Any]) -> None: ...
     def rollback(self, plan: Mapping[str, Any]) -> None: ...
 
@@ -613,12 +702,12 @@ def validate_snapshot(
     baseline_exact = observed["activeFingerprint"] == baseline["activeBundleFingerprint"] and observed["apiImage"] == baseline["liveImage"]
     before = plan["migrations"]["appliedBefore"]
     after = before + plan["migrations"]["pending"]
-    if candidate_exact and observed["migrations"] == after:
-        state = "ALREADY_ACTIVE"
-    elif observed["migrations"] == after and baseline_exact:
-        raise EscalationRequired("MIGRATIONS_APPLIED_WITH_OLD_APPLICATION")
-    elif baseline_exact and observed["migrations"] == before:
+    if baseline_exact and observed["migrations"] == before:
         state = "READY"
+    elif candidate_exact and observed["migrations"] == after:
+        state = "ALREADY_ACTIVE"
+    elif plan["migrations"]["pending"] and observed["migrations"] == after and baseline_exact:
+        raise EscalationRequired("MIGRATIONS_APPLIED_WITH_OLD_APPLICATION")
     else:
         raise StopBeforeMutation("LIVE_BASELINE_MISMATCH")
     if not healthy_snapshot(observed):
@@ -785,10 +874,17 @@ class SystemRuntime:
         ])
         self._verified_manager = manager
 
-    def verify_active(self, plan: Mapping[str, Any], fingerprint: str, image: str, role: str = "current") -> None:
+    def verify_active(self, plan: Mapping[str, Any], fingerprint: str, image: str, role: str | None = None) -> None:
         active = Path(plan["paths"]["activeRelease"])
         if self._verified_manager is None:
             raise StopBeforeMutation("RELEASE_MANAGER_NOT_VERIFIED")
+        if role is None:
+            active_fingerprint, active_image, active_role = release_manifest_identity(active)
+            if active_fingerprint != fingerprint or active_image != image:
+                raise StopBeforeMutation("ACTIVE_RELEASE_IDENTITY_MISMATCH")
+            role = active_role
+        elif role not in {"current", "rollback"}:
+            raise StopBeforeMutation("INVALID_ACTIVE_RELEASE_ROLE")
         manager = self._verified_manager
         self._run([
             sys.executable, str(manager), "verify-bundle", "--bundle", str(active),
@@ -822,13 +918,29 @@ class SystemRuntime:
             "-U", plan["migrations"]["bootstrapUser"], "-d", plan["migrations"]["database"], "-c", migration_sql,
         ]).splitlines()
         allowed_siblings = set(plan["paths"]["allowedExistingSiblings"])
+        for name in allowed_siblings:
+            allowed_path = release_root.parent / name
+            if name.startswith(".genesis-release-staging-") and (
+                allowed_path.exists() or allowed_path.is_symlink()
+            ):
+                validate_preserved_staging(allowed_path, name.rsplit("-", 1)[-1])
         expected_rollback = release_root.parent / f".genesis-release-rollback-{plan['runId']}"
         rollback_ready = expected_rollback.is_dir() and not expected_rollback.is_symlink()
+        expected_staging = release_root.parent / f".genesis-release-staging-{plan['runId']}"
+        staging_ready = expected_staging.exists() or expected_staging.is_symlink()
+        if staging_ready:
+            validate_preserved_staging(
+                expected_staging,
+                plan["runId"],
+                expected_fingerprint=plan["baseline"]["activeBundleFingerprint"],
+                expected_image=plan["baseline"]["liveImage"],
+            )
         siblings = [
             path.name for path in release_root.parent.iterdir()
             if path.name.startswith(".genesis-release-")
             and path.name not in allowed_siblings
             and not (path == expected_rollback and rollback_ready)
+            and not (path == expected_staging and staging_ready)
         ]
         lock_held = self._lock_is_held(Path(plan["paths"]["deploymentLock"]))
         return {
@@ -989,8 +1101,8 @@ class SystemRuntime:
             time.sleep(min(interval, 10.0))
         raise StopBeforeMutation("API_HEALTH_TIMEOUT")
 
-    def smoke(self, plan: Mapping[str, Any], minimal: bool = False) -> None:
-        SmokeClient(plan).run(minimal=minimal)
+    def smoke(self, plan: Mapping[str, Any], mode: str = "full") -> None:
+        SmokeClient(plan).run(mode=mode)
 
     def observe(self, plan: Mapping[str, Any]) -> None:
         names = [
@@ -1061,10 +1173,17 @@ class SmokeClient:
         except json.JSONDecodeError as exc:
             raise StopBeforeMutation("SMOKE_RESPONSE_INVALID") from exc
 
-    def run(self, minimal: bool = False) -> None:
-        for path in ("/health", "/api/v1/health", "/api/v1/health/live", "/api/v1/health/ready"):
+    def run(self, mode: str = "full") -> None:
+        if mode not in SMOKE_MODES:
+            raise StopBeforeMutation("INVALID_SMOKE_MODE")
+        health_paths = (
+            ("/health",)
+            if mode == "rollback"
+            else ("/health", "/api/v1/health", "/api/v1/health/live", "/api/v1/health/ready")
+        )
+        for path in health_paths:
             self._request(path)
-        if minimal:
+        if mode != "full":
             return
         credentials = load_json(Path(self.plan["smoke"]["credentialsFile"]))
         if not isinstance(credentials, dict) or set(credentials) != {"email", "password"}:
@@ -1151,8 +1270,8 @@ def run_observation(
         )
         if state != "ALREADY_ACTIVE":
             raise StopBeforeMutation("CANDIDATE_NOT_ACTIVE_DURING_OBSERVATION")
-        runtime.verify_active(plan, observed["activeFingerprint"], observed["apiImage"])
-        runtime.smoke(plan, minimal=True)
+        runtime.verify_active(plan, observed["activeFingerprint"], observed["apiImage"], "current")
+        runtime.smoke(plan, mode="observation")
         runtime.observe(plan)
         evidence.emit("observation", "PASS", checkpointSeconds=checkpoint)
 
@@ -1204,7 +1323,8 @@ def execute(
         activated = False
         try:
             runtime.registry_pull(plan)
-            runtime.migrate(plan, current)
+            if plan["migrations"]["pending"]:
+                runtime.migrate(plan, current)
             migration_state = runtime.snapshot(plan, Path(plan["paths"]["activeRelease"]))
             expected_migrations = plan["migrations"]["appliedBefore"] + plan["migrations"]["pending"]
             if migration_state["migrations"] != expected_migrations:
@@ -1222,8 +1342,8 @@ def execute(
                 deployment_lock_owned=True,
             ) != "ALREADY_ACTIVE":
                 raise StopBeforeMutation("CANDIDATE_HEALTH_FAILED")
-            runtime.verify_active(plan, candidate_state["activeFingerprint"], candidate_state["apiImage"])
-            runtime.smoke(plan)
+            runtime.verify_active(plan, candidate_state["activeFingerprint"], candidate_state["apiImage"], "current")
+            runtime.smoke(plan, mode="full")
             run_observation(
                 plan,
                 runtime,
@@ -1244,7 +1364,7 @@ def execute(
                 runtime.verify_active(plan, rolled_back["activeFingerprint"], rolled_back["apiImage"], "rollback")
                 if rolled_back["migrations"] != plan["migrations"]["appliedBefore"] + plan["migrations"]["pending"]:
                     raise EscalationRequired("SCHEMA_NOT_PRESERVED")
-                runtime.smoke(plan, minimal=True)
+                runtime.smoke(plan, mode="rollback")
                 evidence.emit("rollback", "APPLICATION_ROLLBACK_COMPLETE")
             except Exception as rollback_exc:
                 evidence.emit("rollback", "ESCALATION_REQUIRED", reasonCode="ROLLBACK_FAILED")

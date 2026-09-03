@@ -567,15 +567,22 @@ sobrescreva o contrato versionado, preserva variáveis não pertencentes ao
 contrato e não modifica o ambiente global. Não há fallback para `.env` ambiente
 nem injeção de outro path; os secrets permanecem file-backed. Se o arquivo
 canônico estiver ausente ou possuir sintaxe inválida, o comando falha fechado.
-O applied baseline e o pending set ordenado devem ser exatos antes, e o
-post-head deve ser exato depois. Falha ou estado ambíguo impede activation;
+O applied baseline, que nunca pode ser vazio, e o pending set ordenado devem ser
+exatos antes. Quando há pending, o post-head é seu último item e o service
+`migrate` é executado; quando pending é vazio, o post-head é o último item do
+baseline, o comando é omitido e um novo snapshot ainda prova o mesmo conjunto
+antes da activation. Falha ou estado ambíguo impede activation;
 `migration:revert` não é executado.
 
 Activation delega a troca atômica a `release-tree-manager.py activate`. Em
 seguida, o único recreate permitido é `docker compose ... up -d --no-deps
 --force-recreate api`; os IDs de PostgreSQL e Traefik são comparados antes e
 depois. Health interno/público, liveness, readiness, TLS, CSRF/login/session,
-tenant e Kanban são validados sem registrar payloads. O contrato financeiro do
+tenant e Kanban são validados sem registrar payloads. O preflight deriva
+`releaseRole` da árvore ativa cujo manifesto está vinculado ao fingerprint e à
+imagem observados, aceitando somente `current` ou `rollback`; depois da
+activation o candidate continua obrigado a `current`, e o terminal de rollback
+continua obrigado a `rollback`. O contrato financeiro do
 smoke aceita dados genéricos e valida BRL, totais minor em string, contagem sem
 valor, agregados de estágio e `expectedValueMinor` string/null.
 
@@ -586,7 +593,12 @@ T+10 e T+15. Health/readiness, restart count, 5xx, CPU, memória, disco,
 PostgreSQL, Traefik e logs sanitizados são gates. Digest divergente, health ou
 readiness falhos, restart inesperado, 5xx persistente, regressão de auth,
 tenant/Kanban ou observabilidade acionam application rollback atômico para o
-bundle/digest anterior, seguido apenas do recreate da API e smoke mínimo.
+bundle/digest anterior, seguido apenas do recreate da API e smoke de
+compatibilidade que consulta somente `GET /health`. O smoke completo do
+candidate e o smoke de health da observation mantêm, sem redução, os quatro
+endpoints `/health`, `/api/v1/health`, `/api/v1/health/live` e
+`/api/v1/health/ready`; somente o modo de rollback é compatível com releases
+anteriores que não expõem os três endpoints prefixados.
 
 O rollback mantém o schema já expandido; nunca há database revert automático,
 nem segunda tentativa de deployment. Falha no rollback preserva evidência e
@@ -747,9 +759,16 @@ autorização de produção, e este texto não declara que o reparo foi executad
 
 Lacuna durável conhecida, fora deste reparo: depois de um rollback normal, a
 árvore ativa possui `releaseRole=rollback`, enquanto um preflight posterior do
-operador de deployment ainda verifica por padrão `releaseRole=current`. Essa
-compatibilidade deve ser tratada em tarefa própria; o operador não é alterado
-pela capacidade one-time.
+operador precisa preservar essa identidade. O operador agora deriva o papel do
+manifesto ativo vinculado ao fingerprint e aceita a baseline somente como
+`current` ou `rollback`, sem enfraquecer os papéis fixos do candidate e do
+terminal de rollback. Ele também reconhece um sibling
+`.genesis-release-staging-<runId>` preservado pela troca atômica somente quando
+nome, diretório root-owned não symlink, marker fechado `UNTRUSTED` com reason
+`previous-active-tree` e manifesto são válidos. Para o run corrente, fingerprint
+e imagem do manifesto precisam ser exatamente os da baseline aprovada;
+stagings históricos exigem allowlist explícita e suffix de 16 hex. Qualquer
+marker, run, manifesto ou sibling arbitrário divergente continua bloqueando.
 
 Nenhum bundle pré-merge pode ser transferido à VPS. A operação 05B usou somente um
 `committed-release` reconstruído a partir do commit aprovado
