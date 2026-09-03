@@ -80,7 +80,19 @@ def contract_tree(parent):
     }
 
 
-def build_bundle(root, image, payload, release_role):
+def build_bundle(
+    root,
+    image,
+    payload,
+    release_role,
+    *,
+    release_profile=None,
+    application_revision=None,
+    config_digest=None,
+    previous_image=ROLLBACK_IMAGE,
+    previous_application=None,
+    previous_config=None,
+):
     root.mkdir(mode=0o755)
     os.chown(root, 0, 0)
     for relative in MANAGER.EXPECTED_DIRECTORIES[1:]:
@@ -92,9 +104,10 @@ def build_bundle(root, image, payload, release_role):
     payload_path.write_bytes(payload)
     os.chown(payload_path, 0, 0)
     os.chmod(payload_path, 0o644)
+    compose_current_image = image if release_role == "current" else CURRENT_IMAGE
     current_compose = (
-        f"services:\n  migrate:\n    image: {CURRENT_IMAGE}\n"
-        f"  api:\n    image: {CURRENT_IMAGE}\n"
+        f"services:\n  migrate:\n    image: {compose_current_image}\n"
+        f"  api:\n    image: {compose_current_image}\n"
     ).encode()
     compose = (
         current_compose.replace(CURRENT_IMAGE.encode(), ROLLBACK_IMAGE.encode())
@@ -124,6 +137,17 @@ def build_bundle(root, image, payload, release_role):
         "images": {
             "api": {
                 "reference": image,
+                "digest": image.split("@", 1)[1],
+                **(
+                    {"applicationRevision": application_revision}
+                    if application_revision is not None
+                    else {}
+                ),
+                **(
+                    {"configDigest": config_digest}
+                    if config_digest is not None
+                    else {}
+                ),
                 **(
                     {"relation": "previous-approved"}
                     if release_role == "rollback"
@@ -131,7 +155,27 @@ def build_bundle(root, image, payload, release_role):
                 ),
             }
         },
-        "rollback": {"api": {"reference": ROLLBACK_IMAGE}},
+        "rollback": {
+            "api": {
+                "reference": previous_image,
+                "digest": previous_image.split("@", 1)[1],
+                **(
+                    {"applicationRevision": previous_application}
+                    if previous_application is not None
+                    else {}
+                ),
+                **(
+                    {"configDigest": previous_config}
+                    if previous_config is not None
+                    else {}
+                ),
+                **(
+                    {"relation": "previous-approved"}
+                    if release_profile is not None
+                    else {}
+                ),
+            }
+        },
         "releaseTree": contract_tree(root.parent),
         "directories": directories,
         "manifestEntry": {
@@ -175,12 +219,95 @@ def build_bundle(root, image, payload, release_role):
             }
         ],
     }
+    if release_profile is not None:
+        manifest["releaseProfile"] = release_profile
+        manifest.update(
+            {
+                "generatedAt": "2026-09-02T00:00:00Z",
+                "generatedAtSemantics": "source-commit-timestamp",
+                "platform": "linux/amd64",
+                "recovery": {},
+                "migrations": {"sourcePath": "src/database/migrations", "orderedNames": []},
+            }
+        )
     raw = (json.dumps(manifest, indent=2) + "\n").encode()
     manifest_path = root / "release-manifest.json"
     manifest_path.write_bytes(raw)
     os.chown(manifest_path, 0, 0)
     os.chmod(manifest_path, 0o644)
     return "sha256:" + sha256(raw)
+
+
+def add_legacy_09e_state(root):
+    current_digest = MANAGER.BASELINE_REPAIR_CURRENT_IMAGE.rsplit(":", 1)[1]
+    previous_digest = MANAGER.BASELINE_REPAIR_PREVIOUS_IMAGE.rsplit(":", 1)[1]
+    state = root / "deployment-state"
+    overlays = state / "overlays"
+    evidence = state / "evidence"
+    for path, mode in ((state, 0o755), (overlays, 0o755), (evidence, 0o700)):
+        path.mkdir(mode=mode)
+        os.chown(path, 0, 0)
+        os.chmod(path, mode)
+    legacy_files = {}
+
+    def write_legacy(path, content, mode):
+        path.write_bytes(content)
+        os.chown(path, 0, 0)
+        os.chmod(path, mode)
+        relative = path.relative_to(root).as_posix()
+        legacy_files[relative] = (f"{mode:04o}", sha256(content))
+
+    for digest, image in (
+        (current_digest, MANAGER.BASELINE_REPAIR_CURRENT_IMAGE),
+        (previous_digest, MANAGER.BASELINE_REPAIR_PREVIOUS_IMAGE),
+    ):
+        directory = overlays / digest
+        directory.mkdir(mode=0o755)
+        os.chown(directory, 0, 0)
+        os.chmod(directory, 0o755)
+        overlay = directory / "compose.api-image.json"
+        write_legacy(overlay, MANAGER._legacy_overlay_bytes(image), 0o644)
+    pointers = state / "pointers.json"
+    write_legacy(
+        pointers,
+        (
+            json.dumps(
+            {
+                "schemaVersion": "1.0.0",
+                "current": f"deployment-state/overlays/{current_digest}",
+                "previous": f"deployment-state/overlays/{previous_digest}",
+            },
+            separators=(",", ":"),
+        )
+            + "\n"
+        ).encode(),
+        0o644,
+    )
+    sanitized = b"synthetic sanitized evidence\n"
+    sanitized_hash = sha256(sanitized)
+    for name in (
+        "final",
+        "keep",
+        "t-plus-0",
+        "t-plus-10",
+        "t-plus-15",
+        "t-plus-2",
+        "t-plus-5",
+    ):
+        log = evidence / f"{name}.sanitized.log"
+        write_legacy(log, sanitized, 0o600)
+        companion = evidence / f"{name}.sanitized.log.sha256"
+        write_legacy(
+            companion,
+            f"{sanitized_hash}  {log.name}\n".encode("ascii"),
+            0o600,
+        )
+    write_legacy(
+        evidence / "render-diff.sanitized.json",
+        b'{"status":"synthetic"}\n',
+        0o600,
+    )
+    return legacy_files
 
 
 def copy_tree(source, target):
@@ -260,6 +387,59 @@ class ReleaseTreeManagerTests(unittest.TestCase):
             raw,
             require_target_identity=True,
         )
+
+    def prepare_baseline_repair(self):
+        shutil.rmtree(self.active)
+        old_fingerprint = build_bundle(
+            self.active,
+            MANAGER.BASELINE_REPAIR_PREVIOUS_IMAGE,
+            b"historical-current\n",
+            "current",
+            application_revision=MANAGER.BASELINE_REPAIR_PREVIOUS_APPLICATION,
+            config_digest=MANAGER.BASELINE_REPAIR_PREVIOUS_CONFIG,
+        )
+        legacy_files = add_legacy_09e_state(self.active)
+        legacy_files_patcher = mock.patch.object(
+            MANAGER, "BASELINE_REPAIR_LEGACY_FILES", legacy_files
+        )
+        legacy_files_patcher.start()
+        self.addCleanup(legacy_files_patcher.stop)
+        repair_bundle = self.root / "baseline-repair-bundle"
+        repair_fingerprint = build_bundle(
+            repair_bundle,
+            MANAGER.BASELINE_REPAIR_CURRENT_IMAGE,
+            b"canonical-live-current\n",
+            "current",
+            release_profile=MANAGER.BASELINE_REPAIR_PROFILE,
+            application_revision=MANAGER.BASELINE_REPAIR_CURRENT_APPLICATION,
+            config_digest=MANAGER.BASELINE_REPAIR_CURRENT_CONFIG,
+            previous_image=MANAGER.BASELINE_REPAIR_PREVIOUS_IMAGE,
+            previous_application=MANAGER.BASELINE_REPAIR_PREVIOUS_APPLICATION,
+            previous_config=MANAGER.BASELINE_REPAIR_PREVIOUS_CONFIG,
+        )
+        return old_fingerprint, repair_bundle, repair_fingerprint
+
+    def repair_baseline(self, old_fingerprint, repair_bundle, repair_fingerprint, **overrides):
+        arguments = {
+            "bundle": repair_bundle,
+            "new_fingerprint": repair_fingerprint,
+            "current_image": MANAGER.BASELINE_REPAIR_CURRENT_IMAGE,
+            "expected_old_fingerprint": old_fingerprint,
+            "run_id": "abcdef0123456789",
+            "parent": self.parent,
+            "active": self.active,
+            "lock_path": self.lock,
+        }
+        arguments.update(overrides)
+        with mock.patch.object(
+            MANAGER, "BASELINE_REPAIR_OLD_FINGERPRINT", old_fingerprint
+        ):
+            return MANAGER.repair_baseline(**arguments)
+
+    def clone_legacy_tree(self, name):
+        target = self.root / name
+        shutil.copytree(self.active, target, copy_function=shutil.copy2)
+        return target
 
     def test_verifier_is_idempotent_and_rejects_0777(self):
         self.assertEqual(self.verify_bundle(), self.verify_bundle())
@@ -491,6 +671,296 @@ class ReleaseTreeManagerTests(unittest.TestCase):
             ):
                 self.activate()
         self.assertTrue((self.active / "legacy.txt").is_file())
+
+    def test_baseline_repair_preserves_exact_old_tree_and_restores_it_atomically(self):
+        old_fingerprint, repair_bundle, repair_fingerprint = (
+            self.prepare_baseline_repair()
+        )
+        original = MANAGER.validate_baseline_repair_old_tree(
+            self.active, old_fingerprint
+        )
+        result = self.repair_baseline(
+            old_fingerprint, repair_bundle, repair_fingerprint
+        )
+        self.assertEqual(result["status"], "baseline-repaired")
+        self.assertEqual(result["backupIdentity"], original["treeFingerprint"])
+        backup = Path(result["backup"])
+        preserved = MANAGER.validate_baseline_repair_old_tree(
+            backup, old_fingerprint
+        )
+        self.assertEqual(preserved, original)
+        active_manifest = json.loads(
+            (self.active / "release-manifest.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            active_manifest["releaseProfile"], MANAGER.BASELINE_REPAIR_PROFILE
+        )
+        self.assertEqual(
+            active_manifest["images"]["api"]["reference"],
+            MANAGER.BASELINE_REPAIR_CURRENT_IMAGE,
+        )
+        self.assertFalse((self.active / "deployment-state").exists())
+        with mock.patch.object(
+            MANAGER, "BASELINE_REPAIR_OLD_FINGERPRINT", old_fingerprint
+        ):
+            restored = MANAGER.restore_baseline_repair(
+                repaired_fingerprint=repair_fingerprint,
+                backup_identity=result["backupIdentity"],
+                run_id="abcdef0123456789",
+                parent=self.parent,
+                active=self.active,
+                lock_path=self.lock,
+            )
+        self.assertEqual(restored["status"], "baseline-repair-restored")
+        after = MANAGER.validate_baseline_repair_old_tree(
+            self.active, old_fingerprint
+        )
+        self.assertEqual(after, original)
+        self.assertEqual(
+            json.loads((backup / "release-manifest.json").read_text())["releaseProfile"],
+            MANAGER.BASELINE_REPAIR_PROFILE,
+        )
+
+    def test_baseline_repair_legacy_contract_matches_readonly_evidence(self):
+        self.assertEqual(len(MANAGER.BASELINE_REPAIR_LEGACY_DIRECTORIES), 5)
+        self.assertEqual(len(MANAGER.BASELINE_REPAIR_LEGACY_FILES), 18)
+        self.assertEqual(len(MANAGER.BASELINE_REPAIR_COMPANION_PAIRS), 7)
+        self.assertEqual(
+            MANAGER.BASELINE_REPAIR_LEGACY_FILES[
+                "deployment-state/evidence/render-diff.sanitized.json"
+            ][1],
+            "cc2d19a1202570033ce34d87ef3ac7fc9c340aed854d0f87afe79f5ed265a5f0",
+        )
+        self.assertEqual(
+            MANAGER.BASELINE_REPAIR_LEGACY_FILES[
+                "deployment-state/pointers.json"
+            ][1],
+            "670f2ab7d46ba5f3bdf2b87bbde46c8a2cd5dd50b45ce91ee0b3fa4c98850312",
+        )
+
+    def test_baseline_repair_rejects_legacy_path_metadata_and_link_drift(self):
+        old_fingerprint, _, _ = self.prepare_baseline_repair()
+        evidence = Path("deployment-state/evidence")
+
+        missing = self.clone_legacy_tree("legacy-missing")
+        (missing / evidence / "render-diff.sanitized.json").unlink()
+        with self.assertRaisesRegex(MANAGER.ContractError, "incomplete"):
+            MANAGER.validate_baseline_repair_old_tree(missing, old_fingerprint)
+
+        extra = self.clone_legacy_tree("legacy-extra")
+        extra_file = extra / evidence / "unexpected.sanitized.log"
+        extra_file.write_bytes(b"unexpected\n")
+        os.chown(extra_file, 0, 0)
+        os.chmod(extra_file, 0o600)
+        with self.assertRaisesRegex(MANAGER.ContractError, "unexpected path"):
+            MANAGER.validate_baseline_repair_old_tree(extra, old_fingerprint)
+
+        changed = self.clone_legacy_tree("legacy-content")
+        (changed / evidence / "keep.sanitized.log").write_bytes(b"changed\n")
+        with self.assertRaisesRegex(MANAGER.ContractError, "legacy content hash"):
+            MANAGER.validate_baseline_repair_old_tree(changed, old_fingerprint)
+
+        wrong_mode = self.clone_legacy_tree("legacy-mode")
+        os.chmod(wrong_mode / evidence / "keep.sanitized.log", 0o640)
+        with self.assertRaisesRegex(MANAGER.ContractError, "metadata mismatch"):
+            MANAGER.validate_baseline_repair_old_tree(wrong_mode, old_fingerprint)
+
+        wrong_owner = self.clone_legacy_tree("legacy-owner")
+        os.chown(wrong_owner / evidence / "keep.sanitized.log", 1, 0)
+        with self.assertRaisesRegex(MANAGER.ContractError, "metadata mismatch"):
+            MANAGER.validate_baseline_repair_old_tree(wrong_owner, old_fingerprint)
+
+        symlink = self.clone_legacy_tree("legacy-symlink")
+        symlink_target = symlink / evidence / "render-diff.sanitized.json"
+        symlink_target.unlink()
+        symlink_target.symlink_to("final.sanitized.log")
+        with self.assertRaisesRegex(MANAGER.ContractError, "unique regular file"):
+            MANAGER.validate_baseline_repair_old_tree(symlink, old_fingerprint)
+
+        hardlink = self.clone_legacy_tree("legacy-hardlink")
+        hardlink_target = hardlink / evidence / "render-diff.sanitized.json"
+        hardlink_target.unlink()
+        os.link(hardlink / evidence / "final.sanitized.log", hardlink_target)
+        with self.assertRaisesRegex(MANAGER.ContractError, "unique regular file"):
+            MANAGER.validate_baseline_repair_old_tree(hardlink, old_fingerprint)
+
+        extra_overlay = self.clone_legacy_tree("legacy-overlay-extra")
+        added_overlay = extra_overlay / "deployment-state/overlays" / ("c" * 64)
+        added_overlay.mkdir(mode=0o755)
+        os.chown(added_overlay, 0, 0)
+        with self.assertRaisesRegex(MANAGER.ContractError, "unexpected path"):
+            MANAGER.validate_baseline_repair_old_tree(extra_overlay, old_fingerprint)
+
+    def test_baseline_repair_validates_companion_semantics_beyond_file_hash(self):
+        old_fingerprint, _, _ = self.prepare_baseline_repair()
+        companion_relative = (
+            "deployment-state/evidence/t-plus-0.sanitized.log.sha256"
+        )
+
+        cases = {
+            "digest": "0" * 64 + "  t-plus-0.sanitized.log\n",
+            "basename": "0" * 64 + "  keep.sanitized.log\n",
+            "missing-lf": "0" * 64 + "  t-plus-0.sanitized.log",
+            "extra-line": "0" * 64 + "  t-plus-0.sanitized.log\nextra\n",
+        }
+        for name, value in cases.items():
+            with self.subTest(name=name):
+                candidate = self.clone_legacy_tree(f"legacy-companion-{name}")
+                companion = candidate.joinpath(*companion_relative.split("/"))
+                content = value.encode("ascii")
+                companion.write_bytes(content)
+                expected = dict(MANAGER.BASELINE_REPAIR_LEGACY_FILES)
+                expected[companion_relative] = ("0600", sha256(content))
+                error = "digest mismatch" if name == "digest" else "format mismatch"
+                if name == "basename":
+                    error = "basename mismatch"
+                with mock.patch.object(
+                    MANAGER, "BASELINE_REPAIR_LEGACY_FILES", expected
+                ):
+                    with self.assertRaisesRegex(MANAGER.ContractError, error):
+                        MANAGER.validate_baseline_repair_old_tree(
+                            candidate, old_fingerprint
+                        )
+
+        non_ascii = self.clone_legacy_tree("legacy-companion-non-ascii")
+        companion = non_ascii.joinpath(*companion_relative.split("/"))
+        content = b"\xff\n"
+        companion.write_bytes(content)
+        expected = dict(MANAGER.BASELINE_REPAIR_LEGACY_FILES)
+        expected[companion_relative] = ("0600", sha256(content))
+        with mock.patch.object(MANAGER, "BASELINE_REPAIR_LEGACY_FILES", expected):
+            with self.assertRaisesRegex(MANAGER.ContractError, "not ASCII"):
+                MANAGER.validate_baseline_repair_old_tree(non_ascii, old_fingerprint)
+
+    def test_baseline_restore_rejects_mutated_legacy_backup(self):
+        old_fingerprint, repair_bundle, repair_fingerprint = (
+            self.prepare_baseline_repair()
+        )
+        result = self.repair_baseline(
+            old_fingerprint, repair_bundle, repair_fingerprint
+        )
+        backup = Path(result["backup"])
+        (backup / "deployment-state/evidence/keep.sanitized.log").write_bytes(
+            b"mutated\n"
+        )
+        with mock.patch.object(
+            MANAGER, "BASELINE_REPAIR_OLD_FINGERPRINT", old_fingerprint
+        ):
+            with self.assertRaisesRegex(MANAGER.ContractError, "legacy content hash"):
+                MANAGER.restore_baseline_repair(
+                    repaired_fingerprint=repair_fingerprint,
+                    backup_identity=result["backupIdentity"],
+                    run_id="abcdef0123456789",
+                    parent=self.parent,
+                    active=self.active,
+                    lock_path=self.lock,
+                )
+
+    def test_baseline_repair_rejects_preconditions_before_active_exchange(self):
+        old_fingerprint, repair_bundle, repair_fingerprint = (
+            self.prepare_baseline_repair()
+        )
+        active_identity = (os.lstat(self.active).st_dev, os.lstat(self.active).st_ino)
+        with self.assertRaisesRegex(MANAGER.ContractError, "approved 09E baseline"):
+            self.repair_baseline(
+                old_fingerprint,
+                repair_bundle,
+                repair_fingerprint,
+                expected_old_fingerprint="sha256:" + "0" * 64,
+            )
+        self.assertEqual(
+            (os.lstat(self.active).st_dev, os.lstat(self.active).st_ino),
+            active_identity,
+        )
+        payload = repair_bundle / "docs" / "payload.txt"
+        payload.write_text("invalid\n", encoding="utf-8")
+        with self.assertRaisesRegex(MANAGER.ContractError, "content hash mismatch"):
+            self.repair_baseline(
+                old_fingerprint, repair_bundle, repair_fingerprint
+            )
+        self.assertEqual(
+            (os.lstat(self.active).st_dev, os.lstat(self.active).st_ino),
+            active_identity,
+        )
+
+    def test_baseline_repair_rejects_lock_backup_device_and_unavailable_exchange(self):
+        old_fingerprint, repair_bundle, repair_fingerprint = (
+            self.prepare_baseline_repair()
+        )
+        with MANAGER._exclusive_lock(self.lock):
+            with self.assertRaisesRegex(MANAGER.ContractError, "lock is already held"):
+                self.repair_baseline(
+                    old_fingerprint, repair_bundle, repair_fingerprint
+                )
+        backup = self.parent / (
+            MANAGER.BASELINE_REPAIR_BACKUP_PREFIX + "abcdef0123456789"
+        )
+        backup.mkdir()
+        with self.assertRaisesRegex(MANAGER.ContractError, "backup path already exists"):
+            self.repair_baseline(
+                old_fingerprint, repair_bundle, repair_fingerprint
+            )
+        backup.rmdir()
+        wrong_device_target = self.parent / ".genesis-release-device-check"
+        with self.assertRaisesRegex(MANAGER.ContractError, "different filesystem"):
+            MANAGER.stage_bundle(
+                repair_bundle,
+                wrong_device_target,
+                repair_fingerprint,
+                MANAGER.BASELINE_REPAIR_CURRENT_IMAGE,
+                "current",
+                expected_device=os.lstat(self.parent).st_dev + 1,
+            )
+        shutil.rmtree(wrong_device_target)
+        active_identity = (os.lstat(self.active).st_dev, os.lstat(self.active).st_ino)
+        with mock.patch.object(
+            MANAGER,
+            "_rename_exchange",
+            side_effect=MANAGER.AtomicPrimitiveUnavailable(
+                "ATOMIC_PRIMITIVE_UNAVAILABLE"
+            ),
+        ):
+            with self.assertRaisesRegex(
+                MANAGER.AtomicPrimitiveUnavailable,
+                "ATOMIC_PRIMITIVE_UNAVAILABLE",
+            ):
+                self.repair_baseline(
+                    old_fingerprint, repair_bundle, repair_fingerprint
+                )
+        self.assertEqual(
+            (os.lstat(self.active).st_dev, os.lstat(self.active).st_ino),
+            active_identity,
+        )
+
+    def test_baseline_repair_post_exchange_failure_restores_exact_old_inode(self):
+        old_fingerprint, repair_bundle, repair_fingerprint = (
+            self.prepare_baseline_repair()
+        )
+        original = MANAGER.validate_baseline_repair_old_tree(
+            self.active, old_fingerprint
+        )
+
+        def fail():
+            raise RuntimeError("injected baseline repair validation failure")
+
+        with self.assertRaisesRegex(MANAGER.ContractError, "exact old active restored"):
+            self.repair_baseline(
+                old_fingerprint,
+                repair_bundle,
+                repair_fingerprint,
+                after_exchange=fail,
+            )
+        restored = MANAGER.validate_baseline_repair_old_tree(
+            self.active, old_fingerprint
+        )
+        self.assertEqual(restored, original)
+        backup = self.parent / (
+            MANAGER.BASELINE_REPAIR_BACKUP_PREFIX + "abcdef0123456789"
+        )
+        self.assertEqual(
+            json.loads((backup / "release-manifest.json").read_text())["releaseProfile"],
+            MANAGER.BASELINE_REPAIR_PROFILE,
+        )
 
 
 if __name__ == "__main__":

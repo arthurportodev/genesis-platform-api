@@ -691,6 +691,56 @@ recovery state, `/opt/genesis/traefik-state`, Docker/volumes e PostgreSQL ficam
 fora da travessia e da troca; o procedimento não reinicia serviços nem executa
 backup, migration ou Compose.
 
+### Reparo one-time da baseline 09E
+
+O deployment histórico 09E deixou o runtime da API em
+`0a56a8aee7c64bda59a1981888418e1ad03950c0` e na imagem imutável
+`sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb`,
+com config digest
+`sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24`,
+mas preservou em `/opt/genesis/release` o manifesto anterior `9402d067... /
+a4dafefa...` e o overlay `deployment-state`. Editar somente o manifesto não é
+um reparo válido: a árvore inteira precisa voltar à allowlist canônica.
+
+O profile fechado `baseline-repair-09e` existe exclusivamente para construir,
+de um futuro containing commit real, um `committed-release` de papel `current`
+com a aplicação/imagem/config já ativas. Ele registra
+`9402d067897ab727fb369d7e696a11ba3b9cf68f`,
+`sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a`
+e `sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9`
+como `previous-approved`, não aceita override de aplicação, imagem ou config e
+não participa da promoção PIPE-V2 `ac2f8cd... / c53b283...`.
+
+Sob tarefa e Gate humano próprios, `release-tree-manager.py repair-baseline`
+exige o fingerprint histórico aprovado
+`sha256:752084dda34619155617fb40b42c518ff3a1129ec30e7d22dbd0994d965d64b8`,
+revalida sob o lock da release e reconhece `deployment-state` somente pelo
+inventário 09E fechado coletado read-only: cinco diretórios e dezoito arquivos
+regulares, sem entrada adicional, todos `root:root`, no mesmo device, com modes
+e SHA-256 exatos. Os sete pares `*.sanitized.log`/`.sha256` são validados tanto
+pelo hash de cada arquivo quanto pelo conteúdo ASCII do companion, que deve ter
+uma única linha LF no formato `<digest><dois espaços><basename>` e declarar o
+hash real do log correspondente. Conteúdo bruto dos logs não é emitido.
+
+O reparo constrói uma árvore root-only no mesmo filesystem e usa somente
+`renameat2(RENAME_EXCHANGE)`. A árvore antiga, com seus bytes e inode
+preservados, passa para
+`.genesis-release-baseline-repair-backup-<runId>`. Falha após a troca provoca o
+exchange inverso imediato e a prova da identidade anterior; não existe
+fallback não atômico.
+
+`restore-baseline-repair` aceita somente o backup derivado do mesmo `runId`, o
+fingerprint exato da árvore reparada e o `backupIdentity` emitido pelo reparo.
+Ele também usa exchange atômico e restaura a árvore antiga sem chamar Docker,
+Compose, cliente de banco ou migration. Nenhum desses comandos constitui
+autorização de produção, e este texto não declara que o reparo foi executado.
+
+Lacuna durável conhecida, fora deste reparo: depois de um rollback normal, a
+árvore ativa possui `releaseRole=rollback`, enquanto um preflight posterior do
+operador de deployment ainda verifica por padrão `releaseRole=current`. Essa
+compatibilidade deve ser tratada em tarefa própria; o operador não é alterado
+pela capacidade one-time.
+
 Nenhum bundle pré-merge pode ser transferido à VPS. A operação 05B usou somente um
 `committed-release` reconstruído a partir do commit aprovado
 `38baf1e8898194b618cfee787a3bea753677eb93`; qualquer nova transferência exige

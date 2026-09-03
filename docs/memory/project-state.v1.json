@@ -904,7 +904,7 @@
     {
       "id": "EV-MVP08-R2-RELEASE-TREE-CONTRACT",
       "kind": "repository-file",
-      "uri": "repo://arthurportodev/genesis-platform-api/docker/production/release-tree-manager.py",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/blob/6930b2e747ba62febe5c3d83c3c9d59d62863aa2/docker/production/release-tree-manager.py",
       "sha256": "ce2c9ac1d1c0a429db343e5594344c64c4b599aa330b003e0b069f2f13353867",
       "capturedAt": "2026-08-14T11:33:53.957Z"
     },

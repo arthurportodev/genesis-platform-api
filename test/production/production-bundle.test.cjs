@@ -28,6 +28,11 @@ const {
   validateProductionBundle,
 } = require('../../scripts/validate-production-bundle.cjs');
 const { calculateFingerprint } = require('../../scripts/task-fingerprint.cjs');
+const {
+  API_RELEASE_BINDINGS,
+  BASELINE_REPAIR_BINDINGS,
+  BASELINE_REPAIR_PROFILE,
+} = require('../../scripts/validate-production-compose.cjs');
 
 const MIGRATION_FIXTURE_INPUTS = readdirSync(
   join(process.cwd(), ...MIGRATION_DIRECTORY.split('/')),
@@ -500,6 +505,220 @@ test('builds and validates a committed release only from a matching Git snapshot
       requiredMode: 'committed-release',
     }).status,
     'passed',
+  );
+});
+
+test('builds only the closed deterministic 09E baseline repair current release', (t) => {
+  const root = tempRoot();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const fixture = committedFixture(root);
+  const first = join(root, 'baseline-repair-first');
+  const second = join(root, 'baseline-repair-second');
+  const options = {
+    cwd: fixture.repository,
+    mode: 'committed-release',
+    releaseRole: 'current',
+    profile: BASELINE_REPAIR_PROFILE,
+    sourceCommit: fixture.sourceCommit,
+    env: {},
+  };
+  const builtFirst = buildProductionBundle({ ...options, output: first });
+  const builtSecond = buildProductionBundle({ ...options, output: second });
+  assert.equal(builtFirst.manifest.releaseProfile, BASELINE_REPAIR_PROFILE);
+  assert.equal(builtFirst.manifest.bundleMode, 'committed-release');
+  assert.equal(builtFirst.manifest.releaseRole, 'current');
+  assert.equal(builtFirst.manifest.sourceCommit, fixture.sourceCommit);
+  assert.deepEqual(builtFirst.manifest.images.api, {
+    reference: BASELINE_REPAIR_BINDINGS.current.image,
+    digest: BASELINE_REPAIR_BINDINGS.current.image.split('@')[1],
+    configDigest: BASELINE_REPAIR_BINDINGS.current.configDigest,
+    applicationRevision: BASELINE_REPAIR_BINDINGS.current.applicationRevision,
+    platform: 'linux/amd64',
+  });
+  assert.deepEqual(builtFirst.manifest.rollback.api, {
+    reference: BASELINE_REPAIR_BINDINGS.previousApproved.image,
+    digest: BASELINE_REPAIR_BINDINGS.previousApproved.image.split('@')[1],
+    configDigest: BASELINE_REPAIR_BINDINGS.previousApproved.configDigest,
+    applicationRevision:
+      BASELINE_REPAIR_BINDINGS.previousApproved.applicationRevision,
+    relation: 'previous-approved',
+    platform: 'linux/amd64',
+  });
+  const compose = readFileSync(join(first, 'compose.production.yml'), 'utf8');
+  assert.equal(compose.includes(API_RELEASE_BINDINGS.current.image), false);
+  assert.equal(
+    compose.split(BASELINE_REPAIR_BINDINGS.current.image).length - 1,
+    2,
+  );
+  const composeEntry = builtFirst.manifest.artifacts.find(
+    (entry) => entry.path === 'compose.production.yml',
+  );
+  assert.deepEqual(composeEntry.derivation, {
+    kind: 'exact-baseline-repair-image-replacement',
+    sourceSha256: sha256(
+      readFileSync(join(fixture.repository, 'compose.production.yml')),
+    ),
+    from: API_RELEASE_BINDINGS.current.image,
+    to: BASELINE_REPAIR_BINDINGS.current.image,
+    replacements: 2,
+  });
+  assert.equal(existsSync(join(first, 'deployment-state')), false);
+  assert.equal(
+    readFileSync(join(first, 'release-manifest.json'), 'utf8'),
+    readFileSync(join(second, 'release-manifest.json'), 'utf8'),
+  );
+  assert.equal(
+    validateProductionBundle(first, {
+      cwd: fixture.repository,
+      requiredMode: 'committed-release',
+    }).status,
+    'passed',
+  );
+});
+
+test('rejects every open or malformed baseline repair binding', (t) => {
+  const root = tempRoot();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const fixture = committedFixture(root);
+  assert.throws(
+    () =>
+      buildProductionBundle({
+        cwd: fixture.repository,
+        output: join(root, 'candidate-profile'),
+        profile: BASELINE_REPAIR_PROFILE,
+      }),
+    /requires committed-release mode and the current release role/u,
+  );
+  assert.throws(
+    () =>
+      buildProductionBundle({
+        cwd: fixture.repository,
+        output: join(root, 'rollback-profile'),
+        mode: 'committed-release',
+        releaseRole: 'rollback',
+        profile: BASELINE_REPAIR_PROFILE,
+        sourceCommit: fixture.sourceCommit,
+      }),
+    /requires committed-release mode and the current release role/u,
+  );
+  assert.throws(
+    () =>
+      buildProductionBundle({
+        cwd: fixture.repository,
+        output: join(root, 'arbitrary-profile'),
+        mode: 'committed-release',
+        profile: 'arbitrary-image-profile',
+        sourceCommit: fixture.sourceCommit,
+      }),
+    /release profile is invalid/u,
+  );
+
+  const scenarios = [
+    {
+      name: 'prospective-current',
+      mutate: (manifest) => {
+        manifest.images.api = {
+          ...manifest.images.api,
+          ...API_RELEASE_BINDINGS.current,
+          digest: API_RELEASE_BINDINGS.current.image.split('@')[1],
+        };
+      },
+      expected: /API reference mismatch|API application revision mismatch/u,
+    },
+    {
+      name: 'wrong-current-config',
+      mutate: (manifest) => {
+        manifest.images.api.configDigest = `sha256:${'2'.repeat(64)}`;
+      },
+      expected: /API config digest mismatch/u,
+    },
+    {
+      name: 'wrong-previous-approved',
+      mutate: (manifest) => {
+        manifest.rollback.api.applicationRevision = '1'.repeat(40);
+      },
+      expected: /rollback API metadata mismatch/u,
+    },
+    {
+      name: 'malformed-derivation',
+      mutate: (manifest) => {
+        manifest.artifacts.find(
+          (entry) => entry.path === 'compose.production.yml',
+        ).derivation.to = API_RELEASE_BINDINGS.current.image;
+      },
+      expected: /derivation metadata mismatch/u,
+    },
+    {
+      name: 'free-form-manifest-override',
+      mutate: (manifest) => {
+        manifest.currentImageOverride = `ghcr.io/example/api@sha256:${'f'.repeat(64)}`;
+      },
+      expected: /manifest fields are not closed/u,
+    },
+  ];
+  for (const scenario of scenarios) {
+    const output = join(root, scenario.name);
+    buildProductionBundle({
+      cwd: fixture.repository,
+      output,
+      mode: 'committed-release',
+      releaseRole: 'current',
+      profile: BASELINE_REPAIR_PROFILE,
+      sourceCommit: fixture.sourceCommit,
+      env: {},
+    });
+    const manifestPath = join(output, 'release-manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    scenario.mutate(manifest);
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    assert.match(
+      validateProductionBundle(output, {
+        cwd: fixture.repository,
+        requiredMode: 'committed-release',
+      }).failures.join('\n'),
+      scenario.expected,
+    );
+  }
+
+  const extra = join(root, 'deployment-state-extra');
+  buildProductionBundle({
+    cwd: fixture.repository,
+    output: extra,
+    mode: 'committed-release',
+    releaseRole: 'current',
+    profile: BASELINE_REPAIR_PROFILE,
+    sourceCommit: fixture.sourceCommit,
+    env: {},
+  });
+  mkdirSync(join(extra, 'deployment-state'));
+  writeFileSync(join(extra, 'deployment-state', 'pointers.json'), '{}\n');
+  assert.match(
+    validateProductionBundle(extra, {
+      cwd: fixture.repository,
+      requiredMode: 'committed-release',
+    }).failures.join('\n'),
+    /bundle file allowlist mismatch/u,
+  );
+
+  const script = join(process.cwd(), 'scripts', 'build-production-bundle.cjs');
+  assert.throws(
+    () =>
+      execFileSync(
+        process.execPath,
+        [
+          script,
+          '--output',
+          join(root, 'free-image-override'),
+          '--mode',
+          'committed-release',
+          '--profile',
+          BASELINE_REPAIR_PROFILE,
+          '--current-image',
+          `ghcr.io/example/api@sha256:${'f'.repeat(64)}`,
+        ],
+        { cwd: fixture.repository, encoding: 'utf8', windowsHide: true },
+      ),
+    /Command failed/u,
   );
 });
 

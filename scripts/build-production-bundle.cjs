@@ -20,6 +20,8 @@ const {
 } = require('./lib/release-tree-contract.cjs');
 const {
   API_RELEASE_BINDINGS,
+  BASELINE_REPAIR_BINDINGS,
+  BASELINE_REPAIR_PROFILE,
   PLATFORM,
   POSTGRES_IMAGE,
   TRAEFIK_IMAGE,
@@ -433,37 +435,61 @@ function candidateProvenance(cwd) {
   };
 }
 
-function materializeArtifact(content, artifact, releaseRole) {
+function releaseBindings(releaseRole, profile) {
+  if (profile === undefined || profile === null) {
+    return {
+      selected: API_RELEASE_BINDINGS[releaseRole],
+      previousApproved: API_RELEASE_BINDINGS.rollback,
+    };
+  }
+  if (profile !== BASELINE_REPAIR_PROFILE) {
+    throw new Error('release profile is invalid.');
+  }
+  if (releaseRole !== 'current') {
+    throw new Error(
+      'baseline repair profile requires the current release role.',
+    );
+  }
+  return {
+    selected: BASELINE_REPAIR_BINDINGS.current,
+    previousApproved: BASELINE_REPAIR_BINDINGS.previousApproved,
+  };
+}
+
+function materializeArtifact(content, artifact, releaseRole, profile = null) {
+  const baselineRepair = profile === BASELINE_REPAIR_PROFILE;
   if (
-    releaseRole !== 'rollback' ||
-    artifact.path !== 'compose.production.yml'
+    artifact.path !== 'compose.production.yml' ||
+    (releaseRole !== 'rollback' && !baselineRepair)
   ) {
     return { content, derivation: undefined };
+  }
+  if (profile !== null && !baselineRepair) {
+    throw new Error('release profile is invalid.');
   }
   const source = content.toString('utf8');
   const occurrences =
     source.split(API_RELEASE_BINDINGS.current.image).length - 1;
-  if (
-    occurrences !== 2 ||
-    source.includes(API_RELEASE_BINDINGS.rollback.image)
-  ) {
+  const target = baselineRepair
+    ? BASELINE_REPAIR_BINDINGS.current.image
+    : API_RELEASE_BINDINGS.rollback.image;
+  if (occurrences !== 2 || source.includes(target)) {
     throw new Error(
-      'rollback Compose derivation requires exactly two current API image bindings and no pre-existing rollback binding.',
+      `${baselineRepair ? 'baseline repair' : 'rollback'} Compose derivation requires exactly two current API image bindings and no pre-existing target binding.`,
     );
   }
   const derived = Buffer.from(
-    source.replaceAll(
-      API_RELEASE_BINDINGS.current.image,
-      API_RELEASE_BINDINGS.rollback.image,
-    ),
+    source.replaceAll(API_RELEASE_BINDINGS.current.image, target),
   );
   return {
     content: derived,
     derivation: {
-      kind: 'exact-api-image-replacement',
+      kind: baselineRepair
+        ? 'exact-baseline-repair-image-replacement'
+        : 'exact-api-image-replacement',
       sourceSha256: sha256(content),
       from: API_RELEASE_BINDINGS.current.image,
-      to: API_RELEASE_BINDINGS.rollback.image,
+      to: target,
       replacements: 2,
     },
   };
@@ -474,6 +500,7 @@ function buildProductionBundle({
   output,
   mode = 'candidate',
   releaseRole = 'current',
+  profile = null,
   sourceCommit = null,
   env = process.env,
 } = {}) {
@@ -481,6 +508,17 @@ function buildProductionBundle({
   if (!BUNDLE_MODES.has(mode)) throw new Error('bundle mode is invalid.');
   if (!RELEASE_ROLES.has(releaseRole)) {
     throw new Error('release role is invalid.');
+  }
+  if (profile !== null && profile !== BASELINE_REPAIR_PROFILE) {
+    throw new Error('release profile is invalid.');
+  }
+  if (
+    profile === BASELINE_REPAIR_PROFILE &&
+    (mode !== 'committed-release' || releaseRole !== 'current')
+  ) {
+    throw new Error(
+      'baseline repair profile requires committed-release mode and the current release role.',
+    );
   }
   if (mode === 'candidate' && sourceCommit !== null) {
     throw new Error('candidate bundles cannot declare a source commit.');
@@ -528,7 +566,12 @@ function buildProductionBundle({
       if (content.includes(0)) {
         throw new Error(`bundle source must be text: ${artifact.source}`);
       }
-      const materialized = materializeArtifact(content, artifact, releaseRole);
+      const materialized = materializeArtifact(
+        content,
+        artifact,
+        releaseRole,
+        profile,
+      );
       content = materialized.content;
       const secretFailure = obviousSecretFailure(
         artifact.path,
@@ -553,7 +596,8 @@ function buildProductionBundle({
       });
     }
 
-    const selectedApiBinding = API_RELEASE_BINDINGS[releaseRole];
+    const bindings = releaseBindings(releaseRole, profile);
+    const selectedApiBinding = bindings.selected;
     const apiMetadata = {
       reference: selectedApiBinding.image,
       digest: selectedApiBinding.image.split('@')[1],
@@ -567,6 +611,7 @@ function buildProductionBundle({
       contractVersion: CONTRACT_VERSION,
       bundleMode: mode,
       releaseRole,
+      ...(profile === null ? {} : { releaseProfile: profile }),
       operational: mode === 'committed-release',
       ...identity,
       ...generation,
@@ -593,11 +638,10 @@ function buildProductionBundle({
       },
       rollback: {
         api: {
-          reference: API_RELEASE_BINDINGS.rollback.image,
-          digest: API_RELEASE_BINDINGS.rollback.image.split('@')[1],
-          configDigest: API_RELEASE_BINDINGS.rollback.configDigest,
-          applicationRevision:
-            API_RELEASE_BINDINGS.rollback.applicationRevision,
+          reference: bindings.previousApproved.image,
+          digest: bindings.previousApproved.image.split('@')[1],
+          configDigest: bindings.previousApproved.configDigest,
+          applicationRevision: bindings.previousApproved.applicationRevision,
           relation: 'previous-approved',
           platform: PLATFORM,
         },
@@ -656,6 +700,7 @@ function parseArguments(argv) {
     if (argument === '--output') result.output = argv[++index];
     else if (argument === '--mode') result.mode = argv[++index];
     else if (argument === '--release-role') result.releaseRole = argv[++index];
+    else if (argument === '--profile') result.profile = argv[++index];
     else if (argument === '--source-commit')
       result.sourceCommit = argv[++index];
     else throw new Error(`unknown argument: ${argument}`);
@@ -673,6 +718,7 @@ function main() {
         output: result.output,
         bundleMode: result.manifest.bundleMode,
         releaseRole: result.manifest.releaseRole,
+        releaseProfile: result.manifest.releaseProfile ?? null,
         operational: result.manifest.operational,
         sourceCommit: result.manifest.sourceCommit ?? null,
         baseSha: result.manifest.baseSha ?? null,
@@ -704,6 +750,7 @@ module.exports = {
   migrationInventory,
   obviousSecretFailure,
   readCommittedArtifact,
+  releaseBindings,
   resolveGenerationTime,
   sha256,
 };

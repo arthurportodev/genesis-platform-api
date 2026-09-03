@@ -12,6 +12,8 @@ const {
 } = require('./lib/release-tree-contract.cjs');
 const {
   API_RELEASE_BINDINGS,
+  BASELINE_REPAIR_BINDINGS,
+  BASELINE_REPAIR_PROFILE,
   PLATFORM,
   POSTGRES_IMAGE,
   TRAEFIK_IMAGE,
@@ -285,6 +287,11 @@ function validateCandidateIdentity(manifest, cwd, failures) {
     failures,
   );
   check(
+    manifest.releaseProfile === undefined,
+    'candidate must not declare a release profile',
+    failures,
+  );
+  check(
     /^[a-f0-9]{40}$/u.test(manifest.baseSha ?? ''),
     'candidate base SHA is invalid',
     failures,
@@ -366,34 +373,36 @@ function validateReleaseIdentity(manifest, artifactsByPath, cwd, failures) {
     if (artifact) {
       let expectedContent = snapshot.content;
       let expectedDerivation;
-      if (
-        manifest.releaseRole === 'rollback' &&
-        expected.path === 'compose.production.yml'
-      ) {
+      if (expected.path === 'compose.production.yml') {
         const source = snapshot.content.toString('utf8');
-        const replacements =
-          source.split(API_RELEASE_BINDINGS.current.image).length - 1;
-        if (
-          replacements !== 2 ||
-          source.includes(API_RELEASE_BINDINGS.rollback.image)
-        ) {
-          failures.push(
-            'rollback Compose source does not have the exact derivation shape',
-          );
-        } else {
-          expectedContent = Buffer.from(
-            source.replaceAll(
-              API_RELEASE_BINDINGS.current.image,
-              API_RELEASE_BINDINGS.rollback.image,
-            ),
-          );
-          expectedDerivation = {
-            kind: 'exact-api-image-replacement',
-            sourceSha256: sha256(snapshot.content),
-            from: API_RELEASE_BINDINGS.current.image,
-            to: API_RELEASE_BINDINGS.rollback.image,
-            replacements: 2,
-          };
+        const baselineRepair =
+          manifest.releaseProfile === BASELINE_REPAIR_PROFILE;
+        const derivedRelease =
+          manifest.releaseRole === 'rollback' || baselineRepair;
+        if (derivedRelease) {
+          const target = baselineRepair
+            ? BASELINE_REPAIR_BINDINGS.current.image
+            : API_RELEASE_BINDINGS.rollback.image;
+          const replacements =
+            source.split(API_RELEASE_BINDINGS.current.image).length - 1;
+          if (replacements !== 2 || source.includes(target)) {
+            failures.push(
+              `${baselineRepair ? 'baseline repair' : 'rollback'} Compose source does not have the exact derivation shape`,
+            );
+          } else {
+            expectedContent = Buffer.from(
+              source.replaceAll(API_RELEASE_BINDINGS.current.image, target),
+            );
+            expectedDerivation = {
+              kind: baselineRepair
+                ? 'exact-baseline-repair-image-replacement'
+                : 'exact-api-image-replacement',
+              sourceSha256: sha256(snapshot.content),
+              from: API_RELEASE_BINDINGS.current.image,
+              to: target,
+              replacements: 2,
+            };
+          }
         }
       }
       check(
@@ -487,6 +496,45 @@ function validateProductionBundle(
     'release role is invalid',
     failures,
   );
+  const baselineRepair = manifest.releaseProfile === BASELINE_REPAIR_PROFILE;
+  check(
+    manifest.releaseProfile === undefined || baselineRepair,
+    'release profile is invalid',
+    failures,
+  );
+  if (baselineRepair) {
+    const expectedKeys = [
+      'artifacts',
+      'bundleMode',
+      'contractVersion',
+      'directories',
+      'generatedAt',
+      'generatedAtSemantics',
+      'images',
+      'manifestEntry',
+      'migrations',
+      'operational',
+      'platform',
+      'recovery',
+      'releaseProfile',
+      'releaseRole',
+      'releaseTree',
+      'rollback',
+      'sourceCommit',
+    ];
+    check(
+      JSON.stringify(Object.keys(manifest).sort()) ===
+        JSON.stringify(expectedKeys),
+      'baseline repair manifest fields are not closed',
+      failures,
+    );
+    check(
+      manifest.bundleMode === 'committed-release' &&
+        manifest.releaseRole === 'current',
+      'baseline repair profile requires committed-release mode and current role',
+      failures,
+    );
+  }
   if (requiredMode !== null) {
     check(
       manifest.bundleMode === requiredMode,
@@ -510,7 +558,15 @@ function validateProductionBundle(
     failures,
   );
   check(manifest.platform === PLATFORM, 'bundle platform mismatch', failures);
-  const selectedApiBinding = API_RELEASE_BINDINGS[manifest.releaseRole];
+  const selectedApiBinding = baselineRepair
+    ? BASELINE_REPAIR_BINDINGS.current
+    : API_RELEASE_BINDINGS[manifest.releaseRole];
+  const previousApprovedBinding = baselineRepair
+    ? BASELINE_REPAIR_BINDINGS.previousApproved
+    : API_RELEASE_BINDINGS.rollback;
+  const distinctCurrentBinding = baselineRepair
+    ? BASELINE_REPAIR_BINDINGS.current
+    : API_RELEASE_BINDINGS.current;
   check(
     manifest.images?.api?.reference === selectedApiBinding?.image,
     'API reference mismatch for release role',
@@ -551,33 +607,32 @@ function validateProductionBundle(
     failures,
   );
   check(
-    manifest.rollback?.api?.reference === API_RELEASE_BINDINGS.rollback.image,
+    manifest.rollback?.api?.reference === previousApprovedBinding.image,
     'rollback API reference mismatch',
     failures,
   );
   check(
     manifest.rollback?.api?.digest ===
-      API_RELEASE_BINDINGS.rollback.image.split('@')[1],
+      previousApprovedBinding.image.split('@')[1],
     'rollback API digest mismatch',
     failures,
   );
   check(
     manifest.rollback?.api?.applicationRevision ===
-      API_RELEASE_BINDINGS.rollback.applicationRevision &&
+      previousApprovedBinding.applicationRevision &&
       manifest.rollback?.api?.configDigest ===
-        API_RELEASE_BINDINGS.rollback.configDigest &&
+        previousApprovedBinding.configDigest &&
       manifest.rollback?.api?.relation === 'previous-approved' &&
       manifest.rollback?.api?.platform === PLATFORM,
     'rollback API metadata mismatch',
     failures,
   );
   check(
-    API_RELEASE_BINDINGS.current.image !==
-      API_RELEASE_BINDINGS.rollback.image &&
-      API_RELEASE_BINDINGS.current.applicationRevision !==
-        API_RELEASE_BINDINGS.rollback.applicationRevision &&
-      API_RELEASE_BINDINGS.current.configDigest !==
-        API_RELEASE_BINDINGS.rollback.configDigest,
+    distinctCurrentBinding.image !== previousApprovedBinding.image &&
+      distinctCurrentBinding.applicationRevision !==
+        previousApprovedBinding.applicationRevision &&
+      distinctCurrentBinding.configDigest !==
+        previousApprovedBinding.configDigest,
     'API image bindings must be distinct',
     failures,
   );
@@ -715,10 +770,10 @@ function validateProductionBundle(
       `${artifact.path} mode mismatch`,
       failures,
     );
-    if (
-      manifest.releaseRole !== 'rollback' ||
-      artifact.path !== 'compose.production.yml'
-    ) {
+    const composeDerivationAllowed =
+      artifact.path === 'compose.production.yml' &&
+      (manifest.releaseRole === 'rollback' || baselineRepair);
+    if (!composeDerivationAllowed) {
       check(
         artifact.derivation === undefined,
         `${artifact.path} must not declare derivation metadata`,
@@ -763,6 +818,7 @@ function validateProductionBundle(
     failures: [...new Set(failures)].sort(),
     bundleMode: manifest.bundleMode,
     releaseRole: manifest.releaseRole,
+    releaseProfile: manifest.releaseProfile ?? null,
     operational: manifest.operational,
     sourceCommit: manifest.sourceCommit ?? null,
     baseSha: manifest.baseSha ?? null,
