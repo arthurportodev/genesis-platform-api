@@ -18,6 +18,23 @@ const API_RELEASE_BINDINGS = Object.freeze({
       'sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24',
   }),
 });
+const BASELINE_REPAIR_PROFILE = 'baseline-repair-09e';
+const BASELINE_REPAIR_BINDINGS = Object.freeze({
+  current: Object.freeze({
+    applicationRevision: '0a56a8aee7c64bda59a1981888418e1ad03950c0',
+    image:
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb',
+    configDigest:
+      'sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24',
+  }),
+  previousApproved: Object.freeze({
+    applicationRevision: '9402d067897ab727fb369d7e696a11ba3b9cf68f',
+    image:
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a',
+    configDigest:
+      'sha256:ba67e2ab1bb92d3486e9f37c602fd4c374330d54b2697b5b1bca79d925a96bd9',
+  }),
+});
 const POSTGRES_IMAGE =
   'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const TRAEFIK_IMAGE =
@@ -1231,6 +1248,8 @@ if (require.main === module) main();
 
 module.exports = {
   API_RELEASE_BINDINGS,
+  BASELINE_REPAIR_BINDINGS,
+  BASELINE_REPAIR_PROFILE,
   BASE_COMPOSE,
   FUNCTIONAL_COMPOSE,
   MODE_CONTRACTS,
