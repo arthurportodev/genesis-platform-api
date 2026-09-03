@@ -267,6 +267,24 @@ class OperatorTest(unittest.TestCase):
         )
         return path
 
+    def simulate_staging_uid(self, path, uid):
+        real_lstat = deploy.os.lstat
+        exact_path = os.path.normcase(os.path.abspath(os.fspath(path)))
+
+        def lstat(candidate):
+            metadata = real_lstat(candidate)
+            candidate_path = os.path.normcase(os.path.abspath(os.fspath(candidate)))
+            if candidate_path != exact_path:
+                return metadata
+            values = list(metadata)
+            values[4] = uid
+            return os.stat_result(values)
+
+        return mock.patch.object(deploy.os, "lstat", side_effect=lstat)
+
+    def simulate_root_owned_staging(self, path):
+        return self.simulate_staging_uid(path, 0)
+
     def system_snapshot(self, plan, release_root):
         runtime = deploy.SystemRuntime.__new__(deploy.SystemRuntime)
         runtime._five_xx_streak = 0
@@ -347,8 +365,9 @@ class OperatorTest(unittest.TestCase):
         parent = self.root / "runtime-current-staging"
         active = parent / "release"
         shutil.copytree(self.rollback, active)
-        self.preserved_staging(parent, self.plan["runId"])
-        observed = self.system_snapshot(self.plan, active)
+        staging = self.preserved_staging(parent, self.plan["runId"])
+        with self.simulate_root_owned_staging(staging):
+            observed = self.system_snapshot(self.plan, active)
         self.assertEqual(observed["unexpectedStaging"], [])
         self.assertEqual(deploy.validate_snapshot(self.plan, observed), "READY")
 
@@ -361,19 +380,22 @@ class OperatorTest(unittest.TestCase):
         plan = json.loads(json.dumps(self.plan))
         plan["paths"]["allowedExistingSiblings"] = [historical.name]
         deploy.validate_plan(plan)
-        observed = self.system_snapshot(plan, active)
+        with self.simulate_root_owned_staging(historical):
+            observed = self.system_snapshot(plan, active)
         self.assertEqual(observed["unexpectedStaging"], [])
 
     def test_preserved_staging_with_malformed_marker_blocks_snapshot(self):
         parent = self.root / "runtime-bad-marker"
         active = parent / "release"
         shutil.copytree(self.rollback, active)
-        self.preserved_staging(
+        staging = self.preserved_staging(
             parent,
             self.plan["runId"],
             marker={"state": "UNTRUSTED", "runId": self.plan["runId"], "reason": "wrong"},
         )
-        with self.assertRaisesRegex(deploy.StopBeforeMutation, "INVALID_STAGING_MARKER"):
+        with self.simulate_root_owned_staging(staging), self.assertRaisesRegex(
+            deploy.StopBeforeMutation, "INVALID_STAGING_MARKER",
+        ):
             self.system_snapshot(self.plan, active)
 
     def test_preserved_staging_marker_run_must_match_path_suffix(self):
@@ -383,8 +405,32 @@ class OperatorTest(unittest.TestCase):
             "runId": "0123456789abcdef",
             "reason": "previous-active-tree",
         }))
-        with self.assertRaisesRegex(deploy.StopBeforeMutation, "INVALID_STAGING_MARKER"):
+        with self.simulate_root_owned_staging(path), self.assertRaisesRegex(
+            deploy.StopBeforeMutation, "INVALID_STAGING_MARKER",
+        ):
             deploy.validate_preserved_staging(path, "deadbeefdeadbeef")
+
+    def test_root_owned_staging_simulation_is_path_scoped_and_preserves_metadata(self):
+        staging = self.preserved_staging(self.root, "deadbeefdeadbeef")
+        marker = staging / ".genesis-untrusted-release.json"
+        real_staging = deploy.os.lstat(staging)
+        real_marker = deploy.os.lstat(marker)
+        with self.simulate_root_owned_staging(staging):
+            simulated_staging = deploy.os.lstat(staging)
+            simulated_marker = deploy.os.lstat(marker)
+        self.assertEqual(simulated_staging.st_uid, 0)
+        self.assertEqual(
+            (simulated_staging.st_mode, simulated_staging.st_gid, simulated_staging.st_ino, simulated_staging.st_dev),
+            (real_staging.st_mode, real_staging.st_gid, real_staging.st_ino, real_staging.st_dev),
+        )
+        self.assertEqual(simulated_marker, real_marker)
+
+    def test_preserved_staging_rejects_non_root_owner(self):
+        staging = self.preserved_staging(self.root, "deadbeefdeadbeef")
+        with self.simulate_staging_uid(staging, 1000), self.assertRaisesRegex(
+            deploy.StopBeforeMutation, "INVALID_STAGING_IDENTITY",
+        ):
+            deploy.validate_preserved_staging(staging, "deadbeefdeadbeef")
 
     def test_arbitrary_unallowlisted_staging_remains_unexpected(self):
         parent = self.root / "runtime-unallowlisted-staging"
@@ -407,7 +453,9 @@ class OperatorTest(unittest.TestCase):
             "runId": self.plan["runId"],
             "reason": "previous-active-tree",
         }))
-        with self.assertRaisesRegex(deploy.StopBeforeMutation, "STAGING_FINGERPRINT_MISMATCH"):
+        with self.simulate_root_owned_staging(staging), self.assertRaisesRegex(
+            deploy.StopBeforeMutation, "STAGING_FINGERPRINT_MISMATCH",
+        ):
             self.system_snapshot(self.plan, active)
 
     def test_active_role_is_derived_from_fingerprint_bound_manifest(self):
