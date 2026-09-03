@@ -503,6 +503,114 @@ class OperatorTest(unittest.TestCase):
         self.assertTrue(any(input_text == "fixture-password\n" for _, input_text in calls))
         self.assertTrue(all("fixture-password" not in argv for argv, _ in calls))
 
+    def test_migrate_uses_exact_release_local_compose_runtime_configuration(self):
+        runtime = deploy.SystemRuntime.__new__(deploy.SystemRuntime)
+        runtime.mutations = []
+        release_root = self.root / "compose-current"
+        canonical_env = release_root / "config/production.env.example"
+        canonical_env.parent.mkdir(parents=True)
+        canonical_env.write_bytes((ROOT / ".env.production.example").read_bytes())
+        canonical_keys = deploy.SystemRuntime._canonical_compose_env_keys(canonical_env)
+        external_env = self.root / "external.env"
+        injected_plan = {**self.plan, "composeEnvFile": str(external_env)}
+        expected = [
+            "docker", "compose",
+            "--env-file", str(canonical_env),
+            "--project-directory", str(release_root),
+            "-f", str(release_root / "compose.production.yml"),
+            "run", "--rm", "--no-deps", "migrate",
+        ]
+        ambient = {key: f"wrong-{key.lower()}" for key in canonical_keys}
+        ambient.update({
+            "DATABASE_NAME": "wrong_database",
+            "DATABASE_MIGRATION_USER": "wrong_user",
+            "DATABASE_RUNTIME_ROLE": "wrong_role",
+            "COMPOSE_ENV_FILES": str(external_env),
+            "GENESIS_TEST_UNRELATED_ENV": "preserved",
+        })
+
+        with mock.patch.dict(os.environ, ambient, clear=True), mock.patch.object(
+            runtime, "_run", return_value="",
+        ) as run:
+            runtime.migrate(injected_plan, release_root)
+            self.assertEqual(os.environ["DATABASE_NAME"], "wrong_database")
+
+        run.assert_called_once()
+        argv = run.call_args.args[0]
+        child_environment = run.call_args.kwargs["env"]
+        self.assertEqual(argv, expected)
+        self.assertEqual(run.call_args.kwargs["timeout"], 900)
+        for key in canonical_keys:
+            self.assertNotIn(key, child_environment)
+        for key in ("DATABASE_NAME", "DATABASE_MIGRATION_USER", "DATABASE_RUNTIME_ROLE", "APP_NAME"):
+            self.assertIn(key, canonical_keys)
+            self.assertNotIn(key, child_environment)
+        self.assertEqual(child_environment["GENESIS_TEST_UNRELATED_ENV"], "preserved")
+        self.assertNotIn(str(external_env), expected)
+
+    def test_recreate_uses_exact_release_local_compose_runtime_configuration(self):
+        runtime = deploy.SystemRuntime.__new__(deploy.SystemRuntime)
+        runtime.mutations = []
+        release_root = self.root / "compose-current"
+        canonical_env = release_root / "config/production.env.example"
+        canonical_env.parent.mkdir(parents=True)
+        canonical_env.write_bytes((ROOT / ".env.production.example").read_bytes())
+        canonical_keys = deploy.SystemRuntime._canonical_compose_env_keys(canonical_env)
+        expected = [
+            "docker", "compose",
+            "--env-file", str(canonical_env),
+            "--project-directory", str(release_root),
+            "-f", str(release_root / "compose.production.yml"),
+            "up", "-d", "--no-deps", "--force-recreate", "api",
+        ]
+        healthy = {
+            "Config": {"Healthcheck": {
+                "Interval": 1_000_000_000,
+                "Timeout": 1_000_000_000,
+                "StartPeriod": 0,
+                "Retries": 1,
+                "Test": ["CMD", "true"],
+            }},
+            "State": {"Status": "running", "Health": {"Status": "healthy"}},
+        }
+        ambient = {key: f"wrong-{key.lower()}" for key in canonical_keys}
+        ambient["GENESIS_TEST_UNRELATED_ENV"] = "preserved"
+
+        with mock.patch.dict(os.environ, ambient, clear=True), mock.patch.object(
+            runtime, "_run", return_value="",
+        ) as run, mock.patch.object(runtime, "_inspect", return_value=healthy):
+            runtime.recreate_api(self.plan, release_root)
+
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0], expected)
+        self.assertEqual(run.call_args.kwargs["timeout"], 300)
+        child_environment = run.call_args.kwargs["env"]
+        self.assertTrue(canonical_keys.isdisjoint(child_environment))
+        self.assertEqual(child_environment["GENESIS_TEST_UNRELATED_ENV"], "preserved")
+
+    def test_canonical_compose_env_parser_accepts_only_the_closed_syntax(self):
+        env_file = self.root / "valid.env"
+        env_file.write_text(
+            "\n# canonical comment\nDATABASE_NAME=genesis\nAPP_NAME=value=with=equals\nTRUST_PROXY_HOPS=\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(
+            deploy.SystemRuntime._canonical_compose_env_keys(env_file),
+            {"DATABASE_NAME", "APP_NAME", "TRUST_PROXY_HOPS"},
+        )
+
+        for invalid in (
+            "not-an-assignment\n",
+            "lowercase=value\n",
+            "1INVALID=value\n",
+            "INVALID-NAME=value\n",
+            " # comment must begin in column one\n",
+        ):
+            with self.subTest(invalid=invalid):
+                env_file.write_text(invalid, encoding="utf-8")
+                with self.assertRaisesRegex(deploy.StopBeforeMutation, "INVALID_CANONICAL_COMPOSE_ENV"):
+                    deploy.SystemRuntime._canonical_compose_env_keys(env_file)
+
     def test_kanban_protocol_accepts_generic_financial_contract(self):
         deploy.validate_kanban({
             "currency": "BRL", "expectedValueTotalMinor": "1000", "withoutExpectedValue": 1,

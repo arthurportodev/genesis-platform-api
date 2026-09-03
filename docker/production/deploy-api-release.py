@@ -753,11 +753,14 @@ class SystemRuntime:
         self._verified_manager: Path | None = None
 
     @staticmethod
-    def _run(argv: Sequence[str], *, input_text: str | None = None, timeout: int = 120) -> str:
+    def _run(
+        argv: Sequence[str], *, input_text: str | None = None,
+        timeout: int = 120, env: Mapping[str, str] | None = None,
+    ) -> str:
         try:
             completed = subprocess.run(
                 list(argv), input=input_text, capture_output=True, text=True, shell=False,
-                timeout=timeout, check=False,
+                timeout=timeout, check=False, env=env,
             )
         except (OSError, subprocess.SubprocessError) as exc:
             raise StopBeforeMutation("COMMAND_EXECUTION_FAILED") from exc
@@ -903,10 +906,46 @@ class SystemRuntime:
                 ):
                     raise StopBeforeMutation("PULLED_IMAGE_IDENTITY_MISMATCH")
 
+    @staticmethod
+    def _compose_prefix(release_root: Path) -> list[str]:
+        return [
+            "docker", "compose",
+            "--env-file", str(release_root / "config/production.env.example"),
+            "--project-directory", str(release_root),
+            "-f", str(release_root / "compose.production.yml"),
+        ]
+
+    @staticmethod
+    def _canonical_compose_env_keys(env_file: Path) -> set[str]:
+        try:
+            lines = env_file.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as exc:
+            raise StopBeforeMutation("INVALID_CANONICAL_COMPOSE_ENV") from exc
+        keys: set[str] = set()
+        for line in lines:
+            if not line.strip() or line.startswith("#"):
+                continue
+            key, separator, _ = line.partition("=")
+            if separator != "=" or re.fullmatch(r"[A-Z][A-Z0-9_]*", key) is None:
+                raise StopBeforeMutation("INVALID_CANONICAL_COMPOSE_ENV")
+            keys.add(key)
+        return keys
+
+    @classmethod
+    def _compose_child_environment(cls, release_root: Path) -> dict[str, str]:
+        env_file = release_root / "config/production.env.example"
+        child_environment = os.environ.copy()
+        for key in cls._canonical_compose_env_keys(env_file):
+            child_environment.pop(key, None)
+        return child_environment
+
     def migrate(self, plan: Mapping[str, Any], release_root: Path) -> None:
         self.mutations.append("migration")
         try:
-            self._run(["docker", "compose", "--project-directory", str(release_root), "-f", str(release_root / "compose.production.yml"), "run", "--rm", "--no-deps", "migrate"], timeout=900)
+            self._run([
+                *self._compose_prefix(release_root),
+                "run", "--rm", "--no-deps", "migrate",
+            ], timeout=900, env=self._compose_child_environment(release_root))
         except StopBeforeMutation as exc:
             raise EscalationRequired("MIGRATION_FAILED_STATE_REQUIRES_RECONCILIATION") from exc
 
@@ -923,7 +962,10 @@ class SystemRuntime:
 
     def recreate_api(self, plan: Mapping[str, Any], release_root: Path) -> None:
         self.mutations.append("api-recreate")
-        self._run(["docker", "compose", "--project-directory", str(release_root), "-f", str(release_root / "compose.production.yml"), "up", "-d", "--no-deps", "--force-recreate", "api"], timeout=300)
+        self._run([
+            *self._compose_prefix(release_root),
+            "up", "-d", "--no-deps", "--force-recreate", "api",
+        ], timeout=300, env=self._compose_child_environment(release_root))
         name = plan["baseline"]["apiContainer"]
         inspected = self._inspect(name)
         contract = inspected.get("Config", {}).get("Healthcheck", {})
