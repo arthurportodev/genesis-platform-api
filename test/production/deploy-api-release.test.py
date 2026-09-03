@@ -8,6 +8,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import stat
 import sys
 import tarfile
@@ -133,16 +134,20 @@ class FakeRuntime:
     def __init__(self, plan: dict):
         self.plan = plan
         self.mutations = []
+        self.events = []
         self.state = "baseline"
         self.fail_at = None
+        self.post_pull_migrations = None
         self.smoke_calls = 0
+        self.smoke_modes = []
         self.observe_calls = 0
+        self.verified_roles = []
 
     def snapshot(self, plan, release_root):
         after = plan["migrations"]["appliedBefore"] + plan["migrations"]["pending"]
         candidate = self.state in {"candidate", "candidate-unhealthy"}
         rollback_after = self.state == "rollback-after"
-        return {
+        observed = {
             "hostname": "srv1870064",
             "architecture": "linux/amd64",
             "activeFingerprint": plan["candidate"]["bundleFingerprint"] if candidate else plan["rollback"]["bundleFingerprint"],
@@ -162,14 +167,20 @@ class FakeRuntime:
             "unexpectedStaging": [],
             "lockHeld": False,
         }
+        if self.mutations == ["pull"] and self.post_pull_migrations is not None:
+            observed["migrations"] = list(self.post_pull_migrations)
+        self.events.append(("snapshot", tuple(observed["migrations"])))
+        return observed
 
     def verify_pair(self, plan, current, rollback):
         return None
 
-    def verify_active(self, plan, fingerprint, image, role="current"):
+    def verify_active(self, plan, fingerprint, image, role=None):
+        self.verified_roles.append(role)
         return None
 
     def _action(self, action):
+        self.events.append(("action", action))
         self.mutations.append(action)
         if self.fail_at == action:
             raise deploy.StopBeforeMutation(action.upper() + "_FAILED")
@@ -188,9 +199,10 @@ class FakeRuntime:
     def recreate_api(self, plan, release_root):
         self._action("api-recreate")
 
-    def smoke(self, plan, minimal=False):
+    def smoke(self, plan, mode="full"):
         self.smoke_calls += 1
-        if self.fail_at == "smoke" and not minimal:
+        self.smoke_modes.append(mode)
+        if self.fail_at == "smoke" and mode == "full":
             raise deploy.StopBeforeMutation("SMOKE_FAILED")
 
     def observe(self, plan):
@@ -243,9 +255,389 @@ class OperatorTest(unittest.TestCase):
     def evidence(self):
         return deploy.make_evidence(self.plan, self.sha, self.evidence_path, now=lambda: 0)
 
+    def preserved_staging(self, parent, run_id, *, marker=None):
+        path = parent / f".genesis-release-staging-{run_id}"
+        shutil.copytree(self.rollback, path)
+        (path / ".genesis-untrusted-release.json").write_bytes(
+            deploy.canonical_json(marker or {
+                "state": "UNTRUSTED",
+                "runId": run_id,
+                "reason": "previous-active-tree",
+            })
+        )
+        return path
+
+    def simulate_staging_uid(self, path, uid):
+        real_lstat = deploy.os.lstat
+        exact_path = os.path.normcase(os.path.abspath(os.fspath(path)))
+
+        def lstat(candidate):
+            metadata = real_lstat(candidate)
+            candidate_path = os.path.normcase(os.path.abspath(os.fspath(candidate)))
+            if candidate_path != exact_path:
+                return metadata
+            values = list(metadata)
+            values[4] = uid
+            return os.stat_result(values)
+
+        return mock.patch.object(deploy.os, "lstat", side_effect=lstat)
+
+    def simulate_root_owned_staging(self, path):
+        return self.simulate_staging_uid(path, 0)
+
+    def system_snapshot(self, plan, release_root):
+        runtime = deploy.SystemRuntime.__new__(deploy.SystemRuntime)
+        runtime._five_xx_streak = 0
+        runtime._verified_manager = None
+        inspections = {
+            plan["baseline"]["apiContainer"]: {
+                "Config": {
+                    "Image": plan["baseline"]["liveImage"],
+                    "Labels": {
+                        "com.docker.compose.project": "genesis",
+                        "com.docker.compose.service": "api",
+                    },
+                },
+                "State": {"Status": "running", "Health": {"Status": "healthy"}},
+                "RestartCount": 0,
+            },
+            plan["baseline"]["postgresContainer"]: {
+                "Id": "postgres-id",
+                "Config": {"Labels": {
+                    "com.docker.compose.project": "genesis",
+                    "com.docker.compose.service": "postgres",
+                }},
+                "State": {"Health": {"Status": "healthy"}},
+            },
+            plan["baseline"]["traefikContainer"]: {
+                "Id": "traefik-id",
+                "Config": {"Labels": {
+                    "com.docker.compose.project": "genesis",
+                    "com.docker.compose.service": "traefik",
+                }},
+                "State": {"Status": "running"},
+            },
+        }
+
+        def command(argv, **_kwargs):
+            if argv == ["hostname"]:
+                return "srv1870064"
+            if argv == ["uname", "-sm"]:
+                return "Linux x86_64"
+            if argv[:2] == ["docker", "exec"]:
+                return "\n".join(plan["migrations"]["appliedBefore"])
+            if argv[:3] == ["docker", "volume", "inspect"]:
+                return "genesis-postgres-data"
+            raise AssertionError(argv)
+
+        with mock.patch.object(runtime, "_inspect", side_effect=lambda name: inspections[name]), mock.patch.object(
+            runtime, "_run", side_effect=command,
+        ), mock.patch.object(runtime, "_secret_valid", return_value=True), mock.patch.object(
+            deploy.shutil, "disk_usage", return_value=types.SimpleNamespace(free=plan["minimumFreeBytes"] + 1),
+        ), mock.patch.object(runtime, "_lock_is_held", return_value=False):
+            return runtime.snapshot(plan, release_root)
+
     def test_plan_and_pair_accept_exact_contract(self):
         self.assertEqual(deploy.validate_plan(self.plan), self.plan)
         deploy.validate_bundle_pair(self.current, self.rollback, self.plan)
+
+    def test_plan_accepts_only_closed_historical_sibling_names(self):
+        allowed = json.loads(json.dumps(self.plan))
+        allowed["paths"]["allowedExistingSiblings"] = [
+            ".genesis-release-rollback-deadbeefdeadbeef",
+            ".genesis-release-quarantine-0123456789abcdef",
+            ".genesis-release-staging-fedcba9876543210",
+        ]
+        self.assertEqual(deploy.validate_plan(allowed), allowed)
+        for invalid_name in (
+            ".genesis-release-staging-not-hex",
+            ".genesis-release-staging-0123456789abcde",
+            ".genesis-release-other-0123456789abcdef",
+        ):
+            invalid = json.loads(json.dumps(self.plan))
+            invalid["paths"]["allowedExistingSiblings"] = [invalid_name]
+            with self.subTest(name=invalid_name), self.assertRaisesRegex(
+                deploy.StopBeforeMutation, "INVALID_ALLOWED_SIBLING",
+            ):
+                deploy.validate_plan(invalid)
+
+    def test_current_run_staging_with_exact_marker_and_baseline_identity_is_accepted(self):
+        parent = self.root / "runtime-current-staging"
+        active = parent / "release"
+        shutil.copytree(self.rollback, active)
+        staging = self.preserved_staging(parent, self.plan["runId"])
+        with self.simulate_root_owned_staging(staging):
+            observed = self.system_snapshot(self.plan, active)
+        self.assertEqual(observed["unexpectedStaging"], [])
+        self.assertEqual(deploy.validate_snapshot(self.plan, observed), "READY")
+
+    def test_allowlisted_historical_staging_with_exact_marker_is_accepted(self):
+        parent = self.root / "runtime-historical-staging"
+        active = parent / "release"
+        shutil.copytree(self.rollback, active)
+        historical_run = "deadbeefdeadbeef"
+        historical = self.preserved_staging(parent, historical_run)
+        plan = json.loads(json.dumps(self.plan))
+        plan["paths"]["allowedExistingSiblings"] = [historical.name]
+        deploy.validate_plan(plan)
+        with self.simulate_root_owned_staging(historical):
+            observed = self.system_snapshot(plan, active)
+        self.assertEqual(observed["unexpectedStaging"], [])
+
+    def test_preserved_staging_with_malformed_marker_blocks_snapshot(self):
+        parent = self.root / "runtime-bad-marker"
+        active = parent / "release"
+        shutil.copytree(self.rollback, active)
+        staging = self.preserved_staging(
+            parent,
+            self.plan["runId"],
+            marker={"state": "UNTRUSTED", "runId": self.plan["runId"], "reason": "wrong"},
+        )
+        with self.simulate_root_owned_staging(staging), self.assertRaisesRegex(
+            deploy.StopBeforeMutation, "INVALID_STAGING_MARKER",
+        ):
+            self.system_snapshot(self.plan, active)
+
+    def test_preserved_staging_marker_run_must_match_path_suffix(self):
+        path = self.preserved_staging(self.root, "deadbeefdeadbeef")
+        (path / ".genesis-untrusted-release.json").write_bytes(deploy.canonical_json({
+            "state": "UNTRUSTED",
+            "runId": "0123456789abcdef",
+            "reason": "previous-active-tree",
+        }))
+        with self.simulate_root_owned_staging(path), self.assertRaisesRegex(
+            deploy.StopBeforeMutation, "INVALID_STAGING_MARKER",
+        ):
+            deploy.validate_preserved_staging(path, "deadbeefdeadbeef")
+
+    def test_root_owned_staging_simulation_is_path_scoped_and_preserves_metadata(self):
+        staging = self.preserved_staging(self.root, "deadbeefdeadbeef")
+        marker = staging / ".genesis-untrusted-release.json"
+        real_staging = deploy.os.lstat(staging)
+        real_marker = deploy.os.lstat(marker)
+        with self.simulate_root_owned_staging(staging):
+            simulated_staging = deploy.os.lstat(staging)
+            simulated_marker = deploy.os.lstat(marker)
+        self.assertEqual(simulated_staging.st_uid, 0)
+        self.assertEqual(
+            (simulated_staging.st_mode, simulated_staging.st_gid, simulated_staging.st_ino, simulated_staging.st_dev),
+            (real_staging.st_mode, real_staging.st_gid, real_staging.st_ino, real_staging.st_dev),
+        )
+        self.assertEqual(simulated_marker, real_marker)
+
+    def test_preserved_staging_rejects_non_root_owner(self):
+        staging = self.preserved_staging(self.root, "deadbeefdeadbeef")
+        with self.simulate_staging_uid(staging, 1000), self.assertRaisesRegex(
+            deploy.StopBeforeMutation, "INVALID_STAGING_IDENTITY",
+        ):
+            deploy.validate_preserved_staging(staging, "deadbeefdeadbeef")
+
+    def test_arbitrary_unallowlisted_staging_remains_unexpected(self):
+        parent = self.root / "runtime-unallowlisted-staging"
+        active = parent / "release"
+        shutil.copytree(self.rollback, active)
+        arbitrary = self.preserved_staging(parent, "deadbeefdeadbeef")
+        observed = self.system_snapshot(self.plan, active)
+        self.assertEqual(observed["unexpectedStaging"], [arbitrary.name])
+        with self.assertRaisesRegex(deploy.StopBeforeMutation, "UNEXPECTED_STAGING_STATE"):
+            deploy.validate_snapshot(self.plan, observed)
+
+    def test_current_run_staging_must_match_approved_baseline_manifest(self):
+        parent = self.root / "runtime-mismatched-staging"
+        active = parent / "release"
+        shutil.copytree(self.rollback, active)
+        staging = parent / f".genesis-release-staging-{self.plan['runId']}"
+        shutil.copytree(self.current, staging)
+        (staging / ".genesis-untrusted-release.json").write_bytes(deploy.canonical_json({
+            "state": "UNTRUSTED",
+            "runId": self.plan["runId"],
+            "reason": "previous-active-tree",
+        }))
+        with self.simulate_root_owned_staging(staging), self.assertRaisesRegex(
+            deploy.StopBeforeMutation, "STAGING_FINGERPRINT_MISMATCH",
+        ):
+            self.system_snapshot(self.plan, active)
+
+    def test_active_role_is_derived_from_fingerprint_bound_manifest(self):
+        for role, bundle, fingerprint, image in (
+            ("current", self.current, self.plan["candidate"]["bundleFingerprint"], CANDIDATE_IMAGE),
+            ("rollback", self.rollback, self.plan["rollback"]["bundleFingerprint"], ROLLBACK_IMAGE),
+        ):
+            active = self.root / f"active-{role}"
+            shutil.copytree(bundle, active)
+            plan = json.loads(json.dumps(self.plan))
+            plan["paths"]["activeRelease"] = str(active)
+            runtime = deploy.SystemRuntime.__new__(deploy.SystemRuntime)
+            runtime._verified_manager = self.root / "verified-manager.py"
+            with self.subTest(role=role), mock.patch.object(runtime, "_run", return_value="") as run:
+                runtime.verify_active(plan, fingerprint, image)
+                self.assertEqual(run.call_args.args[0][-2:], ["--expected-role", role])
+
+    def test_preflight_accepts_fingerprint_bound_current_and_rollback_baselines(self):
+        baseline_current = self.root / "baseline-current-source"
+        baseline_current_fingerprint = write_bundle(baseline_current, "current", ROLLBACK_IMAGE)
+        cases = (
+            ("current", baseline_current, baseline_current_fingerprint),
+            ("rollback", self.rollback, self.plan["rollback"]["bundleFingerprint"]),
+        )
+        for role, source, fingerprint in cases:
+            active = self.root / f"preflight-active-{role}"
+            shutil.copytree(source, active)
+            plan = json.loads(json.dumps(self.plan))
+            plan["paths"]["activeRelease"] = str(active)
+            plan["baseline"]["activeBundleFingerprint"] = fingerprint
+            observed = FakeRuntime(plan).snapshot(plan, active)
+            observed["activeFingerprint"] = fingerprint
+            runtime = deploy.SystemRuntime.__new__(deploy.SystemRuntime)
+            runtime._verified_manager = self.root / "verified-manager.py"
+            with self.subTest(role=role), mock.patch.object(runtime, "verify_pair"), mock.patch.object(
+                runtime, "snapshot", return_value=observed,
+            ), mock.patch.object(runtime, "_run", return_value="") as run:
+                self.assertEqual(
+                    deploy.preflight(plan, self.current, self.rollback, runtime, self.evidence()),
+                    "READY",
+                )
+                self.assertEqual(run.call_args.args[0][-2:], ["--expected-role", role])
+
+    def test_invalid_active_release_role_fails_closed(self):
+        active = self.root / "active-invalid-role"
+        fingerprint = write_bundle(active, "invalid", ROLLBACK_IMAGE)
+        plan = json.loads(json.dumps(self.plan))
+        plan["paths"]["activeRelease"] = str(active)
+        runtime = deploy.SystemRuntime.__new__(deploy.SystemRuntime)
+        runtime._verified_manager = self.root / "verified-manager.py"
+        with self.assertRaisesRegex(deploy.StopBeforeMutation, "INVALID_ACTIVE_RELEASE_ROLE"):
+            runtime.verify_active(plan, fingerprint, ROLLBACK_IMAGE)
+
+    def test_zero_pending_migrations_validate_and_classify_baseline_and_candidate(self):
+        plan = json.loads(json.dumps(self.plan))
+        plan["migrations"]["appliedBefore"] = list(MIGRATIONS)
+        plan["migrations"]["pending"] = []
+        plan["migrations"]["postHead"] = MIGRATIONS[-1]
+        deploy.validate_plan(plan)
+        deploy.validate_bundle_pair(self.current, self.rollback, plan)
+        runtime = FakeRuntime(plan)
+        baseline = runtime.snapshot(plan, Path("/opt/genesis/release"))
+        self.assertEqual(deploy.validate_snapshot(plan, baseline), "READY")
+        runtime.state = "candidate"
+        candidate = runtime.snapshot(plan, Path("/opt/genesis/release"))
+        self.assertEqual(deploy.validate_snapshot(plan, candidate), "ALREADY_ACTIVE")
+
+    def test_zero_pending_migrations_skip_migrate_but_prove_state_before_activation(self):
+        plan = json.loads(json.dumps(self.plan))
+        plan["migrations"]["appliedBefore"] = list(MIGRATIONS)
+        plan["migrations"]["pending"] = []
+        plan["migrations"]["postHead"] = MIGRATIONS[-1]
+        self.assertEqual(plan["migrations"]["pending"], [])
+        runtime = FakeRuntime(plan)
+        clock = FakeClock()
+        result = deploy.execute(
+            plan, self.current, self.rollback, runtime, self.evidence(), self.sha,
+            flag=True, environment={"GENESIS_PRODUCTION_MUTATION_AUTHORIZED": "true"},
+            authorization_id=plan["authorizationId"], approved_plan_sha=self.sha,
+            lock_factory=fake_lock, monotonic=clock.monotonic, sleep=clock.sleep,
+        )
+        self.assertEqual(result, "CANDIDATE_OBSERVED / READY_FOR_KEEP")
+        self.assertEqual(runtime.mutations, ["pull", "activation", "api-recreate"])
+        self.assertNotIn(("action", "migration"), runtime.events)
+        pull = runtime.events.index(("action", "pull"))
+        activation = runtime.events.index(("action", "activation"))
+        self.assertEqual(
+            runtime.events[pull + 1:activation],
+            [("snapshot", tuple(plan["migrations"]["appliedBefore"]))],
+        )
+
+    def test_zero_pending_wrong_post_pull_inventory_blocks_activation(self):
+        plan = json.loads(json.dumps(self.plan))
+        plan["migrations"]["appliedBefore"] = list(MIGRATIONS)
+        plan["migrations"]["pending"] = []
+        plan["migrations"]["postHead"] = MIGRATIONS[-1]
+        runtime = FakeRuntime(plan)
+        runtime.post_pull_migrations = MIGRATIONS[:-1]
+        clock = FakeClock()
+        with self.assertRaisesRegex(deploy.EscalationRequired, "MIGRATION_OUTCOME_AMBIGUOUS"):
+            deploy.execute(
+                plan, self.current, self.rollback, runtime, self.evidence(), self.sha,
+                flag=True, environment={"GENESIS_PRODUCTION_MUTATION_AUTHORIZED": "true"},
+                authorization_id=plan["authorizationId"], approved_plan_sha=self.sha,
+                lock_factory=fake_lock, monotonic=clock.monotonic, sleep=clock.sleep,
+            )
+        self.assertEqual(runtime.mutations, ["pull"])
+        self.assertNotIn(("action", "migration"), runtime.events)
+        self.assertNotIn(("action", "activation"), runtime.events)
+        pull = runtime.events.index(("action", "pull"))
+        self.assertEqual(
+            runtime.events[pull + 1:],
+            [("snapshot", tuple(runtime.post_pull_migrations))],
+        )
+
+    def test_zero_pending_requires_nonempty_applied_baseline_and_matching_post_head(self):
+        for before, post_head in (([], MIGRATIONS[-1]), (list(MIGRATIONS), MIGRATIONS[0])):
+            invalid = json.loads(json.dumps(self.plan))
+            invalid["migrations"]["appliedBefore"] = before
+            invalid["migrations"]["pending"] = []
+            invalid["migrations"]["postHead"] = post_head
+            with self.subTest(before=before, post_head=post_head), self.assertRaises(
+                deploy.StopBeforeMutation,
+            ):
+                deploy.validate_plan(invalid)
+
+    def test_smoke_modes_preserve_full_and_observation_contracts(self):
+        credentials = self.root / "smoke-credentials.json"
+        credentials.write_text(json.dumps({"email": "operator@example.test", "password": "fixture"}), encoding="utf-8")
+        plan = json.loads(json.dumps(self.plan))
+        plan["smoke"]["credentialsFile"] = str(credentials)
+        responses = {
+            "/api/v1/auth/csrf": {"csrfToken": "fixture-csrf"},
+            plan["smoke"]["kanbanPath"]: {
+                "currency": "BRL",
+                "expectedValueTotalMinor": "1000",
+                "withoutExpectedValue": 0,
+                "columns": [],
+            },
+        }
+        full = deploy.SmokeClient(plan)
+        with mock.patch.object(full, "_request", side_effect=lambda path, **_kwargs: responses.get(path, {})) as request:
+            full.run(mode="full")
+        self.assertEqual(
+            [call.args[0] for call in request.call_args_list],
+            [
+                "/health",
+                "/api/v1/health",
+                "/api/v1/health/live",
+                "/api/v1/health/ready",
+                "/api/v1/auth/csrf",
+                "/api/v1/auth/login",
+                plan["smoke"]["tenantProbePath"],
+                plan["smoke"]["kanbanPath"],
+            ],
+        )
+        observation = deploy.SmokeClient(plan)
+        with mock.patch.object(observation, "_request", return_value={}) as request:
+            observation.run(mode="observation")
+        self.assertEqual(
+            [call.args[0] for call in request.call_args_list],
+            ["/health", "/api/v1/health", "/api/v1/health/live", "/api/v1/health/ready"],
+        )
+
+    def test_rollback_compatibility_smoke_probes_only_root_health(self):
+        client = deploy.SmokeClient(self.plan)
+
+        def rollback_compatible(path, **_kwargs):
+            if path != "/health":
+                raise deploy.StopBeforeMutation("SMOKE_HTTP_FAILURE")
+            return {"status": "ok"}
+
+        with mock.patch.object(client, "_request", side_effect=rollback_compatible) as request:
+            client.run(mode="rollback")
+        request.assert_called_once_with("/health")
+
+    def test_rollback_compatibility_smoke_fails_when_root_health_fails(self):
+        client = deploy.SmokeClient(self.plan)
+        with mock.patch.object(
+            client, "_request", side_effect=deploy.StopBeforeMutation("SMOKE_HTTP_FAILURE"),
+        ), self.assertRaisesRegex(deploy.StopBeforeMutation, "SMOKE_HTTP_FAILURE"):
+            client.run(mode="rollback")
 
     def test_bundle_migration_inventory_must_match_approved_order_before_mutation(self):
         mismatched = json.loads(json.dumps(self.plan))
@@ -363,6 +755,17 @@ class OperatorTest(unittest.TestCase):
         result, runtime, clock = self.execute_success()
         self.assertEqual(result, "CANDIDATE_OBSERVED / READY_FOR_KEEP")
         self.assertEqual(runtime.mutations, ["pull", "migration", "activation", "api-recreate"])
+        self.assertEqual(runtime.mutations.count("migration"), 1)
+        pull = runtime.events.index(("action", "pull"))
+        activation = runtime.events.index(("action", "activation"))
+        self.assertEqual(
+            runtime.events[pull + 1:activation],
+            [
+                ("action", "migration"),
+                ("snapshot", tuple(self.plan["migrations"]["appliedBefore"] + self.plan["migrations"]["pending"])),
+            ],
+        )
+        self.assertEqual(runtime.smoke_modes, ["full"] + ["observation"] * 5)
         self.assertEqual(clock.sleeps, [120.0, 180.0, 300.0, 300.0])
         self.assertEqual(runtime.observe_calls, 5)
         lines = [json.loads(line) for line in self.evidence_path.read_text().splitlines()]
