@@ -556,10 +556,20 @@ activation e recreate são impossíveis. O Docker config temporário de registry
 fica root-only sob `/run`, recebe a senha por stdin e é removido mesmo em falha.
 
 Após o pull por digest, o operador executa apenas o service Compose canônico
-`migrate`, que chama TypeORM `migration:run` com a role dedicada. O applied
-baseline e o pending set ordenado devem ser exatos antes, e o post-head deve ser
-exato depois. Falha ou estado ambíguo impede activation; `migration:revert` não
-é executado.
+`migrate`, que chama TypeORM `migration:run` com a role dedicada. Tanto esse
+comando quanto o recreate posterior da API usam explicitamente `--env-file
+<release>/config/production.env.example`, antes do `--project-directory` e do
+Compose file do mesmo release. Assim, a interpolação é vinculada à configuração
+não secreta versionada do bundle. Antes de invocar Compose, o operador deriva
+todos os nomes declarados nesse arquivo e os remove de uma cópia do ambiente
+destinada somente ao processo filho. Isso impede que a precedência do shell
+sobrescreva o contrato versionado, preserva variáveis não pertencentes ao
+contrato e não modifica o ambiente global. Não há fallback para `.env` ambiente
+nem injeção de outro path; os secrets permanecem file-backed. Se o arquivo
+canônico estiver ausente ou possuir sintaxe inválida, o comando falha fechado.
+O applied baseline e o pending set ordenado devem ser exatos antes, e o
+post-head deve ser exato depois. Falha ou estado ambíguo impede activation;
+`migration:revert` não é executado.
 
 Activation delega a troca atômica a `release-tree-manager.py activate`. Em
 seguida, o único recreate permitido é `docker compose ... up -d --no-deps
