@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
   "instanceKind": "current",
-  "stateRevision": "PIPE-V2-03-COMPLETE-2026-09-02",
+  "stateRevision": "PIPE-V2-03-PRODUCTION-LIVE-2026-09-04",
   "project": {
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-09-02T10:03:18.404Z",
+  "updatedAt": "2026-09-04T21:34:26.017Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -35,7 +35,7 @@
     }
   ],
   "releaseBindings": {
-    "apiApplicationRevision": "0a56a8aee7c64bda59a1981888418e1ad03950c0",
+    "apiApplicationRevision": "ac2f8cd96ae02c1cad52366871bdde8ca651631d",
     "apiReleaseManifestRevision": {
       "kind": "containing-commit"
     },
@@ -54,10 +54,10 @@
       "artifact": "release-manifest.json",
       "releaseRole": "rollback"
     },
-    "authorizedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb",
-    "authorizedApiImageConfigDigest": "sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24",
-    "rollbackApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a",
-    "webIntegratedRevision": "017ef0056d97147a5e5337494fa339a3f65986ac"
+    "authorizedApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7",
+    "authorizedApiImageConfigDigest": "sha256:17e5b82451b78a20c6934b5dc2bb0cc00fa10252665245ed49b2f7c09a7fc629",
+    "rollbackApiImage": "ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb",
+    "webIntegratedRevision": "6f53180e6c3947bd778e47c8fdb734567802e0d8"
   },
   "phase": {
     "id": "PIPE-V2",
@@ -67,22 +67,25 @@
       "title": "Presentation V2",
       "completedAt": "2026-09-02T08:38:04Z",
       "evidenceIds": [
-        "EV-PIPE-V2-03-WEB-PR24"
+        "EV-PIPE-V2-03-WEB-PR24",
+        "EV-PIPE-V2-API-PRODUCTION-KEEP",
+        "EV-PIPE-V2-WEB-PRODUCTION-KEEP"
       ]
     }
   },
   "currentWork": {
     "status": "none",
-    "summary": "Nenhuma execução de produção está ativa. O próximo trabalho autorizado é preparar e promover em produção as revisões PIPE-V2 já incorporadas; nenhuma mutação de produção ocorreu."
+    "summary": "Nenhum deployment está ativo. API e Web de PIPE-V2-03 estão live e estáveis em Production; o próximo produto planejado é PIPE-V2-03A — Expected Value Editing."
   },
   "nextTask": {
-    "id": "PIPE-V2-PRODUCTION-DEPLOYMENT",
-    "title": "Production Deployment"
+    "id": "PIPE-V2-03A",
+    "title": "Expected Value Editing"
   },
   "operationalState": {
-    "summary": "O programa PIPE-V2 está vigente. A Genesis Frontend Program Foundation, PIPE-V2-01 — Financial Domain, PIPE-V2-02 — Financial Aggregates e PIPE-V2-03 — Presentation V2 estão concluídos e incorporados. A preparação e promoção de produção dessas revisões é o próximo trabalho autorizado; nenhuma mutação de produção ocorreu.",
-    "basis": "documented",
-    "documentedAt": "2026-09-02T10:03:18.404Z",
+    "summary": "PIPE-V2-01, PIPE-V2-02 e PIPE-V2-03 estão concluídos. A API e o Web de PIPE-V2-03 terminaram seus deployments com KEEP, a integração same-origin passou e Presentation V2 está live e observada em Production. Nenhuma execução de produção está ativa.",
+    "basis": "observed",
+    "documentedAt": "2026-09-04T21:34:26.017Z",
+    "observedAt": "2026-09-04T21:34:26.017Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -312,13 +315,14 @@
       {
         "id": "OPS-VERCEL-LINK",
         "status": "absent",
-        "statement": "Registro histórico: C4R1 deixou de ser o deployment live e foi superseded pela promoção 10B dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z; dpl_AuunpMMmehaXdXFa5wu52DAMF99P é o rollback Web preservado. O controle durável git.deploymentEnabled=false permanece, sem inferir estado atual de C4R1.",
+        "statement": "Registro histórico: C4R1 foi superseded pela promoção 10B; esse par live/rollback também foi posteriormente superseded. O binding Web Production vigente está em OPS-PIPE-V2-WEB-PRODUCTION, e git.deploymentEnabled=false permanece como controle durável.",
         "basis": "observed",
         "documentedAt": "2026-08-15T11:45:00Z",
         "observedAt": "2026-08-15T11:45:00Z",
         "evidenceIds": [
           "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT",
-          "EV-MVP10B-PRODUCTION-PROMOTION"
+          "EV-MVP10B-PRODUCTION-PROMOTION",
+          "EV-PIPE-V2-WEB-PRODUCTION-KEEP"
         ]
       },
       {
@@ -404,21 +408,28 @@
       },
       {
         "id": "OPS-MVP08-API-RELEASE-BINDING",
-        "status": "present",
-        "statement": "O binding runtime atual seleciona a imagem b45425d7, derivada da application revision 0a56a8ae. O API main f5a11c6 contém tooling de onboarding posterior e não é apresentada como origem da imagem implantada.",
+        "status": "absent",
+        "statement": "Registro histórico superseded: o deployment 09E selecionou b45425d7 a partir de 0a56a8ae. O binding runtime vigente foi substituído pelo deploy simples registrado em OPS-PIPE-V2-API-PRODUCTION.",
         "basis": "observed",
         "documentedAt": "2026-08-21T04:10:42.7186699Z",
         "observedAt": "2026-08-21T04:08:04.537544119Z",
-        "evidenceIds": ["EV-MVP09E-DEPLOYMENT-MANIFEST", "EV-MVP10A-API-PR61"]
+        "evidenceIds": [
+          "EV-MVP09E-DEPLOYMENT-MANIFEST",
+          "EV-MVP10A-API-PR61",
+          "EV-PIPE-V2-API-PRODUCTION-KEEP"
+        ]
       },
       {
         "id": "OPS-MVP08-API-ROLLBACK-BINDING",
-        "status": "present",
-        "statement": "A imagem a4dafefa é o rollback atual da API para o deployment 09E; a imagem 56ada pertence ao histórico anterior e não é o rollback operacional vigente.",
+        "status": "absent",
+        "statement": "Registro histórico superseded: a4dafefa foi o rollback do deployment 09E. O deploy simples PIPE-V2 promoveu c53b2835 e preservou b45425d7 como previous digest no receipt final; qualquer rollback futuro exige autorização própria.",
         "basis": "observed",
         "documentedAt": "2026-08-21T04:10:42.7186699Z",
         "observedAt": "2026-08-21T04:08:04.537544119Z",
-        "evidenceIds": ["EV-MVP09E-DEPLOYMENT-MANIFEST"]
+        "evidenceIds": [
+          "EV-MVP09E-DEPLOYMENT-MANIFEST",
+          "EV-PIPE-V2-API-PRODUCTION-KEEP"
+        ]
       },
       {
         "id": "OPS-MVP08-PREFLIGHT-BLOCKED",
@@ -435,23 +446,28 @@
       {
         "id": "OPS-MVP08-VPS-INTEGRITY-AUDIT",
         "status": "absent",
-        "statement": "remoteTreeBinding=SUPERSEDED. Registro histórico: a auditoria MVP08 vinculava a árvore remota a df7fca7 e registrava REBIND_REQUIRED para aquele closeout. Não se infere nem se reconstrói um rebind. O deployment 09E posterior promoveu a imagem b45425d7, fonte 0a56a8a, preservou a4dafefa como rollback e observou API, PostgreSQL e Traefik saudáveis; esse é o estado runtime vigente.",
+        "statement": "remoteTreeBinding=SUPERSEDED. Registro histórico: a auditoria MVP08 vinculava a árvore remota a df7fca7 e registrava REBIND_REQUIRED naquele closeout; 09E o supersedeu e o deploy simples PIPE-V2 supersedeu 09E. Não se infere nem se reconstrói um rebind antigo.",
         "basis": "observed",
         "documentedAt": "2026-08-15T11:45:00Z",
         "observedAt": "2026-08-15T11:45:00Z",
         "evidenceIds": [
           "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
           "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT",
-          "EV-MVP09E-DEPLOYMENT-MANIFEST"
+          "EV-MVP09E-DEPLOYMENT-MANIFEST",
+          "EV-PIPE-V2-API-PRODUCTION-KEEP"
         ]
       },
       {
         "id": "OPS-MVP08-RELEASE-TREE-CONTRACT",
-        "status": "present",
-        "statement": "O bundle v2 define onze diretórios, staging root-only, papéis current/rollback, quarentena e renameat2(RENAME_EXCHANGE). O rollback deriva do mesmo containing commit por duas substituições fechadas para a imagem previous-approved. O par exige papéis, imagens e fingerprints distintos, sourceCommit idêntico e todos os demais artefatos iguais; o contrato foi usado no rebuild atômico autorizado e permanece inalterado por esta reconciliação.",
+        "status": "absent",
+        "statement": "LEGACY / SUPERSEDED. O release-tree, bundles current/rollback, staging, quarentena e fingerprints permanecem preservados como contrato e evidência históricos, mas não são mecanismo suportado para novos deploys após ADR-020 e o primeiro SIMPLE_VPS_DEPLOYMENT com KEEP.",
         "basis": "documented",
         "documentedAt": "2026-08-14T11:33:53.957Z",
-        "evidenceIds": ["EV-MVP08-R2-RELEASE-TREE-CONTRACT"]
+        "evidenceIds": [
+          "EV-MVP08-R2-RELEASE-TREE-CONTRACT",
+          "EV-API-ADR020-SIMPLE-VPS",
+          "EV-PIPE-V2-API-PRODUCTION-KEEP"
+        ]
       },
       {
         "id": "OPS-MVP08-HUMAN-SECURITY",
@@ -482,7 +498,7 @@
       {
         "id": "OPS-MVP08-OPERATIONAL-ROLLBACK",
         "status": "absent",
-        "statement": "Registro histórico superseded: o plano integral MVP08 baseado na imagem 56ada e nos deployments dpl_2VraWZimf1t2x9bGeqTmvRYb3MJr/B4 não é mais o rollback vigente. Após 09E e 10B, o rollback API preservado é a4dafefa e o rollback Web é dpl_AuunpMMmehaXdXFa5wu52DAMF99P; qualquer reversão futura exige autorização própria.",
+        "statement": "Registro histórico superseded: os pares de rollback MVP08, 09E e 10B não definem o estado live atual. Os receipts finais PIPE-V2 registram os previous factuais, nenhum rollback foi disparado e qualquer reversão futura exige autorização própria.",
         "basis": "observed",
         "documentedAt": "2026-08-15T11:45:00Z",
         "observedAt": "2026-08-15T11:45:00Z",
@@ -490,7 +506,9 @@
           "EV-MVP08-ATOMIC-REBUILD-ROLLBACK",
           "EV-MVP08-C4R1-OPERATIONAL-CLOSEOUT",
           "EV-MVP09E-DEPLOYMENT-MANIFEST",
-          "EV-MVP10B-PRODUCTION-PROMOTION"
+          "EV-MVP10B-PRODUCTION-PROMOTION",
+          "EV-PIPE-V2-API-PRODUCTION-KEEP",
+          "EV-PIPE-V2-WEB-PRODUCTION-KEEP"
         ]
       },
       {
@@ -514,7 +532,7 @@
       {
         "id": "OPS-MVP08-ORIGIN-TRUST",
         "status": "present",
-        "statement": "A API b45425d7 está saudável, privada e sem porta pública; o proxy same-origin e login funcionam no domínio final e a origem direta continua protegida. Nenhum segredo foi lido ou registrado nesta reconciliação.",
+        "statement": "No checkpoint 09E/10B, a API b45425d7 estava saudável e privada e o proxy same-origin funcionava no domínio final. O estado live posterior está registrado nos fatos PIPE-V2, sem reescrever esta evidência histórica.",
         "basis": "observed",
         "documentedAt": "2026-08-21T20:32:57.3293060Z",
         "observedAt": "2026-08-21T20:32:57.3293060Z",
@@ -628,7 +646,7 @@
       {
         "id": "OPS-MVP10A-API-MAIN",
         "status": "present",
-        "statement": "O API main f5a11c6ad5b6f4817198730b8311d27117ee01a7 contém o CLI privado de onboarding OWNER. Essa revisão de tooling não substitui a application revision 0a56a8ae da imagem API live.",
+        "statement": "No checkpoint 10A, o API main f5a11c6ad5b6f4817198730b8311d27117ee01a7 continha o CLI privado de onboarding OWNER, separado da application revision 0a56a8ae então implantada. O binding live posterior é registrado pelos fatos PIPE-V2.",
         "basis": "documented",
         "documentedAt": "2026-08-21T18:04:17Z",
         "evidenceIds": ["EV-MVP10A-API-PR61"]
@@ -691,7 +709,7 @@
       {
         "id": "OPS-IFMATCH-INCIDENT-FINAL-RETIREMENT",
         "status": "present",
-        "statement": "O incidente If-Match está encerrado. A decisão de suporte é NOT PURSUED BY HUMAN DECISION; a correction branch e a branch remota do probe estão ausentes, o deployment temporário do probe foi removido e nenhum recurso de produção foi alterado. A correção Web 017ef005 permanece ativa e observada, o smoke funcional passou, o falso 412 e o Weak ETag permanecem resolvidos e a concorrência otimista foi preservada.",
+        "statement": "O incidente If-Match está encerrado. A decisão de suporte foi NOT PURSUED BY HUMAN DECISION; branches e deployment temporário foram removidos. A correção 017ef005 foi validada naquele checkpoint e permanece histórica, enquanto o Web Production live posterior está em OPS-PIPE-V2-WEB-PRODUCTION.",
         "basis": "observed",
         "documentedAt": "2026-08-25T18:16:23.996Z",
         "observedAt": "2026-08-25T18:16:23.996Z",
@@ -699,17 +717,21 @@
           "EV-IFMATCH-WEB-PR20",
           "EV-IFMATCH-PRODUCTION-PROMOTION",
           "EV-IFMATCH-FUNCTIONAL-SMOKE",
-          "EV-IFMATCH-INCIDENT-FINAL-RETIREMENT"
+          "EV-IFMATCH-INCIDENT-FINAL-RETIREMENT",
+          "EV-PIPE-V2-WEB-PRODUCTION-KEEP"
         ]
       },
       {
         "id": "OPS-IFMATCH-PRODUCTION-PROMOTED",
         "status": "present",
-        "statement": "O deployment dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr da revisão Web 017ef005 foi promovido em 2026-08-25T16:43:46.645Z e ficou Ready, Production e Current em app.agenciagenesismkt.com.br, sem novo build. dpl_9Npu4VnyWatw1vMEforzUv8Mokke permanece preservado para rollback.",
+        "statement": "Registro histórico: dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr da revisão 017ef005 foi promovido em 2026-08-25 e posteriormente serviu como previous seguro da promoção PIPE-V2; o deployment live atual está em OPS-PIPE-V2-WEB-PRODUCTION.",
         "basis": "observed",
         "documentedAt": "2026-08-25T17:13:24.353Z",
         "observedAt": "2026-08-25T16:43:46.645Z",
-        "evidenceIds": ["EV-IFMATCH-PRODUCTION-PROMOTION"]
+        "evidenceIds": [
+          "EV-IFMATCH-PRODUCTION-PROMOTION",
+          "EV-PIPE-V2-WEB-PRODUCTION-KEEP"
+        ]
       },
       {
         "id": "OPS-IFMATCH-TECHNICAL-CANARY",
@@ -729,13 +751,15 @@
       },
       {
         "id": "OPS-MVP09E-HELPER-PROVENANCE",
-        "status": "partial",
-        "statement": "O deployment 09E foi executado com script aprovado SHA-256 e99dee6fb4610f9ca470aca8e12f00c4076e60ea45de3f9fb7a4f762208b6db6, preservado na custódia externa 0.8-MVP-09E/deployment-execution. O artefato exato não está comprovadamente versionado na main; isso não afeta o runtime atual, mas exige reconciliar e versionar novamente o procedimento antes de qualquer futuro deployment API.",
+        "status": "absent",
+        "statement": "Registro histórico superseded: o helper 09E permanece na custódia externa com seu SHA-256, mas não é mecanismo atual. ADR-020, o operador versionado de SIMPLE_VPS_DEPLOYMENT e o run ec9d646a2a7344e9 substituem essa lacuna para novos deploys.",
         "basis": "documented",
         "documentedAt": "2026-08-21T04:10:42.7186699Z",
         "evidenceIds": [
           "EV-MVP09E-EXECUTED-SCRIPT",
-          "EV-MVP09E-DEPLOYMENT-MANIFEST"
+          "EV-MVP09E-DEPLOYMENT-MANIFEST",
+          "EV-API-ADR020-SIMPLE-VPS",
+          "EV-PIPE-V2-API-PRODUCTION-KEEP"
         ]
       },
       {
@@ -772,11 +796,50 @@
       {
         "id": "OPS-PIPE-V2-03-COMPLETE",
         "status": "present",
-        "statement": "PIPE-V2-03 — Presentation V2 está concluída e incorporada no Web pelo PR #24 (6f53180e6c3947bd778e47c8fdb734567802e0d8); post-merge CI e visual sanity foram aprovados.",
-        "basis": "documented",
-        "documentedAt": "2026-09-02T10:03:18.404Z",
+        "statement": "PIPE-V2-03 — Presentation V2 está concluída, incorporada no Web pelo PR #24 em 6f53180e6c3947bd778e47c8fdb734567802e0d8 e live em Production; o browser harness obrigatório executou V2 sem skip, page error ou 5xx.",
+        "basis": "observed",
+        "documentedAt": "2026-09-04T21:34:26.017Z",
+        "observedAt": "2026-09-04T21:34:26.017Z",
         "evidenceIds": [
-          "EV-PIPE-V2-03-WEB-PR24"
+          "EV-PIPE-V2-03-WEB-PR24",
+          "EV-PIPE-V2-03-WEB-CI",
+          "EV-PIPE-V2-WEB-PRODUCTION-KEEP"
+        ]
+      },
+      {
+        "id": "OPS-PIPE-V2-API-PRODUCTION",
+        "status": "present",
+        "statement": "SIMPLE_VPS_DEPLOYMENT está ACTIVE / CURRENT e foi usado com KEEP no run ec9d646a2a7344e9: source ac2f8cd9, operational source c3103e49 e imagem c53b2835; API healthy, restart 0, 11 migrations, pending vazio, PostgreSQL, Traefik e volume preservados.",
+        "basis": "observed",
+        "documentedAt": "2026-09-04T21:34:26.017Z",
+        "observedAt": "2026-09-04T18:04:22.255768Z",
+        "evidenceIds": [
+          "EV-API-ADR020-SIMPLE-VPS",
+          "EV-PIPE-V2-API-PRODUCTION-KEEP"
+        ]
+      },
+      {
+        "id": "OPS-PIPE-V2-WEB-PRODUCTION",
+        "status": "present",
+        "statement": "O source Web 6f53180e6c3947bd778e47c8fdb734567802e0d8 está live no deployment Vercel dpl_2DVvUezpSGPtmzenNkabDH1qt67J em app.agenciagenesismkt.com.br, com KEEP, READY, HTTPS/app/assets PASS e generated host protegido fail-closed.",
+        "basis": "observed",
+        "documentedAt": "2026-09-04T21:34:26.017Z",
+        "observedAt": "2026-09-04T21:34:26.017Z",
+        "evidenceIds": [
+          "EV-PIPE-V2-03-WEB-CI",
+          "EV-PIPE-V2-WEB-PRODUCTION-KEEP"
+        ]
+      },
+      {
+        "id": "OPS-PIPE-V2-WEB-API-INTEGRATION",
+        "status": "present",
+        "statement": "A integração Web/API same-origin passou CSRF, login, bootstrap, organização, Kanban e logout. API e Web passaram T+0/T+30/T+120; Presentation V2 foi obrigatória, executada e aprovada, sem rollback, page errors ou HTTP 5xx.",
+        "basis": "observed",
+        "documentedAt": "2026-09-04T21:34:26.017Z",
+        "observedAt": "2026-09-04T21:34:26.017Z",
+        "evidenceIds": [
+          "EV-PIPE-V2-API-PRODUCTION-KEEP",
+          "EV-PIPE-V2-WEB-PRODUCTION-KEEP"
         ]
       }
     ]
@@ -1131,6 +1194,31 @@
       "kind": "github-pr",
       "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/24",
       "capturedAt": "2026-09-02T08:38:04Z"
+    },
+    {
+      "id": "EV-PIPE-V2-03-WEB-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/actions/runs/33609759372",
+      "capturedAt": "2026-09-02T08:42:43Z"
+    },
+    {
+      "id": "EV-API-ADR020-SIMPLE-VPS",
+      "kind": "repository-file",
+      "uri": "repo://arthurportodev/genesis-platform-api/docs/decisions/ADR-020-simple-vps-deployment.md",
+      "sha256": "3582db48e0040ea566369daeef2a920e054a8ad819a6d0a8c0e88b92f9c25367",
+      "capturedAt": "2026-09-04T18:04:22.255768Z"
+    },
+    {
+      "id": "EV-PIPE-V2-API-PRODUCTION-KEEP",
+      "kind": "external-observation",
+      "uri": "artifact://genesis-platform/simple-vps-deployment/ec9d646a2a7344e9",
+      "capturedAt": "2026-09-04T18:04:22.255768Z"
+    },
+    {
+      "id": "EV-PIPE-V2-WEB-PRODUCTION-KEEP",
+      "kind": "external-observation",
+      "uri": "artifact://genesis-platform/web-production-deployment/151f76bfebbfa7d8",
+      "capturedAt": "2026-09-04T21:34:26.017Z"
     }
   ],
   "blockers": [
@@ -1144,7 +1232,7 @@
     {
       "id": "BLOCK-WEB-VERCEL-FUNCTIONAL",
       "status": "resolved",
-      "summary": "Histórico resolvido e superseded: C4R1/B4 não são mais o par live/rollback. A produção Web 10B usa dpl_3wHMLgJJP6wWAQ3epZzd3GYBLz4Z, com dpl_AuunpMMmehaXdXFa5wu52DAMF99P preservado para rollback.",
+      "summary": "Histórico resolvido e superseded: C4R1/B4 e o deployment 10B não são mais o estado live. PIPE-V2-03 está em Production no deployment dpl_2DVvUezpSGPtmzenNkabDH1qt67J com KEEP.",
       "owner": "arthur",
       "blocksTaskIds": []
     },
@@ -1158,14 +1246,14 @@
     {
       "id": "BLOCK-API-RELEASE-BINDING",
       "status": "resolved",
-      "summary": "O deployment 09E promoveu b45425d7 e preservou a4dafefa como rollback; a lacuna de versionamento do helper é restrição para um deployment futuro, não blocker do runtime atual.",
+      "summary": "O deploy simples PIPE-V2 promoveu c53b2835 com source ac2f8cd9 e preservou b45425d7 como previous digest; ADR-020 e o operador versionado substituíram a lacuna histórica do helper 09E.",
       "owner": "agent",
       "blocksTaskIds": []
     },
     {
       "id": "BLOCK-VPS-RELEASE-TREE-INTEGRITY",
       "status": "resolved",
-      "summary": "Histórico resolvido e superseded: o requisito de rebind associado a df7fca7 pertencia ao closeout MVP08. Sem afirmar rebind posterior, a evidência 09E estabelece o runtime b45425d7, fonte 0a56a8a, rollback a4dafefa e serviços saudáveis; o helper exato continua sujeito à restrição de proveniência para qualquer deployment futuro.",
+      "summary": "Histórico resolvido e superseded: o requisito de rebind associado a df7fca7 pertencia ao closeout MVP08. ADR-020 e o run ec9d646a2a7344e9 provaram SIMPLE_VPS_DEPLOYMENT como mecanismo current sem reconstruir o release-tree antigo.",
       "owner": "agent",
       "blocksTaskIds": []
     }
@@ -1245,14 +1333,15 @@
     },
     {
       "id": "RG-WEB-PRODUCTION-PROMOTION",
-      "statement": "A revisão Web 017ef005 recebeu promoção controlada, rollback preservado e observações técnica, de transporte e funcional; o shim eliminou o falso 412 observado sem alterar a concorrência otimista da API.",
+      "statement": "A revisão histórica 017ef005 e, depois, PIPE-V2-03 em 6f53180e receberam promoções controladas. O deployment dpl_2DVvUezpSGPtmzenNkabDH1qt67J passou same-origin, Presentation V2 obrigatória e T+0/T+30/T+120 com KEEP.",
       "status": "passed",
       "sourceEvidenceIds": [
         "EV-IFMATCH-WEB-PR20",
         "EV-IFMATCH-WEB-POSTMERGE-CI",
         "EV-IFMATCH-PRODUCTION-PROMOTION",
         "EV-IFMATCH-TECHNICAL-CANARY",
-        "EV-IFMATCH-FUNCTIONAL-SMOKE"
+        "EV-IFMATCH-FUNCTIONAL-SMOKE",
+        "EV-PIPE-V2-WEB-PRODUCTION-KEEP"
       ]
     }
   ],
@@ -1318,12 +1407,12 @@
       ]
     },
     {
-      "id": "OR-API-DEPLOYMENT-HELPER-PROVENANCE",
-      "statement": "O script exato executado na 09E está preservado somente na custódia operacional externa e não está comprovadamente versionado na main atual.",
-      "reviewTrigger": "Antes de qualquer futuro deployment da API, reconciliar, revisar e versionar novamente o procedimento; não inferir o artefato a partir da branch local 09E.",
+      "id": "OR-SIMPLE-VPS-DEPLOYMENT-AUTHORIZATION",
+      "statement": "SIMPLE_VPS_DEPLOYMENT é o mecanismo current; qualquer novo deploy ou rollback continua exigindo run ID, sources, digest, level, preflight e autorização humana próprios.",
+      "reviewTrigger": "Interromper antes de qualquer execução sem o envelope e Gate operacional definidos por ADR-020.",
       "sourceEvidenceIds": [
-        "EV-MVP09E-EXECUTED-SCRIPT",
-        "EV-MVP09E-DEPLOYMENT-MANIFEST"
+        "EV-API-ADR020-SIMPLE-VPS",
+        "EV-PIPE-V2-API-PRODUCTION-KEEP"
       ]
     },
     {
