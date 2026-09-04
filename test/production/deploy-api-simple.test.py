@@ -936,6 +936,13 @@ class FakeCompose:
         if self.fail_recreate_after is not None and len(self.recreate_calls) >= self.fail_recreate_after:
             raise deploy.DeployStop("RECREATE_FAILED")
 
+    def service_id(self, service):
+        return {
+            "api": "new-api",
+            "postgres": "postgres",
+            "traefik": "traefik",
+        }[service]
+
 
 class DummyLock:
     def __init__(self, *_args, **_kwargs):
@@ -1043,8 +1050,102 @@ class FakeSmoke:
         return [{"category": "rollback", "status": 200, "assertion": "PASS", "reasonCode": None}]
 
 
+class RuntimeHealthWaitTests(unittest.TestCase):
+    @staticmethod
+    def compose():
+        return types.SimpleNamespace(service_id=lambda service: "api-container")
+
+    def test_waits_only_while_starting_and_returns_healthy(self):
+        states = [
+            deploy.ContainerState("api-container", CANDIDATE, "running", "starting", 0),
+            deploy.ContainerState("api-container", CANDIDATE, "running", "starting", 0),
+            deploy.ContainerState("api-container", CANDIDATE, "running", "healthy", 0),
+        ]
+        sleeps = []
+        with mock.patch.object(deploy, "inspect_container", side_effect=states):
+            state = deploy.wait_for_runtime_healthy(
+                RecordingRunner(),
+                self.compose(),
+                CANDIDATE,
+                sleep=sleeps.append,
+                monotonic=lambda: 0,
+            )
+        self.assertEqual(state.health, "healthy")
+        self.assertEqual(sleeps, [deploy.API_HEALTH_POLL_INTERVAL_SECONDS] * 2)
+
+    def test_immediate_healthy_does_not_sleep(self):
+        sleep = mock.Mock()
+        state = deploy.ContainerState("api-container", CANDIDATE, "running", "healthy", 0)
+        with mock.patch.object(deploy, "inspect_container", return_value=state):
+            result = deploy.wait_for_runtime_healthy(
+                RecordingRunner(), self.compose(), CANDIDATE, sleep=sleep
+            )
+        self.assertIs(result, state)
+        sleep.assert_not_called()
+
+    def test_unhealthy_fails_immediately(self):
+        sleep = mock.Mock()
+        state = deploy.ContainerState("api-container", CANDIDATE, "running", "unhealthy", 0)
+        with mock.patch.object(deploy, "inspect_container", return_value=state):
+            with self.assertRaisesRegex(deploy.DeployStop, "API_NOT_HEALTHY"):
+                deploy.wait_for_runtime_healthy(
+                    RecordingRunner(), self.compose(), CANDIDATE, sleep=sleep
+                )
+        sleep.assert_not_called()
+
+    def test_exited_fails_immediately(self):
+        sleep = mock.Mock()
+        state = deploy.ContainerState("api-container", CANDIDATE, "exited", "starting", 0)
+        with mock.patch.object(deploy, "inspect_container", return_value=state):
+            with self.assertRaisesRegex(deploy.DeployStop, "API_NOT_HEALTHY"):
+                deploy.wait_for_runtime_healthy(
+                    RecordingRunner(), self.compose(), CANDIDATE, sleep=sleep
+                )
+        sleep.assert_not_called()
+
+    def test_wrong_digest_fails_immediately_even_when_healthy(self):
+        sleep = mock.Mock()
+        state = deploy.ContainerState("api-container", PREVIOUS, "running", "healthy", 0)
+        with mock.patch.object(deploy, "inspect_container", return_value=state):
+            with self.assertRaisesRegex(deploy.DeployStop, "RUNTIME_IMAGE_DIVERGED"):
+                deploy.wait_for_runtime_healthy(
+                    RecordingRunner(), self.compose(), CANDIDATE, sleep=sleep
+                )
+        sleep.assert_not_called()
+
+    def test_missing_health_fails_immediately(self):
+        sleep = mock.Mock()
+        state = deploy.ContainerState("api-container", CANDIDATE, "running", None, 0)
+        with mock.patch.object(deploy, "inspect_container", return_value=state):
+            with self.assertRaisesRegex(deploy.DeployStop, "API_NOT_HEALTHY"):
+                deploy.wait_for_runtime_healthy(
+                    RecordingRunner(), self.compose(), CANDIDATE, sleep=sleep
+                )
+        sleep.assert_not_called()
+
+    def test_starting_at_deadline_fails_with_health_timeout(self):
+        clock = {"now": 0}
+        sleeps = []
+        state = deploy.ContainerState("api-container", CANDIDATE, "running", "starting", 0)
+
+        def sleep(seconds):
+            sleeps.append(seconds)
+            clock["now"] = deploy.API_HEALTH_WAIT_TIMEOUT_SECONDS
+
+        with mock.patch.object(deploy, "inspect_container", return_value=state):
+            with self.assertRaisesRegex(deploy.DeployStop, "API_HEALTH_TIMEOUT"):
+                deploy.wait_for_runtime_healthy(
+                    RecordingRunner(),
+                    self.compose(),
+                    CANDIDATE,
+                    sleep=sleep,
+                    monotonic=lambda: clock["now"],
+                )
+        self.assertEqual(sleeps, [deploy.API_HEALTH_POLL_INTERVAL_SECONDS])
+
+
 class FlowTests(unittest.TestCase):
-    def run_flow(self, compose, *, level=1, expected_pending=(), smoke=None, candidate=CANDIDATE, checkpoint_error=None):
+    def run_flow(self, compose, *, level=1, expected_pending=(), smoke=None, candidate=CANDIDATE, checkpoint_error=None, runtime_states=None):
         temporary = tempfile.TemporaryDirectory()
         root = Path(temporary.name)
         evidence = root / "evidence"
@@ -1070,6 +1171,17 @@ class FlowTests(unittest.TestCase):
             compose.pointer_updates.append(image)
             write_pointer(path, image, **kwargs)
 
+        states = iter(runtime_states) if runtime_states is not None else None
+
+        def inspect_runtime(_runner, _container_id):
+            if states is not None:
+                return next(states)
+            return deploy.ContainerState(
+                "new-api", pointer_state["image"], "running", "healthy", 0
+            )
+
+        compose.sleep_calls = []
+
         patchers = [
             mock.patch.object(deploy, "DeploymentLock", DummyLock),
             mock.patch.object(deploy, "preflight", return_value=(snapshot, compose)),
@@ -1086,7 +1198,7 @@ class FlowTests(unittest.TestCase):
                 side_effect=lambda *_args, **_kwargs: pointer_state["image"],
             ),
             mock.patch.object(deploy, "verify_dependencies", return_value="new-api"),
-            mock.patch.object(deploy, "assert_runtime_image", return_value=deploy.ContainerState("new-api", candidate, "running", "healthy", 0)),
+            mock.patch.object(deploy, "inspect_container", side_effect=inspect_runtime),
             mock.patch.object(deploy, "observe"),
             mock.patch.object(deploy, "run_checkpoint"),
         ]
@@ -1110,7 +1222,7 @@ class FlowTests(unittest.TestCase):
             ),
             expected_hostname="fixture", minimum_free_bytes=0,
             policy=deploy.MetadataPolicy(uid=None, gid=None),
-            smoke_factory=lambda: smoke or FakeSmoke(), sleep=lambda _seconds: None,
+            smoke_factory=lambda: smoke or FakeSmoke(), sleep=compose.sleep_calls.append,
         )
         return temporary, result, checkpoint_mock
 
@@ -1202,6 +1314,41 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(result["result"], "ROLLBACK_FAILED")
         self.assertEqual(result["failureReasonCode"], "SMOKE_FAILED")
         self.assertEqual(result["rollbackReasonCode"], "ROLLBACK_FAILED")
+
+    def test_rollback_waits_for_previous_to_transition_from_starting_to_healthy(self):
+        compose = FakeCompose([((), ())])
+        states = [
+            deploy.ContainerState("new-api", CANDIDATE, "running", "healthy", 0),
+            deploy.ContainerState("new-api", PREVIOUS, "running", "starting", 0),
+            deploy.ContainerState("new-api", PREVIOUS, "running", "healthy", 0),
+        ]
+        temporary, result, _checkpoint = self.run_flow(
+            compose,
+            smoke=FakeSmoke(fail_full=True),
+            runtime_states=states,
+        )
+        self.addCleanup(temporary.cleanup)
+        self.assertEqual(result["result"], "ROLLBACK")
+        self.assertEqual(result["failureReasonCode"], "SMOKE_FAILED")
+        self.assertEqual(result["rollbackResult"], "PASS")
+        self.assertEqual(compose.sleep_calls, [deploy.API_HEALTH_POLL_INTERVAL_SECONDS])
+
+    def test_rollback_unhealthy_preserves_original_failure(self):
+        compose = FakeCompose([((), ())])
+        states = [
+            deploy.ContainerState("new-api", CANDIDATE, "running", "healthy", 0),
+            deploy.ContainerState("new-api", PREVIOUS, "running", "unhealthy", 0),
+        ]
+        temporary, result, _checkpoint = self.run_flow(
+            compose,
+            smoke=FakeSmoke(fail_full=True),
+            runtime_states=states,
+        )
+        self.addCleanup(temporary.cleanup)
+        self.assertEqual(result["result"], "ROLLBACK_FAILED")
+        self.assertEqual(result["failureReasonCode"], "SMOKE_FAILED")
+        self.assertEqual(result["rollbackReasonCode"], "ROLLBACK_FAILED")
+        self.assertEqual(compose.sleep_calls, [])
 
     def test_post_promotion_timeout_preserves_failure_and_rolls_back(self):
         class TimeoutOnceCompose(FakeCompose):
