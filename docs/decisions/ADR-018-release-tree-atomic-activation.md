@@ -1,8 +1,13 @@
 # ADR-018 — Contrato íntegro e ativação atômica da árvore de release
 
-- Estado: Accepted
+- Estado: Superseded pelo ADR-020; legacy / unsupported for new deploys
 - Data: 2026-08-14
 - Gate: 0.8-MVP-08B-R2 versioned remediation
+
+> Esta decisão permanece como registro histórico. O ADR-020 substitui a
+> release-tree para novos deploys da API; o tooling antigo é preservado para
+> história e auditoria, mas não é um caminho operacional suportado sob o novo
+> contrato Compose/pointer.
 
 ## Contexto
 

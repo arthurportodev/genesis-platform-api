@@ -73,7 +73,7 @@ services:
       - database
 
   migrate:
-    image: ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7
+    image: ${API_IMAGE:?API_IMAGE is required}
     platform: linux/amd64
     restart: 'no'
     init: true
@@ -115,7 +115,7 @@ services:
       - database
 
   api:
-    image: ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7
+    image: ${API_IMAGE:?API_IMAGE is required}
     platform: linux/amd64
     restart: unless-stopped
     init: true

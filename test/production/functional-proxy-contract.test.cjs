@@ -3,6 +3,7 @@ const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 const test = require('node:test');
 const {
+  API_RELEASE_BINDINGS,
   BASE_COMPOSE,
   FUNCTIONAL_COMPOSE,
   loadProductionCompose,
@@ -14,6 +15,7 @@ function loadFunctionalContract() {
     cwd: process.cwd(),
     composePaths: [resolve(BASE_COMPOSE), resolve(FUNCTIONAL_COMPOSE)],
     envFile: resolve('.env.production.example'),
+    environment: { API_IMAGE: API_RELEASE_BINDINGS.current.image },
   });
 }
 

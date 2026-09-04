@@ -3,6 +3,7 @@ const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 const test = require('node:test');
 const {
+  API_IMAGE_EXPRESSION,
   API_RELEASE_BINDINGS,
   BASE_COMPOSE,
   MODE_CONTRACTS,
@@ -25,10 +26,12 @@ function loadMode(mode, selectedStaticConfig) {
     cwd: process.cwd(),
     composePaths,
     envFile: resolve('.env.production.example'),
-    environment:
-      selectedStaticConfig === undefined
+    environment: {
+      API_IMAGE: API_RELEASE_BINDINGS.current.image,
+      ...(selectedStaticConfig === undefined
         ? {}
-        : { TRAEFIK_PUBLIC_HTTP_CONFIG: selectedStaticConfig },
+        : { TRAEFIK_PUBLIC_HTTP_CONFIG: selectedStaticConfig }),
+    },
   });
 }
 
@@ -55,6 +58,8 @@ test('pins every image by approved digest for linux/amd64', () => {
     loaded.config.services.migrate.image,
     API_RELEASE_BINDINGS.current.image,
   );
+  assert.equal(loaded.rawConfig.services.api.image, API_IMAGE_EXPRESSION);
+  assert.equal(loaded.rawConfig.services.migrate.image, API_IMAGE_EXPRESSION);
   assert.deepEqual(API_RELEASE_BINDINGS.current, {
     applicationRevision: 'ac2f8cd96ae02c1cad52366871bdde8ca651631d',
     image:
@@ -79,6 +84,28 @@ test('pins every image by approved digest for linux/amd64', () => {
     assert.equal(service.platform, 'linux/amd64');
     assert.match(service.image, /@sha256:[a-f0-9]{64}$/u);
   }
+});
+
+test('requires API_IMAGE explicitly with no Compose fallback', () => {
+  const missing = loadProductionCompose({
+    cwd: process.cwd(),
+    composePaths: [resolve(BASE_COMPOSE)],
+    envFile: resolve('.env.production.example'),
+    environment: { API_IMAGE: '' },
+  });
+  assert.equal(missing.status, 'failed');
+  assert.match(missing.failures.join('\n'), /API_IMAGE is required/u);
+});
+
+test('rejects historical harness compatibility metadata from current Compose', () => {
+  const rawConfig = structuredClone(loaded.rawConfig);
+  rawConfig['x-genesis-historical-release-api-images'] = {
+    api: API_RELEASE_BINDINGS.current.image,
+    migrate: API_RELEASE_BINDINGS.current.image,
+  };
+  const validation = validateProductionCompose(loaded.config, rawConfig);
+  assert.equal(validation.status, 'failed');
+  assert.match(validation.failures.join('\n'), /compatibility adapter/u);
 });
 
 test('renders four mutually exclusive binding modes with exact host IPs', () => {
