@@ -1147,6 +1147,19 @@ class HttpResult:
     body: bytes
 
 
+class RejectRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        request: urllib.request.Request,
+        file_pointer: Any,
+        code: int,
+        message: str,
+        headers: Mapping[str, Any],
+        new_url: str,
+    ) -> None:
+        raise DeployStop("FUNCTIONAL_SMOKE_REDIRECT_FORBIDDEN")
+
+
 class SmokeClient:
     def __init__(self, credentials_path: Path, *, opener: Any | None = None, policy: MetadataPolicy = MetadataPolicy()):
         self.base = "https://app.agenciagenesismkt.com.br"
@@ -1154,7 +1167,10 @@ class SmokeClient:
         self.credentials_path = credentials_path
         self.policy = policy
         self.cookies = http.cookiejar.CookieJar()
-        self.opener = opener or urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
+        self.opener = opener or urllib.request.build_opener(
+            RejectRedirectHandler(),
+            urllib.request.HTTPCookieProcessor(self.cookies),
+        )
 
     def request(self, method: str, path: str, *, headers: Mapping[str, str] | None = None, payload: Mapping[str, Any] | None = None) -> HttpResult:
         require(path.startswith("/api/v1/") and not path.startswith("//"), "FUNCTIONAL_SMOKE_ORIGIN_DIVERGED")

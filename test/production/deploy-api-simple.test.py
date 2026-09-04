@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import email.message
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -10,6 +11,8 @@ import sys
 import tempfile
 import types
 import unittest
+import urllib.request
+import urllib.response
 from pathlib import Path
 from unittest import mock
 
@@ -565,6 +568,23 @@ class FakeOpener:
         return self.responses.pop(0)
 
 
+class RedirectingHttpsHandler(urllib.request.HTTPSHandler):
+    def __init__(self, target):
+        super().__init__()
+        self.target = target
+        self.requests = []
+
+    def https_open(self, request):
+        self.requests.append(request)
+        headers = FakeHeaders()
+        headers["Location"] = self.target
+        response = urllib.response.addinfourl(
+            io.BytesIO(b""), headers, request.full_url, 302
+        )
+        response.msg = "Found"
+        return response
+
+
 def json_response(payload, cookies=()):
     return FakeResponse(200, json.dumps(payload).encode(), cookies)
 
@@ -577,6 +597,67 @@ def valid_kanban():
 
 
 class SmokeTests(unittest.TestCase):
+    def test_redirects_fail_before_forwarding_credentials_or_authorization(self):
+        cases = (
+            {
+                "target": "https://attacker.example.invalid/collect",
+                "method": "POST",
+                "path": "/api/v1/auth/login",
+                "headers": {
+                    "Origin": "https://app.agenciagenesismkt.com.br",
+                    "X-CSRF-Token": "A" * 43,
+                },
+                "payload": {
+                    "email": "fixture@example.com",
+                    "password": "secret-password",
+                },
+            },
+            {
+                "target": "http://app.agenciagenesismkt.com.br/api/v1/auth/bootstrap",
+                "method": "GET",
+                "path": "/api/v1/auth/bootstrap",
+                "headers": {"Authorization": "Bearer secret-access"},
+                "payload": None,
+            },
+        )
+        for case in cases:
+            with self.subTest(target=case["target"]):
+                transport = RedirectingHttpsHandler(case["target"])
+                opener = urllib.request.build_opener(
+                    transport,
+                    deploy.RejectRedirectHandler(),
+                )
+                client = deploy.SmokeClient(Path("unused"), opener=opener)
+                with self.assertRaisesRegex(
+                    deploy.DeployStop,
+                    "FUNCTIONAL_SMOKE_REDIRECT_FORBIDDEN",
+                ):
+                    client.request(
+                        case["method"],
+                        case["path"],
+                        headers=case["headers"],
+                        payload=case["payload"],
+                    )
+                self.assertEqual(len(transport.requests), 1)
+                self.assertEqual(
+                    transport.requests[0].full_url,
+                    f"https://app.agenciagenesismkt.com.br{case['path']}",
+                )
+                self.assertNotEqual(
+                    transport.requests[0].full_url,
+                    case["target"],
+                )
+                if case["payload"] is None:
+                    self.assertEqual(
+                        transport.requests[0].get_header("Authorization"),
+                        "Bearer secret-access",
+                    )
+                else:
+                    self.assertIn(
+                        b'"password": "secret-password"',
+                        transport.requests[0].data,
+                    )
+
     def test_full_smoke_uses_only_same_origin_and_validates_protocol(self):
         token = "A" * 43
         user_id = "00000000-0000-4000-8000-000000000001"
