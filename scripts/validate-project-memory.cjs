@@ -16,7 +16,7 @@ const WEB_POINTER_SCHEMA_PATH =
 // Provenance of the stable pointer receipt established by the MVP-10E
 // transition. Later Web application revisions do not rewrite this receipt.
 const WEB_SHA = 'e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e';
-const WEB_INTEGRATED_SHA = '017ef0056d97147a5e5337494fa339a3f65986ac';
+const WEB_INTEGRATED_SHA = '6f53180e6c3947bd778e47c8fdb734567802e0d8';
 const WEB_RECEIPT_BASE_SHA = 'ac87eb78640e641c67bf6e354ad497b421d487f8';
 const WEB_TRANSITION_ID = 'MVP-10E-CROSS-REPO';
 const TARGET_STATE_REVISION = 'MVP-10D-WEB-INTEGRATED-2026-08-24';
@@ -24,13 +24,13 @@ const WEB_POINTER_SCHEMA_FINGERPRINT =
   'b871059879b7bef315e1e2d354a8a343bbcf99588181ff87a29e92baaec89b64';
 const API_REPOSITORY = 'arthurportodev/genesis-platform-api';
 const WEB_REPOSITORY = 'arthurportodev/genesis-platform-web';
-const API_APPLICATION_REVISION = '0a56a8aee7c64bda59a1981888418e1ad03950c0';
+const API_APPLICATION_REVISION = 'ac2f8cd96ae02c1cad52366871bdde8ca651631d';
 const AUTHORIZED_API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb';
+  'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7';
 const AUTHORIZED_API_IMAGE_CONFIG_DIGEST =
-  'sha256:1cd0615209cd0ac5b00b9b89754d525a1af9eead3d727f3397a98bfe33d08b24';
+  'sha256:17e5b82451b78a20c6934b5dc2bb0cc00fa10252665245ed49b2f7c09a7fc629';
 const ROLLBACK_API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:a4dafefab191093ea7547e47ed09783cff2abb67b177cabd09aa07b94ac5797a';
+  'ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb';
 const MAX_BYTES = 512 * 1024;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{1,79}$/u;
 const FULL_SHA = /^(?!0{40}$)[a-f0-9]{40}$/u;
@@ -890,7 +890,7 @@ function renderProjection(state) {
     state.releaseGates,
     (entry) => `- **${entry.id}** [${entry.status}] — ${entry.statement}`,
   );
-  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web integrado na main:** ${state.releaseBindings.webIntegratedRevision}\n- **Revisão fonte da imagem API live:** ${state.releaseBindings.apiApplicationRevision}\n- **Revisão do contrato versionado de release API:** containing-commit\n- **Revisão do contrato versionado da árvore de release:** containing-commit\n- **Fingerprint contratual do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint contratual do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API live:** ${state.releaseBindings.authorizedApiImage}\n- **Imagem API de rollback:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória e tooling API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
+  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web Production live source:** ${state.releaseBindings.webIntegratedRevision}\n- **API Production application source:** ${state.releaseBindings.apiApplicationRevision}\n- **Contrato versionado de release API legado:** containing-commit (LEGACY / SUPERSEDED para novos deploys)\n- **Contrato release-tree legado:** containing-commit (LEGACY / SUPERSEDED para novos deploys)\n- **Fingerprint histórico do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint histórico do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API live:** ${state.releaseBindings.authorizedApiImage}\n- **Previous image API preservada:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória e tooling API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
 }
 
 function stripHistoricalRegions(text, path) {
