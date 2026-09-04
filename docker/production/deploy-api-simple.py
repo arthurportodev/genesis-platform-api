@@ -138,6 +138,8 @@ IMAGE_TRANSFER_TIMEOUT_SECONDS = 300
 COMPOSE_MUTATION_TIMEOUT_SECONDS = 300
 MIGRATION_TIMEOUT_SECONDS = 600
 CHECKPOINT_TIMEOUT_SECONDS = 900
+API_HEALTH_WAIT_TIMEOUT_SECONDS = 90
+API_HEALTH_POLL_INTERVAL_SECONDS = 2
 TRAEFIK_HTTP_STATUS_FIELDS = ("DownstreamStatus",)
 LOG_SENSITIVE_PATTERN = re.compile(
     r"(?i)(authorization\s*[:=]|bearer\s+\S+|password\s*[:=]|access[_-]?token\s*[:=]|refresh[_-]?token\s*[:=]|csrf(?:[_-]?token)?\s*[:=]|cookie\s*[:=]|set-cookie\s*[:=])"
@@ -1468,6 +1470,29 @@ def assert_runtime_image(runner: CommandRunner, compose: ComposeClient, expected
     return state
 
 
+def wait_for_runtime_healthy(
+    runner: CommandRunner,
+    compose: ComposeClient,
+    expected: str,
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> ContainerState:
+    deadline = monotonic() + API_HEALTH_WAIT_TIMEOUT_SECONDS
+    while True:
+        require(monotonic() < deadline, "API_HEALTH_TIMEOUT")
+        state = inspect_container(runner, compose.service_id("api"))
+        require(state.image == expected, "RUNTIME_IMAGE_DIVERGED")
+        require(state.status == "running", "API_NOT_HEALTHY")
+        if state.health == "healthy":
+            require(monotonic() <= deadline, "API_HEALTH_TIMEOUT")
+            return state
+        require(state.health == "starting", "API_NOT_HEALTHY")
+        remaining = deadline - monotonic()
+        require(remaining > 0, "API_HEALTH_TIMEOUT")
+        sleep(min(API_HEALTH_POLL_INTERVAL_SECONDS, remaining))
+
+
 def traefik_log_has_5xx(source: str) -> bool:
     for raw_line in source.splitlines():
         line = raw_line.strip()
@@ -1673,7 +1698,13 @@ def execute_deployment(
             compose.recreate_api()
             new_api_id = verify_dependencies(compose, snapshot)
             require(new_api_id != snapshot.api.container_id, "API_CONTAINER_NOT_RECREATED")
-            assert_runtime_image(runner, compose, candidate_image)
+            wait_for_runtime_healthy(
+                runner,
+                compose,
+                candidate_image,
+                sleep=sleep,
+                monotonic=monotonic,
+            )
             smoke_records = smoke.full()
             evidence.update(smoke=smoke_records)
             observe(
@@ -1710,7 +1741,13 @@ def execute_deployment(
                 compose.render(previous)
                 compose.recreate_api()
                 verify_dependencies(compose, snapshot)
-                assert_runtime_image(runner, compose, previous)
+                wait_for_runtime_healthy(
+                    runner,
+                    compose,
+                    previous,
+                    sleep=sleep,
+                    monotonic=monotonic,
+                )
                 rollback_smoke = smoke.compatibility()
                 evidence.data["smoke"] = [*evidence.data["smoke"], *rollback_smoke]
                 evidence.remember_rollback("PASS")
