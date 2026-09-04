@@ -773,11 +773,20 @@ def parse_migration_inventory(source: str) -> tuple[tuple[str, ...], tuple[str, 
         line = ansi.sub("", raw_line).strip()
         if not line:
             continue
-        match = re.fullmatch(r"\[([ X])\]\s+([A-Za-z0-9_.-]+)", line)
+        executed_match = re.fullmatch(
+            r"\[X\]\s+[1-9][0-9]*\s+([A-Za-z0-9_.-]+)", line
+        )
+        pending_match = re.fullmatch(r"\[ \]\s+([A-Za-z0-9_.-]+)", line)
+        require(
+            (executed_match is None) != (pending_match is None),
+            "AMBIGUOUS_MIGRATION_INVENTORY",
+        )
+        match = executed_match or pending_match
         require(match is not None, "AMBIGUOUS_MIGRATION_INVENTORY")
-        target = executed if match.group(1) == "X" else pending
-        require(match.group(2) not in executed and match.group(2) not in pending, "AMBIGUOUS_MIGRATION_INVENTORY")
-        target.append(match.group(2))
+        name = match.group(1)
+        require(name not in executed and name not in pending, "AMBIGUOUS_MIGRATION_INVENTORY")
+        target = executed if executed_match is not None else pending
+        target.append(name)
     require(executed or pending, "AMBIGUOUS_MIGRATION_INVENTORY")
     return tuple(executed), tuple(pending)
 
