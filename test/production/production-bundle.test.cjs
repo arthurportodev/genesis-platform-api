@@ -34,6 +34,8 @@ const {
   BASELINE_REPAIR_PROFILE,
 } = require('../../scripts/validate-production-compose.cjs');
 
+const LEGACY_BUNDLE_SOURCE_SHA = '2258de67d3aa15e44831f2696c51cdc06c17fb57';
+
 const MIGRATION_FIXTURE_INPUTS = readdirSync(
   join(process.cwd(), ...MIGRATION_DIRECTORY.split('/')),
 )
@@ -58,16 +60,24 @@ function runGit(cwd, args, options = {}) {
   }).trim();
 }
 
+function readLegacyFixtureInput(path) {
+  if (path !== 'compose.production.yml') {
+    return readFileSync(join(process.cwd(), ...path.split('/')));
+  }
+  return execFileSync(
+    'git',
+    ['show', `${LEGACY_BUNDLE_SOURCE_SHA}:compose.production.yml`],
+    { cwd: process.cwd(), windowsHide: true },
+  );
+}
+
 function committedFixture(root) {
   const repository = join(root, 'repository');
   mkdirSync(repository);
   for (const artifact of ARTIFACTS) {
     const target = join(repository, ...artifact.source.split('/'));
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(
-      target,
-      readFileSync(join(process.cwd(), ...artifact.source.split('/'))),
-    );
+    writeFileSync(target, readLegacyFixtureInput(artifact.source));
   }
   for (const source of MIGRATION_FIXTURE_INPUTS) {
     const target = join(repository, ...source.split('/'));
@@ -126,10 +136,7 @@ function candidateFixture(t) {
   for (const path of VERSIONED_FIXTURE_INPUTS) {
     const target = join(repository, ...path.split('/'));
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(
-      target,
-      readFileSync(join(process.cwd(), ...path.split('/'))),
-    );
+    writeFileSync(target, readLegacyFixtureInput(path));
   }
 
   runGit(repository, ['init', '--quiet']);
@@ -232,7 +239,26 @@ function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
-test('builds a deterministic non-operational candidate with current bindings', (t) => {
+test('audits legacy bundles against immutable historical Compose bytes', () => {
+  const currentCompose = readFileSync(
+    join(process.cwd(), 'compose.production.yml'),
+    'utf8',
+  );
+  const legacyCompose = readLegacyFixtureInput(
+    'compose.production.yml',
+  ).toString('utf8');
+  assert.match(currentCompose, /\$\{API_IMAGE:\?API_IMAGE is required\}/u);
+  assert.doesNotMatch(
+    currentCompose,
+    /x-genesis-historical-release-api-images/u,
+  );
+  assert.equal(
+    legacyCompose.split(API_RELEASE_BINDINGS.current.image).length - 1,
+    2,
+  );
+});
+
+test('builds a deterministic non-operational candidate with historical bindings', (t) => {
   const fixture = candidateFixture(t);
   const first = join(fixture.root, 'first');
   const second = join(fixture.root, 'second');

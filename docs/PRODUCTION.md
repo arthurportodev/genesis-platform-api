@@ -495,9 +495,119 @@ com essa tag não alcança o push.
 Essa entrega não depende de cadeia customizada de evidências. Controles
 avançados de supply chain são backlog pós-MVP.
 
-## Deploy manual — procedimento durável
+## Deploy simples da API
 
-O operador oficial e versionado para uma futura promoção da API é
+O procedimento vigente para novos deploys da API é o
+`SIMPLE_VPS_DEPLOYMENT` do [ADR-020](decisions/ADR-020-simple-vps-deployment.md),
+implementado por `docker/production/deploy-api-simple.py`. A implementação desta
+Task prepara e testa o operador, mas não instala arquivos nem autoriza uma
+execução na VPS.
+
+O diretório `/opt/genesis/deploy` é fixo, `root:root` e não gravável por
+group/other. Ele contém somente a allowlist do operador e
+`operational-integrity.json`; não há diretório por release. Para uma instalação
+futura, o manifesto é criado a partir de um checkout Git limpo cujo `HEAD` seja
+exatamente o `operationalSourceSha` aprovado no Gate A. O comando rejeita bytes
+dirty ou um commit diferente:
+
+```bash
+python3 <approved-checkout>/docker/production/deploy-api-simple.py manifest \
+  --source-root <approved-checkout> \
+  --production-env /opt/genesis/config/production.env \
+  --operational-source-sha <approved-40-hex-source-sha> \
+  --output /opt/genesis/deploy/operational-integrity.json
+```
+
+`production.env` contém exatamente a configuração não secreta aprovada, é
+`root:root 0600` e tem SHA-256 vinculado pelo manifesto. O pointer separado
+`/opt/genesis/config/api-image.env` é `root:root 0600`, regular, sem hardlink e
+tem exatamente uma linha:
+
+```text
+API_IMAGE=ghcr.io/arthurportodev/genesis-platform-api@sha256:<64-hex>
+```
+
+Compose é sempre chamado com `-p genesis`, `--project-directory
+/opt/genesis/deploy`, os env files `production.env` e `api-image.env` nessa
+ordem e os três Compose files absolutos. `api` e `migrate` exigem o mesmo
+`API_IMAGE`, sem fallback. O operador sempre exige, lê e confronta
+`api-image.env` com Docker. Ele limpa valores hostis herdados antes de cada
+subprocesso; somente inventory/migration do candidate recebe override explícito.
+Promoção e rollback revalidam o pointer e renderizam Compose sem `API_IMAGE` no
+ambiente filho antes da recriação.
+
+O comando `preflight` é a entrada read-only. Ele recebe separadamente
+`--application-source-sha` e `--operational-source-sha` e valida host/plataforma,
+integridade operacional, configuração, pointer/runtime, containers, volume,
+secrets, capacidade, topologia e inventário de migrations. Se o lock único
+`/run/lock/genesis-api-deploy.lock` ainda não existe, o probe o trata como livre
+sem criá-lo; somente `execute`, depois do Gate B, pode criá-lo. Concorrência
+encerra com `DEPLOYMENT_LOCK_HELD`.
+
+`execute` não é autorizado por este documento. Uma tarefa operacional futura
+deve aprovar a imagem/release, o application source SHA e o operational source
+SHA e fornecer Gate B como a string exata
+`<runId>:<applicationSourceSha>:<operationalSourceSha>:<candidate-image>:<level>`.
+A evidência root-only de Gate A contém exatamente esses dois SHAs, a imagem, o
+status aprovado e `approvedLevel2Pending`. O script aceita Level 1 somente sem
+pending e Level 2 somente com cada `--expected-pending` igual a essa lista.
+Level 2 reutiliza
+`/opt/genesis/recovery/backup-runner.sh --mode checkpoint`, exige
+status `passed`, executa migration one-shot e exige que o inventário final seja
+exatamente o anterior concatenado ao pending aprovado. Level 3 termina em
+`LEVEL_3_REQUIRES_SEPARATE_ARCHITECTURE`.
+
+A promoção escreve o pointer atomicamente e executa somente `docker compose up
+-d --no-deps --force-recreate api`. PostgreSQL e Traefik devem conservar seus
+IDs. Health interno usa Docker; health externo consulta somente
+`https://api.agenciagenesismkt.com.br/health`; o smoke funcional completo usa o
+proxy same-origin em `https://app.agenciagenesismkt.com.br`. Observation ocorre
+em T+0/T+30/T+120 no Level 1 e T+0/T+60/T+300 no Level 2. Todos os subprocessos
+têm timeout fixo por categoria; 5xx é detectado somente pelo campo inteiro
+`DownstreamStatus` de cada linha JSON válida do access log do Traefik.
+
+Evidence progressiva fica em
+`/var/lib/genesis/deploy/evidence/<runId>.json`, `root:root 0600`, sem tokens,
+cookies, passwords, CSRF ou bodies. A primeira falha é imutável. Se já houve
+promoção, rollback regrava o previous pointer e recria somente a API; nunca
+reverte migration. Falha de rollback preserva a causa inicial e termina em
+`ROLLBACK_FAILED / ESCALATION_REQUIRED`. Se a persistência da evidence falhar
+depois da promoção, a causa permanece em memória e nenhuma nova escrita de
+auditoria antecede ou interrompe o rollback; o estado terminal é persistido
+somente por uma tentativa best-effort depois da restauração do runtime.
+
+### Transição para o primeiro deploy simples
+
+Esta Task é somente a fase de implementação no repositório. Uma entrega Git
+posterior a Gate 2 também não altera o runtime. Na futura Task operacional, o
+primeiro deploy simples deve, antes de qualquer promoção:
+
+1. descobrir no Docker o digest factual atualmente executado;
+2. provar que essa imagem anterior é imutável, local ou pullable, com RepoDigest
+   e arquitetura `linux/amd64` corretos;
+3. instalar somente os arquivos allowlisted do mecanismo novo em
+   `/opt/genesis/deploy`;
+4. inicializar `api-image.env` com o digest factual anterior e provar
+   pointer == runtime;
+5. confirmar API, PostgreSQL e Traefik healthy, executar o novo preflight e
+   obter Gate B;
+6. promover pela primeira vez somente depois de o rollback novo ter sido
+   exercitado em rehearsal ou ambiente descartável.
+
+Se a imagem anterior não puder ser provada, o resultado é
+`STOP BEFORE MUTATION`. Se a primeira promoção falhar, o único rollback
+suportado é `previous digest -> pointer -> API-only recreate -> health`; ele não
+invoca o harness anterior. A produção permanece intocada até essa Task futura.
+
+## Deploy manual histórico — superseded para novos deploys
+
+Esta seção é mantida exclusivamente para história e auditoria. O release-tree é
+**legacy / unsupported for new deploys** depois da introdução do contrato
+Compose/pointer do ADR-020, pode não renderizar esse Compose atual e não é
+fallback para o deploy simples. Não há adaptador entre os dois modelos; cleanup
+é uma Task futura separada.
+
+O operador histórico e versionado para a promoção por release-tree é
 `docker/production/deploy-api-release.py`. Ele usa somente Python 3 e a
 biblioteca padrão e expõe exatamente `prepare`, `preflight` e `execute`. Sua
 presença, mode e hash integram os bundles `committed-release` current/rollback;
@@ -525,8 +635,9 @@ O fluxo é:
 
 O deploy permanece manual. A execução 09E já ocorreu conforme a seção de
 execução histórica acima; esta sequência não autoriza repetição nem transforma
-o helper histórico em procedimento atual. Cada novo deployment requer imagem e
-rollback imutáveis, plano, smoke, evidência e autorização humana próprios.
+o helper histórico em procedimento atual. Todo novo deploy usa o fluxo simples,
+com imagem anterior/candidate imutáveis, smoke, evidência e autorização humana
+próprios.
 
 No host, `preflight` e `execute` aceitam somente os dois paths materializados
 acima e `<remoteWorkspace>/evidence.jsonl`; um path arbitrário é recusado.

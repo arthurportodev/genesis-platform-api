@@ -53,6 +53,7 @@ jobs:
       DATABASE_RUNTIME_ROLE: genesis_runtime_test
       DATABASE_MIGRATION_USER: genesis_test
       DATABASE_MIGRATION_PASSWORD: test-only
+      API_IMAGE: ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7
 
     steps:
       - name: Initialize synthetic production paths

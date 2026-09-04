@@ -40,6 +40,7 @@ const POSTGRES_IMAGE =
 const TRAEFIK_IMAGE =
   'traefik@sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8';
 const PLATFORM = 'linux/amd64';
+const API_IMAGE_EXPRESSION = '${API_IMAGE:?API_IMAGE is required}';
 const EXPECTED_SERVICES = ['api', 'migrate', 'postgres', 'traefik'];
 const BASE_COMPOSE = 'compose.production.yml';
 const FUNCTIONAL_COMPOSE = 'compose.production.functional.yml';
@@ -195,6 +196,12 @@ function validateProductionCompose(
     failures,
   );
   check(
+    rawConfig?.['x-genesis-historical-release-api-images'] === undefined &&
+      config?.['x-genesis-historical-release-api-images'] === undefined,
+    'current Compose must not carry a historical harness compatibility adapter',
+    failures,
+  );
+  check(
     JSON.stringify(names) === JSON.stringify(EXPECTED_SERVICES),
     `expected only ${EXPECTED_SERVICES.join(', ')} services`,
     failures,
@@ -257,9 +264,17 @@ function validateProductionCompose(
     'traefik image must use the approved official digest',
     failures,
   );
+  check(
+    rawApi.image === API_IMAGE_EXPRESSION,
+    'api image must use the exact API_IMAGE pointer expression',
+    failures,
+  );
+  check(
+    rawMigrate.image === API_IMAGE_EXPRESSION,
+    'migrate image must use the exact API_IMAGE pointer expression',
+    failures,
+  );
   for (const [name, image] of Object.entries({
-    api: rawApi.image,
-    migrate: rawMigrate.image,
     postgres: rawPostgres.image,
     traefik: rawTraefik.image,
   })) {
@@ -1247,6 +1262,7 @@ function main() {
 if (require.main === module) main();
 
 module.exports = {
+  API_IMAGE_EXPRESSION,
   API_RELEASE_BINDINGS,
   BASELINE_REPAIR_BINDINGS,
   BASELINE_REPAIR_PROFILE,
