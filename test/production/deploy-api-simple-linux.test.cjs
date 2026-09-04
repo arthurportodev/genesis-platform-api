@@ -8,11 +8,23 @@ test('simple VPS deployment passes its Python and real Linux mechanism suite', (
     t.skip('Linux-only filesystem, flock, fsync, and subprocess contract.');
     return;
   }
-  const result = spawnSync(
-    'python3',
-    [join(process.cwd(), 'test', 'production', 'deploy-api-simple.test.py')],
-    { encoding: 'utf8', windowsHide: true },
+  const testPath = join(
+    process.cwd(),
+    'test',
+    'production',
+    'deploy-api-simple.test.py',
   );
+  const command = process.getuid?.() === 0 ? 'python3' : 'sudo';
+  const arguments =
+    command === 'python3' ? [testPath] : ['-n', 'python3', testPath];
+  const result = spawnSync(command, arguments, {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.error?.code === 'ENOENT' && process.env.CI !== 'true') {
+    t.skip('passwordless sudo is unavailable outside CI');
+    return;
+  }
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(`${result.stdout}\n${result.stderr}`, /OK/u);
 });

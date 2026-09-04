@@ -192,10 +192,19 @@ class OperationalIntegrityTests(unittest.TestCase):
                 deploy.validate_regular_metadata(
                     Path("file"), policy=deploy.MetadataPolicy()
                 )
-        directory = types.SimpleNamespace(
-            st_mode=stat.S_IFDIR | 0o775, st_uid=0, st_gid=0
+        safe_directory = types.SimpleNamespace(
+            st_mode=stat.S_IFDIR | 0o755, st_uid=0, st_gid=0
         )
-        with mock.patch.object(Path, "lstat", return_value=directory), mock.patch.object(
+        with mock.patch.object(Path, "lstat", return_value=safe_directory), mock.patch.object(
+            Path, "is_symlink", return_value=False
+        ):
+            deploy.validate_safe_directory(
+                Path("parent"), policy=deploy.MetadataPolicy()
+            )
+        unsafe_directory = types.SimpleNamespace(
+            st_mode=stat.S_IFDIR | 0o1777, st_uid=0, st_gid=0
+        )
+        with mock.patch.object(Path, "lstat", return_value=unsafe_directory), mock.patch.object(
             Path, "is_symlink", return_value=False
         ):
             with self.assertRaisesRegex(deploy.DeployStop, "UNSAFE_PARENT_DIRECTORY"):
@@ -1266,16 +1275,75 @@ class FlowTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform.startswith("linux"), "Linux mechanism contract")
 class LinuxMechanismTests(unittest.TestCase):
+    @unittest.skipUnless(
+        getattr(os, "geteuid", lambda: -1)() == 0,
+        "Exact /run lock contract requires a disposable root Linux runner",
+    )
+    def test_default_run_lock_path_acquisition_exclusion_release_and_reuse(self):
+        lock = deploy.LOCK_PATH
+        self.assertEqual(lock, Path("/run/genesis-api-deploy.lock"))
+        self.assertFalse(lock.exists() or lock.is_symlink())
+        parent = lock.parent.lstat()
+        self.assertTrue(stat.S_ISDIR(parent.st_mode))
+        self.assertFalse(lock.parent.is_symlink())
+        self.assertEqual((parent.st_uid, parent.st_gid), (0, 0))
+        self.assertEqual(stat.S_IMODE(parent.st_mode) & 0o022, 0)
+        policy = deploy.MetadataPolicy(uid=0, gid=0)
+        created = False
+        try:
+            deploy.probe_deployment_lock(lock, policy)
+            self.assertFalse(lock.exists())
+            with deploy.DeploymentLock(lock, policy):
+                created = True
+                metadata = lock.lstat()
+                self.assertTrue(stat.S_ISREG(metadata.st_mode))
+                self.assertEqual(stat.S_IMODE(metadata.st_mode), 0o600)
+                self.assertEqual((metadata.st_uid, metadata.st_gid), (0, 0))
+                self.assertEqual(metadata.st_nlink, 1)
+                with self.assertRaisesRegex(
+                    deploy.DeployStop,
+                    "DEPLOYMENT_LOCK_HELD",
+                ):
+                    with deploy.DeploymentLock(lock, policy):
+                        pass
+                with self.assertRaisesRegex(
+                    deploy.DeployStop,
+                    "DEPLOYMENT_LOCK_HELD",
+                ):
+                    deploy.probe_deployment_lock(lock, policy)
+            self.assertTrue(lock.exists())
+            deploy.probe_deployment_lock(lock, policy)
+            with deploy.DeploymentLock(lock, policy):
+                pass
+        finally:
+            if created:
+                metadata = lock.lstat()
+                self.assertTrue(stat.S_ISREG(metadata.st_mode))
+                self.assertEqual((metadata.st_uid, metadata.st_gid), (0, 0))
+                self.assertEqual(metadata.st_nlink, 1)
+                lock.unlink()
+        self.assertFalse(lock.exists())
+
     def test_real_flock_modes_fsync_replace_and_subprocess(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             chmod(root, 0o700)
+            unsafe_parent = root / "unsafe-lock-parent"
+            unsafe_parent.mkdir()
+            chmod(unsafe_parent, 0o1777)
+            unsafe_lock = unsafe_parent / "deploy.lock"
+            policy = deploy.MetadataPolicy(os.getuid(), os.getgid())
+            with self.assertRaisesRegex(
+                deploy.DeployStop,
+                "UNSAFE_PARENT_DIRECTORY",
+            ):
+                deploy.probe_deployment_lock(unsafe_lock, policy)
+            self.assertFalse(unsafe_lock.exists())
             pointer = root / "api-image.env"
             deploy.write_pointer(pointer, PREVIOUS, uid=os.getuid(), gid=os.getgid())
             self.assertEqual(stat.S_IMODE(pointer.stat().st_mode), 0o600)
             self.assertEqual(deploy.read_pointer(pointer, policy=deploy.MetadataPolicy(os.getuid(), os.getgid())), PREVIOUS)
             lock = root / "deploy.lock"
-            policy = deploy.MetadataPolicy(os.getuid(), os.getgid())
             deploy.probe_deployment_lock(lock, policy)
             self.assertFalse(lock.exists())
             with deploy.DeploymentLock(lock, policy):

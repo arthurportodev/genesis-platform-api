@@ -540,7 +540,7 @@ O comando `preflight` é a entrada read-only. Ele recebe separadamente
 `--application-source-sha` e `--operational-source-sha` e valida host/plataforma,
 integridade operacional, configuração, pointer/runtime, containers, volume,
 secrets, capacidade, topologia e inventário de migrations. Se o lock único
-`/run/lock/genesis-api-deploy.lock` ainda não existe, o probe o trata como livre
+`/run/genesis-api-deploy.lock` ainda não existe, o probe o trata como livre
 sem criá-lo; somente `execute`, depois do Gate B, pode criá-lo. Concorrência
 encerra com `DEPLOYMENT_LOCK_HELD`.
 
