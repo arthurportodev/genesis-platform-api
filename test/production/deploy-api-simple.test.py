@@ -30,6 +30,19 @@ APPLICATION_SOURCE_SHA = "a" * 40
 OPERATIONAL_SOURCE_SHA = "b" * 40
 PREVIOUS = f"{deploy.IMAGE_REPOSITORY}@sha256:{'1' * 64}"
 CANDIDATE = f"{deploy.IMAGE_REPOSITORY}@sha256:{'2' * 64}"
+PRODUCTION_MIGRATIONS = (
+    "CreateMultiTenantCore1784400000000",
+    "CreateAuthSessions1784486400000",
+    "CreateOrganizationInvitations1785004800000",
+    "DeliverInvitationAcceptance1785087600000",
+    "ActivateNewInvitationUser1785174000000",
+    "ManageMembershipOwnership1785260400000",
+    "CreateLeadFoundation1785346800000",
+    "ManageLeadCommercialPipeline1785433200000",
+    "ManageLeadActivitiesFollowUp1785519600000",
+    "AddLeadOperationalReadIndexes1785606000000",
+    "ManageLeadCommercialCycleExpectedValue1788289200000",
+)
 
 
 def production_env_bytes() -> bytes:
@@ -390,7 +403,7 @@ class ComposeTests(unittest.TestCase):
         self.assertNotIn("API_IMAGE", options["env"])
         self.assertEqual(options["env"]["SAFE"], "yes")
         self.assertNotIn("COMPOSE_FILE", options["env"])
-        runner.output = "[X] Existing\n"
+        runner.output = "[X] 1 Existing\n"
         compose.migration_inventory(CANDIDATE)
         self.assertEqual(runner.calls[1][1]["env"]["API_IMAGE"], CANDIDATE)
         runner.output = ""
@@ -494,14 +507,52 @@ class ImageTests(unittest.TestCase):
 
 
 class MigrationTests(unittest.TestCase):
-    def test_parses_exact_inventory(self):
+    def test_parses_exact_production_inventory(self):
+        source = "".join(
+            f"[X] {database_id} {name}\n"
+            for database_id, name in enumerate(PRODUCTION_MIGRATIONS, start=1)
+        )
         self.assertEqual(
-            deploy.parse_migration_inventory("[X] Existing\n[ ] Pending_1\n"),
-            (("Existing",), ("Pending_1",)),
+            deploy.parse_migration_inventory(source),
+            (PRODUCTION_MIGRATIONS, ()),
+        )
+
+    def test_parses_executed_and_pending_inventory(self):
+        executed = PRODUCTION_MIGRATIONS[:10]
+        source = "".join(
+            f"[X] {database_id} {name}\n"
+            for database_id, name in enumerate(executed, start=1)
+        )
+        source += "[ ] FutureMigration1790000000000\n"
+        self.assertEqual(
+            deploy.parse_migration_inventory(source),
+            (executed, ("FutureMigration1790000000000",)),
+        )
+
+    def test_preserves_typeorm_order_without_requiring_consecutive_ids(self):
+        self.assertEqual(
+            deploy.parse_migration_inventory(
+                "\x1b[32m[X] 7 First1780000000000\x1b[0m\n"
+                "[X] 42 Second1790000000000\n"
+            ),
+            (("First1780000000000", "Second1790000000000"), ()),
         )
 
     def test_rejects_ambiguous_inventory(self):
-        for source in ("", "noise\n", "[ ] duplicate\n[ ] duplicate\n"):
+        for source in (
+            "",
+            "noise\n",
+            "[X] Existing\n",
+            "[X] abc Existing\n",
+            "[X] 1\n",
+            "[X] 0 Existing\n",
+            "[X] 01 Existing\n",
+            "[ ] 1 Pending\n",
+            "[X] 1 Duplicate\n[X] 2 Duplicate\n",
+            "[X] 1 Duplicate\n[ ] Duplicate\n",
+            "noise\n[X] 1 Existing\n",
+            "[X] 1 Existing\nnoise\n",
+        ):
             with self.subTest(source=source), self.assertRaisesRegex(deploy.DeployStop, "AMBIGUOUS_MIGRATION_INVENTORY"):
                 deploy.parse_migration_inventory(source)
 
