@@ -4,25 +4,25 @@
 
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
-- **Revisão de estado:** PIPE-V2-03A-IMPLEMENTED-AND-MERGED-2026-09-05
-- **Atualização documentada:** 2026-09-05T13:08:30.2731380Z
+- **Revisão de estado:** PIPE-V2-03A-PRODUCTION-KEEP-2026-09-05
+- **Atualização documentada:** 2026-09-05T21:09:57.0737619Z
 - **Fase:** PIPE-V2 — Pipeline Experience V2
 - **Último trabalho concluído:** PIPE-V2-03A — Expected Value Editing
-- **Trabalho vigente:** none — Nenhum deployment está ativo. PIPE-V2-03A está IMPLEMENTED_AND_MERGED / NOT_DEPLOYED; a próxima tarefa é sua operação de release em Production.
-- **Próxima tarefa:** PIPE-V2-03A-PRODUCTION-RELEASE — Production Release Operation
-- **Web Production live source:** 6f53180e6c3947bd778e47c8fdb734567802e0d8
-- **API Production application source:** ac2f8cd96ae02c1cad52366871bdde8ca651631d
+- **Trabalho vigente:** none — PIPE-V2-03A está CLOSED em PRODUCTION_KEEP / 03A_LIVE; API e Web permanecem KEEP e nenhuma operação de Production está ativa.
+- **Próxima tarefa:** PENDING-ROADMAP-PRIORITIZATION — Priorizar o próximo marco do produto a partir dos planos versionados
+- **Web Production live source:** 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6
+- **API Production application source:** a169369fd9760d32c922cc646df92cc0f5f632e1
 - **Contrato versionado de release API legado:** containing-commit (LEGACY / SUPERSEDED para novos deploys)
 - **Contrato release-tree legado:** containing-commit (LEGACY / SUPERSEDED para novos deploys)
 - **Fingerprint histórico do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit
 - **Fingerprint histórico do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit
-- **Imagem API live:** ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7
-- **Previous image API preservada:** ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb
+- **Imagem API live:** ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862
+- **Previous image API preservada:** ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7
 - **Proveniência da memória e tooling API:** containing-commit
 
 ## Estado operacional
 
-PIPE-V2-03A está implementada e incorporada nas duas main, mas permanece NOT_DEPLOYED. Os bindings live da API e do Web continuam nos releases PIPE-V2-03 já observados em Production, e nenhuma execução de produção está ativa.
+PIPE-V2-03A está IMPLEMENTED, MERGED e em Production com API KEEP e Web KEEP. Os bindings live funcionais estão separados dos SHAs posteriores de tooling, as observações finais passaram e nenhum deployment está ativo.
 
 - **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
 - **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
@@ -96,10 +96,15 @@ PIPE-V2-03A está implementada e incorporada nas duas main, mas permanece NOT_DE
 - **OPS-PIPE-V2-01-COMPLETE** [documented/present] — PIPE-V2-01 — Financial Domain está concluída e incorporada na API pelo PR #68 (785ec54c273437f40d9ff4a6aaf6bd81b90aeb08).
 - **OPS-PIPE-V2-02-COMPLETE** [documented/present] — PIPE-V2-02 — Financial Aggregates está concluída e incorporada na API pelo PR #69 (ac2f8cd96ae02c1cad52366871bdde8ca651631d).
 - **OPS-PIPE-V2-03-COMPLETE** [observed/present] — PIPE-V2-03 — Presentation V2 está concluída, incorporada no Web pelo PR #24 em 6f53180e6c3947bd778e47c8fdb734567802e0d8 e live em Production; o browser harness obrigatório executou V2 sem skip, page error ou 5xx.
-- **OPS-PIPE-V2-03A-INTEGRATED-NOT-DEPLOYED** [observed/present] — PIPE-V2-03A — Expected Value Editing está IMPLEMENTED_AND_MERGED / NOT_DEPLOYED: o PR API #83 foi integrado em a169369fd9760d32c922cc646df92cc0f5f632e1 e o PR Web #26 foi integrado em 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6; os CIs pós-merge passaram, nenhum deploy foi executado e os bindings de Production permanecem inalterados.
-- **OPS-PIPE-V2-API-PRODUCTION** [observed/present] — SIMPLE_VPS_DEPLOYMENT está ACTIVE / CURRENT e foi usado com KEEP no run ec9d646a2a7344e9: source ac2f8cd9, operational source c3103e49 e imagem c53b2835; API healthy, restart 0, 11 migrations, pending vazio, PostgreSQL, Traefik e volume preservados.
-- **OPS-PIPE-V2-WEB-PRODUCTION** [observed/present] — O source Web 6f53180e6c3947bd778e47c8fdb734567802e0d8 está live no deployment Vercel dpl_2DVvUezpSGPtmzenNkabDH1qt67J em app.agenciagenesismkt.com.br, com KEEP, READY, HTTPS/app/assets PASS e generated host protegido fail-closed.
-- **OPS-PIPE-V2-WEB-API-INTEGRATION** [observed/present] — A integração Web/API same-origin passou CSRF, login, bootstrap, organização, Kanban e logout. API e Web passaram T+0/T+30/T+120; Presentation V2 foi obrigatória, executada e aprovada, sem rollback, page errors ou HTTP 5xx.
+- **OPS-PIPE-V2-03A-PRODUCTION-KEEP** [observed/present] — PIPE-V2-03A — Expected Value Editing está IMPLEMENTED, MERGED e 03A_LIVE: API source a169369fd9760d32c922cc646df92cc0f5f632e1 em KEEP e Web source 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6 em KEEP. Criação e edição normal suportam Valor da oportunidade; cidade e valor foram salvos atomicamente por uma única intenção de Save, sem evidência de escrita parcial.
+- **OPS-PIPE-V2-API-PRODUCTION** [observed/present] — SIMPLE_VPS_DEPLOYMENT permanece ACTIVE / CURRENT. A API funcional source a169369fd9760d32c922cc646df92cc0f5f632e1 está live na imagem imutável e0d3613f, com Migration Level 1, pending migrations [], observações PASS e KEEP; o runtime permaneceu inalterado durante a recuperação Web posterior.
+- **OPS-PIPE-V2-WEB-PRODUCTION** [observed/present] — O source Web funcional 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6 está live no deployment Vercel dpl_DhUzyzKhq2e1emvUMLPYEnSWYFYt em app.agenciagenesismkt.com.br, com dpl_2DVvUezpSGPtmzenNkabDH1qt67J preservado como previous; core smoke, evidência funcional e T+0/T+30/T+120 passaram, resultando em KEEP.
+- **OPS-PIPE-V2-WEB-API-INTEGRATION** [observed/present] — A validação final Web/API passou core smoke e Recovery Gate read-only no Lead sintético 7bd8e64b-d9d6-49ca-ba2d-5d7bf54d668e: cidade Anápolis, expectedValueMinor 200000, Pipeline R$ 2.000,00 e timeline null → 123450 → 200000 com atualização da cidade. T+0/T+30/T+120 passaram, sem escrita parcial ou rollback final.
+- **OPS-GENESIS-SMOKE-PROFILE-V1** [observed/present] — Genesis Smoke Profile v1 define generated-host, production-core e production-feature. O binding sintético Production usa principalUserId 073910f4-18f4-4528-89f6-5b603e675c10, genesis-smoke@agenciagenesismkt.com.br, organizationId 798e0d69-78a8-4538-abe6-245f62787d64, Genesis Smoke, membershipId 8935997b-88cd-4111-8391-59b2803627fd e role OWNER em /opt/genesis/shared/config/smoke-profile.v1.json, SHA-256 20d64e028523bca1bd2cd3780ac14ea8cd184ae1adfa30e2a43e3fd22c4187dc.
+- **OPS-PIPE-V2-03A-API-TOOLING-SEPARATION** [observed/present] — A API funcional permanece no source a169369fd9760d32c922cc646df92cc0f5f632e1 e na imagem ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862. O source 7cba39e7c5869cdcb9d00eeb58f278e009ebf474 e a imagem ghcr.io/arthurportodev/genesis-platform-api@sha256:4242a35bf5b3d288209a7e94429c892b7eecb031012e704fb794501c6d909ade são tooling-only e não foram promovidos. operator:owner resolve recupera read-only uma identidade OWNER já existente.
+- **OPS-PIPE-V2-03A-WEB-TOOLING-SEPARATION** [observed/present] — O source Web funcional Production permanece 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6. Os SHAs posteriores 984811c13f3454f58aa524cd7663f7982d3910a8, do Genesis Smoke Profile v1, e 9c626245c381c3186011059a8716d5b67b752038, da correção de assertion, são tooling operacional/teste e não representam novo deployment funcional.
+- **OPS-PIPE-V2-03A-RELEASE-LESSON** [observed/present] — A primeira promoção Web foi revertida por um locator ambíguo na timeline do feature smoke. A verificação forense read-only provou que a mutação da aplicação havia sido atômica; a assertion recebeu locator escopado e a segunda promoção reutilizou o Lead sintético existente pelo Recovery Gate read-only. As validações finais passaram e o Web chegou a KEEP.
+- **OPS-PIPE-V2-03A-SMOKE-EVIDENCE-FOLLOW-UP** [documented/partial] — Follow-up não bloqueante, não requerido para 03A: melhorar a evidência sanitizada de falha do feature smoke com UUID do Lead sintético, substages diagnósticos mais finos, method/path/status da mutação crítica e última assertion concluída. Nenhuma implementação faz parte deste closeout.
 
 ## Blockers abertos
 
@@ -116,13 +121,13 @@ PIPE-V2-03A está implementada e incorporada nas duas main, mas permanece NOT_DE
 - **RG-TLS** [passed] — TLS, hostname, CNAME e o caminho funcional same-origin protegido foram comprovados no domínio final; o acesso direto à API sem a chave continua 404.
 - **RG-RECOVERY** [passed] — Backup recuperável e restore sintético devem passar antes de dados reais.
 - **RG-CROSS-TENANT** [pending] — A evidência atual não é suficiente para aprovar o gate adversarial cross-tenant. Ele permanece pendente para expansão de usuários e dados e não invalida o estado live atual com um OWNER efetivo.
-- **RG-WEB-PRODUCTION-PROMOTION** [passed] — A revisão histórica 017ef005 e, depois, PIPE-V2-03 em 6f53180e receberam promoções controladas. O deployment dpl_2DVvUezpSGPtmzenNkabDH1qt67J passou same-origin, Presentation V2 obrigatória e T+0/T+30/T+120 com KEEP.
+- **RG-WEB-PRODUCTION-PROMOTION** [passed] — PIPE-V2-03A foi promovida no deployment dpl_DhUzyzKhq2e1emvUMLPYEnSWYFYt. Core smoke, Recovery Gate read-only, evidência funcional e T+0/T+30/T+120 passaram; o source funcional 90dc36a3 permaneceu distinto do tooling posterior e a decisão final foi KEEP.
 
 ## Restrições atuais
 
 - **OR-SINGLE-VPS** — A baseline documentada usa uma única VPS e um único failure domain.
 - **OR-SINGLE-REPLICA** — A API pública permanece limitada a uma réplica enquanto controles forem process-local.
-- **OR-NO-COMMERCIAL-LEADS-OBSERVED** — A 10A e a 10B não criaram Leads de negócio; o fato comprovado é a existência da organização Porto e de um OWNER real ativo, com uso normal inicial do CRM disponível.
+- **OR-NO-COMMERCIAL-LEADS-OBSERVED** — Nenhum Lead comercial foi observado. PIPE-V2-03A reutilizou exclusivamente o Lead sintético 7bd8e64b-d9d6-49ca-ba2d-5d7bf54d668e da organização Genesis Smoke para a evidência controlada de Production.
 - **OR-POSTGRES-PRIVATE** — O PostgreSQL deve permanecer privado, sem binding de porta no host ou exposição direta à Internet.
 - **OR-FUNCTIONAL-API-ORIGIN-PROTECTED** — A API funcional é acessível somente pelo proxy same-origin /api/v1 do domínio final e pelo Traefik protegido; a origem direta sem chave permanece 404.
 - **OR-VERCEL-HOBBY-TECHNICAL-MVP** — O frontend live e o OWNER real foram aprovados no plano Vercel atual; a adequação técnica e contratual para onboarding externo ou uso comercial ampliado permanece decisão específica pendente.
