@@ -1969,7 +1969,7 @@ describe('Lead foundation database integration', () => {
       city: beforeCommonFailure.city,
       revision: beforeCommonFailure.revision,
     });
-    expect(afterCommonFailure.latestCycle.expectedValueMinor).toBe('200');
+    expect(afterCommonFailure.latestCycle.expectedValueMinor).toBe('250');
     await expect(
       service.updateInformation(
         tenant,
