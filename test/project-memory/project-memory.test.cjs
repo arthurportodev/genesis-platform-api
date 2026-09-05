@@ -463,7 +463,7 @@ test('requires the MVP08 remote tree binding to be explicitly superseded', () =>
 test('binds application, containing release contracts, derived bundle, images and Web exactly', () => {
   const state = readJson(ROOT);
   assert.deepEqual(state.releaseBindings, {
-    apiApplicationRevision: 'ac2f8cd96ae02c1cad52366871bdde8ca651631d',
+    apiApplicationRevision: 'a169369fd9760d32c922cc646df92cc0f5f632e1',
     apiReleaseManifestRevision: { kind: 'containing-commit' },
     apiReleaseTreeContractRevision: { kind: 'containing-commit' },
     apiReleaseBundleFingerprint: {
@@ -479,11 +479,11 @@ test('binds application, containing release contracts, derived bundle, images an
       releaseRole: 'rollback',
     },
     authorizedApiImage:
-      'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7',
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862',
     authorizedApiImageConfigDigest:
-      'sha256:17e5b82451b78a20c6934b5dc2bb0cc00fa10252665245ed49b2f7c09a7fc629',
+      'sha256:6debf2bc06aa96cf42308b81908a7ca48d86089e02fe263350a716c643962a2a',
     rollbackApiImage:
-      'ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb',
+      'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7',
     webIntegratedRevision: WEB_INTEGRATED_SHA,
   });
 
@@ -927,14 +927,14 @@ test('projection is derived only from the authority object', () => {
     new RegExp(state.nextTask.id.replaceAll('.', '\\.')),
   );
   assert.match(projection, /containing-commit/u);
-  assert.match(projection, /ac2f8cd96ae02c1cad52366871bdde8ca651631d/u);
+  assert.match(projection, /a169369fd9760d32c922cc646df92cc0f5f632e1/u);
+  assert.match(projection, /sha256:e0d3613fbf77/u);
   assert.match(projection, /sha256:c53b28357195/u);
-  assert.match(projection, /sha256:b45425d7f6ea63/u);
   assert.match(projection, /LEGACY \/ SUPERSEDED/u);
   assert.match(projection, new RegExp(WEB_INTEGRATED_SHA, 'u'));
 });
 
-test('records PIPE-V2-03A as integrated and not deployed while preserving Production', () => {
+test('records PIPE-V2-03A as closed with durable Production KEEP', () => {
   const state = readJson(ROOT);
   const facts = Object.fromEntries(
     state.operationalState.facts.map((entry) => [entry.id, entry]),
@@ -943,13 +943,11 @@ test('records PIPE-V2-03A as integrated and not deployed while preserving Produc
 
   assert.equal(state.stateRevision, TARGET_STATE_REVISION);
   assert.equal(state.currentWork.status, 'none');
-  assert.match(
-    state.currentWork.summary,
-    /IMPLEMENTED_AND_MERGED \/ NOT_DEPLOYED/u,
-  );
+  assert.match(state.currentWork.summary, /PRODUCTION_KEEP \/ 03A_LIVE/u);
   assert.deepEqual(state.nextTask, {
-    id: 'PIPE-V2-03A-PRODUCTION-RELEASE',
-    title: 'Production Release Operation',
+    id: 'PENDING-ROADMAP-PRIORITIZATION',
+    title:
+      'Priorizar o próximo marco do produto a partir dos planos versionados',
   });
   assert.equal(state.repositories[1].memoryRevision.sha, WEB_SHA);
   assert.equal(
@@ -958,30 +956,46 @@ test('records PIPE-V2-03A as integrated and not deployed while preserving Produc
   );
   assert.equal(
     state.releaseBindings.apiApplicationRevision,
-    'ac2f8cd96ae02c1cad52366871bdde8ca651631d',
+    'a169369fd9760d32c922cc646df92cc0f5f632e1',
   );
   assert.equal(state.releaseBindings.webIntegratedRevision, WEB_INTEGRATED_SHA);
   assert.match(
-    facts['OPS-PIPE-V2-03A-INTEGRATED-NOT-DEPLOYED'].statement,
-    /a169369fd9760d32c922cc646df92cc0f5f632e1.*90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6/u,
-  );
-  assert.match(
-    facts['OPS-PIPE-V2-03A-INTEGRATED-NOT-DEPLOYED'].statement,
-    /nenhum deploy foi executado.*bindings de Production permanecem inalterados/u,
+    facts['OPS-PIPE-V2-03A-PRODUCTION-KEEP'].statement,
+    /IMPLEMENTED, MERGED e 03A_LIVE.*a169369fd9760d32c922cc646df92cc0f5f632e1.*90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6.*atomicamente/u,
   );
   assert.equal(facts['OPS-PIPE-V2-API-PRODUCTION'].status, 'present');
   assert.match(
     facts['OPS-PIPE-V2-API-PRODUCTION'].statement,
-    /SIMPLE_VPS_DEPLOYMENT.*ACTIVE \/ CURRENT.*ec9d646a2a7344e9/u,
+    /a169369fd9760d32c922cc646df92cc0f5f632e1.*e0d3613f.*Migration Level 1.*pending migrations \[\].*KEEP/u,
   );
   assert.equal(facts['OPS-PIPE-V2-WEB-PRODUCTION'].status, 'present');
   assert.match(
     facts['OPS-PIPE-V2-WEB-PRODUCTION'].statement,
-    /dpl_2DVvUezpSGPtmzenNkabDH1qt67J/u,
+    /90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6.*dpl_DhUzyzKhq2e1emvUMLPYEnSWYFYt.*dpl_2DVvUezpSGPtmzenNkabDH1qt67J.*T\+0\/T\+30\/T\+120.*KEEP/u,
   );
   assert.match(
     facts['OPS-PIPE-V2-WEB-API-INTEGRATION'].statement,
-    /same-origin.*T\+0\/T\+30\/T\+120.*sem rollback/u,
+    /7bd8e64b-d9d6-49ca-ba2d-5d7bf54d668e.*Anápolis.*200000.*R\$ 2\.000,00.*null → 123450 → 200000/u,
+  );
+  assert.match(
+    facts['OPS-GENESIS-SMOKE-PROFILE-V1'].statement,
+    /generated-host.*production-core.*production-feature.*073910f4-18f4-4528-89f6-5b603e675c10.*798e0d69-78a8-4538-abe6-245f62787d64.*8935997b-88cd-4111-8391-59b2803627fd.*20d64e028523bca1bd2cd3780ac14ea8cd184ae1adfa30e2a43e3fd22c4187dc/u,
+  );
+  assert.match(
+    facts['OPS-PIPE-V2-03A-API-TOOLING-SEPARATION'].statement,
+    /a169369fd9760d32c922cc646df92cc0f5f632e1.*e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862.*7cba39e7c5869cdcb9d00eeb58f278e009ebf474.*4242a35bf5b3d288209a7e94429c892b7eecb031012e704fb794501c6d909ade.*não foram promovidos.*operator:owner resolve.*read-only/u,
+  );
+  assert.match(
+    facts['OPS-PIPE-V2-03A-WEB-TOOLING-SEPARATION'].statement,
+    /90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6.*984811c13f3454f58aa524cd7663f7982d3910a8.*9c626245c381c3186011059a8716d5b67b752038.*não representam novo deployment funcional/u,
+  );
+  assert.equal(
+    facts['OPS-PIPE-V2-03A-SMOKE-EVIDENCE-FOLLOW-UP'].status,
+    'partial',
+  );
+  assert.match(
+    facts['OPS-PIPE-V2-03A-SMOKE-EVIDENCE-FOLLOW-UP'].statement,
+    /não bloqueante, não requerido para 03A.*UUID.*method\/path\/status.*última assertion/u,
   );
   assert.equal(facts['OPS-MVP08-RELEASE-TREE-CONTRACT'].status, 'absent');
   assert.match(
@@ -994,9 +1008,14 @@ test('records PIPE-V2-03A as integrated and not deployed while preserving Produc
   assert.equal(evidence.has('EV-PIPE-V2-03A-API-CI'), true);
   assert.equal(evidence.has('EV-PIPE-V2-03A-WEB-PR26'), true);
   assert.equal(evidence.has('EV-PIPE-V2-03A-WEB-CI'), true);
+  assert.equal(evidence.has('EV-PIPE-V2-03A-FINAL-PRODUCTION-KEEP'), true);
+  assert.equal(evidence.has('EV-GENESIS-SMOKE-PROFILE-V1'), true);
+  assert.equal(evidence.has('EV-PIPE-V2-03A-TOOLING-SEPARATION'), true);
+  assert.equal(evidence.has('EV-PIPE-V2-03A-WEB-RECOVERY-KEEP'), true);
+  assert.equal(evidence.has('EV-PIPE-V2-03A-SMOKE-EVIDENCE-FOLLOW-UP'), true);
 });
 
-test('cross-repo contract resolves the clean integrated Candidate A receipt', () => {
+test('cross-repo contract resolves the clean final Web-first receipt', () => {
   const web = mkdtempSync(join(tmpdir(), 'genesis-web-pointer-'));
   FIXTURES.push(web);
   const pointerPath = target(web, 'docs/memory/project-state.pointer.v1.json');
@@ -1039,7 +1058,7 @@ test('cross-repo contract resolves the clean integrated Candidate A receipt', ()
 
 test('cross-repo contract rejects previous and arbitrary Web containing commits', () => {
   for (const commit of [
-    '04515f8b17545947129466faab5d8140d1463f4f',
+    'd5e0f35e21b9fcf8039b0cae2fcbed85374fb174',
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   ]) {
     const web = mkdtempSync(join(tmpdir(), 'genesis-web-revision-'));

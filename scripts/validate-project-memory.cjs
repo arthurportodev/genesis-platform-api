@@ -14,22 +14,22 @@ const WEB_POINTER_PATH = 'docs/memory/project-state.pointer.v1.json';
 const WEB_POINTER_SCHEMA_PATH =
   'schemas/genesis-harness/project-state.pointer.v1.schema.json';
 // Provenance of the Web-first receipt for this canonical memory transition.
-const WEB_SHA = 'd5e0f35e21b9fcf8039b0cae2fcbed85374fb174';
-const WEB_INTEGRATED_SHA = '6f53180e6c3947bd778e47c8fdb734567802e0d8';
-const WEB_RECEIPT_BASE_SHA = '90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6';
-const WEB_TRANSITION_ID = 'PIPE-V2-03A-CROSS-REPO';
-const TARGET_STATE_REVISION = 'PIPE-V2-03A-IMPLEMENTED-AND-MERGED-2026-09-05';
+const WEB_SHA = 'd9608464031460053024748f6f51da5218f3ce22';
+const WEB_INTEGRATED_SHA = '90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6';
+const WEB_RECEIPT_BASE_SHA = '9c626245c381c3186011059a8716d5b67b752038';
+const WEB_TRANSITION_ID = 'PIPE-V2-03A-PRODUCTION-KEEP-CROSS-REPO';
+const TARGET_STATE_REVISION = 'PIPE-V2-03A-PRODUCTION-KEEP-2026-09-05';
 const WEB_POINTER_SCHEMA_FINGERPRINT =
   'b871059879b7bef315e1e2d354a8a343bbcf99588181ff87a29e92baaec89b64';
 const API_REPOSITORY = 'arthurportodev/genesis-platform-api';
 const WEB_REPOSITORY = 'arthurportodev/genesis-platform-web';
-const API_APPLICATION_REVISION = 'ac2f8cd96ae02c1cad52366871bdde8ca651631d';
+const API_APPLICATION_REVISION = 'a169369fd9760d32c922cc646df92cc0f5f632e1';
 const AUTHORIZED_API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7';
+  'ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862';
 const AUTHORIZED_API_IMAGE_CONFIG_DIGEST =
-  'sha256:17e5b82451b78a20c6934b5dc2bb0cc00fa10252665245ed49b2f7c09a7fc629';
+  'sha256:6debf2bc06aa96cf42308b81908a7ca48d86089e02fe263350a716c643962a2a';
 const ROLLBACK_API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:b45425d7f6ea63bde18e53195dab0ef0af43a84c55402a1ecc70321484e05feb';
+  'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7';
 const MAX_BYTES = 512 * 1024;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{1,79}$/u;
 const FULL_SHA = /^(?!0{40}$)[a-f0-9]{40}$/u;
