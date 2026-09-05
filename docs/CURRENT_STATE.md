@@ -4,12 +4,12 @@
 
 Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
 
-- **Revisão de estado:** PIPE-V2-03-PRODUCTION-LIVE-2026-09-04
-- **Atualização documentada:** 2026-09-04T21:34:26.017Z
+- **Revisão de estado:** PIPE-V2-03A-IMPLEMENTED-AND-MERGED-2026-09-05
+- **Atualização documentada:** 2026-09-05T13:08:30.2731380Z
 - **Fase:** PIPE-V2 — Pipeline Experience V2
-- **Último trabalho concluído:** PIPE-V2-03 — Presentation V2
-- **Trabalho vigente:** none — Nenhum deployment está ativo. API e Web de PIPE-V2-03 estão live e estáveis em Production; o próximo produto planejado é PIPE-V2-03A — Expected Value Editing.
-- **Próxima tarefa:** PIPE-V2-03A — Expected Value Editing
+- **Último trabalho concluído:** PIPE-V2-03A — Expected Value Editing
+- **Trabalho vigente:** none — Nenhum deployment está ativo. PIPE-V2-03A está IMPLEMENTED_AND_MERGED / NOT_DEPLOYED; a próxima tarefa é sua operação de release em Production.
+- **Próxima tarefa:** PIPE-V2-03A-PRODUCTION-RELEASE — Production Release Operation
 - **Web Production live source:** 6f53180e6c3947bd778e47c8fdb734567802e0d8
 - **API Production application source:** ac2f8cd96ae02c1cad52366871bdde8ca651631d
 - **Contrato versionado de release API legado:** containing-commit (LEGACY / SUPERSEDED para novos deploys)
@@ -22,7 +22,7 @@ Esta projeção é gerada deterministicamente. Não edite manualmente; a autorid
 
 ## Estado operacional
 
-PIPE-V2-01, PIPE-V2-02 e PIPE-V2-03 estão concluídos. A API e o Web de PIPE-V2-03 terminaram seus deployments com KEEP, a integração same-origin passou e Presentation V2 está live e observada em Production. Nenhuma execução de produção está ativa.
+PIPE-V2-03A está implementada e incorporada nas duas main, mas permanece NOT_DEPLOYED. Os bindings live da API e do Web continuam nos releases PIPE-V2-03 já observados em Production, e nenhuma execução de produção está ativa.
 
 - **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
 - **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
@@ -96,6 +96,7 @@ PIPE-V2-01, PIPE-V2-02 e PIPE-V2-03 estão concluídos. A API e o Web de PIPE-V2
 - **OPS-PIPE-V2-01-COMPLETE** [documented/present] — PIPE-V2-01 — Financial Domain está concluída e incorporada na API pelo PR #68 (785ec54c273437f40d9ff4a6aaf6bd81b90aeb08).
 - **OPS-PIPE-V2-02-COMPLETE** [documented/present] — PIPE-V2-02 — Financial Aggregates está concluída e incorporada na API pelo PR #69 (ac2f8cd96ae02c1cad52366871bdde8ca651631d).
 - **OPS-PIPE-V2-03-COMPLETE** [observed/present] — PIPE-V2-03 — Presentation V2 está concluída, incorporada no Web pelo PR #24 em 6f53180e6c3947bd778e47c8fdb734567802e0d8 e live em Production; o browser harness obrigatório executou V2 sem skip, page error ou 5xx.
+- **OPS-PIPE-V2-03A-INTEGRATED-NOT-DEPLOYED** [observed/present] — PIPE-V2-03A — Expected Value Editing está IMPLEMENTED_AND_MERGED / NOT_DEPLOYED: o PR API #83 foi integrado em a169369fd9760d32c922cc646df92cc0f5f632e1 e o PR Web #26 foi integrado em 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6; os CIs pós-merge passaram, nenhum deploy foi executado e os bindings de Production permanecem inalterados.
 - **OPS-PIPE-V2-API-PRODUCTION** [observed/present] — SIMPLE_VPS_DEPLOYMENT está ACTIVE / CURRENT e foi usado com KEEP no run ec9d646a2a7344e9: source ac2f8cd9, operational source c3103e49 e imagem c53b2835; API healthy, restart 0, 11 migrations, pending vazio, PostgreSQL, Traefik e volume preservados.
 - **OPS-PIPE-V2-WEB-PRODUCTION** [observed/present] — O source Web 6f53180e6c3947bd778e47c8fdb734567802e0d8 está live no deployment Vercel dpl_2DVvUezpSGPtmzenNkabDH1qt67J em app.agenciagenesismkt.com.br, com KEEP, READY, HTTPS/app/assets PASS e generated host protegido fail-closed.
 - **OPS-PIPE-V2-WEB-API-INTEGRATION** [observed/present] — A integração Web/API same-origin passou CSRF, login, bootstrap, organização, Kanban e logout. API e Web passaram T+0/T+30/T+120; Presentation V2 foi obrigatória, executada e aprovada, sem rollback, page errors ou HTTP 5xx.

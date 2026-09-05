@@ -153,7 +153,7 @@ function candidatePointer() {
       targetStateRevision: TARGET_STATE_REVISION,
       baseSha: WEB_RECEIPT_BASE_SHA,
       revisionSource: 'containing-commit',
-      generatedAt: '2026-08-24T14:18:54.2261794Z',
+      generatedAt: '2026-09-05T12:28:19.7854393Z',
     },
   };
 }
@@ -934,24 +934,40 @@ test('projection is derived only from the authority object', () => {
   assert.match(projection, new RegExp(WEB_INTEGRATED_SHA, 'u'));
 });
 
-test('records PIPE-V2-03 as live while preserving pointer and historical provenance', () => {
+test('records PIPE-V2-03A as integrated and not deployed while preserving Production', () => {
   const state = readJson(ROOT);
   const facts = Object.fromEntries(
     state.operationalState.facts.map((entry) => [entry.id, entry]),
   );
   const evidence = new Set(state.evidence.map((entry) => entry.id));
 
-  assert.equal(state.stateRevision, 'PIPE-V2-03-PRODUCTION-LIVE-2026-09-04');
+  assert.equal(state.stateRevision, TARGET_STATE_REVISION);
   assert.equal(state.currentWork.status, 'none');
-  assert.match(state.currentWork.summary, /live e estáveis em Production/u);
+  assert.match(
+    state.currentWork.summary,
+    /IMPLEMENTED_AND_MERGED \/ NOT_DEPLOYED/u,
+  );
   assert.deepEqual(state.nextTask, {
-    id: 'PIPE-V2-03A',
-    title: 'Expected Value Editing',
+    id: 'PIPE-V2-03A-PRODUCTION-RELEASE',
+    title: 'Production Release Operation',
   });
   assert.equal(state.repositories[1].memoryRevision.sha, WEB_SHA);
   assert.equal(
     state.pointerMetadata.targetStateRevision,
-    'MVP-10D-WEB-INTEGRATED-2026-08-24',
+    TARGET_STATE_REVISION,
+  );
+  assert.equal(
+    state.releaseBindings.apiApplicationRevision,
+    'ac2f8cd96ae02c1cad52366871bdde8ca651631d',
+  );
+  assert.equal(state.releaseBindings.webIntegratedRevision, WEB_INTEGRATED_SHA);
+  assert.match(
+    facts['OPS-PIPE-V2-03A-INTEGRATED-NOT-DEPLOYED'].statement,
+    /a169369fd9760d32c922cc646df92cc0f5f632e1.*90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6/u,
+  );
+  assert.match(
+    facts['OPS-PIPE-V2-03A-INTEGRATED-NOT-DEPLOYED'].statement,
+    /nenhum deploy foi executado.*bindings de Production permanecem inalterados/u,
   );
   assert.equal(facts['OPS-PIPE-V2-API-PRODUCTION'].status, 'present');
   assert.match(
@@ -974,6 +990,10 @@ test('records PIPE-V2-03 as live while preserving pointer and historical provena
   );
   assert.equal(evidence.has('EV-PIPE-V2-API-PRODUCTION-KEEP'), true);
   assert.equal(evidence.has('EV-PIPE-V2-WEB-PRODUCTION-KEEP'), true);
+  assert.equal(evidence.has('EV-PIPE-V2-03A-API-PR83'), true);
+  assert.equal(evidence.has('EV-PIPE-V2-03A-API-CI'), true);
+  assert.equal(evidence.has('EV-PIPE-V2-03A-WEB-PR26'), true);
+  assert.equal(evidence.has('EV-PIPE-V2-03A-WEB-CI'), true);
 });
 
 test('cross-repo contract resolves the clean integrated Candidate A receipt', () => {
@@ -1004,7 +1024,7 @@ test('cross-repo contract resolves the clean integrated Candidate A receipt', ()
         targetStateRevision: TARGET_STATE_REVISION,
         baseSha: WEB_RECEIPT_BASE_SHA,
         revisionSource: 'containing-commit',
-        generatedAt: '2026-08-24T14:18:54.2261794Z',
+        generatedAt: '2026-09-05T12:28:19.7854393Z',
       },
     },
     'docs/memory/project-state.pointer.v1.json',
@@ -1169,7 +1189,7 @@ test('cross-repo schema rejects extra temporal or secret-bearing pointer data', 
         targetStateRevision: TARGET_STATE_REVISION,
         baseSha: WEB_RECEIPT_BASE_SHA,
         revisionSource: 'containing-commit',
-        generatedAt: '2026-08-24T14:18:54.2261794Z',
+        generatedAt: '2026-09-05T12:28:19.7854393Z',
       },
       [property]: property === 'phase' ? { id: 'forbidden' } : 'forbidden',
     };

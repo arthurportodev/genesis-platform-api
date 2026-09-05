@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
   "instanceKind": "current",
-  "stateRevision": "PIPE-V2-03-PRODUCTION-LIVE-2026-09-04",
+  "stateRevision": "PIPE-V2-03A-IMPLEMENTED-AND-MERGED-2026-09-05",
   "project": {
     "id": "genesis-platform",
     "name": "Genesis Platform"
   },
-  "updatedAt": "2026-09-04T21:34:26.017Z",
+  "updatedAt": "2026-09-05T13:08:30.2731380Z",
   "authority": {
     "repository": "arthurportodev/genesis-platform-api",
     "branch": "main",
@@ -30,7 +30,7 @@
       "status": "integrated",
       "memoryRevision": {
         "kind": "commit",
-        "sha": "e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e"
+        "sha": "d5e0f35e21b9fcf8039b0cae2fcbed85374fb174"
       }
     }
   ],
@@ -63,29 +63,30 @@
     "id": "PIPE-V2",
     "title": "Pipeline Experience V2",
     "lastCompleted": {
-      "id": "PIPE-V2-03",
-      "title": "Presentation V2",
-      "completedAt": "2026-09-02T08:38:04Z",
+      "id": "PIPE-V2-03A",
+      "title": "Expected Value Editing",
+      "completedAt": "2026-09-05T12:14:10Z",
       "evidenceIds": [
-        "EV-PIPE-V2-03-WEB-PR24",
-        "EV-PIPE-V2-API-PRODUCTION-KEEP",
-        "EV-PIPE-V2-WEB-PRODUCTION-KEEP"
+        "EV-PIPE-V2-03A-API-PR83",
+        "EV-PIPE-V2-03A-API-CI",
+        "EV-PIPE-V2-03A-WEB-PR26",
+        "EV-PIPE-V2-03A-WEB-CI"
       ]
     }
   },
   "currentWork": {
     "status": "none",
-    "summary": "Nenhum deployment está ativo. API e Web de PIPE-V2-03 estão live e estáveis em Production; o próximo produto planejado é PIPE-V2-03A — Expected Value Editing."
+    "summary": "Nenhum deployment está ativo. PIPE-V2-03A está IMPLEMENTED_AND_MERGED / NOT_DEPLOYED; a próxima tarefa é sua operação de release em Production."
   },
   "nextTask": {
-    "id": "PIPE-V2-03A",
-    "title": "Expected Value Editing"
+    "id": "PIPE-V2-03A-PRODUCTION-RELEASE",
+    "title": "Production Release Operation"
   },
   "operationalState": {
-    "summary": "PIPE-V2-01, PIPE-V2-02 e PIPE-V2-03 estão concluídos. A API e o Web de PIPE-V2-03 terminaram seus deployments com KEEP, a integração same-origin passou e Presentation V2 está live e observada em Production. Nenhuma execução de produção está ativa.",
+    "summary": "PIPE-V2-03A está implementada e incorporada nas duas main, mas permanece NOT_DEPLOYED. Os bindings live da API e do Web continuam nos releases PIPE-V2-03 já observados em Production, e nenhuma execução de produção está ativa.",
     "basis": "observed",
-    "documentedAt": "2026-09-04T21:34:26.017Z",
-    "observedAt": "2026-09-04T21:34:26.017Z",
+    "documentedAt": "2026-09-05T13:08:30.2731380Z",
+    "observedAt": "2026-09-05T13:08:30.2731380Z",
     "facts": [
       {
         "id": "OPS-PRIVATE-BASELINE",
@@ -807,6 +808,20 @@
         ]
       },
       {
+        "id": "OPS-PIPE-V2-03A-INTEGRATED-NOT-DEPLOYED",
+        "status": "present",
+        "statement": "PIPE-V2-03A — Expected Value Editing está IMPLEMENTED_AND_MERGED / NOT_DEPLOYED: o PR API #83 foi integrado em a169369fd9760d32c922cc646df92cc0f5f632e1 e o PR Web #26 foi integrado em 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6; os CIs pós-merge passaram, nenhum deploy foi executado e os bindings de Production permanecem inalterados.",
+        "basis": "observed",
+        "documentedAt": "2026-09-05T13:08:30.2731380Z",
+        "observedAt": "2026-09-05T13:08:30.2731380Z",
+        "evidenceIds": [
+          "EV-PIPE-V2-03A-API-PR83",
+          "EV-PIPE-V2-03A-API-CI",
+          "EV-PIPE-V2-03A-WEB-PR26",
+          "EV-PIPE-V2-03A-WEB-CI"
+        ]
+      },
+      {
         "id": "OPS-PIPE-V2-API-PRODUCTION",
         "status": "present",
         "statement": "SIMPLE_VPS_DEPLOYMENT está ACTIVE / CURRENT e foi usado com KEEP no run ec9d646a2a7344e9: source ac2f8cd9, operational source c3103e49 e imagem c53b2835; API healthy, restart 0, 11 migrations, pending vazio, PostgreSQL, Traefik e volume preservados.",
@@ -1219,6 +1234,30 @@
       "kind": "external-observation",
       "uri": "artifact://genesis-platform/web-production-deployment/151f76bfebbfa7d8",
       "capturedAt": "2026-09-04T21:34:26.017Z"
+    },
+    {
+      "id": "EV-PIPE-V2-03A-API-PR83",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/pull/83",
+      "capturedAt": "2026-09-05T12:07:52Z"
+    },
+    {
+      "id": "EV-PIPE-V2-03A-API-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-api/actions/runs/33965177011",
+      "capturedAt": "2026-09-05T12:12:49Z"
+    },
+    {
+      "id": "EV-PIPE-V2-03A-WEB-PR26",
+      "kind": "github-pr",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/pull/26",
+      "capturedAt": "2026-09-05T12:14:10Z"
+    },
+    {
+      "id": "EV-PIPE-V2-03A-WEB-CI",
+      "kind": "github-run",
+      "uri": "https://github.com/arthurportodev/genesis-platform-web/actions/runs/33965466640",
+      "capturedAt": "2026-09-05T12:18:33Z"
     }
   ],
   "blockers": [
@@ -1427,7 +1466,7 @@
     "path": "docs/memory/project-state.pointer.v1.json",
     "schemaVersion": "1.0.0",
     "mode": "pointer-only",
-    "transitionId": "MVP-10E-CROSS-REPO",
-    "targetStateRevision": "MVP-10D-WEB-INTEGRATED-2026-08-24"
+    "transitionId": "PIPE-V2-03A-CROSS-REPO",
+    "targetStateRevision": "PIPE-V2-03A-IMPLEMENTED-AND-MERGED-2026-09-05"
   }
 }

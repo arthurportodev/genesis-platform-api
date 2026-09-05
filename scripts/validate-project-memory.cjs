@@ -13,13 +13,12 @@ const PROJECTION_PATH = 'docs/CURRENT_STATE.md';
 const WEB_POINTER_PATH = 'docs/memory/project-state.pointer.v1.json';
 const WEB_POINTER_SCHEMA_PATH =
   'schemas/genesis-harness/project-state.pointer.v1.schema.json';
-// Provenance of the stable pointer receipt established by the MVP-10E
-// transition. Later Web application revisions do not rewrite this receipt.
-const WEB_SHA = 'e1ecc23f7c8fe346c93e0b9fd79bbbeaae46f49e';
+// Provenance of the Web-first receipt for this canonical memory transition.
+const WEB_SHA = 'd5e0f35e21b9fcf8039b0cae2fcbed85374fb174';
 const WEB_INTEGRATED_SHA = '6f53180e6c3947bd778e47c8fdb734567802e0d8';
-const WEB_RECEIPT_BASE_SHA = 'ac87eb78640e641c67bf6e354ad497b421d487f8';
-const WEB_TRANSITION_ID = 'MVP-10E-CROSS-REPO';
-const TARGET_STATE_REVISION = 'MVP-10D-WEB-INTEGRATED-2026-08-24';
+const WEB_RECEIPT_BASE_SHA = '90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6';
+const WEB_TRANSITION_ID = 'PIPE-V2-03A-CROSS-REPO';
+const TARGET_STATE_REVISION = 'PIPE-V2-03A-IMPLEMENTED-AND-MERGED-2026-09-05';
 const WEB_POINTER_SCHEMA_FINGERPRINT =
   'b871059879b7bef315e1e2d354a8a343bbcf99588181ff87a29e92baaec89b64';
 const API_REPOSITORY = 'arthurportodev/genesis-platform-api';
