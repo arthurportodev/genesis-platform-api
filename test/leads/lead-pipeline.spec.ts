@@ -10,15 +10,20 @@ import {
   LeadFollowUpCommand,
   LeadLostReason,
   LeadNextActionType,
+  LeadSource,
   LeadStage,
 } from '../../src/modules/leads/enums/lead.enums';
 import {
   leadCommandFingerprint,
   leadExpectedValueFingerprint,
   leadFollowUpFingerprint,
+  leadInformationFingerprint,
+  leadManualCreateFingerprint,
+  leadRequestFingerprint,
   LeadCommandFingerprintInput,
   LeadExpectedValueFingerprintInput,
   LeadFollowUpFingerprintInput,
+  normalizeLeadInput,
 } from '../../src/modules/leads/security/lead-fingerprint';
 import { LeadsService } from '../../src/modules/leads/services/leads.service';
 import { MembershipRole } from '../../src/modules/memberships/enums/membership-role.enum';
@@ -110,6 +115,76 @@ describe('Lead commercial pipeline', () => {
     ).not.toBe(leadExpectedValueFingerprint(financialInput, key));
   });
 
+  it('preserves legacy creation fingerprints for null and binds an informed value', () => {
+    const input = normalizeLeadInput(
+      {
+        displayName: 'Maria',
+        primaryPhone: '+5562999999999',
+        source: LeadSource.MANUAL,
+      },
+      '+5562999999999',
+    );
+    expect(leadManualCreateFingerprint(input, null, key)).toBe(
+      leadRequestFingerprint(input, key),
+    );
+    expect(leadManualCreateFingerprint(input, '0', key)).not.toBe(
+      leadManualCreateFingerprint(input, null, key),
+    );
+    expect(leadManualCreateFingerprint(input, '1', key)).not.toBe(
+      leadManualCreateFingerprint(input, '0', key),
+    );
+  });
+
+  it('binds every field of an atomic information intent', () => {
+    const input = {
+      organizationId: tenant.organizationId,
+      actorMembershipId: tenant.membershipId,
+      leadId,
+      expectedRevision: '7',
+      displayName: 'Maria',
+      primaryPhone: '+5562999999999',
+      email: null,
+      companyName: 'Genesis',
+      instagram: null,
+      city: 'Goiânia',
+      serviceInterest: 'Consultoria',
+      expectedValueMinor: '123450',
+    };
+    const fingerprint = leadInformationFingerprint(input, key);
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/u);
+    expect(
+      leadInformationFingerprint(
+        { ...input, expectedValueMinor: '123451' },
+        key,
+      ),
+    ).not.toBe(fingerprint);
+    expect(
+      leadInformationFingerprint({ ...input, city: 'Anápolis' }, key),
+    ).not.toBe(fingerprint);
+    expect(
+      leadInformationFingerprint(
+        { ...input, city: undefined, companyName: undefined },
+        key,
+      ),
+    ).not.toBe(fingerprint);
+    expect(
+      leadInformationFingerprint(
+        { ...input, city: undefined, companyName: undefined },
+        key,
+      ),
+    ).toBe(
+      leadInformationFingerprint(
+        { ...input, city: undefined, companyName: undefined },
+        key,
+      ),
+    );
+    expect(
+      leadInformationFingerprint({ ...input, companyName: undefined }, key),
+    ).not.toBe(
+      leadInformationFingerprint({ ...input, companyName: null }, key),
+    );
+  });
+
   it.each([null, '0', '125000', '9223372036854775807'])(
     'sends canonical expected value %p without numeric conversion',
     async (expectedValueMinor) => {
@@ -159,6 +234,27 @@ describe('Lead commercial pipeline', () => {
       service.setExpectedValue(tenant, leadId, '1', randomUUID(), {
         expectedValueMinor: value,
       }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(called).toBe(false);
+  });
+
+  it('rejects creation overflow before opening its transaction', async () => {
+    let called = false;
+    const service = serviceWith(() => {
+      called = true;
+      return Promise.resolve([]);
+    });
+    await expect(
+      service.createManual(
+        tenant,
+        {
+          displayName: 'Maria',
+          primaryPhone: '+5562999999999',
+          source: LeadSource.MANUAL,
+          expectedValueMinor: '9223372036854775808',
+        },
+        randomUUID(),
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(called).toBe(false);
   });
@@ -373,7 +469,11 @@ describe('Lead commercial pipeline', () => {
 
   function serviceWith(query: QueryStub): LeadsService {
     return new LeadsService(
-      { query } as unknown as DataSource,
+      {
+        query,
+        transaction: (callback: (manager: { query: QueryStub }) => unknown) =>
+          callback({ query }),
+      } as unknown as DataSource,
       { getOrThrow: () => config } as unknown as ConfigService,
       {
         assertManualReady: jest.fn(),

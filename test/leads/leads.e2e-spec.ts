@@ -100,6 +100,7 @@ describe('Lead HTTP contract (e2e)', () => {
     timeline: jest.fn(),
     cycles: jest.fn(),
     update: jest.fn(),
+    updateInformation: jest.fn(),
     assign: jest.fn(),
     move: jest.fn(),
     setExpectedValue: jest.fn(),
@@ -210,17 +211,68 @@ describe('Lead HTTP contract (e2e)', () => {
     });
   });
 
-  it('does not accept expected value through Lead creation', async () => {
+  it.each(['100', null, '0', '9223372036854775807'])(
+    'accepts canonical expected value %j through manual creation',
+    async (expectedValueMinor) => {
+      leads.createManual.mockResolvedValue({
+        responseStatus: 201,
+        replayed: false,
+        lead: view,
+      });
+      await request(app.getHttpServer() as Server)
+        .post('/api/v1/leads')
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          displayName: 'Maria',
+          primaryPhone: '+5562999999999',
+          expectedValueMinor,
+        })
+        .expect(201);
+      expect(leads.createManual).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({ expectedValueMinor }),
+        expect.any(String),
+      );
+    },
+  );
+
+  it.each(['', '-1', ' 1', '+1', '1.0', '1e3', '00'])(
+    'rejects invalid creation expected value %j',
+    async (expectedValueMinor) => {
+      await request(app.getHttpServer() as Server)
+        .post('/api/v1/leads')
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          displayName: 'Maria',
+          primaryPhone: '+5562999999999',
+          expectedValueMinor,
+        })
+        .expect(400);
+      expect(leads.createManual).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns the atomic information result with ETag and replay metadata', async () => {
+    const key = randomUUID();
+    leads.updateInformation.mockResolvedValueOnce({
+      lead: { ...view, revision: '3' },
+      replayed: true,
+    });
     await request(app.getHttpServer() as Server)
-      .post('/api/v1/leads')
-      .set('Idempotency-Key', randomUUID())
-      .send({
-        displayName: 'Maria',
-        primaryPhone: '+5562999999999',
-        expectedValueMinor: '100',
-      })
-      .expect(400);
-    expect(leads.createManual).not.toHaveBeenCalled();
+      .post(`/api/v1/leads/${leadId}/information`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', key)
+      .send({ displayName: 'Maria Silva', expectedValueMinor: '250000' })
+      .expect(200)
+      .expect('ETag', `"lead:${leadId}:3"`)
+      .expect('Idempotency-Replayed', 'true');
+    expect(leads.updateInformation).toHaveBeenCalledWith(
+      expect.any(Object),
+      leadId,
+      '1',
+      key,
+      { displayName: 'Maria Silva', expectedValueMinor: '250000' },
+    );
   });
 
   it('always returns opaque 204 for member success, including hidden duplicate', async () => {

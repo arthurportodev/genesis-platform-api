@@ -102,6 +102,38 @@ export function leadRequestFingerprint(
     .digest('hex');
 }
 
+export function leadManualCreateFingerprint(
+  input: NormalizedLeadInput,
+  expectedValueMinor: string | null,
+  key: Buffer,
+): string {
+  if (expectedValueMinor === null) return leadRequestFingerprint(input, key);
+  return createHmac('sha256', key)
+    .update(
+      JSON.stringify([
+        2,
+        input.displayName,
+        input.primaryPhone,
+        input.email,
+        input.companyName,
+        input.instagram,
+        input.city,
+        input.serviceInterest,
+        input.source,
+        input.sourceDetail,
+        input.utmSource,
+        input.utmMedium,
+        input.utmCampaign,
+        input.utmContent,
+        input.utmTerm,
+        input.responsibleMembershipId,
+        expectedValueMinor,
+      ]),
+      'utf8',
+    )
+    .digest('hex');
+}
+
 export interface LeadCommandFingerprintInput {
   organizationId: string;
   actorMembershipId: string;
@@ -158,6 +190,48 @@ export function leadExpectedValueFingerprint(
         input.leadId,
         LeadCommand.SET_EXPECTED_VALUE,
         input.expectedRevision,
+        input.expectedValueMinor,
+      ]),
+      'utf8',
+    )
+    .digest('hex');
+}
+
+export interface LeadInformationFingerprintInput {
+  organizationId: string;
+  actorMembershipId: string;
+  leadId: string;
+  expectedRevision: string;
+  displayName?: string;
+  primaryPhone?: string;
+  email?: string | null;
+  companyName?: string | null;
+  instagram?: string | null;
+  city?: string | null;
+  serviceInterest?: string | null;
+  expectedValueMinor: string | null;
+}
+
+export function leadInformationFingerprint(
+  input: LeadInformationFingerprintInput,
+  key: Buffer,
+): string {
+  return createHmac('sha256', key)
+    .update(
+      JSON.stringify([
+        1,
+        input.organizationId,
+        input.actorMembershipId,
+        input.leadId,
+        'update_information',
+        input.expectedRevision,
+        [input.displayName !== undefined, input.displayName ?? null],
+        [input.primaryPhone !== undefined, input.primaryPhone ?? null],
+        [input.email !== undefined, input.email ?? null],
+        [input.companyName !== undefined, input.companyName ?? null],
+        [input.instagram !== undefined, input.instagram ?? null],
+        [input.city !== undefined, input.city ?? null],
+        [input.serviceInterest !== undefined, input.serviceInterest ?? null],
         input.expectedValueMinor,
       ]),
       'utf8',

@@ -19,6 +19,7 @@ import {
   CancelLeadNextActionDto,
   CompleteLeadNextActionDto,
   CreateLeadActivityDto,
+  CreateManualLeadDto,
   CreateLeadDto,
   CreateLeadNextActionDto,
   CreateLeadNoteDto,
@@ -29,6 +30,7 @@ import {
   RescheduleLeadNextActionDto,
   SetLeadExpectedValueDto,
   UpdateLeadDto,
+  UpdateLeadInformationDto,
 } from '../dto/lead.dto';
 import {
   LeadArchiveReason,
@@ -46,11 +48,14 @@ import { normalizeLeadPhone } from '../normalization/phone.normalizer';
 import { LEAD_READINESS, LeadReadiness } from '../ports/lead-readiness.port';
 import {
   leadRequestFingerprint,
+  leadManualCreateFingerprint,
   leadCommandFingerprint,
   leadExpectedValueFingerprint,
+  leadInformationFingerprint,
   leadFollowUpFingerprint,
   LeadCommandFingerprintInput,
   LeadExpectedValueFingerprintInput,
+  LeadInformationFingerprintInput,
   LeadFollowUpFingerprintInput,
   normalizeLeadInput,
 } from '../security/lead-fingerprint';
@@ -91,11 +96,26 @@ interface LeadRow {
 }
 
 interface IngestRow {
+  outcome: 'created' | 'entry_added';
   leadId: string;
   revision: string;
   replayed: boolean;
   visible: boolean;
   responseStatus: number;
+}
+
+interface LeadUpdateValues {
+  displayName: string;
+  primaryPhone: string;
+  email: string | null;
+  companyName: string | null;
+  instagram: string | null;
+  city: string | null;
+  serviceInterest: string | null;
+}
+
+interface QueryExecutor {
+  query<T = unknown>(query: string, parameters?: unknown[]): Promise<T>;
 }
 
 interface CursorValue {
@@ -150,19 +170,50 @@ export class LeadsService {
 
   async createManual(
     tenant: TenantContext,
-    dto: CreateLeadDto,
+    dto: CreateManualLeadDto,
     idempotencyKey: string,
   ): Promise<LeadIngestResult> {
     await this.readiness.assertManualReady();
     const version = this.config.idempotencyCurrentKeyVersion as number;
-    return this.ingest(
-      tenant,
-      LeadIntakeChannel.MANUAL,
-      dto,
-      idempotencyKey,
-      version,
-      this.config.idempotencyKeys.get(version) as Buffer,
+    const expectedValueMinor = this.normalizeExpectedValueMinor(
+      dto.expectedValueMinor ?? null,
     );
+    const row = await this.dataSource.transaction(async (manager) => {
+      const result = await this.executeIngest(
+        manager,
+        tenant,
+        LeadIntakeChannel.MANUAL,
+        dto,
+        idempotencyKey,
+        version,
+        (input, candidateKey) =>
+          leadManualCreateFingerprint(input, expectedValueMinor, candidateKey),
+      );
+      if (
+        result.outcome === 'created' &&
+        !result.replayed &&
+        expectedValueMinor !== null
+      ) {
+        const input: LeadExpectedValueFingerprintInput = {
+          organizationId: tenant.organizationId,
+          actorMembershipId: tenant.membershipId,
+          leadId: result.leadId,
+          expectedRevision: result.revision,
+          expectedValueMinor,
+        };
+        await this.executeExpectedValue(
+          manager,
+          tenant,
+          result.leadId,
+          result.revision,
+          idempotencyKey,
+          expectedValueMinor,
+          (candidateKey) => leadExpectedValueFingerprint(input, candidateKey),
+        );
+      }
+      return result;
+    });
+    return this.ingestResult(tenant, LeadIntakeChannel.MANUAL, row);
   }
 
   async createFromForm(
@@ -177,7 +228,6 @@ export class LeadsService {
       dto,
       idempotencyKey,
       version,
-      this.config.idempotencyKeys.get(version) as Buffer,
     );
   }
 
@@ -506,6 +556,77 @@ export class LeadsService {
     await this.readiness.assertManualReady();
     const current = await this.findVisible(tenant, leadId);
     if (current === null) throw new NotFoundException('Lead not found.');
+    const merged = this.normalizeLeadUpdate(current, dto);
+    await this.executeLeadUpdate(
+      this.dataSource,
+      tenant,
+      leadId,
+      expectedRevision,
+      merged,
+    );
+    return this.get(tenant, leadId);
+  }
+
+  async updateInformation(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+    dto: UpdateLeadInformationDto,
+  ): Promise<{ lead: LeadView; replayed: boolean }> {
+    await this.readiness.assertManualReady();
+    const current = await this.findVisible(tenant, leadId);
+    if (current === null) throw new NotFoundException('Lead not found.');
+    const merged = this.normalizeLeadUpdate(current, dto);
+    const expectedValueMinor = this.normalizeExpectedValueMinor(
+      dto.expectedValueMinor,
+    );
+    const input: LeadInformationFingerprintInput = {
+      organizationId: tenant.organizationId,
+      actorMembershipId: tenant.membershipId,
+      leadId,
+      expectedRevision,
+      displayName:
+        dto.displayName === undefined ? undefined : merged.displayName,
+      primaryPhone:
+        dto.primaryPhone === undefined ? undefined : merged.primaryPhone,
+      email: dto.email === undefined ? undefined : merged.email,
+      companyName:
+        dto.companyName === undefined ? undefined : merged.companyName,
+      instagram: dto.instagram === undefined ? undefined : merged.instagram,
+      city: dto.city === undefined ? undefined : merged.city,
+      serviceInterest:
+        dto.serviceInterest === undefined ? undefined : merged.serviceInterest,
+      expectedValueMinor,
+    };
+    const command = await this.dataSource.transaction(async (manager) => {
+      const result = await this.executeExpectedValue(
+        manager,
+        tenant,
+        leadId,
+        expectedRevision,
+        idempotencyKey,
+        expectedValueMinor,
+        (candidateKey) => leadInformationFingerprint(input, candidateKey),
+      );
+      if (!result.replayed) {
+        await this.executeLeadUpdate(
+          manager,
+          tenant,
+          leadId,
+          result.revision,
+          merged,
+        );
+      }
+      return result;
+    });
+    return { lead: await this.get(tenant, leadId), replayed: command.replayed };
+  }
+
+  private normalizeLeadUpdate(
+    current: LeadRow,
+    dto: UpdateLeadDto,
+  ): LeadUpdateValues {
     const merged = {
       displayName: dto.displayName?.trim() ?? current.displayName,
       primaryPhone:
@@ -555,8 +676,18 @@ export class LeadsService {
     ) {
       throw new BadRequestException('Invalid lead text.');
     }
+    return merged;
+  }
+
+  private async executeLeadUpdate(
+    manager: QueryExecutor,
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    merged: LeadUpdateValues,
+  ): Promise<void> {
     try {
-      await this.dataSource.query(
+      await manager.query(
         `SELECT * FROM app_private.update_lead(
           $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::bigint,
           $6::text,$7::text,$8::text,$9::text,$10::text,$11::text,$12::text)`,
@@ -578,7 +709,6 @@ export class LeadsService {
     } catch (error) {
       this.mapDatabaseError(error);
     }
-    return this.get(tenant, leadId);
   }
 
   async assign(
@@ -885,7 +1015,6 @@ export class LeadsService {
     const expectedValueMinor = this.normalizeExpectedValueMinor(
       dto.expectedValueMinor,
     );
-    const version = this.config.idempotencyCurrentKeyVersion as number;
     const input: LeadExpectedValueFingerprintInput = {
       organizationId: tenant.organizationId,
       actorMembershipId: tenant.membershipId,
@@ -893,17 +1022,38 @@ export class LeadsService {
       expectedRevision,
       expectedValueMinor,
     };
+    return this.executeExpectedValue(
+      this.dataSource,
+      tenant,
+      leadId,
+      expectedRevision,
+      idempotencyKey,
+      expectedValueMinor,
+      (candidateKey) => leadExpectedValueFingerprint(input, candidateKey),
+    );
+  }
+
+  private async executeExpectedValue(
+    manager: QueryExecutor,
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+    expectedValueMinor: string | null,
+    fingerprint: (key: Buffer) => string,
+  ): Promise<LeadCommandResult> {
+    const version = this.config.idempotencyCurrentKeyVersion as number;
     const fingerprints = Object.fromEntries(
       [...this.config.idempotencyKeys.entries()].map(
         ([candidateVersion, candidateKey]) => [
           String(candidateVersion),
-          leadExpectedValueFingerprint(input, candidateKey),
+          fingerprint(candidateKey),
         ],
       ),
     );
     let rows: CommandRow[];
     try {
-      rows = await this.dataSource.query<CommandRow[]>(
+      rows = await manager.query<CommandRow[]>(
         `SELECT revision::text AS revision, replayed,
                 response_status AS "responseStatus"
          FROM app_private.execute_lead_expected_value_command(
@@ -917,10 +1067,7 @@ export class LeadsService {
           expectedRevision,
           idempotencyKey,
           version,
-          leadExpectedValueFingerprint(
-            input,
-            this.config.idempotencyKeys.get(version) as Buffer,
-          ),
+          fingerprint(this.config.idempotencyKeys.get(version) as Buffer),
           JSON.stringify(fingerprints),
           expectedValueMinor,
         ],
@@ -1187,8 +1334,31 @@ export class LeadsService {
     dto: CreateLeadDto,
     idempotencyKey: string,
     version: number,
-    key: Buffer,
   ): Promise<LeadIngestResult> {
+    const row = await this.executeIngest(
+      this.dataSource,
+      tenant,
+      channel,
+      dto,
+      idempotencyKey,
+      version,
+      (input, candidateKey) => leadRequestFingerprint(input, candidateKey),
+    );
+    return this.ingestResult(tenant, channel, row);
+  }
+
+  private async executeIngest(
+    manager: QueryExecutor,
+    tenant: TenantContext | null,
+    channel: LeadIntakeChannel,
+    dto: CreateLeadDto,
+    idempotencyKey: string,
+    version: number,
+    fingerprint: (
+      input: ReturnType<typeof normalizeLeadInput>,
+      key: Buffer,
+    ) => string,
+  ): Promise<IngestRow> {
     const input = normalizeLeadInput(dto, normalizeLeadPhone(dto.primaryPhone));
     if (channel === LeadIntakeChannel.GENESIS_FORM) {
       input.responsibleMembershipId = null;
@@ -1197,14 +1367,14 @@ export class LeadsService {
       [...this.config.idempotencyKeys.entries()].map(
         ([candidateVersion, candidateKey]) => [
           String(candidateVersion),
-          leadRequestFingerprint(input, candidateKey),
+          fingerprint(input, candidateKey),
         ],
       ),
     );
     let rows: IngestRow[];
     try {
-      rows = await this.dataSource.query<IngestRow[]>(
-        `SELECT lead_id AS "leadId", revision::text AS revision,
+      rows = await manager.query<IngestRow[]>(
+        `SELECT outcome, lead_id AS "leadId", revision::text AS revision,
                 replayed, actor_can_view AS visible,
                 response_status AS "responseStatus"
          FROM app_private.ingest_lead(
@@ -1233,7 +1403,10 @@ export class LeadsService {
           input.utmTerm,
           idempotencyKey,
           version,
-          leadRequestFingerprint(input, key),
+          fingerprint(
+            input,
+            this.config.idempotencyKeys.get(version) as Buffer,
+          ),
           JSON.stringify(fingerprints),
         ],
       );
@@ -1250,6 +1423,14 @@ export class LeadsService {
     if (result === undefined) {
       throw new ServiceUnavailableException('Lead intake is unavailable.');
     }
+    return result;
+  }
+
+  private async ingestResult(
+    tenant: TenantContext | null,
+    channel: LeadIntakeChannel,
+    result: IngestRow,
+  ): Promise<LeadIngestResult> {
     const mayReturnLead =
       channel === LeadIntakeChannel.MANUAL &&
       tenant !== null &&
