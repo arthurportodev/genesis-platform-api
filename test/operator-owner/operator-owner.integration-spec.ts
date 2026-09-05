@@ -265,6 +265,79 @@ describe('private operator OWNER database integration', () => {
     expect(status).not.toHaveProperty('emailNormalized');
     expect(status).not.toHaveProperty('organization');
   });
+
+  it('resolves one exact OWNER identity without modifying any database row', async () => {
+    const service = new OperatorOwnerService(owner);
+    const identity = identityFor('resolve');
+    const created = await service.create(
+      identity,
+      Buffer.from('resolve-test-password-10A'),
+    );
+    const before = await readDatabaseState(owner);
+
+    await expect(
+      service.resolve({
+        emailNormalized: identity.emailNormalized,
+        organizationSlug: identity.organizationSlug,
+      }),
+    ).resolves.toEqual({
+      status: 'RESOLVED',
+      organizationId: created.organizationId,
+      userId: created.userId,
+      membershipId: created.membershipId,
+      organization: identity.organizationName,
+      organizationSlug: identity.organizationSlug,
+      emailNormalized: identity.emailNormalized,
+      role: 'OWNER',
+      organizationActive: true,
+      userActive: true,
+      membershipActive: true,
+    });
+
+    expect(await readDatabaseState(owner)).toEqual(before);
+    await expect(
+      service.status({
+        organizationId: created.organizationId,
+        userId: created.userId,
+        membershipId: created.membershipId,
+      }),
+    ).resolves.toMatchObject({
+      status: 'READY',
+      sessions: 0,
+      refreshTokens: 0,
+      leads: 0,
+    });
+  });
+
+  it('fails closed for missing and mismatched recovery keys without changing data', async () => {
+    const service = new OperatorOwnerService(owner);
+    const firstIdentity = identityFor('resolve-first');
+    const secondIdentity = identityFor('resolve-second');
+    await service.create(
+      firstIdentity,
+      Buffer.from('resolve-first-password-10A'),
+    );
+    await service.create(
+      secondIdentity,
+      Buffer.from('resolve-second-password-10A'),
+    );
+    const before = await readDatabaseState(owner);
+
+    await expect(
+      service.resolve({
+        emailNormalized: 'missing@example.invalid',
+        organizationSlug: firstIdentity.organizationSlug,
+      }),
+    ).resolves.toEqual({ status: 'NOT_FOUND' });
+    await expect(
+      service.resolve({
+        emailNormalized: firstIdentity.emailNormalized,
+        organizationSlug: secondIdentity.organizationSlug,
+      }),
+    ).resolves.toEqual({ status: 'NOT_FOUND' });
+
+    expect(await readDatabaseState(owner)).toEqual(before);
+  });
 });
 
 function identityFor(label: string) {
@@ -304,6 +377,21 @@ async function readCardinality(connection: DataSource): Promise<{
   );
   if (row === undefined) throw new Error('Missing cardinality evidence.');
   return row;
+}
+
+async function readDatabaseState(connection: DataSource): Promise<unknown> {
+  const [row] = await connection.query<Array<{ state: unknown }>>(
+    `SELECT jsonb_build_object(
+       'organizations', (SELECT coalesce(jsonb_agg(to_jsonb(record) ORDER BY record.id), '[]'::jsonb) FROM public.organizations record),
+       'users', (SELECT coalesce(jsonb_agg(to_jsonb(record) ORDER BY record.id), '[]'::jsonb) FROM public.users record),
+       'memberships', (SELECT coalesce(jsonb_agg(to_jsonb(record) ORDER BY record.id), '[]'::jsonb) FROM public.memberships record),
+       'sessions', (SELECT coalesce(jsonb_agg(to_jsonb(record) ORDER BY record.id), '[]'::jsonb) FROM public.auth_sessions record),
+       'refreshTokens', (SELECT coalesce(jsonb_agg(to_jsonb(record) ORDER BY record.id), '[]'::jsonb) FROM public.auth_refresh_tokens record),
+       'leads', (SELECT coalesce(jsonb_agg(to_jsonb(record) ORDER BY record.id), '[]'::jsonb) FROM public.leads record)
+     ) AS state`,
+  );
+  if (row === undefined) throw new Error('Missing read-only state evidence.');
+  return row.state;
 }
 
 function createOwnerDataSource(): DataSource {

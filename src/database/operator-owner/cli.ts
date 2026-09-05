@@ -5,12 +5,14 @@ import {
   OperatorOwnerError,
   OperatorOwnerIdentifiers,
   prepareOperatorOwnerIdentity,
+  prepareOperatorOwnerResolution,
   PreparedOperatorOwnerInput,
+  PreparedOperatorOwnerResolution,
 } from './operator-owner.model';
 import { OperatorOwnerService } from './operator-owner.service';
 import { MaskedTtyInput } from './masked-tty-input';
 
-type OperatorOwnerCommand = 'create' | 'status';
+type OperatorOwnerCommand = 'create' | 'resolve' | 'status';
 
 export const PRODUCTION_OWNER_AUTHORIZATION =
   'AUTORIZO A CRIAÇÃO DA MINHA ORGANIZAÇÃO E CONTA OWNER DE PRODUÇÃO';
@@ -18,6 +20,7 @@ export const PRODUCTION_OWNER_AUTHORIZATION =
 export interface OperatorOwnerCliArguments {
   command: OperatorOwnerCommand;
   identifiers: OperatorOwnerIdentifiers | null;
+  resolution: PreparedOperatorOwnerResolution | null;
 }
 
 export interface OperatorOwnerInteraction {
@@ -38,30 +41,36 @@ export function parseOperatorOwnerCliArguments(
   arguments_: string[],
 ): OperatorOwnerCliArguments {
   const command = arguments_[0];
-  if (command !== 'create' && command !== 'status') {
+  if (command !== 'create' && command !== 'resolve' && command !== 'status') {
     invalidArguments();
   }
   if (command === 'create') {
     if (arguments_.length !== 1) invalidArguments();
-    return { command, identifiers: null };
+    return { command, identifiers: null, resolution: null };
+  }
+  if (command === 'resolve') {
+    const values = parseOptions(arguments_.slice(1), [
+      '--email',
+      '--organization-slug',
+    ]);
+    if (values.size !== 2) invalidArguments();
+    return {
+      command,
+      identifiers: null,
+      resolution: prepareOperatorOwnerResolution({
+        email: values.get('--email') ?? '',
+        organizationSlug: values.get('--organization-slug') ?? '',
+      }),
+    };
   }
   if (arguments_.length === 1) {
-    return { command, identifiers: null };
+    return { command, identifiers: null, resolution: null };
   }
-  const values = new Map<string, string>();
-  for (let index = 1; index < arguments_.length; index += 2) {
-    const option = arguments_[index];
-    const value = arguments_[index + 1];
-    if (
-      value === undefined ||
-      value.startsWith('--') ||
-      !['--organization-id', '--user-id', '--membership-id'].includes(option) ||
-      values.has(option)
-    ) {
-      invalidArguments();
-    }
-    values.set(option, value);
-  }
+  const values = parseOptions(arguments_.slice(1), [
+    '--organization-id',
+    '--user-id',
+    '--membership-id',
+  ]);
   const identifiers = {
     organizationId: values.get('--organization-id') ?? '',
     userId: values.get('--user-id') ?? '',
@@ -75,7 +84,29 @@ export function parseOperatorOwnerCliArguments(
   ) {
     invalidArguments();
   }
-  return { command, identifiers };
+  return { command, identifiers, resolution: null };
+}
+
+function parseOptions(
+  arguments_: string[],
+  allowed: string[],
+): Map<string, string> {
+  const values = new Map<string, string>();
+  for (let index = 0; index < arguments_.length; index += 2) {
+    const option = arguments_[index];
+    const value = arguments_[index + 1];
+    if (
+      option === undefined ||
+      value === undefined ||
+      value.startsWith('--') ||
+      !allowed.includes(option) ||
+      values.has(option)
+    ) {
+      invalidArguments();
+    }
+    values.set(option, value);
+  }
+  return values;
 }
 
 export async function executeAuthorizedOperatorOwnerCreate(
@@ -148,6 +179,17 @@ async function run(): Promise<void> {
         withOwnerService((service) => service.create(identity, password)),
     );
     console.log(JSON.stringify(result));
+    return;
+  }
+
+  if (arguments_.command === 'resolve') {
+    const resolution = arguments_.resolution;
+    if (resolution === null) invalidArguments();
+    const result = await withOwnerService((service) =>
+      service.resolve(resolution),
+    );
+    console.log(JSON.stringify(result));
+    if (result.status !== 'RESOLVED') process.exitCode = 2;
     return;
   }
 
@@ -235,7 +277,7 @@ function requireTty(message: string): void {
 function invalidArguments(): never {
   throw new OperatorOwnerError(
     'INVALID_ARGUMENTS',
-    'Use create without options or status with the three explicit identifiers.',
+    'Use create without options, resolve with exact email and organization slug, or status with the three explicit identifiers.',
   );
 }
 

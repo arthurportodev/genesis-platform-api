@@ -7,8 +7,10 @@ import {
   OperatorOwnerCreateResult,
   OperatorOwnerError,
   OperatorOwnerIdentifiers,
+  OperatorOwnerResolveResult,
   OperatorOwnerStatusResult,
   PreparedOperatorOwnerInput,
+  PreparedOperatorOwnerResolution,
 } from './operator-owner.model';
 
 interface QueryExecutor {
@@ -39,6 +41,17 @@ interface ScopedStatusRow {
   refreshTokens: number;
   effectiveOwners: number;
   checkedAt: Date;
+}
+
+interface ResolvedOwnerRow extends OperatorOwnerIdentifiers {
+  organization: string;
+  organizationSlug: string;
+  emailNormalized: string;
+  organizationActive: boolean;
+  userActive: boolean;
+  membershipActive: boolean;
+  ownerRole: boolean;
+  credentialPresent: boolean;
 }
 
 export class OperatorOwnerService {
@@ -113,6 +126,62 @@ export class OperatorOwnerService {
       };
     }
     return this.toStatusResult(row);
+  }
+
+  async resolve(
+    resolution: PreparedOperatorOwnerResolution,
+  ): Promise<OperatorOwnerResolveResult> {
+    await assertOperatorOwnerOperationalRole(this.connection);
+    await assertOperatorOwnerSchema(this.connection);
+    const rows = await this.connection.query<ResolvedOwnerRow[]>(
+      `SELECT organization.id AS "organizationId",
+              application_user.id AS "userId",
+              membership.id AS "membershipId",
+              organization.name AS organization,
+              organization.slug AS "organizationSlug",
+              application_user.email AS "emailNormalized",
+              organization.status = 'active' AS "organizationActive",
+              application_user.status = 'active' AS "userActive",
+              membership.status = 'active' AS "membershipActive",
+              membership.role = 'owner' AS "ownerRole",
+              application_user.password_hash IS NOT NULL AS "credentialPresent"
+         FROM public.users application_user
+         JOIN public.memberships membership
+           ON membership.user_id = application_user.id
+         JOIN public.organizations organization
+           ON organization.id = membership.organization_id
+        WHERE lower(btrim(application_user.email)) = $1
+          AND organization.slug = $2`,
+      [resolution.emailNormalized, resolution.organizationSlug],
+    );
+    if (rows.length === 0) return { status: 'NOT_FOUND' };
+    const row = rows.length === 1 ? rows[0] : undefined;
+    if (
+      row === undefined ||
+      !row.organizationActive ||
+      !row.userActive ||
+      !row.membershipActive ||
+      !row.ownerRole ||
+      !row.credentialPresent
+    ) {
+      throw new OperatorOwnerError(
+        'IDENTITY_NOT_RESOLVED',
+        'The requested production OWNER identity could not be resolved uniquely.',
+      );
+    }
+    return {
+      organizationId: row.organizationId,
+      userId: row.userId,
+      membershipId: row.membershipId,
+      status: 'RESOLVED',
+      organization: row.organization,
+      organizationSlug: row.organizationSlug,
+      emailNormalized: row.emailNormalized,
+      role: 'OWNER',
+      organizationActive: true,
+      userActive: true,
+      membershipActive: true,
+    };
   }
 
   private async createInTransaction(
