@@ -6,10 +6,12 @@ export type OperatorOwnerFailureCode =
   | 'CONFLICT'
   | 'CREATION_NOT_AUTHORIZED'
   | 'INPUT_CANCELLED'
+  | 'IDENTITY_NOT_RESOLVED'
   | 'INVARIANT_VIOLATION'
   | 'INVALID_ARGUMENTS'
   | 'INVALID_EMAIL'
   | 'INVALID_ORGANIZATION_NAME'
+  | 'INVALID_ORGANIZATION_SLUG'
   | 'INVALID_OWNER_NAME'
   | 'INVALID_PASSWORD'
   | 'PASSWORD_INPUT_CANCELLED'
@@ -41,6 +43,25 @@ export interface OperatorOwnerIdentifiers {
   userId: string;
   membershipId: string;
 }
+
+export interface PreparedOperatorOwnerResolution {
+  emailNormalized: string;
+  organizationSlug: string;
+}
+
+export interface OperatorOwnerResolvedResult extends OperatorOwnerIdentifiers {
+  status: 'RESOLVED';
+  organization: string;
+  organizationSlug: string;
+  emailNormalized: string;
+  role: 'OWNER';
+  organizationActive: true;
+  userActive: true;
+  membershipActive: true;
+}
+
+export type OperatorOwnerResolveResult =
+  OperatorOwnerResolvedResult | { status: 'NOT_FOUND' };
 
 export interface OperatorOwnerCreateResult extends OperatorOwnerIdentifiers {
   status: 'CREATED';
@@ -119,6 +140,31 @@ export function prepareOperatorOwnerIdentity(input: {
     ownerName,
     emailNormalized,
   };
+}
+
+export function prepareOperatorOwnerResolution(input: {
+  email: string;
+  organizationSlug: string;
+}): PreparedOperatorOwnerResolution {
+  const emailNormalized = normalizeEmail(input.email);
+  if (emailNormalized.length > 320 || !isEmail(emailNormalized)) {
+    throw new OperatorOwnerError(
+      'INVALID_EMAIL',
+      'Email does not satisfy the authentication contract.',
+    );
+  }
+  const organizationSlug = input.organizationSlug;
+  if (
+    organizationSlug.length === 0 ||
+    organizationSlug.length > 120 ||
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(organizationSlug)
+  ) {
+    throw new OperatorOwnerError(
+      'INVALID_ORGANIZATION_SLUG',
+      'Organization slug does not satisfy the canonical contract.',
+    );
+  }
+  return { emailNormalized, organizationSlug };
 }
 
 export function slugifyOrganizationName(name: string): string {

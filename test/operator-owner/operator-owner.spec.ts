@@ -12,6 +12,7 @@ import { MaskedTtyInput } from '../../src/database/operator-owner/masked-tty-inp
 import {
   OperatorOwnerError,
   prepareOperatorOwnerIdentity,
+  prepareOperatorOwnerResolution,
   slugifyOrganizationName,
 } from '../../src/database/operator-owner/operator-owner.model';
 import { OperatorOwnerService } from '../../src/database/operator-owner/operator-owner.service';
@@ -25,10 +26,12 @@ describe('private operator OWNER CLI contract', () => {
     expect(parseOperatorOwnerCliArguments(['create'])).toEqual({
       command: 'create',
       identifiers: null,
+      resolution: null,
     });
     expect(parseOperatorOwnerCliArguments(['status'])).toEqual({
       command: 'status',
       identifiers: null,
+      resolution: null,
     });
     expect(
       parseOperatorOwnerCliArguments([
@@ -43,12 +46,43 @@ describe('private operator OWNER CLI contract', () => {
     ).toEqual({
       command: 'status',
       identifiers: { organizationId, userId, membershipId },
+      resolution: null,
+    });
+  });
+
+  it('accepts only an exact email and organization slug for read-only recovery', () => {
+    expect(
+      parseOperatorOwnerCliArguments([
+        'resolve',
+        '--email',
+        '  OWNER@Example.COM ',
+        '--organization-slug',
+        'genesis-smoke',
+      ]),
+    ).toEqual({
+      command: 'resolve',
+      identifiers: null,
+      resolution: {
+        emailNormalized: 'owner@example.com',
+        organizationSlug: 'genesis-smoke',
+      },
     });
   });
 
   it.each([
     ['create', '--password', 'not-allowed'],
     ['create', '--email', 'owner@example.com'],
+    ['resolve'],
+    ['resolve', '--email', 'owner@example.com'],
+    [
+      'resolve',
+      '--email',
+      'owner@example.com',
+      '--organization-slug',
+      'genesis-smoke',
+      '--organization-slug',
+      'other',
+    ],
     ['status', '--organization-id', organizationId],
     [
       'status',
@@ -81,7 +115,30 @@ describe('private operator OWNER CLI contract', () => {
     expect(slugifyOrganizationName('São João & Filhos')).toBe(
       'sao-joao-filhos',
     );
+    expect(
+      prepareOperatorOwnerResolution({
+        email: ' OWNER@Example.COM ',
+        organizationSlug: 'genesis-smoke',
+      }),
+    ).toEqual({
+      emailNormalized: 'owner@example.com',
+      organizationSlug: 'genesis-smoke',
+    });
   });
+
+  it.each(['Genesis-Smoke', 'genesis_smoke', '', ' genesis-smoke '])(
+    'rejects a non-canonical recovery slug: %j',
+    (organizationSlug) => {
+      expect(
+        captureError(() =>
+          prepareOperatorOwnerResolution({
+            email: 'owner@example.com',
+            organizationSlug,
+          }),
+        ),
+      ).toMatchObject({ code: 'INVALID_ORGANIZATION_SLUG' });
+    },
+  );
 
   it.each([
     {
@@ -171,6 +228,56 @@ describe('private operator OWNER CLI contract', () => {
         expect.stringMatching(/operator|owner-onboarding/iu),
       ]),
     );
+  });
+
+  it.each([
+    { rows: [resolvedOwnerRow(), resolvedOwnerRow()], label: 'ambiguity' },
+    {
+      rows: [{ ...resolvedOwnerRow(), organizationActive: false }],
+      label: 'inactive organization',
+    },
+    {
+      rows: [{ ...resolvedOwnerRow(), userActive: false }],
+      label: 'inactive user',
+    },
+    {
+      rows: [{ ...resolvedOwnerRow(), membershipActive: false }],
+      label: 'inactive membership',
+    },
+    {
+      rows: [{ ...resolvedOwnerRow(), ownerRole: false }],
+      label: 'non-owner membership',
+    },
+    {
+      rows: [{ ...resolvedOwnerRow(), credentialPresent: false }],
+      label: 'missing credential',
+    },
+  ])(
+    'fails recovery closed for $label without a mutating query',
+    async ({ rows }) => {
+      const connection = createResolveConnection(rows);
+      await expect(
+        new OperatorOwnerService(connection).resolve({
+          emailNormalized: 'owner@example.com',
+          organizationSlug: 'genesis-smoke',
+        }),
+      ).rejects.toMatchObject({ code: 'IDENTITY_NOT_RESOLVED' });
+      expect(
+        (connection.query as jest.Mock).mock.calls.every(([sql]) =>
+          /^SELECT\b/u.test(String(sql).trim()),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('returns NOT_FOUND without identity fields when no exact pair exists', async () => {
+    const connection = createResolveConnection([]);
+    await expect(
+      new OperatorOwnerService(connection).resolve({
+        emailNormalized: 'missing@example.com',
+        organizationSlug: 'genesis-smoke',
+      }),
+    ).resolves.toEqual({ status: 'NOT_FOUND' });
   });
 });
 
@@ -416,6 +523,59 @@ function createResult() {
     createdAt: '2026-08-21T00:00:00.000Z',
     loginInstruction: 'Open the CRM.',
   };
+}
+
+function resolvedOwnerRow() {
+  return {
+    organizationId,
+    userId,
+    membershipId,
+    organization: 'Genesis Smoke',
+    organizationSlug: 'genesis-smoke',
+    emailNormalized: 'owner@example.com',
+    organizationActive: true,
+    userActive: true,
+    membershipActive: true,
+    ownerRole: true,
+    credentialPresent: true,
+  };
+}
+
+function createResolveConnection(rows: ReturnType<typeof resolvedOwnerRow>[]) {
+  const safeRole = {
+    canLogin: true,
+    superuser: false,
+    createDatabase: false,
+    createRole: false,
+    inherit: false,
+    bypassRls: false,
+    ownsDatabase: true,
+    ownsPublicSchema: true,
+    memberships: 0,
+  };
+  const completeSchema = {
+    organizations: true,
+    users: true,
+    memberships: true,
+    leads: true,
+    sessions: true,
+    refreshTokens: true,
+    passwordHash: true,
+    emailVerifiedAt: true,
+    emailUnique: true,
+    slugUnique: true,
+    ownershipGuard: true,
+  };
+  return {
+    migrations: [{ name: 'CurrentSchema' }],
+    showMigrations: jest.fn().mockResolvedValue(false),
+    query: jest
+      .fn()
+      .mockResolvedValueOnce([safeRole])
+      .mockResolvedValueOnce([{ name: 'CurrentSchema' }])
+      .mockResolvedValueOnce([completeSchema])
+      .mockResolvedValueOnce(rows),
+  } as unknown as DataSource;
 }
 
 function expectZeroed(value: Buffer): void {

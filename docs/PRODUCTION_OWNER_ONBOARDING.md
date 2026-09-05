@@ -18,6 +18,11 @@ O processo não cria Lead, Session ou Refresh Token. Depois da criação, o
 operador deve executar `status` para os três identificadores retornados e uma
 pessoa deve fazer o login diretamente no navegador.
 
+Se o receipt sanitizado de uma criação confirmada for perdido, `resolve`
+recupera os três identificadores por e-mail normalizado e slug exato sem
+autenticar o User ou modificar dados. Ele não substitui a verificação por
+`status` e não pode ser usado para criar ou escolher identidades.
+
 ## Pré-condições
 
 - usar uma imagem imutável, por digest, que contenha o CLI compilado;
@@ -56,6 +61,26 @@ O hash segue o serviço oficial de senha e o buffer de entrada é apagado da
 memória ao término.
 
 ## Verificação por status
+
+### Recuperação read-only do receipt
+
+Use somente para uma identidade cuja criação já foi confirmada:
+
+```bash
+npm run operator:owner -- resolve \
+  --email <normalized-email> \
+  --organization-slug <organization-slug>
+```
+
+O resultado `RESOLVED` exige uma única combinação de User, Organization e
+Membership ativa com papel `OWNER` e credential existente. Ausência ou mismatch
+retornam `NOT_FOUND` sem campos de identidade. Estado inativo, papel divergente
+ou ambiguidade retornam apenas o erro opaco `IDENTITY_NOT_RESOLVED`, também sem
+identidade parcial. O comando executa somente consultas e não cria Session ou
+Refresh Token.
+
+Depois de `RESOLVED`, execute obrigatoriamente o `status` existente com os três
+UUIDs retornados.
 
 Use os três identificadores retornados pela criação, sem publicá-los em
 documentação ou evidência versionada:
