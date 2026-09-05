@@ -163,6 +163,15 @@ export class CreateLeadDto {
 
 export class FormLeadDto extends CreateLeadDto {}
 
+export class CreateManualLeadDto extends CreateLeadDto {
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(19)
+  @Matches(/^(0|[1-9]\d*)$/u)
+  expectedValueMinor?: string | null;
+}
+
 export class UpdateLeadDto {
   @IsOptional()
   @IsString()
@@ -376,6 +385,15 @@ export class ArchiveLeadDto {
 export class EmptyLeadCommandDto {}
 
 export class SetLeadExpectedValueDto {
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(19)
+  @Matches(/^(0|[1-9]\d*)$/u)
+  expectedValueMinor!: string | null;
+}
+
+export class UpdateLeadInformationDto extends UpdateLeadDto {
   @IsDefined()
   @ValidateIf((_object, value) => value !== null)
   @IsString()

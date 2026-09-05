@@ -1783,6 +1783,226 @@ describe('Lead foundation database integration', () => {
     );
   });
 
+  it('creates expected value atomically and rolls back either side of combined information edits', async () => {
+    const fixture = await createFixture();
+    const tenant = ownerTenant(fixture);
+    const service = createLeadService();
+    const reads = createReadService();
+    const createKey = randomUUID();
+    const phone = uniquePhone();
+    const createInput = {
+      displayName: 'Atomic creation',
+      primaryPhone: phone,
+      source: LeadSource.MANUAL,
+      city: 'Goiânia',
+      expectedValueMinor: '9007199254740993',
+    };
+
+    const created = await service.createManual(tenant, createInput, createKey);
+    expect(created).toMatchObject({ responseStatus: 201, replayed: false });
+    const leadId = created.lead?.id;
+    if (leadId === undefined) throw new Error('Owner creation hid the Lead.');
+    expect((await reads.detail(tenant, leadId)).latestCycle).toMatchObject({
+      expectedValueMinor: '9007199254740993',
+    });
+
+    await service.setExpectedValue(
+      tenant,
+      leadId,
+      created.lead?.revision ?? '',
+      randomUUID(),
+      { expectedValueMinor: '100' },
+    );
+    await expect(
+      service.createManual(tenant, createInput, createKey),
+    ).resolves.toMatchObject({ responseStatus: 200, replayed: true });
+    await expect(
+      service.createManual(
+        tenant,
+        { ...createInput, expectedValueMinor: '999' },
+        randomUUID(),
+      ),
+    ).resolves.toMatchObject({ responseStatus: 200, replayed: false });
+    expect((await reads.detail(tenant, leadId)).latestCycle).toMatchObject({
+      expectedValueMinor: '100',
+    });
+
+    const memberTenant = {
+      userId: fixture.users[1].id,
+      membershipId: fixture.memberships[1].id,
+      organizationId: fixture.organization.id,
+      role: MembershipRole.MEMBER,
+    };
+    const memberPhone = uniquePhone();
+    await expect(
+      service.createManual(
+        memberTenant,
+        {
+          displayName: 'Opaque member creation',
+          primaryPhone: memberPhone,
+          source: LeadSource.MANUAL,
+          expectedValueMinor: '0',
+        },
+        randomUUID(),
+      ),
+    ).resolves.toEqual({ responseStatus: 204, replayed: false, lead: null });
+    const memberLead = await reads.list(tenant, {
+      q: memberPhone,
+      limit: 25,
+      sort: LeadListSort.CREATED_AT_DESC,
+    });
+    expect(memberLead.items).toHaveLength(1);
+    expect(memberLead.items[0]?.expectedValueMinor).toBe('0');
+
+    const internals = service as unknown as {
+      executeExpectedValue: (...args: unknown[]) => Promise<unknown>;
+      executeLeadUpdate: (...args: unknown[]) => Promise<unknown>;
+    };
+    const originalExpected = internals.executeExpectedValue.bind(service);
+    const originalUpdate = internals.executeLeadUpdate.bind(service);
+
+    const rollbackPhone = uniquePhone();
+    internals.executeExpectedValue = () =>
+      Promise.reject(new Error('forced initial financial failure'));
+    await expect(
+      service.createManual(
+        tenant,
+        {
+          displayName: 'Must roll back',
+          primaryPhone: rollbackPhone,
+          source: LeadSource.MANUAL,
+          expectedValueMinor: '1',
+        },
+        randomUUID(),
+      ),
+    ).rejects.toThrow('forced initial financial failure');
+    internals.executeExpectedValue = originalExpected;
+    const rolledBackCreation = await reads.list(tenant, {
+      q: rollbackPhone,
+      limit: 25,
+      sort: LeadListSort.CREATED_AT_DESC,
+    });
+    expect(rolledBackCreation.items).toHaveLength(0);
+
+    const beforeCombined = await reads.detail(tenant, leadId);
+    const combinedKey = randomUUID();
+    const combinedBody = {
+      displayName: beforeCombined.displayName,
+      primaryPhone: beforeCombined.primaryPhone,
+      email: beforeCombined.email,
+      companyName: beforeCombined.companyName,
+      instagram: beforeCombined.instagram,
+      city: 'Anápolis',
+      serviceInterest: beforeCombined.serviceInterest,
+      expectedValueMinor: '200',
+    };
+    const combined = await service.updateInformation(
+      tenant,
+      leadId,
+      beforeCombined.revision,
+      combinedKey,
+      combinedBody,
+    );
+    expect(combined).toMatchObject({ replayed: false });
+    expect(combined.lead).toMatchObject({ city: 'Anápolis' });
+    expect((await reads.detail(tenant, leadId)).latestCycle).toMatchObject({
+      expectedValueMinor: '200',
+    });
+    await expect(
+      service.updateInformation(
+        tenant,
+        leadId,
+        beforeCombined.revision,
+        combinedKey,
+        combinedBody,
+      ),
+    ).resolves.toMatchObject({ replayed: true });
+
+    const beforePartial = await reads.detail(tenant, leadId);
+    const partialKey = randomUUID();
+    const partialBody = {
+      city: 'Goiânia',
+      expectedValueMinor: '250',
+    };
+    await expect(
+      service.updateInformation(
+        tenant,
+        leadId,
+        beforePartial.revision,
+        partialKey,
+        partialBody,
+      ),
+    ).resolves.toMatchObject({ replayed: false });
+    const afterPartial = await reads.detail(tenant, leadId);
+    await service.update(tenant, leadId, afterPartial.revision, {
+      companyName: 'Concurrent edit',
+    });
+    await expect(
+      service.updateInformation(
+        tenant,
+        leadId,
+        beforePartial.revision,
+        partialKey,
+        partialBody,
+      ),
+    ).resolves.toMatchObject({
+      replayed: true,
+      lead: { city: 'Goiânia', companyName: 'Concurrent edit' },
+    });
+
+    const beforeCommonFailure = await reads.detail(tenant, leadId);
+    const commonFailureKey = randomUUID();
+    internals.executeLeadUpdate = () =>
+      Promise.reject(new Error('forced common failure'));
+    await expect(
+      service.updateInformation(
+        tenant,
+        leadId,
+        beforeCommonFailure.revision,
+        commonFailureKey,
+        { ...combinedBody, city: 'Brasília', expectedValueMinor: '300' },
+      ),
+    ).rejects.toThrow('forced common failure');
+    internals.executeLeadUpdate = originalUpdate;
+    const afterCommonFailure = await reads.detail(tenant, leadId);
+    expect(afterCommonFailure).toMatchObject({
+      city: beforeCommonFailure.city,
+      revision: beforeCommonFailure.revision,
+    });
+    expect(afterCommonFailure.latestCycle.expectedValueMinor).toBe('200');
+    await expect(
+      service.updateInformation(
+        tenant,
+        leadId,
+        beforeCommonFailure.revision,
+        commonFailureKey,
+        { ...combinedBody, city: 'Brasília', expectedValueMinor: '300' },
+      ),
+    ).resolves.toMatchObject({ replayed: false });
+
+    const beforeFinancialFailure = await reads.detail(tenant, leadId);
+    internals.executeExpectedValue = () =>
+      Promise.reject(new Error('forced financial failure'));
+    await expect(
+      service.updateInformation(
+        tenant,
+        leadId,
+        beforeFinancialFailure.revision,
+        randomUUID(),
+        { ...combinedBody, city: 'Palmas', expectedValueMinor: '400' },
+      ),
+    ).rejects.toThrow('forced financial failure');
+    internals.executeExpectedValue = originalExpected;
+    const afterFinancialFailure = await reads.detail(tenant, leadId);
+    expect(afterFinancialFailure).toMatchObject({
+      city: beforeFinancialFailure.city,
+      revision: beforeFinancialFailure.revision,
+    });
+    expect(afterFinancialFailure.latestCycle.expectedValueMinor).toBe(
+      beforeFinancialFailure.latestCycle.expectedValueMinor,
+    );
+  });
+
   it('preserves financial authorization, tenant isolation, and close-race serialization', async () => {
     const fixture = await createFixture();
     const otherTenant = await createFixture();

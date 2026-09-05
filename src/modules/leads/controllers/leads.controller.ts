@@ -28,7 +28,7 @@ import {
   CancelLeadNextActionDto,
   CompleteLeadNextActionDto,
   CreateLeadActivityDto,
-  CreateLeadDto,
+  CreateManualLeadDto,
   CreateLeadNextActionDto,
   CreateLeadNoteDto,
   LeadParamsDto,
@@ -47,6 +47,7 @@ import {
   RescheduleLeadNextActionDto,
   SetLeadExpectedValueDto,
   UpdateLeadDto,
+  UpdateLeadInformationDto,
 } from '../dto/lead.dto';
 import { LeadsService } from '../services/leads.service';
 import { LeadOperationalReadService } from '../services/lead-operational-read.service';
@@ -87,7 +88,7 @@ export class LeadsController {
   @Post()
   async create(
     @CurrentTenant() tenant: TenantContext,
-    @Body() dto: CreateLeadDto,
+    @Body() dto: CreateManualLeadDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Res({ passthrough: true }) response: Response,
   ): Promise<LeadView | undefined> {
@@ -249,6 +250,28 @@ export class LeadsController {
     );
     response.setHeader('ETag', this.etag(lead));
     return lead;
+  }
+
+  @Post(':leadId/information')
+  async updateInformation(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: UpdateLeadInformationDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<LeadView> {
+    const result = await this.leads.updateInformation(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
+    );
+    response.status(HttpStatus.OK);
+    response.setHeader('ETag', this.etag(result.lead));
+    if (result.replayed) response.setHeader('Idempotency-Replayed', 'true');
+    return result.lead;
   }
 
   @Post(':leadId/activities')
