@@ -62,10 +62,7 @@ function classifyAbsence(stderr, overrides = {}) {
 test('accepts both authoritative release-control workflows', () => {
   const automatic = validateWorkflowSource(automaticSource);
   const release = validateReleaseWorkflowSource(releaseSource);
-  assert.deepEqual(Object.keys(automatic.jobs).sort(), [
-    'build-and-scan',
-    'validate',
-  ]);
+  assert.deepEqual(Object.keys(automatic.jobs), ['validate']);
   assert.deepEqual(Object.keys(release.on), ['workflow_dispatch']);
   assert.equal(
     release.jobs['publish-image'].environment,
@@ -82,23 +79,17 @@ test('parser preserves the GitHub Actions on key and rejects duplicates', () => 
   );
 });
 
-test('positive automatic graph retains tests, local build, and blocking scan', () => {
+test('positive automatic graph is delta-aware and retains a blocking scan', () => {
   const workflow = parseYamlSubset(automaticSource);
-  const validateRuns = workflow.jobs.validate.steps.map(
-    (step) => step.run ?? '',
-  );
-  const buildSteps = workflow.jobs['build-and-scan'].steps;
-  assert.ok(validateRuns.includes('npm run test -- --runInBand'));
-  assert.ok(validateRuns.includes('npm run test:e2e -- --runInBand'));
-  assert.ok(validateRuns.includes('npm run test:integration'));
+  const steps = workflow.jobs.validate.steps;
+  const source = JSON.stringify(steps);
+  assert.match(source, /--verify-pr-checkout/u);
+  assert.match(source, /ci-main-integrity/u);
+  assert.match(source, /steps\.delta\.outputs\.app/u);
+  assert.match(source, /steps\.delta\.outputs\.production/u);
+  assert.match(source, /steps\.delta\.outputs\.image_build_scan/u);
   assert.equal(
-    buildSteps.find((step) =>
-      String(step.uses ?? '').startsWith('docker/build-push-action@'),
-    ).with.push,
-    false,
-  );
-  assert.equal(
-    buildSteps.find((step) =>
+    steps.find((step) =>
       String(step.uses ?? '').startsWith('aquasecurity/trivy-action@'),
     ).with['exit-code'],
     '1',
@@ -128,7 +119,7 @@ test('negative 2 rejects registry login in automatic CI', () => {
 test('negative 3 rejects image push commands in automatic CI', () => {
   rejects(
     automaticMutation((workflow) => {
-      workflow.jobs['build-and-scan'].steps.push({
+      workflow.jobs.validate.steps.push({
         run: 'docker push "$IMAGE_REF"',
       });
     }),
@@ -136,23 +127,22 @@ test('negative 3 rejects image push commands in automatic CI', () => {
   );
 });
 
-test('negative 4 rejects build action push true in automatic CI', () => {
+test('negative 4 rejects a non-blocking automatic scan', () => {
   rejects(
     automaticMutation((workflow) => {
-      const step = workflow.jobs['build-and-scan'].steps.find((candidate) =>
-        String(candidate.uses ?? '').startsWith('docker/build-push-action@'),
+      const step = workflow.jobs.validate.steps.find((candidate) =>
+        String(candidate.uses ?? '').startsWith('aquasecurity/trivy-action@'),
       );
-      step.with.push = true;
+      step.with['exit-code'] = '0';
     }),
-    /registry login|push false/u,
+    /Trivy|exit-code/u,
   );
 });
 
 test('negative 5 rejects automatic reusable workflow calls', () => {
   rejects(
     automaticMutation((workflow) => {
-      workflow.jobs['build-and-scan'].uses =
-        './.github/workflows/release-image.yml';
+      workflow.jobs.validate.uses = './.github/workflows/release-image.yml';
     }),
     /reusable workflow/u,
   );

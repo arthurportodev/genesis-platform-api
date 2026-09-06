@@ -892,132 +892,140 @@ function validateAutomaticWorkflowDocument(workflow) {
       'global',
     ),
   );
+  const dispatch = workflow?.on?.workflow_dispatch?.inputs?.mode;
+  if (
+    dispatch?.required !== true ||
+    dispatch?.type !== 'choice' ||
+    dispatch?.default !== 'full' ||
+    JSON.stringify(dispatch?.options) !== JSON.stringify(['full', 'integrity'])
+  ) {
+    failures.push(
+      'workflow_dispatch must expose only full and integrity modes.',
+    );
+  }
   const jobs = workflow?.jobs;
   if (!jobs || typeof jobs !== 'object' || Array.isArray(jobs)) {
     failures.push('automatic CI jobs must be a mapping.');
     return failures;
   }
-  if (
-    JSON.stringify(Object.keys(jobs).sort()) !==
-    JSON.stringify(['build-and-scan', 'validate'])
-  ) {
+  if (JSON.stringify(Object.keys(jobs)) !== JSON.stringify(['validate'])) {
     failures.push(
-      'automatic CI must contain exactly validate and build-and-scan jobs.',
+      'automatic CI must contain exactly one required validate job.',
     );
   }
   const validate = jobs.validate ?? {};
-  const build = jobs['build-and-scan'] ?? {};
   failures.push(...jobEnvironmentContextFailures(jobs));
-  for (const [name, job] of Object.entries({
-    validate,
-    'build-and-scan': build,
-  })) {
-    if (job['runs-on'] !== 'ubuntu-24.04')
-      failures.push(`${name} must use ubuntu-24.04.`);
+  if (validate.name !== 'Validate backend and production contracts') {
     failures.push(
-      ...permissionFailures(job.permissions, { contents: 'read' }, name),
-    );
-    if (Object.hasOwn(job, 'uses')) {
-      failures.push(`${name} must not call a reusable workflow.`);
-    }
-    if (containsRegistryCapability(job)) {
-      failures.push(
-        `${name} must have no registry login or publication capability.`,
-      );
-    }
-    if (containsDeploymentCapability(job)) {
-      failures.push(`${name} must have no deployment capability.`);
-    }
-  }
-  if (build.needs !== 'validate')
-    failures.push('build-and-scan must need validate.');
-  if (normalizeExpression(validate.if) !== '') {
-    failures.push('validate must run for every configured automatic CI event.');
-  }
-  if (normalizeExpression(build.if) !== '') {
-    failures.push(
-      'build-and-scan must run after validation for every configured CI event.',
+      'required check name must remain Validate backend and production contracts.',
     );
   }
-
-  const validateSteps = stepsFor(validate);
-  failures.push(...syntheticProductionFailures(validate));
-  const requiredValidationCommands = [
-    'npm run task:contracts',
-    'npm run format:check:task-tools',
-    'npm run test:task-tools',
-    'node scripts/validate-project-memory.cjs --mode local',
-    'node --test test/project-memory/project-memory.test.cjs',
-    'npm run ci:contract:validate',
-    'npm run format:check:ci',
-    'npm run test:ci',
-    'npm run format:check:production',
-    'npm run production:compose:validate',
-    'npm run test:production',
-    'npm run recovery:validate',
-    'npm run format:check:recovery',
-    'sudo env "PATH=$PATH" npm run test:recovery',
-    'npm run test:recovery:integration',
-    'npm run format:check',
-    'npm run lint',
-    'npm run build',
-    'npm run test -- --runInBand',
-    'npm run test:e2e -- --runInBand',
-    'npm run test:integration',
-  ];
-  const validateRuns = validateSteps.map((step) =>
-    String(step.run ?? '').trim(),
+  if (validate['runs-on'] !== 'ubuntu-24.04')
+    failures.push('validate must use ubuntu-24.04.');
+  failures.push(
+    ...permissionFailures(
+      validate.permissions,
+      { contents: 'read' },
+      'validate',
+    ),
   );
-  for (const command of requiredValidationCommands) {
-    if (!validateRuns.includes(command)) {
-      failures.push(`validate is missing exact command: ${command}.`);
-    }
-  }
+  if (Object.hasOwn(validate, 'uses'))
+    failures.push('validate must not call a reusable workflow.');
+  if (containsRegistryCapability(validate))
+    failures.push(
+      'validate must have no registry login or publication capability.',
+    );
+  if (
+    stepsFor(validate).some((step) => {
+      const action = actionReference(step)?.action ?? '';
+      const run = String(step.run ?? '');
+      return (
+        /(?:ssh-action|scp-action|vercel-action)/iu.test(action) ||
+        /\b(?:ssh|scp|rsync|vercel|kubectl|helm)\s+|docker\s+(?:compose|service)\s+(?:up|restart|update)/iu.test(
+          run,
+        )
+      );
+    })
+  )
+    failures.push('validate must have no deployment capability.');
+  if (validate.services && Object.keys(validate.services).length > 0)
+    failures.push('validate must not start an unconditional service.');
 
-  failures.push(...buildFailures(build, 'build-and-scan'));
-  failures.push(...metadataFailures(build, 'build-and-scan'));
-  const buildSteps = stepsFor(build);
-  const scans = buildSteps.filter(
+  const steps = stepsFor(validate);
+  const source = JSON.stringify(steps);
+  for (const marker of [
+    '--verify-pr-checkout',
+    'steps.delta.outputs.tooling',
+    'steps.delta.outputs.memory',
+    'steps.delta.outputs.app',
+    'steps.delta.outputs.production',
+    'steps.delta.outputs.recovery',
+    'steps.delta.outputs.image_build_scan',
+    'scripts/ci-main-integrity.cjs',
+    "inputs.mode == 'full'",
+  ]) {
+    if (!source.includes(marker))
+      failures.push(`automatic CI is missing ${marker}.`);
+  }
+  const checkout = findStep(
+    validate,
+    (step) => actionReference(step)?.action === 'actions/checkout',
+  );
+  if (
+    checkout?.with?.['fetch-depth'] !== 0 ||
+    checkout?.with?.['persist-credentials'] !== false
+  ) {
+    failures.push(
+      'checkout must fetch full history without persisted credentials.',
+    );
+  }
+  const install = findStep(
+    validate,
+    (step) => String(step.run ?? '').trim() === 'npm ci',
+  );
+  if (!normalizeExpression(install?.if).includes('needs_dependencies'))
+    failures.push('npm ci must be conditional on selected dependencies.');
+  const legacy = findStep(validate, (step) =>
+    String(step.name ?? '').includes('ADR-018 legacy'),
+  );
+  if (
+    normalizeExpression(legacy?.if) !==
+    "steps.delta.outputs.legacy_production == 'true'"
+  ) {
+    failures.push(
+      'ADR-018 legacy validation must run only for an impacted PR delta.',
+    );
+  }
+  const imageBuild = findStep(validate, (step) =>
+    /docker build --target production/u.test(String(step.run ?? '')),
+  );
+  if (!normalizeExpression(imageBuild?.if).includes('image_build_scan'))
+    failures.push(
+      'production image build must be conditional on image impact.',
+    );
+  const scans = steps.filter(
     (step) => actionReference(step)?.action === 'aquasecurity/trivy-action',
   );
   if (scans.length !== 1) {
-    failures.push(
-      'build-and-scan must contain exactly one blocking Trivy scan.',
-    );
+    failures.push('validate must contain exactly one blocking Trivy scan.');
   } else {
-    failures.push(...trivyFailures(scans[0], 'build-and-scan'));
+    failures.push(...trivyFailures(scans[0], 'validate'));
+    if (!normalizeExpression(scans[0].if).includes('image_build_scan'))
+      failures.push('Trivy must be conditional on image impact.');
   }
-  const buildIndex = stepIndex(
-    build,
-    (step) => actionReference(step)?.action === 'docker/build-push-action',
+  const active = String(
+    findStep(validate, (step) =>
+      String(step.name ?? '').includes('ADR-020 active'),
+    )?.run ?? '',
   );
-  const runtimeIndex = stepIndex(
-    build,
-    (step) =>
-      String(step.run ?? '').trim() ===
-      'node --test test/production/production-image.test.cjs',
-  );
-  const scanIndex = buildSteps.indexOf(scans[0]);
-  if (!(
-    buildIndex >= 0 &&
-    buildIndex < runtimeIndex &&
-    runtimeIndex < scanIndex
-  )) {
+  if (!active.includes('deploy-api-simple-linux.test.cjs'))
     failures.push(
-      'automatic image build, runtime validation, and scan order is invalid.',
+      'active Production validation must include ADR-020 simple deploy.',
     );
-  }
-  const buildAction = buildSteps.find(
-    (step) => actionReference(step)?.action === 'docker/build-push-action',
-  );
-  if (buildAction?.with?.push !== false || buildAction?.with?.load !== true) {
-    failures.push('automatic build must load locally with push false.');
-  }
-  if (!String(build?.env?.IMAGE_REF ?? '').endsWith(':sha-${{ github.sha }}')) {
+  if (/release-tree|production-bundle|deploy-api-release/u.test(active))
     failures.push(
-      'automatic image reference must use the full github.sha tag.',
+      'active Production validation must exclude ADR-018 legacy tests.',
     );
-  }
   failures.push(...validatePinnedActions(jobs));
   return [...new Set(failures)].sort();
 }

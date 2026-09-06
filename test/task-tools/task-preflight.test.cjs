@@ -40,6 +40,64 @@ test('reports normalized validation surfaces for a V3 manifest', () => {
   assert.deepEqual(result.validationLevels, []);
 });
 
+test('fails when a V3 manifest under-declares delta surfaces', () => {
+  const { cwd, baseSha } = createTestRepository();
+  write(
+    cwd,
+    '.codex/task-manifest.json',
+    `${JSON.stringify(
+      v3Manifest(baseSha, {
+        scope: {
+          allowedPaths: ['docs/**', 'src/**'],
+          protectedPaths: ['src/auth/**'],
+        },
+        validation: { surfaces: ['tooling'] },
+      }),
+      null,
+      2,
+    )}\n`,
+  );
+  write(cwd, 'src/feature.ts', 'export const feature = true;\n');
+  const result = runPreflight({ cwd });
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(result.requiredValidationSurfaces, ['app']);
+  assert.match(result.failures.join('\n'), /MANIFEST_SURFACE_UNDER_DECLARED/u);
+});
+
+test('allows a V3 manifest to over-declare delta surfaces', () => {
+  const { cwd, baseSha } = createTestRepository();
+  write(
+    cwd,
+    '.codex/task-manifest.json',
+    `${JSON.stringify(
+      v3Manifest(baseSha, {
+        validation: { surfaces: ['app', 'tooling'] },
+      }),
+      null,
+      2,
+    )}\n`,
+  );
+  write(cwd, 'docs/change.md', 'tooling documentation\n');
+  const result = runPreflight({ cwd });
+  assert.equal(result.status, 'passed');
+  assert.deepEqual(result.requiredValidationSurfaces, ['tooling']);
+});
+
+test('fails closed when an allowed candidate path has no CI surface rule', () => {
+  const { cwd } = createTestRepository({
+    manifestOverrides: {
+      scope: {
+        allowedPaths: ['new-area/**'],
+        protectedPaths: ['src/auth/**'],
+      },
+    },
+  });
+  write(cwd, 'new-area/unknown.file', 'unknown\n');
+  const result = runPreflight({ cwd });
+  assert.equal(result.status, 'failed');
+  assert.match(result.failures.join('\n'), /UNKNOWN_CI_SURFACE_PATH/u);
+});
+
 test('detects a branch mismatch', () => {
   const { cwd } = createTestRepository();
   git(cwd, 'switch', '-c', 'wrong-branch');

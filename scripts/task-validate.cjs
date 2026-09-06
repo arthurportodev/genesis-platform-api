@@ -1,6 +1,11 @@
 const { spawnSync } = require('node:child_process');
 const { join } = require('node:path');
 const { MANIFEST_PATH } = require('./lib/task-candidate.cjs');
+const { inspectCandidate } = require('./lib/task-candidate.cjs');
+const {
+  SURFACE_ORDER,
+  classifyPaths,
+} = require('./lib/ci-surface-classifier.cjs');
 const { loadTaskManifest } = require('./lib/task-manifest.cjs');
 
 function npmCommand(args, env = process.env, platform = process.platform) {
@@ -80,7 +85,11 @@ function buildLegacyValidationPlan(manifest, env = process.env) {
   }
 }
 
-function buildSurfaceValidationPlan(manifest, env = process.env) {
+function buildSurfaceValidationPlan(
+  manifest,
+  env = process.env,
+  { surfaces = manifest.validation.surfaces, modifiers = {} } = {},
+) {
   const npm = (...args) => npmCommand(args, env);
   const taskFormat = npm('run', 'format:check:task-tools');
   const surfacePlans = {
@@ -109,14 +118,51 @@ function buildSurfaceValidationPlan(manifest, env = process.env) {
         : []),
     ],
     production: [
-      npm('run', 'format:check:production'),
-      npm('run', 'test:production'),
-      npm('run', 'format:check:recovery'),
-      npm('run', 'recovery:validate'),
-      npm('run', 'test:recovery'),
-      ...(manifest.task.class === 'critical'
+      npm(
+        'exec',
+        '--',
+        'prettier',
+        '--check',
+        'compose.production.yml',
+        'scripts/validate-production-compose.cjs',
+        'test/production/functional-proxy-contract.test.cjs',
+        'test/production/production-compose.test.cjs',
+        'test/production/production-image.test.cjs',
+        'test/production/production-runtime.test.cjs',
+        'test/production/production-secret-wrappers.test.cjs',
+        'test/production/deploy-api-simple-linux.test.cjs',
+      ),
+      directCommand('node', [
+        '--test',
+        'test/production/functional-proxy-contract.test.cjs',
+        'test/production/production-compose.test.cjs',
+        'test/production/production-image.test.cjs',
+        'test/production/production-runtime.test.cjs',
+        'test/production/production-secret-wrappers.test.cjs',
+        'test/production/deploy-api-simple-linux.test.cjs',
+      ]),
+      ...(modifiers.recovery
         ? [
-            npm('run', 'test:recovery:integration'),
+            npm('run', 'format:check:recovery'),
+            npm('run', 'recovery:validate'),
+            npm('run', 'test:recovery'),
+            ...(manifest.task.class === 'critical'
+              ? [npm('run', 'test:recovery:integration')]
+              : []),
+          ]
+        : []),
+      ...(modifiers.legacyProduction
+        ? [
+            directCommand('node', [
+              '--test',
+              'test/production/production-bundle.test.cjs',
+              'test/production/deploy-api-release-linux.test.cjs',
+              'test/production/release-tree-manager-linux.test.cjs',
+            ]),
+          ]
+        : []),
+      ...(modifiers.imageBuildScan
+        ? [
             directCommand('docker', [
               'build',
               '--target',
@@ -128,11 +174,15 @@ function buildSurfaceValidationPlan(manifest, env = process.env) {
           ]
         : []),
     ],
-    tooling: [taskFormat, npm('run', 'test:task-tools')],
+    tooling: [
+      taskFormat,
+      npm('run', 'test:task-tools'),
+      npm('run', 'ci:contract:validate'),
+      npm('run', 'format:check:ci'),
+      npm('run', 'test:ci'),
+    ],
   };
-  const selected = manifest.validation.surfaces.flatMap(
-    (surface) => surfacePlans[surface],
-  );
+  const selected = surfaces.flatMap((surface) => surfacePlans[surface]);
   return deduplicateCommands([
     npm('run', 'task:preflight'),
     npm('run', 'task:contracts'),
@@ -142,16 +192,35 @@ function buildSurfaceValidationPlan(manifest, env = process.env) {
   ]);
 }
 
-function buildValidationPlan(manifest, env = process.env) {
+function buildValidationPlan(manifest, env = process.env, selection) {
   return manifest.validation.mode === 'legacy-profile'
     ? buildLegacyValidationPlan(manifest, env)
-    : buildSurfaceValidationPlan(manifest, env);
+    : buildSurfaceValidationPlan(manifest, env, selection);
 }
 
 function validationSelection(manifest) {
   return manifest.validation.mode === 'legacy-profile'
     ? `legacy-profile:${manifest.validation.profile}`
     : `surfaces:${manifest.validation.surfaces.join('+')}`;
+}
+
+function fullValidationEnvironment(env = process.env) {
+  return {
+    ...env,
+    TEST_DATABASE_HOST: env.TEST_DATABASE_HOST ?? 'localhost',
+    TEST_DATABASE_PORT: env.TEST_DATABASE_PORT ?? '5433',
+    TEST_DATABASE_NAME: env.TEST_DATABASE_NAME ?? 'genesis_platform_test',
+    TEST_DATABASE_USER: env.TEST_DATABASE_USER ?? 'genesis_test',
+    TEST_DATABASE_PASSWORD: env.TEST_DATABASE_PASSWORD ?? 'test-only',
+    DATABASE_HOST: env.DATABASE_HOST ?? 'localhost',
+    DATABASE_PORT: env.DATABASE_PORT ?? '5433',
+    DATABASE_NAME: env.DATABASE_NAME ?? 'genesis_platform_test',
+    DATABASE_USER: env.DATABASE_USER ?? 'genesis_runtime_test',
+    DATABASE_PASSWORD: env.DATABASE_PASSWORD ?? 'runtime-test-only',
+    DATABASE_RUNTIME_ROLE: env.DATABASE_RUNTIME_ROLE ?? 'genesis_runtime_test',
+    DATABASE_MIGRATION_USER: env.DATABASE_MIGRATION_USER ?? 'genesis_test',
+    DATABASE_MIGRATION_PASSWORD: env.DATABASE_MIGRATION_PASSWORD ?? 'test-only',
+  };
 }
 
 function runValidationPlan(
@@ -216,9 +285,32 @@ function main() {
       manifestPath: join(cwd, ...MANIFEST_PATH.split('/')),
       packageJsonPath: join(cwd, 'package.json'),
     });
-    const plan = buildValidationPlan(manifest);
-    const result = runValidationPlan(validationSelection(manifest), plan, {
+    const full = process.argv.slice(2).includes('--full');
+    const candidate = inspectCandidate(manifest, cwd);
+    const classification = classifyPaths(
+      [...candidate.tracked, ...candidate.untracked],
+      'api',
+    );
+    const selection = full
+      ? {
+          surfaces: [...SURFACE_ORDER],
+          modifiers: {
+            recovery: true,
+            imageBuildScan: true,
+            legacyProduction: false,
+          },
+        }
+      : {
+          surfaces: manifest.validation.surfaces,
+          modifiers: classification.modifiers,
+        };
+    const plan = buildValidationPlan(manifest, process.env, selection);
+    const selectedLabel = full
+      ? 'surfaces:memory+app+production+tooling (full active)'
+      : validationSelection(manifest);
+    const result = runValidationPlan(selectedLabel, plan, {
       cwd,
+      env: full ? fullValidationEnvironment() : process.env,
     });
     console.log(
       JSON.stringify({ command: 'npm run task:validate', ...result }),
@@ -237,6 +329,7 @@ module.exports = {
   buildLegacyValidationPlan,
   buildSurfaceValidationPlan,
   deduplicateCommands,
+  fullValidationEnvironment,
   npmCommand,
   runValidationPlan,
   validationSelection,

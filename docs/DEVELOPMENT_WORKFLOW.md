@@ -59,9 +59,27 @@ governança e rigor dentro da surface; surface controla quais famílias técnica
 executam. Critical nunca perde Task Packet, reverificação independente ou Gates
 por selecionar uma surface menor.
 
-Até a inferência automática por paths, prevista para a Process Simplification
-03, builder, reviewer e verifier conferem a coerência entre `allowedPaths` e as
-surfaces. Em caso de dúvida, incluem a surface mais ampla aplicável.
+O classificador versionado infere `memory`, `app`, `production` e `tooling`
+somente a partir dos paths Git. As surfaces do manifesto podem ampliar essa
+união, mas não podem omiti-la; path sem regra bloqueia o preflight e a CI. Um
+delta misto executa cada comando compartilhado uma única vez. Mudanças em
+`package.json` ou `package-lock.json` selecionam conservadoramente App,
+Production, Tooling e build/scan da imagem.
+
+Em Pull Requests, o check obrigatório `Validate backend and production
+contracts` valida os pais do merge ref contra base e head declarados, classifica
+o delta e executa apenas a união selecionada. Recovery é um modificador de
+Production e só executa quando seus paths são afetados. Build e scan da imagem
+também dependem de impacto explícito. A validação Production corrente segue o
+ADR-020; os contratos históricos do ADR-018 permanecem acessíveis apenas quando
+um path legacy é alterado, e não fazem parte do full ativo.
+
+Em push para `main`, o mesmo check executa somente integridade: `git diff
+--check`, classificação fail-closed, contratos básicos de desenvolvimento e
+parse/resolução da memória. Esse caminho não instala dependências nem inicia
+PostgreSQL, Docker build, Trivy ou suítes completas. `workflow_dispatch` oferece
+`full`, para a união ativa completa, e `integrity`, para reproduzir a checagem
+curta de `main`.
 
 ## Identidade do candidato
 
@@ -142,7 +160,7 @@ Branch, SHAs transitórios, run IDs, job IDs, timestamps, comentários e convers
 - `main` é protegida por um ruleset ativo e deve permanecer estável.
 - Uma branch por tarefa.
 - Alterações na `main` entram obrigatoriamente por Pull Request; push direto e force push são bloqueados.
-- O check `Validate backend` deve passar e a branch do Pull Request deve estar atualizada com a `main`.
+- O check `Validate backend and production contracts` deve passar e a branch do Pull Request deve estar atualizada com a `main`.
 - Todas as conversas de revisão devem ser resolvidas antes do merge.
 - Nenhuma aprovação humana é obrigatória enquanto não existir segundo mantenedor humano elegível.
 - Somente squash merge é permitido; merge commits e rebase merges estão desabilitados.
