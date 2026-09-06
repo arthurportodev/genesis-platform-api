@@ -1,6 +1,6 @@
 # Recovery runbook
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 ## Status and boundary
 

@@ -1,6 +1,6 @@
 # ADR-015 — Traefik, HTTPS e edge health-only
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 Este ADR registra decisão arquitetural. Incorporação e estado live são
 resolvidos por código/testes da `main` e pela memória temporal canônica.

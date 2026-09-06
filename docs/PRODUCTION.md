@@ -1,11 +1,11 @@
 # Produção do MVP
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 Este documento define contratos e runbooks duráveis. Toda afirmação datada de
 execução abaixo é evidência histórica, não estado live. Fase, operação atual,
 gates, blockers e decisões pendentes são resolvidos exclusivamente em
-`docs/memory/project-state.v1.json`.
+`docs/memory/project-state.v2.json`.
 
 Este documento é a autoridade operacional da primeira produção da Genesis
 Platform. A decisão arquitetural está no
@@ -49,7 +49,7 @@ A imagem live deriva da application revision
 `f5a11c6ad5b6f4817198730b8311d27117ee01a7` adiciona o tooling privado de
 onboarding posterior e não é a revisão fonte do runtime implantado. O estado
 temporal completo, inclusive digests vigentes, continua na
-[memória canônica](memory/project-state.v1.json).
+[memória canônica](memory/project-state.v2.json).
 
 O script exato executado na 09E tem SHA-256
 `e99dee6fb4610f9ca470aca8e12f00c4076e60ea45de3f9fb7a4f762208b6db6`
@@ -1072,7 +1072,7 @@ deste runbook.
 
 RPO, RTO, retenção, política de alertas, destinatários, escalonamento e
 autorização de usuários/dados reais são resolvidos exclusivamente em
-`docs/memory/project-state.v1.json`; não mantenha uma segunda lista temporal
+`docs/memory/project-state.v2.json`; não mantenha uma segunda lista temporal
 neste documento.
 
 <!-- genesis-memory-history:start -->

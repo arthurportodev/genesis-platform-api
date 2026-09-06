@@ -18,7 +18,6 @@ const {
 } = require('../../scripts/validate-project-memory.cjs');
 
 const CURRENT_AUTHORITY = 'docs/memory/project-state.v2.json';
-const V1_AUTHORITY = 'docs/memory/project-state.v1.json';
 const SCHEMA = 'schemas/genesis-harness/project-state.v2.schema.json';
 
 function json(path) {
@@ -288,60 +287,31 @@ test('current authority and projection validate locally', () => {
   assert.equal(result.schemaVersion, '2.0.0');
 });
 
-test('one-time migration preserves useful current v1 semantics', () => {
-  const v1 = json(V1_AUTHORITY);
-  const v2 = json(CURRENT_AUTHORITY);
-  assert.equal(v2.stateRevision, v1.stateRevision);
-  assert.deepEqual(v2.phase, {
-    id: v1.phase.id,
-    title: v1.phase.title,
-  });
-  assert.deepEqual(v2.lastCompleted, {
-    id: v1.phase.lastCompleted.id,
-    title: v1.phase.lastCompleted.title,
-    outcome: 'PRODUCTION_KEEP / 03A_LIVE',
-  });
-  assert.equal(v2.currentWork.status, v1.currentWork.status);
-  assert.equal(v2.nextTask.status, 'undecided');
-  assert.equal(v2.nextTask.planningState, v1.nextTask.id);
-  assert.equal(
-    v2.live.api.sourceSha,
-    v1.releaseBindings.apiApplicationRevision,
-  );
-  assert.equal(v2.live.api.image, v1.releaseBindings.authorizedApiImage);
-  assert.equal(v2.live.web.sourceSha, v1.releaseBindings.webIntegratedRevision);
-
-  const webFact = v1.operationalState.facts.find(
-    (fact) => fact.id === 'OPS-PIPE-V2-WEB-PRODUCTION',
-  );
-  assert.match(webFact.statement, new RegExp(v2.live.web.deploymentId, 'u'));
-  assert.match(webFact.statement, /app\.agenciagenesismkt\.com\.br/u);
-  assert.equal(
-    v2.openBlockers.length,
-    v1.blockers.filter((blocker) => blocker.status !== 'resolved').length,
-  );
-  for (const id of [
-    'OR-SINGLE-VPS',
-    'OR-SINGLE-REPLICA',
-    'OR-VERCEL-HOBBY-TECHNICAL-MVP',
+test('v1 authority is removed and stable sources reference only v2', () => {
+  for (const path of [
+    'docs/memory/project-state.v1.json',
+    'schemas/genesis-harness/project-state.v1.schema.json',
   ]) {
-    assert.ok(v1.currentRestrictions.some((item) => item.id === id));
-    assert.ok(v2.activeRestrictions.some((item) => item.id === id));
+    assert.throws(() => readFileSync(path));
   }
-  assert.deepEqual(Object.keys(v2), [
-    'schemaVersion',
-    'stateRevision',
-    'phase',
-    'lastCompleted',
-    'currentWork',
-    'nextTask',
-    'live',
-    'openBlockers',
-    'activeRestrictions',
-    'followUps',
-  ]);
-  assert.doesNotMatch(
-    JSON.stringify(v2),
-    /evidenceIds|releaseTree|rollback|pendingHumanDecisions|supersededPlans/iu,
-  );
+  for (const path of [
+    'AGENTS.md',
+    'README.md',
+    'docs/ARCHITECTURE.md',
+    'docs/DEVELOPMENT_WORKFLOW.md',
+    'docs/PRODUCTION.md',
+    'docs/PRODUCTION_OWNER_ONBOARDING.md',
+    'docs/PROJECT_OVERVIEW.md',
+    'docs/RECOVERY_RUNBOOK.md',
+    'docs/ROADMAP.md',
+    'docs/SECURITY.md',
+    'docs/START_HERE.md',
+    'docs/decisions/ADR-012-development-operating-system-v2.md',
+    'docs/decisions/ADR-013-mvp-production-baseline.md',
+    'docs/decisions/ADR-014-versioned-production-contract.md',
+    'docs/decisions/ADR-015-traefik-edge-and-tls.md',
+    'docs/decisions/README.md',
+  ]) {
+    assert.doesNotMatch(readFileSync(path, 'utf8'), /project-state\.v1/u);
+  }
 });

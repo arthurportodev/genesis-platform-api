@@ -1,10 +1,10 @@
 # ADR-013 — Baseline mínima de produção do MVP
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 Este ADR preserva decisões e riscos aceitos. Status operacional, release gates
 e restrições atuais são resolvidos somente em
-`docs/memory/project-state.v1.json`.
+`docs/memory/project-state.v2.json`.
 
 - **Status:** Accepted
 - **Data:** 2026-08-03
