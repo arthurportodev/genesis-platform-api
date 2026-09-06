@@ -65,6 +65,12 @@ fonte correspondente.
 
 Toda tarefa deve ser classificada como Simple, Normal ou Critical antes da escrita. A execução usa quatro papéis: coordenador, builder, verifier e operador de entrega. Um único writer é owner de cada arquivo em cada fase; writers paralelos exigem worktrees isolados.
 
+Task class e validation surface são dimensões independentes. A classe governa
+papéis, Gates, autonomia e aprovações; o Task Manifest V3 declara uma ou mais
+surfaces `memory`, `app`, `production` e `tooling` para compor os checks
+técnicos. Manifestos V1/V2 permanecem somente como legacy read. Uma surface
+pequena nunca reduz a governança Critical.
+
 Use `$genesis-task-orchestrator` para intake e reidratação e
 `$genesis-independent-verifier` para revisão independente. A invocação das duas
 Skills é explícita em tarefas Critical. Skills orientam o processo; schemas,

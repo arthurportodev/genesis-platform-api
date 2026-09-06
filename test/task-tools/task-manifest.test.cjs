@@ -13,6 +13,7 @@ const {
   DEFAULT_SCRIPTS,
   defaultManifest,
   v2Manifest,
+  v3Manifest,
 } = require('./helpers.cjs');
 
 const SHA = 'a'.repeat(40);
@@ -25,7 +26,7 @@ function validate(overrides = {}) {
 test('accepts a valid manifest', () => {
   const manifest = validate();
   assert.equal(manifest.version, 1);
-  assert.equal(manifest.normalizedVersion, 2);
+  assert.equal(manifest.normalizedVersion, 3);
   assert.equal(manifest.contractVersion, '2.0.0');
   assert.equal(manifest.git.baseSha, SHA);
   assert.equal(manifest.git.requireCleanStage, true);
@@ -48,7 +49,7 @@ test('accepts V2 and rejects unsupported versions and unknown fields', () => {
   assert.equal(v2.version, 2);
   assert.deepEqual(v2.git.expectedTransitions, ['untracked-to-tracked']);
   assert.equal(v2.autonomy.allowHighCorrections, true);
-  assert.throws(() => validate({ version: 3 }), /version must be 1 or 2/u);
+  assert.throws(() => validate({ version: 4 }), /version must be 1, 2 or 3/u);
   const raw = defaultManifest(SHA);
   raw.scope.unreviewed = true;
   assert.throws(
@@ -239,4 +240,105 @@ test('matches repository paths consistently on Windows and Unix', () => {
   assert.equal(matchesAny('scripts\\task.cjs', ['scripts/**']), true);
   assert.equal(matchesAny('src/auth/token.ts', ['src/**']), true);
   assert.equal(matchesAny('src/auth/token.ts', ['docs/**']), false);
+});
+
+function surfaceManifest(taskClass, surfaces, overrides = {}) {
+  const critical = taskClass === 'critical';
+  return v3Manifest(SHA, {
+    task: {
+      id: `surface.${taskClass}`,
+      title: 'Surface task',
+      class: taskClass,
+    },
+    artifacts: critical
+      ? { taskPacket: `.codex/task-packets/surface.${taskClass}.md` }
+      : {},
+    validation: { surfaces },
+    autonomy: {
+      allowHighCorrections: true,
+      requireIndependentReverification: critical,
+    },
+    ...overrides,
+  });
+}
+
+test('accepts the required class and surface combinations', () => {
+  for (const [taskClass, surfaces] of [
+    ['normal', ['memory']],
+    ['critical', ['memory']],
+    ['critical', ['app']],
+    ['critical', ['tooling']],
+    ['critical', ['production']],
+    ['critical', ['production', 'app']],
+  ]) {
+    const result = validateManifest(
+      surfaceManifest(taskClass, surfaces),
+      PACKAGE_JSON,
+    );
+    assert.equal(result.task.class, taskClass);
+    assert.equal(result.validation.mode, 'surfaces');
+  }
+});
+
+test('rejects unknown, empty and duplicate validation surfaces', () => {
+  assert.throws(
+    () =>
+      validateManifest(surfaceManifest('normal', ['security']), PACKAGE_JSON),
+    /unknown value: security/u,
+  );
+  assert.throws(
+    () => validateManifest(surfaceManifest('normal', []), PACKAGE_JSON),
+    /must be a non-empty array/u,
+  );
+  assert.throws(
+    () =>
+      validateManifest(
+        surfaceManifest('normal', ['tooling', 'tooling']),
+        PACKAGE_JSON,
+      ),
+    /duplicate value/u,
+  );
+});
+
+test('keeps Critical governance independent from validation surfaces', () => {
+  assert.throws(
+    () =>
+      validateManifest(
+        surfaceManifest('critical', ['memory'], { artifacts: {} }),
+        PACKAGE_JSON,
+      ),
+    /requires a Task Packet/u,
+  );
+  assert.throws(
+    () =>
+      validateManifest(
+        surfaceManifest('critical', ['tooling'], {
+          autonomy: {
+            allowHighCorrections: true,
+            requireIndependentReverification: false,
+          },
+        }),
+        PACKAGE_JSON,
+      ),
+    /independent reverification/u,
+  );
+  const normal = validateManifest(
+    surfaceManifest('normal', ['memory']),
+    PACKAGE_JSON,
+  );
+  assert.equal(normal.artifacts.taskPacket, null);
+  assert.equal(normal.autonomy.requireIndependentReverification, false);
+});
+
+test('legacy manifests remain readable and V3 normalization is deterministic', () => {
+  const v1 = validateManifest(defaultManifest(SHA), PACKAGE_JSON);
+  const v2 = validateManifest(v2Manifest(SHA), PACKAGE_JSON);
+  const v3 = validateManifest(
+    surfaceManifest('normal', ['tooling', 'memory']),
+    PACKAGE_JSON,
+  );
+  assert.equal(v1.validation.mode, 'legacy-profile');
+  assert.equal(v2.validation.mode, 'legacy-profile');
+  assert.deepEqual(v3.validation.surfaces, ['memory', 'tooling']);
+  assert.equal(v3.normalizedVersion, 3);
 });

@@ -2,13 +2,15 @@ const { readFileSync } = require('node:fs');
 const { isAbsolute, posix, win32 } = require('node:path');
 const { focusedScriptFailure } = require('./task-focused-script-policy.cjs');
 
-const MANIFEST_VERSION = 2;
-const SUPPORTED_MANIFEST_VERSIONS = new Set([1, 2]);
+const MANIFEST_VERSION = 3;
+const SUPPORTED_MANIFEST_VERSIONS = new Set([1, 2, 3]);
 const CONTRACT_VERSION = '2.0.0';
 const CONTRACT_SET_PATH = 'schemas/development-operations/contract-set.json';
 const AUTHORITY_REPOSITORY = 'arthurportodev/genesis-platform-api';
 const TASK_CLASSES = new Set(['simple', 'normal', 'critical']);
 const VALIDATION_PROFILES = new Set(['docs', 'focused', 'normal', 'critical']);
+const VALIDATION_SURFACES = ['memory', 'app', 'production', 'tooling'];
+const VALIDATION_SURFACE_SET = new Set(VALIDATION_SURFACES);
 const VALIDATION_LEVELS = new Set([
   'immediate',
   'focused',
@@ -225,21 +227,6 @@ function validateCommon(rawManifest, packageJson, sourceVersion) {
           );
   }
 
-  assertObject(rawManifest.validation, 'manifest.validation');
-  assertKnownKeys(
-    rawManifest.validation,
-    sourceVersion === 1
-      ? ['profile', 'focusedScripts']
-      : ['profile', 'focusedScripts', 'levels'],
-    'manifest.validation',
-  );
-  const profile = requiredString(
-    rawManifest.validation.profile,
-    'manifest.validation.profile',
-  );
-  if (!VALIDATION_PROFILES.has(profile)) {
-    fail(`manifest.validation.profile is unknown: ${profile}.`);
-  }
   const packageScripts = packageJson?.scripts;
   if (
     packageScripts === null ||
@@ -248,35 +235,85 @@ function validateCommon(rawManifest, packageJson, sourceVersion) {
   ) {
     fail('package.json scripts are unavailable.');
   }
-  const focusedScripts = validateStringList(
-    rawManifest.validation.focusedScripts,
-    'manifest.validation.focusedScripts',
-  ).map((name) => {
-    if (!Object.hasOwn(packageScripts, name)) {
-      fail(`focused script does not exist in package.json: ${name}.`);
+  assertObject(rawManifest.validation, 'manifest.validation');
+  let validation;
+  if (sourceVersion === 3) {
+    assertKnownKeys(
+      rawManifest.validation,
+      ['surfaces'],
+      'manifest.validation',
+    );
+    const surfaces = validateStringList(
+      rawManifest.validation.surfaces,
+      'manifest.validation.surfaces',
+      VALIDATION_SURFACE_SET,
+    );
+    if (surfaces.length === 0) {
+      fail('manifest.validation.surfaces must be a non-empty array.');
     }
-    const policyFailure = focusedScriptFailure(name, packageScripts);
-    if (policyFailure) fail(policyFailure);
-    return name;
-  });
-  if (profile === 'focused' && focusedScripts.length === 0) {
-    fail('focused profile requires at least one focused script.');
-  }
-  const levels =
-    sourceVersion === 1
-      ? defaultLevels(profile)
-      : validateStringList(
-          rawManifest.validation.levels,
-          'manifest.validation.levels',
-          VALIDATION_LEVELS,
-        );
-  for (const requiredLevel of defaultLevels(profile)) {
-    if (!levels.includes(requiredLevel)) {
-      fail(`${profile} profile requires validation level: ${requiredLevel}.`);
+    validation = {
+      mode: 'surfaces',
+      surfaces: [...surfaces].sort(
+        (left, right) =>
+          VALIDATION_SURFACES.indexOf(left) -
+          VALIDATION_SURFACES.indexOf(right),
+      ),
+      profile: null,
+      focusedScripts: [],
+      levels: [],
+    };
+  } else {
+    assertKnownKeys(
+      rawManifest.validation,
+      sourceVersion === 1
+        ? ['profile', 'focusedScripts']
+        : ['profile', 'focusedScripts', 'levels'],
+      'manifest.validation',
+    );
+    const profile = requiredString(
+      rawManifest.validation.profile,
+      'manifest.validation.profile',
+    );
+    if (!VALIDATION_PROFILES.has(profile)) {
+      fail(`manifest.validation.profile is unknown: ${profile}.`);
     }
-  }
-  if (taskClass === 'critical' && profile !== 'critical') {
-    fail('critical task requires the critical validation profile.');
+    const focusedScripts = validateStringList(
+      rawManifest.validation.focusedScripts,
+      'manifest.validation.focusedScripts',
+    ).map((name) => {
+      if (!Object.hasOwn(packageScripts, name)) {
+        fail(`focused script does not exist in package.json: ${name}.`);
+      }
+      const policyFailure = focusedScriptFailure(name, packageScripts);
+      if (policyFailure) fail(policyFailure);
+      return name;
+    });
+    if (profile === 'focused' && focusedScripts.length === 0) {
+      fail('focused profile requires at least one focused script.');
+    }
+    const levels =
+      sourceVersion === 1
+        ? defaultLevels(profile)
+        : validateStringList(
+            rawManifest.validation.levels,
+            'manifest.validation.levels',
+            VALIDATION_LEVELS,
+          );
+    for (const requiredLevel of defaultLevels(profile)) {
+      if (!levels.includes(requiredLevel)) {
+        fail(`${profile} profile requires validation level: ${requiredLevel}.`);
+      }
+    }
+    if (taskClass === 'critical' && profile !== 'critical') {
+      fail('critical task requires the critical validation profile.');
+    }
+    validation = {
+      mode: 'legacy-profile',
+      surfaces: [],
+      profile,
+      focusedScripts,
+      levels,
+    };
   }
   if (taskClass === 'critical' && artifacts.taskPacket === null) {
     fail('critical task requires a Task Packet.');
@@ -291,16 +328,14 @@ function validateCommon(rawManifest, packageJson, sourceVersion) {
     protectedPaths,
     allowBroadPaths,
     artifacts,
-    profile,
-    focusedScripts,
-    levels,
+    validation,
   };
 }
 
 function validateManifest(rawManifest, packageJson) {
   assertObject(rawManifest, 'manifest');
   if (!SUPPORTED_MANIFEST_VERSIONS.has(rawManifest.version)) {
-    fail('manifest.version must be 1 or 2.');
+    fail('manifest.version must be 1, 2 or 3.');
   }
   const sourceVersion = rawManifest.version;
   assertKnownKeys(
@@ -321,7 +356,7 @@ function validateManifest(rawManifest, packageJson) {
         ],
     'manifest',
   );
-  if (sourceVersion === 2 && rawManifest.contractVersion !== CONTRACT_VERSION) {
+  if (sourceVersion >= 2 && rawManifest.contractVersion !== CONTRACT_VERSION) {
     fail(`manifest.contractVersion must be ${CONTRACT_VERSION}.`);
   }
 
@@ -336,7 +371,7 @@ function validateManifest(rawManifest, packageJson) {
     contractSet: CONTRACT_SET_PATH,
   };
 
-  if (sourceVersion === 2) {
+  if (sourceVersion >= 2) {
     assertObject(rawManifest.rehydration, 'manifest.rehydration');
     assertKnownKeys(
       rawManifest.rehydration,
@@ -425,11 +460,7 @@ function validateManifest(rawManifest, packageJson) {
       allowBroadPaths: common.allowBroadPaths,
     },
     artifacts: common.artifacts,
-    validation: {
-      profile: common.profile,
-      focusedScripts: common.focusedScripts,
-      levels: common.levels,
-    },
+    validation: common.validation,
     rehydration,
     autonomy,
     contracts,
@@ -517,6 +548,7 @@ module.exports = {
   TASK_CLASSES,
   VALIDATION_LEVELS,
   VALIDATION_PROFILES,
+  VALIDATION_SURFACES,
   globToRegExp,
   isRepositoryWideGlob,
   loadTaskManifest,

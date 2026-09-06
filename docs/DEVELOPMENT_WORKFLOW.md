@@ -44,17 +44,24 @@ risco que as fontes diretas não expliquem.
 
 Tarefas Normal quando útil e todas as tarefas Critical usam `.codex/task-manifest.json`. O arquivo é transitório, não contém segredos, permanece ignorado somente por `.git/info/exclude` e não substitui documentação durável. O exemplo versionado está em `.codex/task-manifest.example.json`.
 
-O manifesto V2 declara versão de contrato, identidade e classe, branch, base,
-transições Git esperadas, paths permitidos/protegidos, artefatos locais, perfil,
-níveis, reidratação, autonomia e autoridade dos contratos. O parser mantém
-dual-read e normaliza V1/V2; V1 não é removido nesta etapa. Os comandos são:
+O Task Manifest V3 declara versão de contrato, identidade e classe, branch,
+base, transições Git, paths, artefatos locais e validation surfaces. O parser
+mantém dual-read V1/V2 como legacy read e normaliza as três versões; novas
+tarefas usam V3. Os comandos são:
 
 - `npm run task:preflight`: valida manifesto, Git, escopo e artefatos sem modificar o repositório;
 - `npm run task:fingerprint`: calcula o SHA-256 determinístico do candidato; `-- --json` produz saída machine-readable e `-- --verify-transition <referencia.json>` compara o index/commit com a referência pré-stage;
 - `npm run task:contracts`: valida schemas, o manifesto-exemplo, Skills e hashes do conjunto canônico; `-- --validate-instance <schema> <arquivo.json>` aplica o schema completo e as invariantes semânticas a uma evidência;
-- `npm run task:validate`: executa o perfil `docs`, `focused`, `normal` ou `critical`.
+- `npm run task:validate`: compõe base checks e a união das surfaces declaradas.
 
-O perfil `focused` aceita somente nomes existentes em `package.json` que também pertençam à allowlist versionada de validações read-only; não aceita comandos shell, scripts mutantes, recursivos ou lifecycle hooks pelo manifesto. O perfil `critical` delega à validação integral canônica e uma tarefa Critical não pode selecionar perfil inferior nem omitir o Task Packet.
+Profiles V1/V2 preservam seus planos anteriores. No V3, classe controla
+governança e rigor dentro da surface; surface controla quais famílias técnicas
+executam. Critical nunca perde Task Packet, reverificação independente ou Gates
+por selecionar uma surface menor.
+
+Até a inferência automática por paths, prevista para a Process Simplification
+03, builder, reviewer e verifier conferem a coerência entre `allowedPaths` e as
+surfaces. Em caso de dúvida, incluem a surface mais ampla aplicável.
 
 ## Identidade do candidato
 

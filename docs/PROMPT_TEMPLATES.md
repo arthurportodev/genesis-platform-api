@@ -80,7 +80,7 @@ Handoff: classe, contexto, alternativas, decisão recomendada, contratos, riscos
 Tarefa/classe: <identificador, título e classe>
 Base/branch: <SHA e branch>
 Delta: <Gate 1 ou justificativa de dispensa, escopo, contratos, riscos, aceite e validações>
-Manifesto: <obrigatório para Critical; opcional para Normal; perfil de validação>
+Manifesto: <obrigatório para Critical; opcional para Normal; validation surfaces>
 Objetivo: implementar código, testes e documentação afetada até ficar pronta para Gate 2.
 Papéis: coordenador; um builder <nome>; verifier final <nome/modo>; verifier incremental somente por risco; sem operador remoto salvo autorização separada.
 Autonomia: aplicar o predicado estruturado; High exige regressão específica, Critical final, novo candidato e reverificação independente.

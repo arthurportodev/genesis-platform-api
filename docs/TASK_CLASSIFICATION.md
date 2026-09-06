@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Toda tarefa deve ser classificada antes do planejamento ou da escrita. A classificação define papéis, gates e validação mínima; não limita validações adicionais justificadas pelo risco.
+Toda tarefa deve ser classificada antes do planejamento ou da escrita. A classe define governança; as validation surfaces definem a validação técnica aplicável.
 
 Na dúvida, use a classe mais alta. Um único gatilho Critical torna toda a tarefa Critical, mesmo quando o diff esperado é pequeno.
 
@@ -64,6 +64,24 @@ O Product Owner autoriza explicitamente o merge depois de confirmar Pull Request
 | Critical | coordenador, um builder, verifier independente e operador autorizado                              | manifesto e Task Packet obrigatórios; Gates 1, 2 e 3                       | validação completa aplicável, casos adversariais, segurança e CI; migration, integração e Docker quando afetados |
 
 As responsabilidades detalhadas e as regras de acumulação de papéis estão no [modelo operacional](MULTI_AGENT_OPERATING_MODEL.md).
+
+## Validation surfaces
+
+O Task Manifest V3 exige uma ou mais surfaces explícitas:
+
+| Surface    | Validação técnica                                                       |
+| ---------- | ----------------------------------------------------------------------- |
+| memory     | Schema, validator, projection e testes do sistema de memória            |
+| app        | Formato, lint, tipos/build, unit, integration e E2E aplicável           |
+| production | Runtime, release, Docker/Compose, recovery e contratos de Production    |
+| tooling    | Manifesto, preflight, fingerprint, contracts, planner e task-tool tests |
+
+Classe e surface são independentes. Critical preserva Task Packet, verifier,
+Gates e autorização humana mesmo com uma surface pequena. Surfaces mistas
+executam a união determinística dos planos sem repetir comandos comuns.
+
+Manifestos V1/V2 com `validation.profile` permanecem aceitos somente como
+legacy read durante a transição e conservam o comportamento anterior.
 
 ## Elevação e reclassificação
 

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "contractVersion": "2.0.0",
   "task": {
     "id": "X.Y",
@@ -22,11 +22,7 @@
   "artifacts": {
     "taskPacket": ".codex/task-packets/X.Y.md"
   },
-  "validation": {
-    "profile": "critical",
-    "focusedScripts": [],
-    "levels": ["immediate", "focused", "integration", "complete"]
-  },
+  "validation": { "surfaces": ["app", "tooling"] },
   "rehydration": {
     "directSources": [
       "AGENTS.md",

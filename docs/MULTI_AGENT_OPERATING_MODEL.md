@@ -4,7 +4,9 @@
 
 Este documento é a fonte canônica da operação multiagente da Genesis Platform. O modelo reduz handoffs e prompts intermediários sem remover revisão independente, autorização humana ou controles proporcionais ao risco.
 
-A [classificação da tarefa](TASK_CLASSIFICATION.md) determina a topologia, os gates e a validação mínima. Os [templates](PROMPT_TEMPLATES.md) aplicam estas políticas sem copiá-las.
+A [classificação da tarefa](TASK_CLASSIFICATION.md) determina topologia e Gates;
+as validation surfaces determinam a validação técnica. Os
+[templates](PROMPT_TEMPLATES.md) aplicam estas políticas sem copiá-las.
 
 O modelo não pressupõe que toda ferramenta ofereça subagentes ou worktrees automáticos. Quando o ambiente não permitir separar agentes, os papéis podem ser executados em etapas lógicas declaradas; um verifier independente real continua obrigatório quando a classe da tarefa assim exigir.
 

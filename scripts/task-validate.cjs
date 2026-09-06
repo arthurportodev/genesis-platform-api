@@ -18,7 +18,20 @@ function npmCommand(args, env = process.env, platform = process.platform) {
   };
 }
 
-function buildValidationPlan(manifest, env = process.env) {
+function directCommand(command, args) {
+  return { label: [command, ...args].join(' '), command, args };
+}
+
+function deduplicateCommands(commands) {
+  const labels = new Set();
+  return commands.filter((entry) => {
+    if (labels.has(entry.label)) return false;
+    labels.add(entry.label);
+    return true;
+  });
+}
+
+function buildLegacyValidationPlan(manifest, env = process.env) {
   const npm = (...args) => npmCommand(args, env);
   const preflight = npm('run', 'task:preflight');
   const contracts = npm('run', 'task:contracts');
@@ -67,8 +80,82 @@ function buildValidationPlan(manifest, env = process.env) {
   }
 }
 
+function buildSurfaceValidationPlan(manifest, env = process.env) {
+  const npm = (...args) => npmCommand(args, env);
+  const taskFormat = npm('run', 'format:check:task-tools');
+  const surfacePlans = {
+    memory: [
+      taskFormat,
+      directCommand('node', [
+        'scripts/validate-project-memory.cjs',
+        '--mode',
+        'local',
+      ]),
+      directCommand('node', [
+        '--test',
+        'test/project-memory/project-memory.test.cjs',
+      ]),
+    ],
+    app: [
+      npm('run', 'format:check'),
+      npm('run', 'lint'),
+      npm('run', 'build'),
+      npm('test', '--', '--runInBand'),
+      ...(manifest.task.class === 'simple'
+        ? []
+        : [npm('run', 'test:integration')]),
+      ...(manifest.task.class === 'critical'
+        ? [npm('run', 'test:e2e', '--', '--runInBand')]
+        : []),
+    ],
+    production: [
+      npm('run', 'format:check:production'),
+      npm('run', 'test:production'),
+      npm('run', 'format:check:recovery'),
+      npm('run', 'recovery:validate'),
+      npm('run', 'test:recovery'),
+      ...(manifest.task.class === 'critical'
+        ? [
+            npm('run', 'test:recovery:integration'),
+            directCommand('docker', [
+              'build',
+              '--target',
+              'production',
+              '-t',
+              'genesis-platform-api:task-validation',
+              '.',
+            ]),
+          ]
+        : []),
+    ],
+    tooling: [taskFormat, npm('run', 'test:task-tools')],
+  };
+  const selected = manifest.validation.surfaces.flatMap(
+    (surface) => surfacePlans[surface],
+  );
+  return deduplicateCommands([
+    npm('run', 'task:preflight'),
+    npm('run', 'task:contracts'),
+    ...selected,
+    directCommand('git', ['diff', '--check']),
+    npm('run', 'task:fingerprint', '--', '--json'),
+  ]);
+}
+
+function buildValidationPlan(manifest, env = process.env) {
+  return manifest.validation.mode === 'legacy-profile'
+    ? buildLegacyValidationPlan(manifest, env)
+    : buildSurfaceValidationPlan(manifest, env);
+}
+
+function validationSelection(manifest) {
+  return manifest.validation.mode === 'legacy-profile'
+    ? `legacy-profile:${manifest.validation.profile}`
+    : `surfaces:${manifest.validation.surfaces.join('+')}`;
+}
+
 function runValidationPlan(
-  profile,
+  selection,
   plan,
   {
     cwd = process.cwd(),
@@ -79,7 +166,7 @@ function runValidationPlan(
     stderr = process.stderr,
   } = {},
 ) {
-  stdout.write(`Validation profile: ${profile}\n`);
+  stdout.write(`Validation selection: ${selection}\n`);
   stdout.write('Commands:\n');
   for (const entry of plan) stdout.write(`- ${entry.label}\n`);
 
@@ -105,7 +192,7 @@ function runValidationPlan(
     if (result.error) stderr.write(`${result.error.message}\n`);
     if (exitCode !== 0) {
       return {
-        profile,
+        selection,
         status: 'failed',
         exitCode,
         durationMs: now() - totalStartedAt,
@@ -114,7 +201,7 @@ function runValidationPlan(
     }
   }
   return {
-    profile,
+    selection,
     status: 'passed',
     exitCode: 0,
     durationMs: now() - totalStartedAt,
@@ -130,7 +217,7 @@ function main() {
       packageJsonPath: join(cwd, 'package.json'),
     });
     const plan = buildValidationPlan(manifest);
-    const result = runValidationPlan(manifest.validation.profile, plan, {
+    const result = runValidationPlan(validationSelection(manifest), plan, {
       cwd,
     });
     console.log(
@@ -147,6 +234,10 @@ if (require.main === module) main();
 
 module.exports = {
   buildValidationPlan,
+  buildLegacyValidationPlan,
+  buildSurfaceValidationPlan,
+  deduplicateCommands,
   npmCommand,
   runValidationPlan,
+  validationSelection,
 };

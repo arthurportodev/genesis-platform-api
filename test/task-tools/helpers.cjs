@@ -15,6 +15,14 @@ const DEFAULT_SCRIPTS = {
   build: 'node -e "process.exit(0)"',
   test: 'node -e "process.exit(0)"',
   'test:task-tools': 'node -e "process.exit(0)"',
+  'test:integration': 'node -e "process.exit(0)"',
+  'test:e2e': 'node -e "process.exit(0)"',
+  'format:check:production': 'node -e "process.exit(0)"',
+  'test:production': 'node -e "process.exit(0)"',
+  'format:check:recovery': 'node -e "process.exit(0)"',
+  'recovery:validate': 'node -e "process.exit(0)"',
+  'test:recovery': 'node -e "process.exit(0)"',
+  'test:recovery:integration': 'node -e "process.exit(0)"',
   'task:preflight': 'node -e "process.exit(0)"',
   'task:validate': 'node -e "process.exit(0)"',
   'gate2:validate': 'node -e "process.exit(0)"',
@@ -84,6 +92,39 @@ function v2Manifest(baseSha, overrides = {}) {
   };
 }
 
+function v3Manifest(baseSha, overrides = {}) {
+  return {
+    version: 3,
+    contractVersion: '2.0.0',
+    task: { id: 'test.3', title: 'Task tools v3 test', class: 'normal' },
+    git: {
+      branch: 'task/test-tools',
+      baseSha,
+      requireCleanStage: true,
+      expectedTransitions: ['untracked-to-tracked'],
+    },
+    scope: {
+      allowedPaths: ['docs/**'],
+      protectedPaths: ['src/auth/**'],
+    },
+    artifacts: {},
+    validation: { surfaces: ['tooling'] },
+    rehydration: {
+      directSources: ['docs/DEVELOPMENT_WORKFLOW.md'],
+      expansionTriggers: ['base drift'],
+    },
+    autonomy: {
+      allowHighCorrections: true,
+      requireIndependentReverification: false,
+    },
+    contracts: {
+      authorityRepository: 'arthurportodev/genesis-platform-api',
+      contractSet: 'schemas/development-operations/contract-set.json',
+    },
+    ...overrides,
+  };
+}
+
 function createTestRepository({
   manifestOverrides = {},
   packetIgnored = false,
@@ -122,6 +163,7 @@ module.exports = {
   createTestRepository,
   defaultManifest,
   v2Manifest,
+  v3Manifest,
   git,
   write,
 };
