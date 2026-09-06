@@ -35,7 +35,7 @@ test('classifies the four validation surfaces independently', () => {
   const cases =
     repository === 'api'
       ? [
-          ['docs/memory/project-state.v1.json', ['memory']],
+          ['docs/memory/project-state.v2.json', ['memory']],
           ['src/main.ts', ['app']],
           ['compose.production.yml', ['production']],
           ['scripts/task-validate.cjs', ['tooling']],
@@ -53,7 +53,7 @@ test('classifies the four validation surfaces independently', () => {
 
 test('classifies required real path families and mixed deltas', () => {
   const apiPaths = [
-    'docs/memory/project-state.v1.json',
+    'docs/memory/project-state.v2.json',
     'scripts/validate-project-memory.cjs',
     'src/main.ts',
     'Dockerfile',
@@ -92,7 +92,7 @@ test('composes app plus production and memory plus tooling without duplicates', 
   ]);
   assert.deepEqual(
     surfaces(
-      ['docs/memory/project-state.v1.json', 'scripts/task-validate.cjs'],
+      ['docs/memory/project-state.v2.json', 'scripts/task-validate.cjs'],
       'api',
     ),
     ['memory', 'tooling'],

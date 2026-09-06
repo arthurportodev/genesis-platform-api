@@ -1,10 +1,10 @@
 # Segurança
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 Este documento contém invariantes e controles de segurança duráveis. Status de
 release, restrições atuais e observações operacionais são resolvidos em
-`docs/memory/project-state.v1.json`.
+`docs/memory/project-state.v2.json`.
 
 ## Credenciais e senhas
 
@@ -444,7 +444,7 @@ maturidade e podem ser promovidos conforme adoção, dados, compliance e risco.
 
 - Implementação e observação de Vercel, DNS, Traefik, backup e monitoramento
   devem ser comprovadas separadamente da decisão arquitetural; o estado
-  temporal pertence a `docs/memory/project-state.v1.json`.
+  temporal pertence a `docs/memory/project-state.v2.json`.
 - Dados reais exigem backup/restore, monitoramento, smoke cross-tenant e
   autorização humana conforme os release gates da autoridade temporal.
 - Não há grace period backend: duas abas que reapresentem o mesmo refresh podem

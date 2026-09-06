@@ -1,136 +1,34 @@
-<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->
+<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v2.json -->
 
-# Estado atual
+# Current project state
 
-Esta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).
+This is a deterministic projection. Edit [project-state.v2.json](memory/project-state.v2.json), then regenerate this file.
 
-- **Revisão de estado:** PIPE-V2-03A-PRODUCTION-KEEP-2026-09-05
-- **Atualização documentada:** 2026-09-05T21:09:57.0737619Z
-- **Fase:** PIPE-V2 — Pipeline Experience V2
-- **Último trabalho concluído:** PIPE-V2-03A — Expected Value Editing
-- **Trabalho vigente:** none — PIPE-V2-03A está CLOSED em PRODUCTION_KEEP / 03A_LIVE; API e Web permanecem KEEP e nenhuma operação de Production está ativa.
-- **Próxima tarefa:** PENDING-ROADMAP-PRIORITIZATION — Priorizar o próximo marco do produto a partir dos planos versionados
-- **Web Production live source:** 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6
-- **API Production application source:** a169369fd9760d32c922cc646df92cc0f5f632e1
-- **Contrato versionado de release API legado:** containing-commit (LEGACY / SUPERSEDED para novos deploys)
-- **Contrato release-tree legado:** containing-commit (LEGACY / SUPERSEDED para novos deploys)
-- **Fingerprint histórico do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit
-- **Fingerprint histórico do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit
-- **Imagem API live:** ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862
-- **Previous image API preservada:** ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7
-- **Proveniência da memória e tooling API:** containing-commit
+- **State revision:** PIPE-V2-03A-PRODUCTION-KEEP-2026-09-05
+- **Phase:** PIPE-V2 — Pipeline Experience V2
+- **Last completed product work:** PIPE-V2-03A — Expected Value Editing
+- **Outcome:** PRODUCTION_KEEP / 03A_LIVE
+- **Current work:** none
+- **Next task:** undecided — PENDING-ROADMAP-PRIORITIZATION
 
-## Estado operacional
+## Live bindings
 
-PIPE-V2-03A está IMPLEMENTED, MERGED e em Production com API KEEP e Web KEEP. Os bindings live funcionais estão separados dos SHAs posteriores de tooling, as observações finais passaram e nenhum deployment está ativo.
+- **API source:** a169369fd9760d32c922cc646df92cc0f5f632e1
+- **API image:** ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862
+- **Web source:** 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6
+- **Web deployment:** dpl_DhUzyzKhq2e1emvUMLPYEnSWYFYt
+- **Web domain:** https://app.agenciagenesismkt.com.br
 
-- **OPS-PRIVATE-BASELINE** [documented/present] — API e PostgreSQL são documentados como instalados em uma baseline privada.
-- **OPS-PRIVATE-BASELINE-LIVE** [observed/present] — API e PostgreSQL permaneceram privados e saudáveis no closeout, com IDs preservados, zero reinícios inesperados e sem exposição direta ou bindings públicos.
-- **OPS-PUBLIC-PORTS** [observed/present] — A superfície pública final contém somente TCP/22, TCP/80 e TCP/443; as portas 3000, 5432 e 8080 permanecem fechadas.
-- **OPS-06A-CONTRACTS** [observed/present] — Os contratos 06A de edge Traefik health-only foram incorporados à API main por PR #41; o CI pós-merge passou sem publicação nem deploy.
-- **OPS-APPROVED-EDGE** [documented/present] — A arquitetura aprovada define frontend na Vercel em app.agenciagenesismkt.com.br, API em api.agenciagenesismkt.com.br e Traefik como proxy HTTPS; implementação e estado live são registrados separadamente.
-- **OPS-APPROVED-RUNTIME** [documented/present] — A arquitetura aprovada define Hostinger KVM 2, API NestJS em container, PostgreSQL em rede privada e somente produção inicialmente, sem staging.
-- **OPS-APPROVED-DELIVERY** [documented/present] — O destino aprovado usa GHCR privado e deploy inicial manual com aprovação humana; a visibilidade live observada é registrada separadamente.
-- **OPS-COMMITTED-RELEASE-BUNDLE** [observed/present] — O bundle committed-release validado do squash 06A foi transferido, revalidado na VPS e promovido atomicamente como release ativo da Window 1; o release anterior foi preservado.
-- **OPS-API-IMAGE-PRESERVED** [observed/present] — No Checkpoint C da Window 1, a API usou o digest então aprovado, permaneceu saudável com TRUST_PROXY_HOPS=1 e sem binding no host; somente a API foi recriada, com downtime medido de 4,711 segundos.
-- **OPS-TRAEFIK-IMAGE-APPROVED** [observed/present] — Na Window 2, a imagem Traefik aprovada por digest imutável para linux/amd64 foi ativada em modo public-full health-only, sem Docker socket ou dashboard público.
-- **OPS-VPS-READINESS** [observed/present] — A observação pública registrou 30/30 amostras PASS, zero falhas, zero respostas 5xx, CPU máxima de 39,08%, memória máxima de 8,21% e disco em 5%, sem disparar rollback.
-- **OPS-TRAEFIK-LIVE** [observed/present] — Na Window 2, o Traefik executou em modo public-full health-only com TRUST_PROXY_HOPS=1 e restart count zero; GET /health foi a única rota pública bem-sucedida e a matriz fail-closed passou naquele checkpoint.
-- **OPS-ACME-STATE** [observed/present] — O estado ACME staging foi preservado e reutilizado sem novo ciclo; ocorreu uma única solicitação production e um certificado production foi emitido, sem consulta a logs brutos nem a conteúdo ou hash dos arquivos ACME.
-- **OPS-PUBLIC-CERTIFICATE** [observed/present] — Um certificado Let's Encrypt production confiável está ativo para api.agenciagenesismkt.com.br, com SAN e hostname corretos e renovação administrada pelo Traefik.
-- **OPS-PUBLIC-HTTPS** [observed/present] — Na Window 2, TCP/443 ficou público e GET https://api.agenciagenesismkt.com.br/health retornou 200; /api/v1, /api/v1/health, dashboard, métodos não permitidos e demais rotas funcionais permaneceram fail-closed naquele checkpoint.
-- **OPS-PUBLIC-HTTP-BINDINGS** [observed/present] — TCP/80 e TCP/443 estão públicos no Traefik; requisições HTTP em TCP/80 são redirecionadas para HTTPS.
-- **OPS-06B-DEPLOYMENT** [observed/present] — A 0.8-MVP-06B foi concluída com decisão KEEP e HTTPS público estritamente health-only; nenhuma imagem foi publicada, nenhum application deploy ocorreu e nenhuma rota funcional ou dado real foi liberado.
-- **OPS-06B-WINDOW2-OBSERVATION** [observed/present] — A observação mínima foi concluída com 30/30 amostras PASS, zero falhas, zero respostas 5xx, zero reinícios inesperados e zero respostas funcionais de sucesso.
-- **OPS-06B-SCOPE-LIMITS** [observed/present] — O closeout registrou zero publicação de imagem, application deploy, operação Vercel, UptimeRobot ou GHCR, migration, usuário ou dado real; o rollback permanece preservado.
-- **OPS-06B-WINDOW1-OBSERVATION** [observed/present] — A observação privada concluiu 61 amostras em 3.603 segundos, sem falha de health ou readiness, reinício inesperado, exposição pública, alteração de estado ACME ou critério de rollback.
-- **OPS-06B-WINDOW1-PROBE** [observed/present] — O probe sintético privado autorizado comprovou rate limiting, auditoria sanitizada e rejeição do forwarded header forjado, sem usuário ou dado real e sem editar ou apagar registros.
-- **OPS-06B-WINDOW1-KEEP** [observed/present] — A Window 1 terminou em KEEP mantendo o edge privado e TRUST_PROXY_HOPS=1 naquele checkpoint; a Window 2 foi autorizada separadamente e posteriormente concluiu o HTTPS público health-only.
-- **OPS-06B-ROLLBACK-READY** [observed/present] — O release anterior e o procedimento de retorno permanecem preservados para rollback integral; nenhum rollback foi executado na Window 2 porque todos os critérios passaram e a decisão foi KEEP.
-- **OPS-DNS-API** [observed/present] — api.agenciagenesismkt.com.br possui um único registro A para 147.79.82.44, sem AAAA ou CNAME no closeout.
-- **OPS-DNS-APP** [observed/present] — app.agenciagenesismkt.com.br apresentou A 185.158.133.1, sem CNAME ou AAAA, no snapshot do Gate 1.
-- **OPS-VERCEL-LINK** [observed/absent] — Registro histórico: C4R1 foi superseded pela promoção 10B; esse par live/rollback também foi posteriormente superseded. O binding Web Production vigente está em OPS-PIPE-V2-WEB-PRODUCTION, e git.deploymentEnabled=false permanece como controle durável.
-- **OPS-ACME-CONTACT** [observed/present] — O contato aprovado contato@agenciagenesismkt.com.br foi usado na solicitação ACME production única concluída pela Window 2.
-- **OPS-APPROVED-RECOVERY** [documented/present] — Google Drive dedicado opera com RPO de 24 horas, frequência de 12 horas, RTO lógico sintético de quatro horas, retenção regular/checkpoint de 30/90 dias, duas cópias verificadas e trash-only; a Window R4 comprovou a ativação e o restore.
-- **OPS-RECOVERY-TOOLING** [documented/present] — A 07A incorporou contrato versionado, runners, configuração não secreta, systemd, validação, testes e plano Window R; o tooling futuro classifica e provisiona genesis_backup somente sob autorização explícita, e rejeita OAuth externo que não prove status In production com scope drive.file; nenhum backup, OAuth, role, timer ou restore live foi executado.
-- **OPS-RECOVERY-WINDOW-R3** [observed/present] — A Window R3 preservou genesis_backup conforme, identidade age sob custódia dupla e OAuth externo In production com scope drive.file. O checkpoint e o round trip passaram, mas o restore falhou porque o runner exigia SELECT runtime em migrations e três tabelas de idempotência onde produção o nega intencionalmente; o rollback foi trash-only, sem restart, volume ativo, porta publicada ou timer habilitado. A correção candidata torna as quatro negações parte explícita da prova ACL.
-- **OPS-RECOVERY-WINDOW-R4** [observed/present] — A Window R4 instalou atomicamente o committed release corrigido sem restart, validou a credencial Drive sem novo OAuth, manteve genesis_backup conforme com zero mutações, comprovou checkpoint cifrado, round trip e restore PostgreSQL 17 isolado em 17 segundos, ativou o timer e observou o primeiro backup regular. Checkpoint e regular formam duas cópias remotas verificadas; não houve acesso ao volume ativo, porta publicada, untrash, purge ou recurso residual.
-- **OPS-APPROVED-MONITORING** [documented/present] — UptimeRobot sobre /health permanece o destino de monitoramento externo aprovado; política de alertas e implementação seguem pendentes.
-- **OPS-GHCR-VISIBILITY** [observed/present] — A imagem publicada para a application revision 0a56a8aee7c64bda59a1981888418e1ad03950c0 possui manifest digest b45425d7, config digest 1cd06152 e scan Trivy Critical aprovado; a publicação manual foi o run 32401997540.
-- **OPS-GHCR-PUBLIC-READ-OBSERVED** [observed/present] — O package GHCR da API aceitou leitura anônima no Gate 1; a transição futura para privado permanece separada.
-- **OPS-REAL-DATA** [observed/partial] — Existe uma identidade OWNER real e a organização Porto está ativa. A 10A criou zero Leads, Sessions e Refresh Tokens; nenhum Lead de negócio foi criado durante 10A ou 10B.
-- **OPS-MVP08-API-RELEASE-BINDING** [observed/absent] — Registro histórico superseded: o deployment 09E selecionou b45425d7 a partir de 0a56a8ae. O binding runtime vigente foi substituído pelo deploy simples registrado em OPS-PIPE-V2-API-PRODUCTION.
-- **OPS-MVP08-API-ROLLBACK-BINDING** [observed/absent] — Registro histórico superseded: a4dafefa foi o rollback do deployment 09E. O deploy simples PIPE-V2 promoveu c53b2835 e preservou b45425d7 como previous digest no receipt final; qualquer rollback futuro exige autorização própria.
-- **OPS-MVP08-PREFLIGHT-BLOCKED** [observed/present] — Os gaps do preflight 08B foram fechados dentro dos Gates autorizados: bundle versionado, árvore atômica, Vercel Hobby, domínio, DNS, chave de origem, router protegido, smokes e rehearsal foram comprovados sem dados reais.
-- **OPS-MVP08-VPS-INTEGRITY-AUDIT** [observed/absent] — remoteTreeBinding=SUPERSEDED. Registro histórico: a auditoria MVP08 vinculava a árvore remota a df7fca7 e registrava REBIND_REQUIRED naquele closeout; 09E o supersedeu e o deploy simples PIPE-V2 supersedeu 09E. Não se infere nem se reconstrói um rebind antigo.
-- **OPS-MVP08-RELEASE-TREE-CONTRACT** [documented/absent] — LEGACY / SUPERSEDED. O release-tree, bundles current/rollback, staging, quarentena e fingerprints permanecem preservados como contrato e evidência históricos, mas não são mecanismo suportado para novos deploys após ADR-020 e o primeiro SIMPLE_VPS_DEPLOYMENT com KEEP.
-- **OPS-MVP08-HUMAN-SECURITY** [documented/partial] — 2FA e recuperação foram confirmados para Vercel, GitHub e Bitwarden. O 2FA da Hostinger permanece pendente sob risco explicitamente aceito por Arthur; nenhuma nova operação Hostinger deve contornar reautenticação ou ampliar esse risco.
-- **OPS-MVP08-WEB-RUNTIME-INCIDENT** [observed/present] — O deployment B dpl_7rm5gaRDfvmVEDHjiJb9wFCF8jh9 foi rejeitado e não é elegível: o bundle Node 24 preservava o import ESM sem extensão ../src/server/api-proxy, causando ERR_MODULE_NOT_FOUND em /var/task. O PR #13 corrigiu o specifier para ../src/server/api-proxy.js e adicionou regressão sobre o artefato empacotado.
-- **OPS-MVP08-WEB-PREVIEW** [observed/present] — O único Preview autorizado dpl_8jxNbftLPyS3BJ9XtZwJ9A3mk36K, ligado ao commit 5c631fb8c577b0310668204b41f5ace61cfc5cdc, inicializou a Function sem erro de módulo, permaneceu fail-closed e não contatou upstream. Após aprovação técnica, foi excluído e seus aliases passaram a DEPLOYMENT_NOT_FOUND.
-- **OPS-MVP08-OPERATIONAL-ROLLBACK** [observed/absent] — Registro histórico superseded: os pares de rollback MVP08, 09E e 10B não definem o estado live atual. Os receipts finais PIPE-V2 registram os previous factuais, nenhum rollback foi disparado e qualquer reversão futura exige autorização própria.
-- **OPS-MVP08-FINAL-ARCHITECTURE** [observed/present] — A arquitetura final é Browser → Vercel same-origin /api/v1 → api.agenciagenesismkt.com.br → Traefik com chave de origem → Nest → PostgreSQL privado. O navegador não usa a origem API diretamente e o acesso direto sem chave permanece 404.
-- **OPS-MVP08-DNS-TLS** [observed/present] — app.agenciagenesismkt.com.br usa CNAME 3271c7a0f81a40b0.vercel-dns-017.com com TTL 300, confirmado em dois autoritativos e quatro resolvedores públicos, sem A ou AAAA diretos. TLS possui CN/SAN exato, emissor Let's Encrypt YR2 e validade observada até 2026-11-12.
-- **OPS-MVP08-ORIGIN-TRUST** [observed/present] — No checkpoint 09E/10B, a API b45425d7 estava saudável e privada e o proxy same-origin funcionava no domínio final. O estado live posterior está registrado nos fatos PIPE-V2, sem reescrever esta evidência histórica.
-- **OPS-MVP08-WEB-CORRECTIONS** [observed/present] — As correções incorporadas cobrem import ESM empacotado, proveniência do rewrite real da Vercel e snapshot de configuração por invocation, com regressões locais, Preview diagnóstico e validação cloud antes do cutover. C2 e C3 foram aposentadas e não são credenciais ativas.
-- **OPS-MVP08-SYNTHETIC-VERIFICATION** [observed/present] — B4 respondeu 503 configuration_unavailable com zero upstream. C4R1 respondeu GET 200, HEAD 200 e OPTIONS 204 com no-store, CDN MISS, CORS da origem final, credentials true e cookie __Host-genesis_csrf Secure, host-only e Path=/; o acesso direto sem chave respondeu 404.
-- **OPS-MVP08-REHEARSAL-OBSERVATION** [observed/present] — O rehearsal C4R1 → B4 → C4R1 restaurou o mesmo deployment sem criar outro. Seis amostras sintéticas em aproximadamente cinco minutos aprovaram frontend, Function, health, DNS e bloqueio direto, com zero 5xx inesperado.
-- **OPS-MVP08-DATABASE-SCOPE** [observed/present] — O snapshot 08 não continha usuário real. A 10A posteriormente criou, por operação autorizada e transacional, a organização Porto e um OWNER real; nenhuma migration foi executada e nenhum Lead de negócio foi criado.
-- **OPS-MVP08-PLAN-BOUNDARY** [documented/partial] — A restrição histórica que proibia qualquer usuário real foi superada pela autorização e execução da 10A. A compatibilidade do plano Vercel para onboarding externo ou uso comercial ampliado permanece uma decisão específica pendente e não bloqueia o uso normal inicial pela organização Porto.
-- **OPS-MVP08-CLOSEOUT-FINDINGS** [observed/present] — O closeout operacional encerrou com findings Critical, High e Medium vazios. Deployments, branches, quarentenas, árvores de rollback e evidências foram preservados; eventual limpeza futura de deployments com snapshots de chaves aposentadas é opcional e não bloqueante.
-- **OPS-MVP09-API-DEPLOYMENT** [observed/present] — A 09E implantou e observou com resultado KEEP a imagem API b45425d7; a4dafefa foi preservada como rollback. API, PostgreSQL e Traefik terminaram saudáveis, sem migration posterior ao deployment.
-- **OPS-MVP09-FIXTURE-DEACTIVATED** [observed/present] — A fixture sintética reversível usada na validação foi encerrada em estado DEACTIVATED; Leads, Sessions e Refresh Tokens sintéticos ativos ficaram em zero, sem hard delete, migration ou alteração de dado real.
-- **OPS-MVP09-USABILITY-CLOSURE** [documented/present] — A 09I encerrou o MVP live validado com três gaps de usabilidade identificados; esses gaps foram posteriormente resolvidos e implantados pela 10B.
-- **OPS-MVP10A-OWNER-ONBOARDED** [observed/present] — A organização Porto está ativa com exatamente um OWNER real e ativo. A criação privada foi atômica, o login humano passou e nenhuma PII ou credencial da conta é registrada nesta memória.
-- **OPS-MVP10A-API-MAIN** [documented/present] — No checkpoint 10A, o API main f5a11c6ad5b6f4817198730b8311d27117ee01a7 continha o CLI privado de onboarding OWNER, separado da application revision 0a56a8ae então implantada. O binding live posterior é registrado pelos fatos PIPE-V2.
-- **OPS-MVP10B-USABILITY-CORRECTIONS** [observed/present] — A 10B resolveu em produção o 404 da raiz com / para /app, tornou a etapa do Lead imediatamente persistida e confirmada pelo servidor com restauração em falha, e passou a hidratar o e-mail atual no editor por identidade do Lead.
-- **OPS-MVP10D-WEB-INTEGRATED** [observed/present] — O PR Web #18 integrou a correção de equivalência do Weak ETag em ac87eb7 e o PR Web #19 integrou em e1ecc23 a reconciliação Web-first, o bloqueio de auto-deadlock e a preservação do snapshot autenticado durante refresh; ambas as CIs pós-merge passaram.
-- **OPS-IFMATCH-WEB-INTEGRATED** [documented/present] — O PR Web #20 foi integrado por squash em 017ef0056d97147a5e5337494fa339a3f65986ac, árvore 5756fda028b91593473d8fe06238485dc24f7938; a CI pós-merge 32870003911 e Validate frontend passaram. Browser usa X-Genesis-If-Match e o proxy materializa If-Match upstream, sem mudança na API ou no banco.
-- **OPS-IFMATCH-FALSE-412-FORENSICS** [documented/present] — No evento real, o browser observou um PATCH 412 enquanto Traefik/API observaram o único PATCH como 200, sem retry ou segundo writer; o banco confirmou a mutação de serviceInterest e a revisão 18→19. O falso 412 foi localizado após a resposta da API, sem caminho API/PostgreSQL de commit seguido de stale 412 na mesma execução.
-- **OPS-IFMATCH-VERCEL-PROBE** [observed/absent] — Registro histórico: o probe isolado codex/vercel-if-match-probe no commit 45001ad805c110b1bff4fbf3a0ba8a90fc67dd05 e deployment dpl_CrSiMzQBJD5ypbxNpKrkdh4MWqPk reproduziu R1 na fronteira Vercel. Por decisão humana, o chamado não será perseguido e a branch e o deployment foram removidos após o encerramento do incidente; os identificadores, a matriz forense e a conclusão limitada permanecem históricos.
-- **OPS-IFMATCH-INCIDENT-FINAL-RETIREMENT** [observed/present] — O incidente If-Match está encerrado. A decisão de suporte foi NOT PURSUED BY HUMAN DECISION; branches e deployment temporário foram removidos. A correção 017ef005 foi validada naquele checkpoint e permanece histórica, enquanto o Web Production live posterior está em OPS-PIPE-V2-WEB-PRODUCTION.
-- **OPS-IFMATCH-PRODUCTION-PROMOTED** [observed/present] — Registro histórico: dpl_J6SwpHNDGHL9MUdXLZeNVb1wfwyr da revisão 017ef005 foi promovido em 2026-08-25 e posteriormente serviu como previous seguro da promoção PIPE-V2; o deployment live atual está em OPS-PIPE-V2-WEB-PRODUCTION.
-- **OPS-IFMATCH-TECHNICAL-CANARY** [documented/present] — Após a promoção, raiz, login, assets e health same-origin passaram com 200 e no-store; não houve 5xx, logs critical/error/fatal ou host_authority_mismatch público. O cookie CSRF sanitizado permaneceu __Host-, Secure, SameSite=Lax, Path=/ e sem Domain. Canary sem sessão, Authorization ou mutação atravessou X-Genesis-If-Match e alcançou auth/API com 401, sem PRECONDITION_FAILED.
-- **OPS-IFMATCH-FUNCTIONAL-SMOKE** [documented/present] — O smoke manual autenticado confirmou na primeira tentativa edição condicional de Interesse com X-Genesis-If-Match, sem If-Match no browser ou falso 412; GET 200 confirmou revisão 20 e valor persistido. Adicionar nota, criar próxima ação e mover etapa também passaram na granularidade informada. Weak ETag e falso 412 estão resolvidos em produção, com optimistic concurrency preservada.
-- **OPS-MVP09E-HELPER-PROVENANCE** [documented/absent] — Registro histórico superseded: o helper 09E permanece na custódia externa com seu SHA-256, mas não é mecanismo atual. ADR-020, o operador versionado de SIMPLE_VPS_DEPLOYMENT e o run ec9d646a2a7344e9 substituem essa lacuna para novos deploys.
-- **OPS-FRONTEND-PROGRAM-FOUNDATION-COMPLETE** [documented/present] — A Genesis Frontend Program Foundation está concluída: a autoridade API foi incorporada no PR #67 (43d45d68ccf6f6663334c18a660a4608ac304507) e o consumidor Web no PR #22 (2118e33f6506378dc029861783d11403e06c761f).
-- **OPS-PIPE-V2-01-COMPLETE** [documented/present] — PIPE-V2-01 — Financial Domain está concluída e incorporada na API pelo PR #68 (785ec54c273437f40d9ff4a6aaf6bd81b90aeb08).
-- **OPS-PIPE-V2-02-COMPLETE** [documented/present] — PIPE-V2-02 — Financial Aggregates está concluída e incorporada na API pelo PR #69 (ac2f8cd96ae02c1cad52366871bdde8ca651631d).
-- **OPS-PIPE-V2-03-COMPLETE** [observed/present] — PIPE-V2-03 — Presentation V2 está concluída, incorporada no Web pelo PR #24 em 6f53180e6c3947bd778e47c8fdb734567802e0d8 e live em Production; o browser harness obrigatório executou V2 sem skip, page error ou 5xx.
-- **OPS-PIPE-V2-03A-PRODUCTION-KEEP** [observed/present] — PIPE-V2-03A — Expected Value Editing está IMPLEMENTED, MERGED e 03A_LIVE: API source a169369fd9760d32c922cc646df92cc0f5f632e1 em KEEP e Web source 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6 em KEEP. Criação e edição normal suportam Valor da oportunidade; cidade e valor foram salvos atomicamente por uma única intenção de Save, sem evidência de escrita parcial.
-- **OPS-PIPE-V2-API-PRODUCTION** [observed/present] — SIMPLE_VPS_DEPLOYMENT permanece ACTIVE / CURRENT. A API funcional source a169369fd9760d32c922cc646df92cc0f5f632e1 está live na imagem imutável e0d3613f, com Migration Level 1, pending migrations [], observações PASS e KEEP; o runtime permaneceu inalterado durante a recuperação Web posterior.
-- **OPS-PIPE-V2-WEB-PRODUCTION** [observed/present] — O source Web funcional 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6 está live no deployment Vercel dpl_DhUzyzKhq2e1emvUMLPYEnSWYFYt em app.agenciagenesismkt.com.br, com dpl_2DVvUezpSGPtmzenNkabDH1qt67J preservado como previous; core smoke, evidência funcional e T+0/T+30/T+120 passaram, resultando em KEEP.
-- **OPS-PIPE-V2-WEB-API-INTEGRATION** [observed/present] — A validação final Web/API passou core smoke e Recovery Gate read-only no Lead sintético 7bd8e64b-d9d6-49ca-ba2d-5d7bf54d668e: cidade Anápolis, expectedValueMinor 200000, Pipeline R$ 2.000,00 e timeline null → 123450 → 200000 com atualização da cidade. T+0/T+30/T+120 passaram, sem escrita parcial ou rollback final.
-- **OPS-GENESIS-SMOKE-PROFILE-V1** [observed/present] — Genesis Smoke Profile v1 define generated-host, production-core e production-feature. O binding sintético Production usa principalUserId 073910f4-18f4-4528-89f6-5b603e675c10, genesis-smoke@agenciagenesismkt.com.br, organizationId 798e0d69-78a8-4538-abe6-245f62787d64, Genesis Smoke, membershipId 8935997b-88cd-4111-8391-59b2803627fd e role OWNER em /opt/genesis/shared/config/smoke-profile.v1.json, SHA-256 20d64e028523bca1bd2cd3780ac14ea8cd184ae1adfa30e2a43e3fd22c4187dc.
-- **OPS-PIPE-V2-03A-API-TOOLING-SEPARATION** [observed/present] — A API funcional permanece no source a169369fd9760d32c922cc646df92cc0f5f632e1 e na imagem ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862. O source 7cba39e7c5869cdcb9d00eeb58f278e009ebf474 e a imagem ghcr.io/arthurportodev/genesis-platform-api@sha256:4242a35bf5b3d288209a7e94429c892b7eecb031012e704fb794501c6d909ade são tooling-only e não foram promovidos. operator:owner resolve recupera read-only uma identidade OWNER já existente.
-- **OPS-PIPE-V2-03A-WEB-TOOLING-SEPARATION** [observed/present] — O source Web funcional Production permanece 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6. Os SHAs posteriores 984811c13f3454f58aa524cd7663f7982d3910a8, do Genesis Smoke Profile v1, e 9c626245c381c3186011059a8716d5b67b752038, da correção de assertion, são tooling operacional/teste e não representam novo deployment funcional.
-- **OPS-PIPE-V2-03A-RELEASE-LESSON** [observed/present] — A primeira promoção Web foi revertida por um locator ambíguo na timeline do feature smoke. A verificação forense read-only provou que a mutação da aplicação havia sido atômica; a assertion recebeu locator escopado e a segunda promoção reutilizou o Lead sintético existente pelo Recovery Gate read-only. As validações finais passaram e o Web chegou a KEEP.
-- **OPS-PIPE-V2-03A-SMOKE-EVIDENCE-FOLLOW-UP** [documented/partial] — Follow-up não bloqueante, não requerido para 03A: melhorar a evidência sanitizada de falha do feature smoke com UUID do Lead sintético, substages diagnósticos mais finos, method/path/status da mutação crítica e última assertion concluída. Nenhuma implementação faz parte deste closeout.
+## Open blockers
 
-## Blockers abertos
+- None.
 
-- Nenhum.
+## Active restrictions
 
-## Decisões humanas pendentes
+- **OR-SINGLE-VPS:** Production uses one VPS and one failure domain.
+- **OR-SINGLE-REPLICA:** The public API remains limited to one replica while controls are process-local.
+- **OR-VERCEL-HOBBY-TECHNICAL-MVP:** Review Vercel plan suitability before external onboarding or expanded commercial use.
 
-- **HD-MONITORING** — Qual política de alertas, destinatários e escalonamento será aprovada para o UptimeRobot e os sinais internos?
-- **HD-EXTERNAL-ONBOARDING** — Qual política aprovará novos usuários externos e dados comerciais além do uso inicial da organização Porto?
-- **HD-COMMERCIAL-HOSTING-PLAN** — Antes de onboarding externo ou uso comercial ampliado, o plano Vercel atual continua técnica e contratualmente compatível?
+## Follow-ups
 
-## Release gates
-
-- **RG-TLS** [passed] — TLS, hostname, CNAME e o caminho funcional same-origin protegido foram comprovados no domínio final; o acesso direto à API sem a chave continua 404.
-- **RG-RECOVERY** [passed] — Backup recuperável e restore sintético devem passar antes de dados reais.
-- **RG-CROSS-TENANT** [pending] — A evidência atual não é suficiente para aprovar o gate adversarial cross-tenant. Ele permanece pendente para expansão de usuários e dados e não invalida o estado live atual com um OWNER efetivo.
-- **RG-WEB-PRODUCTION-PROMOTION** [passed] — PIPE-V2-03A foi promovida no deployment dpl_DhUzyzKhq2e1emvUMLPYEnSWYFYt. Core smoke, Recovery Gate read-only, evidência funcional e T+0/T+30/T+120 passaram; o source funcional 90dc36a3 permaneceu distinto do tooling posterior e a decisão final foi KEEP.
-
-## Restrições atuais
-
-- **OR-SINGLE-VPS** — A baseline documentada usa uma única VPS e um único failure domain.
-- **OR-SINGLE-REPLICA** — A API pública permanece limitada a uma réplica enquanto controles forem process-local.
-- **OR-NO-COMMERCIAL-LEADS-OBSERVED** — Nenhum Lead comercial foi observado. PIPE-V2-03A reutilizou exclusivamente o Lead sintético 7bd8e64b-d9d6-49ca-ba2d-5d7bf54d668e da organização Genesis Smoke para a evidência controlada de Production.
-- **OR-POSTGRES-PRIVATE** — O PostgreSQL deve permanecer privado, sem binding de porta no host ou exposição direta à Internet.
-- **OR-FUNCTIONAL-API-ORIGIN-PROTECTED** — A API funcional é acessível somente pelo proxy same-origin /api/v1 do domínio final e pelo Traefik protegido; a origem direta sem chave permanece 404.
-- **OR-VERCEL-HOBBY-TECHNICAL-MVP** — O frontend live e o OWNER real foram aprovados no plano Vercel atual; a adequação técnica e contratual para onboarding externo ou uso comercial ampliado permanece decisão específica pendente.
-- **OR-FUTURE-PRODUCTION-MUTATION** — Qualquer futura alteração de produção continua exigindo escopo, rollback e autorização humana explícitos; esta reconciliação documental não concede autorização operacional.
-- **OR-SIMPLE-VPS-DEPLOYMENT-AUTHORIZATION** — SIMPLE_VPS_DEPLOYMENT é o mecanismo current; qualquer novo deploy ou rollback continua exigindo run ID, sources, digest, level, preflight e autorização humana próprios.
-- **OR-RHO-OUT-OF-SCOPE** — RHO permanece fora do escopo desta release e não foi consultado ou alterado.
+- **FOLLOW-UP-FEATURE-SMOKE-EVIDENCE:** Improve sanitized feature-smoke failure evidence with the synthetic Lead UUID, diagnostic substage, critical mutation method/path/status, and last completed assertion.

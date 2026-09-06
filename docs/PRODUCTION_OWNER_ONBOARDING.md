@@ -1,11 +1,11 @@
 # Onboarding privado de OWNER em produção
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 Este runbook descreve o mecanismo versionado de criação inicial de uma
 organização e de seu OWNER. O estado temporal da produção e qualquer
 autorização vigente pertencem exclusivamente à
-[memória canônica](memory/project-state.v1.json).
+[memória canônica](memory/project-state.v2.json).
 
 ## Finalidade e limites
 

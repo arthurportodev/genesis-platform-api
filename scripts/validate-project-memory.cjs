@@ -1,136 +1,38 @@
 #!/usr/bin/env node
 'use strict';
 
-const { execFileSync } = require('node:child_process');
-const { createHash } = require('node:crypto');
-const { lstatSync, readFileSync, statSync, writeFileSync } = require('node:fs');
+const {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  writeFileSync,
+} = require('node:fs');
 const { join, resolve } = require('node:path');
 const { TextDecoder } = require('node:util');
 
-const AUTHORITY_PATH = 'docs/memory/project-state.v1.json';
-const SCHEMA_PATH = 'schemas/genesis-harness/project-state.v1.schema.json';
+const AUTHORITY_PATH = 'docs/memory/project-state.v2.json';
+const SCHEMA_PATH = 'schemas/genesis-harness/project-state.v2.schema.json';
 const PROJECTION_PATH = 'docs/CURRENT_STATE.md';
-const WEB_POINTER_PATH = 'docs/memory/project-state.pointer.v1.json';
-const WEB_POINTER_SCHEMA_PATH =
-  'schemas/genesis-harness/project-state.pointer.v1.schema.json';
-// Provenance of the Web-first receipt for this canonical memory transition.
-const WEB_SHA = 'd9608464031460053024748f6f51da5218f3ce22';
-const WEB_INTEGRATED_SHA = '90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6';
-const WEB_RECEIPT_BASE_SHA = '9c626245c381c3186011059a8716d5b67b752038';
-const WEB_TRANSITION_ID = 'PIPE-V2-03A-PRODUCTION-KEEP-CROSS-REPO';
-const TARGET_STATE_REVISION = 'PIPE-V2-03A-PRODUCTION-KEEP-2026-09-05';
-const WEB_POINTER_SCHEMA_FINGERPRINT =
-  'b871059879b7bef315e1e2d354a8a343bbcf99588181ff87a29e92baaec89b64';
-const API_REPOSITORY = 'arthurportodev/genesis-platform-api';
-const WEB_REPOSITORY = 'arthurportodev/genesis-platform-web';
-const API_APPLICATION_REVISION = 'a169369fd9760d32c922cc646df92cc0f5f632e1';
-const AUTHORIZED_API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862';
-const AUTHORIZED_API_IMAGE_CONFIG_DIGEST =
-  'sha256:6debf2bc06aa96cf42308b81908a7ca48d86089e02fe263350a716c643962a2a';
-const ROLLBACK_API_IMAGE =
-  'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7';
-const MAX_BYTES = 512 * 1024;
+const MAX_BYTES = 64 * 1024;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{1,79}$/u;
 const FULL_SHA = /^(?!0{40}$)[a-f0-9]{40}$/u;
-const SHA256 = /^[a-f0-9]{64}$/u;
+const IMAGE = /^ghcr\.io\/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$/u;
+const DEPLOYMENT_ID = /^dpl_[A-Za-z0-9]{20,80}$/u;
 const SECRET_KEY =
-  /(?:password|passwd|secret|token|authorization|cookie|api[_-]?key|private[_-]?key)/iu;
+  /(?:password|passwd|secret|token|authorization|cookie|api[_-]?key|private[_-]?key|credential)/iu;
 const SECRET_VALUE =
-  /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/u;
-const BASIS = new Set(['documented', 'observed', 'unknown']);
+  /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+\S+|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|https?:\/\/[^/\s]+@)/u;
 const TOP_LEVEL_KEYS = [
   'schemaVersion',
-  'instanceKind',
   'stateRevision',
-  'project',
-  'updatedAt',
-  'authority',
-  'repositories',
-  'releaseBindings',
   'phase',
+  'lastCompleted',
   'currentWork',
   'nextTask',
-  'operationalState',
-  'evidence',
-  'blockers',
-  'pendingHumanDecisions',
-  'supersededPlans',
-  'permanentInvariants',
-  'releaseGates',
-  'currentRestrictions',
-  'pointerMetadata',
-];
-const STABLE_SOURCES = [
-  'AGENTS.md',
-  'README.md',
-  'docs/START_HERE.md',
-  'docs/PROJECT_OVERVIEW.md',
-  'docs/ROADMAP.md',
-  'docs/PRODUCTION.md',
-  'docs/ARCHITECTURE.md',
-  'docs/SECURITY.md',
-  'docs/DEVELOPMENT_WORKFLOW.md',
-  'docs/decisions/README.md',
-  'docs/decisions/ADR-012-development-operating-system-v2.md',
-  'docs/decisions/ADR-013-mvp-production-baseline.md',
-  'docs/decisions/ADR-014-versioned-production-contract.md',
-];
-const SOURCE_AUTHORITY_MARKER =
-  '<!-- genesis-source-authorities:v1 implementation=main-code temporal=docs/memory/project-state.v1.json projection=derived architecture=accepted-adrs history=explicit -->';
-const SOURCE_AUTHORITY_PATHS = ['AGENTS.md', 'docs/START_HERE.md'];
-const WHOLE_DOCUMENT_HISTORY_MARKER = '<!-- genesis-memory-history:v1 -->';
-const WHOLE_DOCUMENT_HISTORY_PATHS = new Set([
-  'docs/ROADMAP.md',
-  'docs/TASK_LOG.md',
-]);
-const HISTORY_START = '<!-- genesis-memory-history:start -->';
-const HISTORY_END = '<!-- genesis-memory-history:end -->';
-const REPOSITORY_EVIDENCE_PREFIX =
-  'repo://arthurportodev/genesis-platform-api/';
-const HISTORICAL_REPOSITORY_EVIDENCE_PREFIX =
-  'https://github.com/arthurportodev/genesis-platform-api/blob/';
-const REPOSITORY_PATH_SEGMENT = /^[A-Za-z0-9._-]+$/u;
-const TEMPORAL_ASSERTION_RULES = [
-  {
-    label: 'PENDING HUMAN DECISION expression',
-    pattern: /PENDING HUMAN DECISION/iu,
-  },
-  {
-    label: 'current phase assertion',
-    pattern:
-      /(?:fase (?:atual|vigente)|current phase)\s*(?::|=|é\b|continua\b|permanece\b)/iu,
-  },
-  {
-    label: 'current or next task assertion',
-    pattern:
-      /(?:próxima tarefa|tarefa (?:atual|vigente)|trabalho vigente|next task|current task|current work)\s*(?::|=|é\b|continua\b|permanece\b)/iu,
-  },
-  {
-    label: 'open blocker list',
-    pattern:
-      /^#{1,6}\s+.*(?:blockers?\s+(?:abertos?|atuais?|vigentes?)|open blockers?)/imu,
-  },
-  {
-    label: 'pending decision list',
-    pattern:
-      /^#{1,6}\s+.*decis(?:ão|ões|oes).*(?:pendentes?|abertas?|vigentes?)/imu,
-  },
-  {
-    label: 'pending rollout assertion',
-    pattern:
-      /(?:rollout|implanta(?:ção|cao)|abertura)\s+(?:ainda\s+)?(?:pendente|não executad[ao]|não concluíd[ao])/iu,
-  },
-  {
-    label: 'current operational state section',
-    pattern:
-      /^#{1,6}\s+(?:estado atual|estado operacional (?:atual|vigente)|current state)\s*$/imu,
-  },
-  {
-    label: 'current gates or restrictions list',
-    pattern:
-      /^#{1,6}\s+.*(?:gates?|restri(?:ção|ções|cao|coes)).*(?:atuais?|vigentes?|abertos?|pendentes?)/imu,
-  },
+  'live',
+  'openBlockers',
+  'activeRestrictions',
+  'followUps',
 ];
 
 class MemoryError extends Error {
@@ -204,60 +106,40 @@ function safeRead(path) {
   }
 }
 
-function parseJson(path) {
+function readJson(path) {
   try {
     return JSON.parse(safeRead(path));
   } catch (error) {
     if (error instanceof MemoryError) throw error;
-    fail(
-      'MEMORY_PARSE_ERROR',
-      'Input is not valid JSON.',
-      path,
-      'Fix JSON syntax.',
-    );
+    fail('MEMORY_PARSE_ERROR', 'Input is not valid JSON.', path, 'Fix JSON.');
   }
 }
 
-function validateTimestamp(value, path) {
+function text(value, path, maxLength) {
   if (
     typeof value !== 'string' ||
-    !value.endsWith('Z') ||
-    !Number.isFinite(Date.parse(value))
+    value.length === 0 ||
+    value.length > maxLength ||
+    value.trim() !== value
   ) {
     fail(
       'MEMORY_SCHEMA_INVALID',
-      `${path} must be an RFC 3339 UTC timestamp.`,
+      `${path} must be a trimmed non-empty string up to ${maxLength} characters.`,
       path,
-      'Use a real UTC timestamp ending in Z.',
+      'Provide concise durable text.',
     );
   }
 }
 
-function uniqueIds(items, path) {
-  if (!Array.isArray(items))
+function identifier(value, path) {
+  if (typeof value !== 'string' || !IDENTIFIER.test(value)) {
     fail(
       'MEMORY_SCHEMA_INVALID',
-      `${path} must be an array.`,
+      `${path} must be a canonical identifier.`,
       path,
-      'Restore the documented array.',
+      'Use 2-80 letters, digits, dot, underscore, or hyphen.',
     );
-  const ids = new Set();
-  for (const [index, item] of items.entries()) {
-    if (
-      !isObject(item) ||
-      !IDENTIFIER.test(item.id ?? '') ||
-      ids.has(item.id)
-    ) {
-      fail(
-        'MEMORY_SCHEMA_INVALID',
-        `${path} contains an invalid or duplicate id.`,
-        `${path}[${index}].id`,
-        'Use unique canonical identifiers.',
-      );
-    }
-    ids.add(item.id);
   }
-  return ids;
 }
 
 function scanSecrets(value, path = '$') {
@@ -265,26 +147,250 @@ function scanSecrets(value, path = '$') {
     value.forEach((entry, index) => scanSecrets(entry, `${path}[${index}]`));
     return;
   }
-  if (isObject(value)) {
-    for (const [key, entry] of Object.entries(value)) {
-      if (SECRET_KEY.test(key))
-        fail(
-          'MEMORY_SECRET_DETECTED',
-          `Secret-bearing key is forbidden: ${key}.`,
-          `${path}.${key}`,
-          'Remove credentials and secret material.',
-        );
-      scanSecrets(entry, `${path}.${key}`);
+  if (!isObject(value)) {
+    if (typeof value === 'string' && SECRET_VALUE.test(value)) {
+      fail(
+        'MEMORY_SECRET_FORBIDDEN',
+        'Secret-like value is forbidden in canonical memory.',
+        path,
+        'Remove credential material.',
+      );
     }
     return;
   }
-  if (typeof value === 'string' && SECRET_VALUE.test(value)) {
+  for (const [key, entry] of Object.entries(value)) {
+    if (SECRET_KEY.test(key)) {
+      fail(
+        'MEMORY_SECRET_FORBIDDEN',
+        `Secret-bearing key is forbidden: ${key}.`,
+        `${path}.${key}`,
+        'Remove credential fields.',
+      );
+    }
+    scanSecrets(entry, `${path}.${key}`);
+  }
+}
+
+function validateNamed(value, path) {
+  exactKeys(value, ['id', 'title'], path);
+  identifier(value.id, `${path}.id`);
+  text(value.title, `${path}.title`, 160);
+}
+
+function validateCurrentWork(value) {
+  if (!isObject(value)) {
     fail(
-      'MEMORY_SECRET_DETECTED',
-      'Secret-like value is forbidden.',
-      path,
-      'Remove credentials and secret material.',
+      'MEMORY_SCHEMA_INVALID',
+      '$.currentWork must be an object.',
+      '$.currentWork',
+      'Use the none or active shape.',
     );
+  }
+  if (value.status === 'none') {
+    exactKeys(value, ['status'], '$.currentWork');
+    return;
+  }
+  if (value.status === 'active') {
+    exactKeys(value, ['status', 'id', 'title'], '$.currentWork');
+    identifier(value.id, '$.currentWork.id');
+    text(value.title, '$.currentWork.title', 160);
+    return;
+  }
+  fail(
+    'MEMORY_SCHEMA_INVALID',
+    '$.currentWork.status must be none or active.',
+    '$.currentWork.status',
+    'Use a supported state.',
+  );
+}
+
+function validateNextTask(value) {
+  if (!isObject(value)) {
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      '$.nextTask must be an object.',
+      '$.nextTask',
+      'Use the undecided or decided shape.',
+    );
+  }
+  if (value.status === 'undecided') {
+    exactKeys(value, ['status', 'planningState'], '$.nextTask');
+    identifier(value.planningState, '$.nextTask.planningState');
+    return;
+  }
+  if (value.status === 'decided') {
+    exactKeys(value, ['status', 'id', 'title'], '$.nextTask');
+    identifier(value.id, '$.nextTask.id');
+    text(value.title, '$.nextTask.title', 160);
+    return;
+  }
+  fail(
+    'MEMORY_SCHEMA_INVALID',
+    '$.nextTask.status must be undecided or decided.',
+    '$.nextTask.status',
+    'Use a supported state.',
+  );
+}
+
+function validateLive(value) {
+  exactKeys(value, ['api', 'web'], '$.live');
+  exactKeys(value.api, ['sourceSha', 'image'], '$.live.api');
+  if (!FULL_SHA.test(value.api.sourceSha ?? '')) {
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      '$.live.api.sourceSha must be a full non-zero SHA.',
+      '$.live.api.sourceSha',
+      'Use the functional source SHA.',
+    );
+  }
+  if (!IMAGE.test(value.api.image ?? '')) {
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      '$.live.api.image must be an immutable GHCR digest reference.',
+      '$.live.api.image',
+      'Use ghcr.io/...@sha256:<64 lowercase hex>.',
+    );
+  }
+
+  exactKeys(value.web, ['sourceSha', 'deploymentId', 'domain'], '$.live.web');
+  if (!FULL_SHA.test(value.web.sourceSha ?? '')) {
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      '$.live.web.sourceSha must be a full non-zero SHA.',
+      '$.live.web.sourceSha',
+      'Use the functional source SHA.',
+    );
+  }
+  if (!DEPLOYMENT_ID.test(value.web.deploymentId ?? '')) {
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      '$.live.web.deploymentId must be a Vercel deployment id.',
+      '$.live.web.deploymentId',
+      'Use dpl_ followed by 20-80 letters or digits.',
+    );
+  }
+  let domain;
+  try {
+    domain = new URL(value.web.domain);
+  } catch {
+    domain = null;
+  }
+  if (
+    !domain ||
+    domain.protocol !== 'https:' ||
+    domain.username ||
+    domain.password ||
+    domain.pathname !== '/' ||
+    domain.search ||
+    domain.hash
+  ) {
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      '$.live.web.domain must be a credential-free HTTPS origin.',
+      '$.live.web.domain',
+      'Use an HTTPS origin without path, query, fragment, or credentials.',
+    );
+  }
+}
+
+function validateNotes(items, path, allIds) {
+  if (!Array.isArray(items) || items.length > 20) {
+    fail(
+      'MEMORY_SCHEMA_INVALID',
+      `${path} must be an array with at most 20 items.`,
+      path,
+      'Keep only current concise items.',
+    );
+  }
+  for (const [index, item] of items.entries()) {
+    const itemPath = `${path}[${index}]`;
+    exactKeys(item, ['id', 'summary'], itemPath);
+    identifier(item.id, `${itemPath}.id`);
+    text(item.summary, `${itemPath}.summary`, 500);
+    if (allIds.has(item.id)) {
+      fail(
+        'MEMORY_DUPLICATE_ID',
+        `Duplicate current-state id: ${item.id}.`,
+        `${itemPath}.id`,
+        'Use unique ids across blockers, restrictions, and follow-ups.',
+      );
+    }
+    allIds.add(item.id);
+  }
+}
+
+function validateState(state) {
+  scanSecrets(state);
+  exactKeys(state, TOP_LEVEL_KEYS, '$');
+  if (state.schemaVersion !== '2.0.0') {
+    fail(
+      'MEMORY_SCHEMA_UNSUPPORTED',
+      '$.schemaVersion must be 2.0.0.',
+      '$.schemaVersion',
+      'Use Canonical Memory v2.',
+    );
+  }
+  identifier(state.stateRevision, '$.stateRevision');
+  validateNamed(state.phase, '$.phase');
+
+  exactKeys(state.lastCompleted, ['id', 'title', 'outcome'], '$.lastCompleted');
+  identifier(state.lastCompleted.id, '$.lastCompleted.id');
+  text(state.lastCompleted.title, '$.lastCompleted.title', 160);
+  text(state.lastCompleted.outcome, '$.lastCompleted.outcome', 500);
+
+  validateCurrentWork(state.currentWork);
+  validateNextTask(state.nextTask);
+  if (
+    state.currentWork.status === 'active' &&
+    state.currentWork.id === state.lastCompleted.id
+  ) {
+    fail(
+      'MEMORY_STATE_CONTRADICTION',
+      'Current work cannot equal the last completed work.',
+      '$.currentWork.id',
+      'Correct the active or completed task.',
+    );
+  }
+  if (
+    state.nextTask.status === 'decided' &&
+    (state.nextTask.id === state.lastCompleted.id ||
+      (state.currentWork.status === 'active' &&
+        state.nextTask.id === state.currentWork.id))
+  ) {
+    fail(
+      'MEMORY_STATE_CONTRADICTION',
+      'The decided next task must differ from current and completed work.',
+      '$.nextTask.id',
+      'Correct the task lifecycle.',
+    );
+  }
+
+  validateLive(state.live);
+  const ids = new Set();
+  validateNotes(state.openBlockers, '$.openBlockers', ids);
+  validateNotes(state.activeRestrictions, '$.activeRestrictions', ids);
+  validateNotes(state.followUps, '$.followUps', ids);
+  return state;
+}
+
+function validateClosedSchemas(value, path = '$') {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) =>
+      validateClosedSchemas(entry, `${path}[${index}]`),
+    );
+    return;
+  }
+  if (!isObject(value)) return;
+  if (value.type === 'object' && value.additionalProperties !== false) {
+    fail(
+      'MEMORY_SCHEMA_CONTRACT_INVALID',
+      `${path} must set additionalProperties=false.`,
+      path,
+      'Keep every object schema closed.',
+    );
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    validateClosedSchemas(entry, `${path}.${key}`);
   }
 }
 
@@ -305,1231 +411,221 @@ function validateSchemaContract(schema) {
   );
   if (
     schema.$schema !== 'https://json-schema.org/draft/2020-12/schema' ||
+    schema.$id !==
+      'https://schemas.agenciagenesis.invalid/genesis-harness/project-state.v2.schema.json' ||
     schema.type !== 'object' ||
-    schema.additionalProperties !== false
+    schema.additionalProperties !== false ||
+    schema.properties?.schemaVersion?.const !== '2.0.0'
   ) {
     fail(
-      'MEMORY_SCHEMA_INVALID',
-      'Schema root contract is invalid.',
-      SCHEMA_PATH,
-      'Restore draft 2020-12 and a closed object root.',
+      'MEMORY_SCHEMA_CONTRACT_INVALID',
+      'The v2 schema identity or root contract is invalid.',
+      '$schema',
+      'Restore the canonical v2 schema identity.',
     );
   }
-  if (JSON.stringify(schema.required) !== JSON.stringify(TOP_LEVEL_KEYS)) {
+  const required = [...(schema.required ?? [])].sort();
+  const expected = [...TOP_LEVEL_KEYS].sort();
+  if (
+    JSON.stringify(required) !== JSON.stringify(expected) ||
+    JSON.stringify(Object.keys(schema.properties ?? {}).sort()) !==
+      JSON.stringify(expected)
+  ) {
     fail(
-      'MEMORY_SCHEMA_INVALID',
-      'Schema required properties drifted.',
+      'MEMORY_SCHEMA_CONTRACT_INVALID',
+      'The v2 schema root fields do not match the authority contract.',
       '$schema.required',
-      'Keep the canonical top-level property order.',
+      'Keep the schema and validator root fields aligned.',
     );
   }
-  for (const key of TOP_LEVEL_KEYS) {
-    if (!Object.hasOwn(schema.properties, key))
-      fail(
-        'MEMORY_SCHEMA_INVALID',
-        `Schema does not define ${key}.`,
-        '$schema.properties',
-        'Define every required authority property.',
-      );
-  }
+  validateClosedSchemas(schema);
+  return schema;
 }
 
-function schemaEqual(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function canonicalJson(value) {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (isObject(value))
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
-      .join(',')}}`;
-  return JSON.stringify(value);
-}
-
-function validatePointerSchemaContract(schema) {
-  const fingerprint = createHash('sha256')
-    .update(canonicalJson(schema), 'utf8')
-    .digest('hex');
-  if (fingerprint !== WEB_POINTER_SCHEMA_FINGERPRINT)
-    fail(
-      'MEMORY_POINTER_SCHEMA_MISMATCH',
-      'The Web pointer schema does not match the reviewed closed contract.',
-      WEB_POINTER_SCHEMA_PATH,
-      `Use the pointer schema from the integrated Web revision ${WEB_SHA}.`,
-    );
-}
-
-function resolveSchemaRef(rootSchema, reference, path, code) {
-  if (typeof reference !== 'string' || !reference.startsWith('#/')) {
-    fail(
-      code,
-      `Unsupported schema reference: ${reference}.`,
-      path,
-      'Use only local JSON Pointer references.',
-    );
-  }
-  let current = rootSchema;
-  for (const encoded of reference.slice(2).split('/')) {
-    const segment = encoded.replaceAll('~1', '/').replaceAll('~0', '~');
-    if (!isObject(current) || !Object.hasOwn(current, segment)) {
-      fail(
-        code,
-        `Schema reference does not resolve: ${reference}.`,
-        path,
-        'Restore a resolvable local schema reference.',
-      );
-    }
-    current = current[segment];
-  }
-  return current;
-}
-
-function validateJsonSchema(
-  value,
-  schema,
-  { rootSchema = schema, path = '$', code = 'MEMORY_SCHEMA_INVALID' } = {},
-) {
-  if (!isObject(schema))
-    fail(
-      code,
-      'Schema node must be an object.',
-      path,
-      'Restore a valid JSON Schema node.',
-    );
-  if (schema.$ref) {
-    validateJsonSchema(
-      value,
-      resolveSchemaRef(rootSchema, schema.$ref, path, code),
-      { rootSchema, path, code },
-    );
-    return;
-  }
-  if (Array.isArray(schema.oneOf)) {
-    let matches = 0;
-    for (const option of schema.oneOf) {
-      try {
-        validateJsonSchema(value, option, { rootSchema, path, code });
-        matches += 1;
-      } catch (error) {
-        if (!(error instanceof MemoryError) || error.code !== code) throw error;
-      }
-    }
-    if (matches !== 1)
-      fail(
-        code,
-        `${path} must match exactly one schema branch.`,
-        path,
-        'Restore the documented union variant.',
-      );
-    return;
-  }
-  if (Object.hasOwn(schema, 'const') && !schemaEqual(value, schema.const))
-    fail(
-      code,
-      `${path} violates const.`,
-      path,
-      'Use the canonical constant value.',
-    );
-  if (
-    Array.isArray(schema.enum) &&
-    !schema.enum.some((entry) => schemaEqual(value, entry))
-  )
-    fail(
-      code,
-      `${path} is not an allowed enum value.`,
-      path,
-      'Use one of the schema enum values.',
-    );
-  if (schema.type === 'object') {
-    if (!isObject(value))
-      fail(
-        code,
-        `${path} must be an object.`,
-        path,
-        'Restore the documented object.',
-      );
-    for (const required of schema.required ?? []) {
-      if (!Object.hasOwn(value, required))
-        fail(
-          code,
-          `${path}.${required} is required.`,
-          `${path}.${required}`,
-          'Add the required property.',
-        );
-    }
-    const properties = isObject(schema.properties) ? schema.properties : {};
-    if (schema.additionalProperties === false) {
-      const extra = Object.keys(value).find(
-        (key) => !Object.hasOwn(properties, key),
-      );
-      if (extra)
-        fail(
-          code,
-          `${path}.${extra} is not allowed.`,
-          `${path}.${extra}`,
-          'Remove the additional property.',
-        );
-    }
-    for (const [key, child] of Object.entries(properties)) {
-      if (Object.hasOwn(value, key))
-        validateJsonSchema(value[key], child, {
-          rootSchema,
-          path: `${path}.${key}`,
-          code,
-        });
-    }
-  } else if (schema.type === 'array') {
-    if (!Array.isArray(value))
-      fail(
-        code,
-        `${path} must be an array.`,
-        path,
-        'Restore the documented array.',
-      );
-    if (Number.isInteger(schema.minItems) && value.length < schema.minItems)
-      fail(
-        code,
-        `${path} has too few items.`,
-        path,
-        `Use at least ${schema.minItems} items.`,
-      );
-    if (Number.isInteger(schema.maxItems) && value.length > schema.maxItems)
-      fail(
-        code,
-        `${path} has too many items.`,
-        path,
-        `Use at most ${schema.maxItems} items.`,
-      );
-    if (schema.uniqueItems === true) {
-      const canonical = value.map((entry) => JSON.stringify(entry));
-      if (new Set(canonical).size !== canonical.length)
-        fail(
-          code,
-          `${path} must contain unique items.`,
-          path,
-          'Remove duplicate items.',
-        );
-    }
-    if (schema.items)
-      value.forEach((entry, index) =>
-        validateJsonSchema(entry, schema.items, {
-          rootSchema,
-          path: `${path}[${index}]`,
-          code,
-        }),
-      );
-  } else if (schema.type === 'string') {
-    if (typeof value !== 'string')
-      fail(code, `${path} must be a string.`, path, 'Use a string value.');
-    if (Number.isInteger(schema.minLength) && value.length < schema.minLength)
-      fail(
-        code,
-        `${path} is too short.`,
-        path,
-        `Use at least ${schema.minLength} characters.`,
-      );
-    if (Number.isInteger(schema.maxLength) && value.length > schema.maxLength)
-      fail(
-        code,
-        `${path} is too long.`,
-        path,
-        `Use at most ${schema.maxLength} characters.`,
-      );
-    if (schema.pattern && !new RegExp(schema.pattern, 'u').test(value))
-      fail(
-        code,
-        `${path} does not match its pattern.`,
-        path,
-        'Use the documented value format.',
-      );
-    if (schema.format === 'date-time') validateTimestamp(value, path);
-    if (schema.format === 'uri') {
-      try {
-        const url = new URL(value);
-        if (!url.protocol || !url.hostname)
-          throw new Error('absolute URI required');
-      } catch {
-        fail(
-          code,
-          `${path} must be an absolute URI.`,
-          path,
-          'Use a valid absolute URI.',
-        );
-      }
-    }
-  } else if (schema.type === 'integer') {
-    if (!Number.isInteger(value))
-      fail(code, `${path} must be an integer.`, path, 'Use an integer value.');
-  } else if (schema.type === 'number') {
-    if (typeof value !== 'number' || !Number.isFinite(value))
-      fail(
-        code,
-        `${path} must be a finite number.`,
-        path,
-        'Use a finite number.',
-      );
-  } else if (schema.type === 'boolean' && typeof value !== 'boolean') {
-    fail(code, `${path} must be boolean.`, path, 'Use true or false.');
-  }
-}
-
-function validateReferenceIds(state) {
-  const evidenceIds = uniqueIds(state.evidence, '$.evidence');
-  const lists = [
-    [
-      '$.phase.lastCompleted.evidenceIds',
-      state.phase.lastCompleted.evidenceIds,
-    ],
-    ...state.operationalState.facts.map((entry, index) => [
-      `$.operationalState.facts[${index}].evidenceIds`,
-      entry.evidenceIds,
-    ]),
-    ...state.supersededPlans.map((entry, index) => [
-      `$.supersededPlans[${index}].sourceEvidenceIds`,
-      entry.sourceEvidenceIds,
-    ]),
-    ...state.permanentInvariants.map((entry, index) => [
-      `$.permanentInvariants[${index}].sourceEvidenceIds`,
-      entry.sourceEvidenceIds,
-    ]),
-    ...state.releaseGates.map((entry, index) => [
-      `$.releaseGates[${index}].sourceEvidenceIds`,
-      entry.sourceEvidenceIds,
-    ]),
-    ...state.currentRestrictions.map((entry, index) => [
-      `$.currentRestrictions[${index}].sourceEvidenceIds`,
-      entry.sourceEvidenceIds,
-    ]),
-  ];
-  for (const [path, ids] of lists) {
-    if (!Array.isArray(ids) || ids.some((id) => !evidenceIds.has(id))) {
-      fail(
-        'MEMORY_EVIDENCE_UNRESOLVED',
-        'An evidence reference does not resolve.',
-        path,
-        'Reference an evidence id declared by this authority.',
-      );
-    }
-  }
-}
-
-function validateState(state, { allowFixture = false } = {}) {
-  exactKeys(state, TOP_LEVEL_KEYS, '$');
-  scanSecrets(state);
-  if (state.schemaVersion !== '1.0.0')
-    fail(
-      'MEMORY_SCHEMA_UNSUPPORTED',
-      'Only schema 1.0.0 is supported.',
-      '$.schemaVersion',
-      'Use schemaVersion 1.0.0.',
-    );
-  if (state.instanceKind === 'historical-fixture' && !allowFixture)
-    fail(
-      'MEMORY_HISTORICAL_FIXTURE',
-      'Historical fixtures cannot be current authority.',
-      '$.instanceKind',
-      'Use the current authority instance.',
-    );
-  if (state.instanceKind !== 'current' && !allowFixture)
-    fail(
-      'MEMORY_SCHEMA_INVALID',
-      'Authority instanceKind must be current.',
-      '$.instanceKind',
-      'Use instanceKind current.',
-    );
-  if (
-    !IDENTIFIER.test(state.stateRevision ?? '') ||
-    state.project?.id !== 'genesis-platform' ||
-    state.project?.name !== 'Genesis Platform'
-  ) {
-    fail(
-      'MEMORY_SCHEMA_INVALID',
-      'Project identity or state revision is invalid.',
-      '$',
-      'Restore the canonical Genesis project identity.',
-    );
-  }
-  validateTimestamp(state.updatedAt, '$.updatedAt');
-  if (
-    JSON.stringify(state.authority) !==
-    JSON.stringify({
-      repository: API_REPOSITORY,
-      branch: 'main',
-      path: AUTHORITY_PATH,
-      revisionSource: 'containing-commit',
-    })
-  ) {
-    fail(
-      'MEMORY_AUTHORITY_NOT_UNIQUE',
-      'The API main authority contract is invalid.',
-      '$.authority',
-      'Use the single API containing-commit authority.',
-    );
-  }
-  if (!Array.isArray(state.repositories) || state.repositories.length !== 2)
-    fail(
-      'MEMORY_SCHEMA_INVALID',
-      'Exactly two repository records are required.',
-      '$.repositories',
-      'Declare API authority and Web satellite exactly once.',
-    );
-  const api = state.repositories.find((entry) => entry.id === 'api');
-  const web = state.repositories.find((entry) => entry.id === 'web');
-  if (
-    !api ||
-    !web ||
-    api.repository !== API_REPOSITORY ||
-    api.role !== 'authority' ||
-    api.memoryRevision?.kind !== 'containing-commit' ||
-    Object.hasOwn(api.memoryRevision ?? {}, 'sha')
-  ) {
-    fail(
-      'MEMORY_AUTHORITY_NOT_UNIQUE',
-      'API repository authority metadata is invalid.',
-      '$.repositories',
-      'Use one API authority with containing-commit provenance and no future SHA.',
-    );
-  }
-  if (web.role !== 'satellite') {
-    fail(
-      'MEMORY_AUTHORITY_NOT_UNIQUE',
-      'Web must remain a pointer-only satellite.',
-      '$.repositories[web].role',
-      'Keep exactly one authority in the API repository.',
-    );
-  }
-  if (
-    web.repository !== WEB_REPOSITORY ||
-    web.memoryRevision?.kind !== 'commit' ||
-    web.memoryRevision?.sha !== WEB_SHA ||
-    !FULL_SHA.test(web.memoryRevision.sha)
-  ) {
-    fail(
-      'MEMORY_WEB_REVISION_MISMATCH',
-      'Web memoryRevision is not the stable pointer containing commit.',
-      '$.repositories[web].memoryRevision',
-      `Use ${WEB_SHA}.`,
-    );
-  }
-  const expectedReleaseBindings = {
-    apiApplicationRevision: API_APPLICATION_REVISION,
-    apiReleaseManifestRevision: { kind: 'containing-commit' },
-    apiReleaseTreeContractRevision: { kind: 'containing-commit' },
-    apiReleaseBundleFingerprint: {
-      kind: 'derived-from-containing-commit',
-      algorithm: 'sha256',
-      artifact: 'release-manifest.json',
-      releaseRole: 'current',
-    },
-    apiRollbackReleaseBundleFingerprint: {
-      kind: 'derived-from-containing-commit',
-      algorithm: 'sha256',
-      artifact: 'release-manifest.json',
-      releaseRole: 'rollback',
-    },
-    authorizedApiImage: AUTHORIZED_API_IMAGE,
-    authorizedApiImageConfigDigest: AUTHORIZED_API_IMAGE_CONFIG_DIGEST,
-    rollbackApiImage: ROLLBACK_API_IMAGE,
-    webIntegratedRevision: WEB_INTEGRATED_SHA,
-  };
-  if (
-    JSON.stringify(state.releaseBindings) !==
-    JSON.stringify(expectedReleaseBindings)
-  ) {
-    fail(
-      'MEMORY_RELEASE_BINDING_MISMATCH',
-      'Versioned release bindings are invalid or ambiguous.',
-      '$.releaseBindings',
-      'Restore the exact application, containing release-manifest/tree-contract, role-specific current/rollback bundle fingerprints, authorized images and integrated Web bindings.',
-    );
-  }
-  if (
-    state.currentWork?.status === 'none' &&
-    Object.hasOwn(state.currentWork, 'task')
-  )
-    fail(
-      'MEMORY_SCHEMA_INVALID',
-      'currentWork none cannot include a task.',
-      '$.currentWork',
-      'Remove the task or select a non-none status.',
-    );
-  if (
-    state.currentWork?.status !== 'none' &&
-    !isObject(state.currentWork?.task)
-  )
-    fail(
-      'MEMORY_SCHEMA_INVALID',
-      'Active currentWork requires task identity.',
-      '$.currentWork.task',
-      'Declare the active task.',
-    );
-  validateTimestamp(
-    state.phase?.lastCompleted?.completedAt,
-    '$.phase.lastCompleted.completedAt',
-  );
-  validateTimestamp(
-    state.operationalState?.documentedAt,
-    '$.operationalState.documentedAt',
-  );
-  uniqueIds(state.operationalState?.facts, '$.operationalState.facts');
-  for (const [index, fact] of state.operationalState.facts.entries()) {
-    if (!BASIS.has(fact.basis))
-      fail(
-        'MEMORY_OBSERVATION_INCOMPLETE',
-        'Operational fact basis is invalid.',
-        `$.operationalState.facts[${index}].basis`,
-        'Use documented, observed, or unknown.',
-      );
-    validateTimestamp(
-      fact.documentedAt,
-      `$.operationalState.facts[${index}].documentedAt`,
-    );
-    if (fact.basis === 'observed' && !fact.observedAt)
-      fail(
-        'MEMORY_OBSERVATION_INCOMPLETE',
-        'Observed facts require observedAt.',
-        `$.operationalState.facts[${index}]`,
-        'Record direct observation time or use documented/unknown.',
-      );
-    if (fact.basis !== 'observed' && Object.hasOwn(fact, 'observedAt'))
-      fail(
-        'MEMORY_OBSERVATION_INCOMPLETE',
-        'Only observed facts may include observedAt.',
-        `$.operationalState.facts[${index}].observedAt`,
-        'Remove observedAt or set basis observed with direct evidence.',
-      );
-  }
-  const remoteTreeBinding = state.operationalState.facts.find(
-    (fact) => fact.id === 'OPS-MVP08-VPS-INTEGRITY-AUDIT',
-  );
-  if (
-    remoteTreeBinding?.status !== 'absent' ||
-    !remoteTreeBinding.statement.startsWith('remoteTreeBinding=SUPERSEDED.')
-  ) {
-    fail(
-      'MEMORY_RELEASE_TREE_BINDING_INVALID',
-      'The historical remote release-tree binding is not explicitly superseded.',
-      '$.operationalState.facts',
-      'Record remoteTreeBinding=SUPERSEDED with absent status in OPS-MVP08-VPS-INTEGRITY-AUDIT.',
-    );
-  }
-  for (const [path, list, prefix] of [
-    ['$.permanentInvariants', state.permanentInvariants, 'PI-'],
-    ['$.releaseGates', state.releaseGates, 'RG-'],
-    ['$.currentRestrictions', state.currentRestrictions, 'OR-'],
-  ]) {
-    const ids = uniqueIds(list, path);
-    if (ids.size === 0 || [...ids].some((id) => !id.startsWith(prefix)))
-      fail(
-        'MEMORY_CONTROL_CLASSIFICATION_INVALID',
-        `${path} is empty or misclassified.`,
-        path,
-        `Use non-empty ${prefix} controls only in this category.`,
-      );
-  }
-  uniqueIds(state.blockers, '$.blockers');
-  uniqueIds(state.pendingHumanDecisions, '$.pendingHumanDecisions');
-  uniqueIds(state.supersededPlans, '$.supersededPlans');
-  if (
-    !state.supersededPlans.some(
-      (plan) =>
-        plan.id === 'PLAN-0.8.2-0.8.11' && plan.replacedBy === '0.8-MVP',
-    )
-  ) {
-    fail(
-      'MEMORY_SUPERSESSION_INCOMPLETE',
-      'The previous production sequence is not explicitly superseded.',
-      '$.supersededPlans',
-      'Record PLAN-0.8.2-0.8.11 as replaced by 0.8-MVP.',
-    );
-  }
-  if (
-    state.pointerMetadata?.repository !== WEB_REPOSITORY ||
-    state.pointerMetadata?.path !== WEB_POINTER_PATH ||
-    state.pointerMetadata?.mode !== 'pointer-only' ||
-    state.pointerMetadata?.transitionId !== WEB_TRANSITION_ID ||
-    state.pointerMetadata?.targetStateRevision !== TARGET_STATE_REVISION
-  ) {
-    fail(
-      'MEMORY_POINTER_MISMATCH',
-      'Pointer metadata does not match this authority.',
-      '$.pointerMetadata',
-      'Restore the exact Candidate A Web pointer-only receipt metadata.',
-    );
-  }
-  validateReferenceIds(state);
-  return state;
-}
-
-function renderList(items, line) {
-  return items.length === 0 ? '- Nenhum.' : items.map(line).join('\n');
+function renderItems(items) {
+  if (items.length === 0) return '- None.';
+  return items.map((item) => `- **${item.id}:** ${item.summary}`).join('\n');
 }
 
 function renderProjection(state) {
-  const facts = renderList(
-    state.operationalState.facts,
-    (fact) =>
-      `- **${fact.id}** [${fact.basis}/${fact.status}] — ${fact.statement}`,
-  );
-  const blockers = renderList(
-    state.blockers.filter((entry) => entry.status === 'open'),
-    (entry) => `- **${entry.id}** — ${entry.summary}`,
-  );
-  const decisions = renderList(
-    state.pendingHumanDecisions,
-    (entry) => `- **${entry.id}** — ${entry.question}`,
-  );
-  const restrictions = renderList(
-    state.currentRestrictions,
-    (entry) => `- **${entry.id}** — ${entry.statement}`,
-  );
-  const gates = renderList(
-    state.releaseGates,
-    (entry) => `- **${entry.id}** [${entry.status}] — ${entry.statement}`,
-  );
-  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v1.json -->\n\n# Estado atual\n\nEsta projeção é gerada deterministicamente. Não edite manualmente; a autoridade temporal única é [docs/memory/project-state.v1.json](memory/project-state.v1.json).\n\n- **Revisão de estado:** ${state.stateRevision}\n- **Atualização documentada:** ${state.updatedAt}\n- **Fase:** ${state.phase.id} — ${state.phase.title}\n- **Último trabalho concluído:** ${state.phase.lastCompleted.id} — ${state.phase.lastCompleted.title}\n- **Trabalho vigente:** ${state.currentWork.status} — ${state.currentWork.summary}\n- **Próxima tarefa:** ${state.nextTask.id} — ${state.nextTask.title}\n- **Web Production live source:** ${state.releaseBindings.webIntegratedRevision}\n- **API Production application source:** ${state.releaseBindings.apiApplicationRevision}\n- **Contrato versionado de release API legado:** containing-commit (LEGACY / SUPERSEDED para novos deploys)\n- **Contrato release-tree legado:** containing-commit (LEGACY / SUPERSEDED para novos deploys)\n- **Fingerprint histórico do bundle current:** SHA-256 derivado do release-manifest.json de papel current no containing commit\n- **Fingerprint histórico do bundle rollback:** SHA-256 derivado do release-manifest.json de papel rollback no containing commit\n- **Imagem API live:** ${state.releaseBindings.authorizedApiImage}\n- **Previous image API preservada:** ${state.releaseBindings.rollbackApiImage}\n- **Proveniência da memória e tooling API:** containing-commit\n\n## Estado operacional\n\n${state.operationalState.summary}\n\n${facts}\n\n## Blockers abertos\n\n${blockers}\n\n## Decisões humanas pendentes\n\n${decisions}\n\n## Release gates\n\n${gates}\n\n## Restrições atuais\n\n${restrictions}\n`;
+  const current =
+    state.currentWork.status === 'none'
+      ? 'none'
+      : `${state.currentWork.id} — ${state.currentWork.title}`;
+  const next =
+    state.nextTask.status === 'undecided'
+      ? `undecided — ${state.nextTask.planningState}`
+      : `${state.nextTask.id} — ${state.nextTask.title}`;
+  return `<!-- generated-by: scripts/validate-project-memory.cjs; source: docs/memory/project-state.v2.json -->
+
+# Current project state
+
+This is a deterministic projection. Edit [project-state.v2.json](memory/project-state.v2.json), then regenerate this file.
+
+- **State revision:** ${state.stateRevision}
+- **Phase:** ${state.phase.id} — ${state.phase.title}
+- **Last completed product work:** ${state.lastCompleted.id} — ${state.lastCompleted.title}
+- **Outcome:** ${state.lastCompleted.outcome}
+- **Current work:** ${current}
+- **Next task:** ${next}
+
+## Live bindings
+
+- **API source:** ${state.live.api.sourceSha}
+- **API image:** ${state.live.api.image}
+- **Web source:** ${state.live.web.sourceSha}
+- **Web deployment:** ${state.live.web.deploymentId}
+- **Web domain:** ${state.live.web.domain}
+
+## Open blockers
+
+${renderItems(state.openBlockers)}
+
+## Active restrictions
+
+${renderItems(state.activeRestrictions)}
+
+## Follow-ups
+
+${renderItems(state.followUps)}
+`;
 }
 
-function stripHistoricalRegions(text, path) {
-  if (text.includes(WHOLE_DOCUMENT_HISTORY_MARKER)) {
-    if (!WHOLE_DOCUMENT_HISTORY_PATHS.has(path))
-      fail(
-        'MEMORY_HISTORY_MARKER_INVALID',
-        `${path} cannot disable temporal lint for the whole document.`,
-        path,
-        `Use bounded ${HISTORY_START} and ${HISTORY_END} regions instead.`,
-      );
-    return '';
-  }
-
-  const marker = /<!-- genesis-memory-history:(start|end) -->/gu;
-  let historical = false;
-  let cursor = 0;
-  let visible = '';
-  for (const match of text.matchAll(marker)) {
-    if (match[1] === 'start') {
-      if (historical)
-        fail(
-          'MEMORY_HISTORY_MARKER_INVALID',
-          `${path} has nested historical regions.`,
-          path,
-          'Use non-overlapping, explicitly bounded historical regions.',
-        );
-      const following = text.slice(match.index + match[0].length);
-      if (!/^\s*#{2,6}\s+.*(?:snapshot|históric)/iu.test(following))
-        fail(
-          'MEMORY_HISTORY_MARKER_INVALID',
-          `${path} opens a historical region without an explicit historical heading.`,
-          path,
-          'Place the start marker immediately before a Snapshot histórico heading.',
-        );
-      visible += text.slice(cursor, match.index);
-      historical = true;
-    } else {
-      if (!historical)
-        fail(
-          'MEMORY_HISTORY_MARKER_INVALID',
-          `${path} closes a historical region that was not opened.`,
-          path,
-          `Add ${HISTORY_START} before this marker.`,
-        );
-      historical = false;
-    }
-    cursor = match.index + match[0].length;
-  }
-  if (historical)
-    fail(
-      'MEMORY_HISTORY_MARKER_INVALID',
-      `${path} has an unclosed historical region.`,
-      path,
-      `Close it with ${HISTORY_END}.`,
-    );
-  visible += text.slice(cursor);
-  return visible;
-}
-
-function delegatesTemporalAuthority(block) {
-  return (
-    block.includes(AUTHORITY_PATH) &&
-    /(?:autoridade|resolve|pertence|exclusiv|não define|não substitu)/iu.test(
-      block,
-    )
-  );
-}
-
-function lintTemporalAssertions(text, path) {
-  const visible = stripHistoricalRegions(text, path);
-  for (const block of visible.split(/\r?\n\s*\r?\n/gu)) {
-    if (delegatesTemporalAuthority(block)) continue;
-    for (const rule of TEMPORAL_ASSERTION_RULES) {
-      if (rule.pattern.test(block))
-        fail(
-          'MEMORY_TEMPORAL_ASSERTION_FORBIDDEN',
-          `${path} contains a forbidden ${rule.label}.`,
-          path,
-          `Move temporal state to ${AUTHORITY_PATH} or bound an actual snapshot with ${HISTORY_START} and ${HISTORY_END}.`,
-        );
-    }
-  }
-}
-
-function validateRepositoryPath(evidence, relative) {
-  const segments = relative.split('/');
-  if (
-    relative.length === 0 ||
-    relative.startsWith('/') ||
-    relative.endsWith('/') ||
-    relative.includes('\\') ||
-    relative.includes('%') ||
-    segments.some(
-      (segment) =>
-        segment.length === 0 ||
-        segment === '.' ||
-        segment === '..' ||
-        !REPOSITORY_PATH_SEGMENT.test(segment),
-    )
-  )
-    fail(
-      'MEMORY_EVIDENCE_PATH_INVALID',
-      `${evidence.id} has an unsafe repository evidence path.`,
-      `$.evidence.${evidence.id}.uri`,
-      'Use a canonical repository-relative path with safe path segments.',
-    );
-  return relative;
-}
-
-function gitEvidence(root, args, { allowFailure = false } = {}) {
-  try {
-    return execFileSync('git', args, {
-      cwd: root,
-      encoding: null,
-      env: { ...process.env, GIT_NO_LAZY_FETCH: '1' },
-      maxBuffer: MAX_BYTES + 1024,
-      shell: false,
-      stdio: ['ignore', 'pipe', 'ignore'],
-      windowsHide: true,
-    });
-  } catch (error) {
-    if (allowFailure) return null;
-    throw error;
-  }
-}
-
-function historicalBlob(root, evidence, revision, relative) {
-  const revisionPath = `$.evidence.${evidence.id}.uri`;
-  if (
-    gitEvidence(root, ['cat-file', '-e', `${revision}^{commit}`], {
-      allowFailure: true,
-    }) === null
-  )
-    fail(
-      'MEMORY_EVIDENCE_REVISION_INVALID',
-      `${evidence.id} references an unavailable Git commit.`,
-      revisionPath,
-      'Provide a full commit SHA that exists in the local Git object database.',
-    );
-
-  const type = gitEvidence(root, ['cat-file', '-t', revision], {
-    allowFailure: true,
-  });
-  if (type === null || type.toString('ascii').trim() !== 'commit')
-    fail(
-      'MEMORY_EVIDENCE_REVISION_INVALID',
-      `${evidence.id} does not reference a commit object.`,
-      revisionPath,
-      'Reference an immutable full commit SHA.',
-    );
-
-  const tree = gitEvidence(
-    root,
-    ['ls-tree', '-z', '--full-tree', revision, '--', relative],
-    { allowFailure: true },
-  );
-  const entries =
-    tree === null
-      ? []
-      : tree
-          .toString('utf8')
-          .split('\0')
-          .filter((entry) => entry.length > 0);
-  const [metadata, foundPath] = entries[0]?.split('\t') ?? [];
-  const [mode, objectType, objectId] = metadata?.split(' ') ?? [];
-  if (
-    entries.length !== 1 ||
-    foundPath !== relative ||
-    objectType !== 'blob' ||
-    !['100644', '100755'].includes(mode) ||
-    !FULL_SHA.test(objectId ?? '')
-  )
-    fail(
-      'MEMORY_EVIDENCE_OBJECT_INVALID',
-      `${evidence.id} does not reference a regular historical file.`,
-      revisionPath,
-      'Reference an existing regular blob at the immutable commit.',
-    );
-
-  const content = gitEvidence(root, ['cat-file', 'blob', objectId], {
-    allowFailure: true,
-  });
-  if (content === null)
-    fail(
-      'MEMORY_EVIDENCE_OBJECT_INVALID',
-      `${evidence.id} historical blob is unavailable.`,
-      revisionPath,
-      'Ensure the referenced blob exists in the local Git object database.',
-    );
-  return content;
-}
-
-function validateRepositoryEvidence(root, state) {
-  for (const evidence of state.evidence) {
-    if (evidence.kind !== 'repository-file') continue;
-    let content;
-    let relative;
-    if (evidence.uri.startsWith(REPOSITORY_EVIDENCE_PREFIX)) {
-      relative = validateRepositoryPath(
-        evidence,
-        evidence.uri.slice(REPOSITORY_EVIDENCE_PREFIX.length),
-      );
-      content = Buffer.from(
-        safeRead(join(root, ...relative.split('/'))),
-        'utf8',
-      );
-    } else if (evidence.uri.startsWith(HISTORICAL_REPOSITORY_EVIDENCE_PREFIX)) {
-      const reference = evidence.uri.slice(
-        HISTORICAL_REPOSITORY_EVIDENCE_PREFIX.length,
-      );
-      const separator = reference.indexOf('/');
-      const revision = reference.slice(0, separator);
-      if (separator !== 40 || !FULL_SHA.test(revision))
-        fail(
-          'MEMORY_EVIDENCE_REVISION_INVALID',
-          `${evidence.id} has an invalid historical Git revision.`,
-          `$.evidence.${evidence.id}.uri`,
-          'Use a full 40-character lowercase commit SHA.',
-        );
-      relative = validateRepositoryPath(
-        evidence,
-        reference.slice(separator + 1),
-      );
-      content = historicalBlob(root, evidence, revision, relative);
-    } else {
-      fail(
-        'MEMORY_EVIDENCE_REPOSITORY_UNSUPPORTED',
-        `${evidence.id} uses an unsupported repository evidence URI.`,
-        `$.evidence.${evidence.id}.uri`,
-        'Use the allowlisted current or immutable historical repository URI.',
-      );
-    }
-    if (!evidence.sha256)
-      fail(
-        'MEMORY_EVIDENCE_HASH_REQUIRED',
-        `${evidence.id} must include sha256.`,
-        `$.evidence.${evidence.id}.sha256`,
-        'Record the SHA-256 of the referenced repository file.',
-      );
-    const actual = createHash('sha256').update(content).digest('hex');
-    if (actual !== evidence.sha256)
-      fail(
-        'MEMORY_EVIDENCE_HASH_MISMATCH',
-        `${evidence.id} does not match ${relative}.`,
-        `$.evidence.${evidence.id}.sha256`,
-        'Regenerate the evidence hash from the final referenced document.',
-      );
-  }
-}
-
-function validateStableSources(root) {
-  for (const path of STABLE_SOURCES) {
-    const text = safeRead(join(root, ...path.split('/')));
-    if (
-      !text.includes('genesis-memory-authority:v1') ||
-      !text.includes(AUTHORITY_PATH)
-    ) {
-      fail(
-        'MEMORY_STABLE_SOURCE_HAS_STATE',
-        `${path} does not delegate temporal authority.`,
-        path,
-        `Add the genesis-memory-authority:v1 marker and resolve current facts from ${AUTHORITY_PATH}.`,
-      );
-    }
-    if (
-      SOURCE_AUTHORITY_PATHS.includes(path) &&
-      !text.includes(SOURCE_AUTHORITY_MARKER)
-    )
-      fail(
-        'MEMORY_SOURCE_AUTHORITY_INVALID',
-        `${path} does not declare authorities by domain.`,
-        path,
-        'Restore the canonical source-authorities marker and domain contract.',
-      );
-    lintTemporalAssertions(text, path);
-  }
-  const taskLog = safeRead(join(root, 'docs', 'TASK_LOG.md'));
-  if (!taskLog.includes(WHOLE_DOCUMENT_HISTORY_MARKER))
-    fail(
-      'MEMORY_HISTORY_MARKER_REQUIRED',
-      'TASK_LOG must be explicitly historical.',
-      'docs/TASK_LOG.md',
-      'Add the whole-document history marker.',
-    );
-}
-
-function validateLocal(root = process.cwd(), { checkProjection = true } = {}) {
-  const schema = parseJson(join(root, ...SCHEMA_PATH.split('/')));
-  validateSchemaContract(schema);
-  const instance = parseJson(join(root, ...AUTHORITY_PATH.split('/')));
-  if (instance.schemaVersion !== '1.0.0') {
-    fail(
-      'MEMORY_SCHEMA_UNSUPPORTED',
-      'Only schema 1.0.0 is supported.',
-      '$.schemaVersion',
-      'Use schemaVersion 1.0.0.',
-    );
-  }
-  validateJsonSchema(instance, schema);
-  const state = validateState(instance);
-  validateRepositoryEvidence(root, state);
-  validateStableSources(root);
-  const expected = renderProjection(state);
-  if (
-    checkProjection &&
-    safeRead(join(root, ...PROJECTION_PATH.split('/'))) !== expected
-  ) {
-    fail(
-      'MEMORY_PROJECTION_STALE',
-      'CURRENT_STATE.md differs from the deterministic projection.',
-      PROJECTION_PATH,
-      'Run --mode render and review the generated projection.',
-    );
-  }
-  return { state, expected };
-}
-
-function loadWebPointer(source) {
-  const absolute = resolve(source);
-  let root = absolute;
-  try {
-    if (!statSync(absolute).isDirectory())
-      root = resolve(absolute, '..', '..', '..');
-  } catch {
-    fail(
-      'AUTHORITY_UNAVAILABLE',
-      'Web source is unavailable.',
-      '--web-source',
-      'Provide the integrated Web checkout or pointer file.',
-    );
-  }
-  const pointerPath = statSync(absolute).isDirectory()
-    ? join(absolute, ...WEB_POINTER_PATH.split('/'))
-    : absolute;
-  return { pointer: parseJson(pointerPath), root };
-}
-
-function containingCommit(root) {
-  const provenancePaths = [WEB_POINTER_PATH, WEB_POINTER_SCHEMA_PATH];
-  try {
-    const status = execFileSync(
-      'git',
-      [
-        'status',
-        '--porcelain=v1',
-        '--untracked-files=all',
-        '--',
-        ...provenancePaths,
-      ],
-      {
-        cwd: root,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      },
-    ).trim();
-    if (status !== '') return null;
-    const commit = execFileSync(
-      'git',
-      ['log', '-1', '--format=%H', '--', WEB_POINTER_PATH],
-      {
-        cwd: root,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      },
-    ).trim();
-    if (!FULL_SHA.test(commit)) return null;
-    execFileSync('git', ['diff', '--quiet', commit, '--', ...provenancePaths], {
-      cwd: root,
-      encoding: 'utf8',
-      stdio: ['ignore', 'ignore', 'ignore'],
-    });
-    return commit;
-  } catch {
-    return null;
-  }
-}
-
-function validateCrossRepo(
-  state,
-  source,
-  { pointerSchema, resolveContainingCommit = containingCommit } = {},
+function validateLocal(
+  root = process.cwd(),
+  {
+    authorityPath = AUTHORITY_PATH,
+    schemaPath = SCHEMA_PATH,
+    projectionPath = PROJECTION_PATH,
+    checkProjection = true,
+  } = {},
 ) {
-  const { pointer, root } = loadWebPointer(source);
-  const schema =
-    pointerSchema ??
-    parseJson(join(root, ...WEB_POINTER_SCHEMA_PATH.split('/')));
-  validatePointerSchemaContract(schema);
-  scanSecrets(pointer, '$web');
-  validateJsonSchema(pointer, schema, {
-    rootSchema: schema,
-    path: '$web',
-    code: 'MEMORY_POINTER_MISMATCH',
-  });
-  if (
-    pointer.schemaVersion !== '1.0.0' ||
-    pointer.instanceKind !== 'current' ||
-    pointer.mode !== 'pointer-only' ||
-    pointer.authority?.repository !== API_REPOSITORY ||
-    pointer.authority?.path !== AUTHORITY_PATH ||
-    pointer.authority?.acceptedSchemaMajor !== 1
-  ) {
-    fail(
-      'MEMORY_POINTER_MISMATCH',
-      'Web pointer identity or authority is incompatible.',
-      '--web-source',
-      'Use the integrated v1 pointer-only Web checkout.',
-    );
+  const authority = resolve(root, ...authorityPath.split('/'));
+  const schema = resolve(root, ...schemaPath.split('/'));
+  const projection = resolve(root, ...projectionPath.split('/'));
+  validateSchemaContract(readJson(schema));
+  const state = validateState(readJson(authority));
+  const rendered = renderProjection(state);
+  if (checkProjection) {
+    if (!existsSync(projection) || safeRead(projection) !== rendered) {
+      fail(
+        'MEMORY_PROJECTION_DRIFT',
+        'docs/CURRENT_STATE.md is not the deterministic v2 projection.',
+        projectionPath,
+        'Run node scripts/validate-project-memory.cjs --write-projection.',
+      );
+    }
   }
-  if (
-    pointer.receipt?.targetStateRevision !==
-      state.pointerMetadata.targetStateRevision ||
-    pointer.receipt?.targetStateRevision !== TARGET_STATE_REVISION ||
-    pointer.receipt?.transitionId !== state.pointerMetadata.transitionId ||
-    pointer.receipt?.transitionId !== WEB_TRANSITION_ID ||
-    pointer.receipt?.baseSha !== WEB_RECEIPT_BASE_SHA ||
-    pointer.receipt?.revisionSource !== 'containing-commit'
-  ) {
-    fail(
-      'MEMORY_TRANSITION_PENDING',
-      'Web receipt does not match the stable pointer transition metadata.',
-      '$web.receipt',
-      'Complete the approved cross-repository transition contract.',
-    );
-  }
-  const commit = resolveContainingCommit(root);
-  if (commit === null)
-    fail(
-      'MEMORY_POINTER_PROVENANCE_INVALID',
-      'The Web pointer is not available from a clean containing commit.',
-      '--web-source',
-      'Use the clean integrated Web main checkout.',
-    );
-  if (commit !== WEB_SHA)
-    fail(
-      'MEMORY_WEB_REVISION_MISMATCH',
-      'The Web pointer containing commit does not match its canonical provenance binding.',
-      '--web-source',
-      `Use the pointer revision ${WEB_SHA}.`,
-    );
-  return { commit, pointer };
-}
-
-function validateOnboardingResponse(state, response) {
-  const expectedFacts = Object.fromEntries(
-    state.operationalState.facts.map((fact) => [fact.id, fact.basis]),
-  );
-  const expected = {
-    stateRevision: state.stateRevision,
-    phaseId: state.phase.id,
-    lastCompletedId: state.phase.lastCompleted.id,
-    currentWorkStatus: state.currentWork.status,
-    nextTaskId: state.nextTask.id,
-    webMemoryRevision: WEB_SHA,
-    operationalFacts: expectedFacts,
-    blockerIds: state.blockers
-      .filter((entry) => entry.status === 'open')
-      .map((entry) => entry.id)
-      .sort(),
-    pendingDecisionIds: state.pendingHumanDecisions
-      .map((entry) => entry.id)
-      .sort(),
-    restrictionIds: state.currentRestrictions.map((entry) => entry.id).sort(),
-    supersededPlanIds: state.supersededPlans.map((entry) => entry.id).sort(),
-  };
-  const normalized = {
-    ...response,
-    blockerIds: [...(response.blockerIds ?? [])].sort(),
-    pendingDecisionIds: [...(response.pendingDecisionIds ?? [])].sort(),
-    restrictionIds: [...(response.restrictionIds ?? [])].sort(),
-    supersededPlanIds: [...(response.supersededPlanIds ?? [])].sort(),
-  };
-  const fields = Object.keys(expected);
-  const mismatches = fields.filter(
-    (field) =>
-      JSON.stringify(normalized[field]) !== JSON.stringify(expected[field]),
-  );
-  const hardFailure =
-    mismatches.length > 0 ||
-    response.supersededUsedAsCurrent === true ||
-    response.mutations !== 0 ||
-    response.secretsExposed !== 0 ||
-    response.startedNextTask === true ||
-    response.humanQuestions > 0;
-  const verifiedOutcomes = hardFailure ? 0 : 1;
-  const interventions = Number(response.humanInterventions ?? 0);
   return {
-    ok: !hardFailure,
-    code: hardFailure ? 'ONBOARDING_ORACLE_FAILED' : 'ONBOARDING_ORACLE_PASSED',
-    mismatches,
-    raw: {
-      sourceCount: Number(response.sourceCount ?? 0),
-      durationSeconds: Number(response.durationSeconds ?? 0),
-      humanQuestions: Number(response.humanQuestions ?? 0),
-      humanInterventions: interventions,
-      correctAnswers: fields.length - mismatches.length,
-      incorrectAnswers: mismatches.length,
-      indeterminateAnswers: Number(response.indeterminateAnswers ?? 0),
-      verifiedOutcomes,
-    },
-    humanInterventionRate:
-      verifiedOutcomes === 0 ? null : interventions / verifiedOutcomes,
+    status: 'READY',
+    authorityPath,
+    schemaPath,
+    projectionPath,
+    schemaVersion: state.schemaVersion,
+    stateRevision: state.stateRevision,
+    authorityBytes: Buffer.byteLength(JSON.stringify(state)),
   };
 }
 
 function parseArguments(argv) {
-  const args = { check: false };
+  const options = {
+    mode: 'local',
+    writeProjection: false,
+    json: false,
+    authorityPath: AUTHORITY_PATH,
+    schemaPath: SCHEMA_PATH,
+    projectionPath: PROJECTION_PATH,
+  };
   for (let index = 0; index < argv.length; index += 1) {
-    const name = argv[index];
-    if (name === '--check') {
-      args.check = true;
-      continue;
-    }
-    const value = argv[index + 1];
-    if (
-      !name?.startsWith('--') ||
-      value === undefined ||
-      value.startsWith('--')
-    )
+    const argument = argv[index];
+    if (argument === '--write-projection') options.writeProjection = true;
+    else if (argument === '--json') options.json = true;
+    else if (argument.startsWith('--')) {
+      const value = argv[index + 1];
+      if (!value || value.startsWith('--')) {
+        fail(
+          'MEMORY_USAGE_INVALID',
+          `Missing value for ${argument}.`,
+          argument,
+          'Provide the documented CLI value.',
+        );
+      }
+      if (argument === '--mode') options.mode = value;
+      else if (argument === '--authority') options.authorityPath = value;
+      else if (argument === '--schema') options.schemaPath = value;
+      else if (argument === '--projection') options.projectionPath = value;
+      else {
+        fail(
+          'MEMORY_USAGE_INVALID',
+          `Unknown argument: ${argument}.`,
+          argument,
+          'Use --mode local, --write-projection, --json, or path overrides.',
+        );
+      }
+      index += 1;
+    } else {
       fail(
-        'USAGE_ERROR',
-        'Arguments must be named options.',
-        'argv',
-        'Use --mode local|render|cross-repo|onboarding-oracle.',
+        'MEMORY_USAGE_INVALID',
+        `Unexpected argument: ${argument}.`,
+        argument,
+        'Use named options.',
       );
-    args[
-      name.slice(2).replace(/-([a-z])/gu, (_, letter) => letter.toUpperCase())
-    ] = value;
-    index += 1;
+    }
   }
-  if (
-    !['local', 'render', 'cross-repo', 'onboarding-oracle'].includes(args.mode)
-  )
+  if (options.mode !== 'local') {
     fail(
-      'USAGE_ERROR',
-      'Unsupported mode.',
-      'argv',
-      'Use --mode local|render|cross-repo|onboarding-oracle.',
+      'MEMORY_USAGE_INVALID',
+      `Unsupported mode: ${options.mode}.`,
+      '--mode',
+      'Use local.',
     );
-  return args;
-}
-
-function output(result) {
-  process.stdout.write(`${JSON.stringify(result)}\n`);
+  }
+  return options;
 }
 
 function main() {
+  const startedAt = Date.now();
   try {
-    const args = parseArguments(process.argv.slice(2));
-    if (args.mode === 'render') {
-      const { expected } = validateLocal(process.cwd(), {
-        checkProjection: false,
-      });
-      if (args.check) {
-        if (safeRead(PROJECTION_PATH) !== expected)
-          fail(
-            'MEMORY_PROJECTION_STALE',
-            'Projection is stale.',
-            PROJECTION_PATH,
-            'Run --mode render without --check.',
-          );
-      } else {
-        writeFileSync(PROJECTION_PATH, expected, 'utf8');
-      }
-      output({
-        ok: true,
-        code: args.check
-          ? 'MEMORY_PROJECTION_CURRENT'
-          : 'MEMORY_PROJECTION_RENDERED',
-        path: PROJECTION_PATH,
-      });
-      return;
-    }
-    const { state } = validateLocal();
-    if (args.mode === 'cross-repo') {
-      if (!args.webSource)
-        fail(
-          'USAGE_ERROR',
-          '--web-source is required.',
-          'argv',
-          'Provide the integrated Web checkout.',
-        );
-      const cross = validateCrossRepo(state, args.webSource);
-      output({
-        ok: true,
-        code: 'MEMORY_RESOLVED',
-        authorityResolved: true,
-        transitionPending: false,
-        staleFallbackUsed: false,
-        stateRevision: state.stateRevision,
-        webMemoryRevision: cross.commit,
-        pointerOnly: true,
-      });
-      return;
-    }
-    if (args.mode === 'onboarding-oracle') {
-      if (!args.response)
-        fail(
-          'USAGE_ERROR',
-          '--response is required.',
-          'argv',
-          'Provide the structured onboarding response JSON.',
-        );
-      const result = validateOnboardingResponse(
-        state,
-        parseJson(resolve(args.response)),
+    const options = parseArguments(process.argv.slice(2));
+    const result = validateLocal(process.cwd(), {
+      authorityPath: options.authorityPath,
+      schemaPath: options.schemaPath,
+      projectionPath: options.projectionPath,
+      checkProjection: !options.writeProjection,
+    });
+    if (options.writeProjection) {
+      const state = validateState(
+        readJson(join(process.cwd(), ...options.authorityPath.split('/'))),
       );
-      output(result);
-      if (!result.ok) process.exitCode = 1;
-      return;
+      writeFileSync(
+        join(process.cwd(), ...options.projectionPath.split('/')),
+        renderProjection(state),
+        'utf8',
+      );
     }
-    output({
-      ok: true,
-      code: 'MEMORY_VALID',
-      stateRevision: state.stateRevision,
-      schemaValidated: true,
-      semanticRulesValidated: true,
-      projectionCurrent: true,
-      stableSourcesValidated: true,
-    });
+    const output = {
+      command: 'validate-project-memory',
+      durationMs: Date.now() - startedAt,
+      ...result,
+    };
+    console.log(options.json ? JSON.stringify(output) : 'READY');
   } catch (error) {
-    const failure =
+    const result =
       error instanceof MemoryError
-        ? error
-        : new MemoryError(
-            'MEMORY_VALIDATION_FAILED',
-            error.message,
-            'runtime',
-            'Inspect the validator inputs.',
-          );
-    output({
-      ok: false,
-      code: failure.code,
-      codes: [failure.code],
-      staleFallbackUsed: false,
-      path: failure.path,
-      nextAction: failure.nextAction,
-    });
-    process.stderr.write(`${failure.message}\n`);
-    process.exitCode = failure.code === 'USAGE_ERROR' ? 2 : 1;
+        ? {
+            status: 'NOT_READY',
+            code: error.code,
+            message: error.message,
+            path: error.path,
+            nextAction: error.nextAction,
+          }
+        : {
+            status: 'NOT_READY',
+            code: 'MEMORY_VALIDATION_FAILED',
+            message: error.message,
+          };
+    console.error(JSON.stringify(result));
+    process.exitCode = 1;
   }
 }
 
@@ -1537,26 +633,14 @@ if (require.main === module) main();
 
 module.exports = {
   AUTHORITY_PATH,
+  MemoryError,
   PROJECTION_PATH,
   SCHEMA_PATH,
-  WEB_SHA,
-  WEB_INTEGRATED_SHA,
-  WEB_RECEIPT_BASE_SHA,
-  WEB_TRANSITION_ID,
-  WEB_POINTER_SCHEMA_FINGERPRINT,
-  TARGET_STATE_REVISION,
-  MemoryError,
   parseArguments,
+  readJson,
   renderProjection,
-  lintTemporalAssertions,
-  containingCommit,
-  validateCrossRepo,
+  scanSecrets,
   validateLocal,
-  validateOnboardingResponse,
-  validatePointerSchemaContract,
-  validateRepositoryEvidence,
   validateSchemaContract,
-  validateStableSources,
-  validateJsonSchema,
   validateState,
 };
