@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   buildValidationPlan,
+  fullValidationEnvironment,
   npmCommand,
   runValidationPlan,
 } = require('../../scripts/task-validate.cjs');
@@ -111,6 +112,18 @@ test('uses platform-specific npm executable without npm_execpath', () => {
   assert.equal(npmCommand(['test'], {}, 'linux').command, 'npm');
 });
 
+test('full API validation supplies the isolated database contract without overriding explicit values', () => {
+  const defaults = fullValidationEnvironment({ PATH: 'test-path' });
+  assert.equal(defaults.DATABASE_HOST, 'localhost');
+  assert.equal(defaults.DATABASE_PORT, '5433');
+  assert.equal(defaults.TEST_DATABASE_USER, 'genesis_test');
+  assert.equal(defaults.PATH, 'test-path');
+  assert.equal(
+    fullValidationEnvironment({ DATABASE_HOST: 'explicit' }).DATABASE_HOST,
+    'explicit',
+  );
+});
+
 test('stops on first failure and preserves exit code and durations', () => {
   const calls = [];
   const output = [];
@@ -147,6 +160,9 @@ test('Critical plus Tooling includes only tooling surface validation', () => {
     'npm run task:contracts',
     'npm run format:check:task-tools',
     'npm run test:task-tools',
+    'npm run ci:contract:validate',
+    'npm run format:check:ci',
+    'npm run test:ci',
     'git diff --check',
     'npm run task:fingerprint -- --json',
   ]);
@@ -203,15 +219,77 @@ test('Critical plus Memory keeps the Memory-only technical plan', () => {
 test('App plus Production composes a deterministic union without duplication', () => {
   const plan = labels('critical', ['production', 'app']);
   assert.equal(plan.includes('npm run test:e2e -- --runInBand'), true);
-  assert.equal(plan.includes('npm run test:production'), true);
+  assert.equal(
+    plan.some((label) =>
+      label.includes('test/production/deploy-api-simple-linux.test.cjs'),
+    ),
+    true,
+  );
+  assert.equal(
+    plan.some((label) => label.includes('recovery')),
+    false,
+  );
+  assert.equal(
+    plan.some((label) => label.includes('release-tree')),
+    false,
+  );
+  assert.equal(
+    plan.some((label) => label.startsWith('docker build')),
+    false,
+  );
+  assert.equal(new Set(plan).size, plan.length);
+});
+
+test('Production modifiers enable Recovery, legacy, and image checks independently', () => {
+  const manifest = surfaceManifest('critical', ['production']);
+  const plan = buildValidationPlan(
+    manifest,
+    { npm_execpath: '/npm/cli.js' },
+    {
+      surfaces: ['production'],
+      modifiers: {
+        recovery: true,
+        legacyProduction: true,
+        imageBuildScan: true,
+      },
+    },
+  ).map((entry) => entry.label);
   assert.equal(plan.includes('npm run test:recovery:integration'), true);
+  assert.equal(
+    plan.some((label) => label.includes('release-tree')),
+    true,
+  );
   assert.equal(
     plan.includes(
       'docker build --target production -t genesis-platform-api:task-validation .',
     ),
     true,
   );
-  assert.equal(new Set(plan).size, plan.length);
+});
+
+test('full active union keeps ADR-018 legacy validation excluded', () => {
+  const manifest = surfaceManifest('critical', ['tooling']);
+  const plan = buildValidationPlan(
+    manifest,
+    { npm_execpath: '/npm/cli.js' },
+    {
+      surfaces: ['memory', 'app', 'production', 'tooling'],
+      modifiers: {
+        recovery: true,
+        legacyProduction: false,
+        imageBuildScan: true,
+      },
+    },
+  ).map((entry) => entry.label);
+  assert.equal(
+    plan.some((label) => label.includes('release-tree')),
+    false,
+  );
+  assert.equal(
+    plan.some((label) => label.includes('production-bundle')),
+    false,
+  );
+  assert.equal(plan.includes('npm run test:recovery:integration'), true);
 });
 
 test('base validation runs once for mixed surfaces', () => {

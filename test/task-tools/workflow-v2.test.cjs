@@ -7,6 +7,18 @@ function read(path) {
   return readFileSync(join(process.cwd(), ...path.split('/')), 'utf8');
 }
 
+test('CI preserves the required check while selecting PR deltas and short main integrity', () => {
+  const workflow = read('.github/workflows/ci.yml');
+  assert.match(workflow, /name: Validate backend and production contracts/u);
+  assert.match(workflow, /fetch-depth: 0/u);
+  assert.match(workflow, /--verify-pr-checkout/u);
+  assert.match(workflow, /scripts\/ci-main-integrity\.cjs/u);
+  assert.match(workflow, /steps\.delta\.outputs\.needs_dependencies/u);
+  assert.match(workflow, /steps\.delta\.outputs\.image_build_scan/u);
+  assert.match(workflow, /steps\.delta\.outputs\.legacy_production/u);
+  assert.doesNotMatch(workflow, /^\s+services:/mu);
+});
+
 test('CI enforces contracts, formatting and task-tool tests', () => {
   const workflow = read('.github/workflows/ci.yml');
   const contracts = workflow.indexOf('npm run task:contracts');

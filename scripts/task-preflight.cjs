@@ -1,4 +1,4 @@
-const { existsSync, lstatSync } = require('node:fs');
+const { existsSync, lstatSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const {
   MANIFEST_PATH,
@@ -13,6 +13,10 @@ const {
   runGit,
 } = require('./lib/task-git.cjs');
 const { loadTaskManifest } = require('./lib/task-manifest.cjs');
+const {
+  classifyPaths,
+  validateDeclaredSurfaces,
+} = require('./lib/ci-surface-classifier.cjs');
 
 function runPreflight({ cwd = process.cwd(), startedAt = Date.now() } = {}) {
   const manifestPath = join(cwd, ...MANIFEST_PATH.split('/'));
@@ -43,6 +47,16 @@ function runPreflight({ cwd = process.cwd(), startedAt = Date.now() } = {}) {
     baseExists.status === 0
       ? inspectCandidate(manifest, cwd)
       : { tracked: [], untracked: [], failures: [] };
+  const candidatePaths = [
+    ...new Set([...candidate.tracked, ...candidate.untracked]),
+  ].sort();
+  const packageJson = JSON.parse(
+    readFileSync(join(cwd, 'package.json'), 'utf8'),
+  );
+  const repository = String(packageJson.name ?? '').endsWith('-web')
+    ? 'web'
+    : 'api';
+  const deltaClassification = classifyPaths(candidatePaths, repository);
 
   if (branch !== manifest.git.branch) {
     failures.push(
@@ -90,6 +104,19 @@ function runPreflight({ cwd = process.cwd(), startedAt = Date.now() } = {}) {
   }
 
   failures.push(...candidate.failures);
+  failures.push(
+    ...deltaClassification.unknownPaths.map(
+      (path) => `UNKNOWN_CI_SURFACE_PATH: ${path}`,
+    ),
+  );
+  if (manifest.validation.mode === 'surfaces') {
+    failures.push(
+      ...validateDeclaredSurfaces(
+        deltaClassification,
+        manifest.validation.surfaces,
+      ).failures,
+    );
+  }
   if (baseExists.status === 0 && hasObviousSecret(manifest, candidate, cwd)) {
     failures.push('possible secret found in candidate content.');
   }
@@ -108,13 +135,13 @@ function runPreflight({ cwd = process.cwd(), startedAt = Date.now() } = {}) {
     stagedFiles: staged.length,
     trackedFiles: candidate.tracked.length,
     untrackedFiles: candidate.untracked.length,
-    candidatePaths: [
-      ...new Set([...candidate.tracked, ...candidate.untracked]),
-    ].sort(),
+    candidatePaths,
     expectedTransitions: manifest.git.expectedTransitions,
     validationMode: manifest.validation.mode,
     validationSurfaces: manifest.validation.surfaces,
     validationLevels: manifest.validation.levels,
+    requiredValidationSurfaces: deltaClassification.surfaces,
+    validationModifiers: deltaClassification.modifiers,
     failures: [...new Set(failures)].sort(),
   };
   return result;

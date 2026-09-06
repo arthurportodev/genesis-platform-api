@@ -863,9 +863,7 @@ test('memory validation CI checkout includes immutable evidence history', () => 
     target(ROOT, '.github/workflows/ci.yml'),
     'utf8',
   );
-  const validateJob = workflow.match(
-    /^  validate:\r?\n[\s\S]*?(?=^  build-and-scan:)/mu,
-  )?.[0];
+  const validateJob = workflow.match(/^  validate:\r?\n[\s\S]*$/mu)?.[0];
   assert.ok(validateJob);
   assert.match(
     validateJob,

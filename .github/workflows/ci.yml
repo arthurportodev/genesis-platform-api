@@ -8,6 +8,15 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Validation mode
+        required: true
+        type: choice
+        default: full
+        options:
+          - full
+          - integrity
 
 permissions:
   contents: read
@@ -22,23 +31,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: genesis_platform_test
-          POSTGRES_USER: genesis_test
-          POSTGRES_PASSWORD: test-only
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U genesis_test -d genesis_platform_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
+    timeout-minutes: 35
     env:
       TEST_DATABASE_HOST: localhost
       TEST_DATABASE_PORT: 5433
@@ -53,308 +46,123 @@ jobs:
       DATABASE_RUNTIME_ROLE: genesis_runtime_test
       DATABASE_MIGRATION_USER: genesis_test
       DATABASE_MIGRATION_PASSWORD: test-only
-      API_IMAGE: ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7
-
+      IMAGE_REF: genesis-platform-api:ci-${{ github.sha }}
     steps:
-      - name: Initialize synthetic production paths
-        shell: bash
-        run: |
-          set -euo pipefail
-          {
-            printf 'PRODUCTION_CI_ROOT=%s\n' "$RUNNER_TEMP/genesis-production-ci"
-            printf 'PRODUCTION_CI_ENV_FILE=%s\n' "$RUNNER_TEMP/genesis-production-ci/production.env"
-            printf 'PRODUCTION_CI_SECRET_DIR=%s\n' "$RUNNER_TEMP/genesis-production-ci/secrets"
-            printf 'PRODUCTION_CI_OVERRIDE_FILE=%s\n' "$RUNNER_TEMP/genesis-production-ci/secret-files.override.yml"
-            printf 'PRODUCTION_CI_RENDER_FILE=%s\n' "$RUNNER_TEMP/genesis-production-ci/rendered.json"
-          } >> "$GITHUB_ENV"
-
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
 
-      - name: Display runtime versions
-        run: |
-          node --version
-          npm --version
-          node -e "if (process.versions.node.split('.')[0] !== '24') process.exit(1)"
+      - name: Classify pull request delta
+        id: delta
+        if: ${{ github.event_name == 'pull_request' }}
+        run: node scripts/ci-surface-classify.cjs --repository api --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --verify-pr-checkout --manifest .codex/task-manifest.json
 
-      - name: Install dependencies
+      - name: Select full manual validation
+        id: full
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'full' }}
+        run: node scripts/ci-surface-classify.cjs --repository api --full
+
+      - name: Run main integrity check
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'integrity') }}
+        run: node scripts/ci-main-integrity.cjs --repository api --head "${{ github.sha }}"
+
+      - name: Install dependencies for selected surfaces
+        if: ${{ steps.delta.outputs.needs_dependencies == 'true' || steps.full.outputs.needs_dependencies == 'true' }}
         run: npm ci
 
-      - name: Validate development-operation contracts
-        run: npm run task:contracts
+      - name: Validate Tooling surface
+        if: ${{ steps.delta.outputs.tooling == 'true' || steps.full.outputs.tooling == 'true' }}
+        run: |
+          npm run task:contracts
+          npm run format:check:task-tools
+          npm run test:task-tools
+          npm run ci:contract:validate
+          npm run format:check:ci
+          npm run test:ci
 
-      - name: Check task-tool formatting
-        run: npm run format:check:task-tools
+      - name: Validate Memory surface
+        if: ${{ steps.delta.outputs.memory == 'true' || steps.full.outputs.memory == 'true' }}
+        run: |
+          node scripts/validate-project-memory.cjs --mode local
+          node --test test/project-memory/project-memory.test.cjs
 
-      - name: Run task-tool tests
-        run: npm run test:task-tools
+      - name: Start isolated App database
+        if: ${{ steps.delta.outputs.app == 'true' || steps.full.outputs.app == 'true' }}
+        run: docker run --detach --rm --name genesis-ci-postgres --health-cmd "pg_isready -U genesis_test -d genesis_platform_test" --health-interval 5s --health-timeout 5s --health-retries 10 --publish 5433:5432 --env POSTGRES_DB=genesis_platform_test --env POSTGRES_USER=genesis_test --env POSTGRES_PASSWORD=test-only postgres:17-alpine
 
-      - name: Validate canonical project memory
-        run: node scripts/validate-project-memory.cjs --mode local
-
-      - name: Run canonical project-memory tests
-        run: node --test test/project-memory/project-memory.test.cjs
-
-      - name: Validate CI workflow contract
-        run: npm run ci:contract:validate
-
-      - name: Check CI workflow formatting
-        run: npm run format:check:ci
-
-      - name: Run CI workflow contract tests
-        run: npm run test:ci
-
-      - name: Check production surface formatting
-        run: npm run format:check:production
-
-      - name: Create synthetic production Compose inputs
+      - name: Wait for isolated App database
+        if: ${{ steps.delta.outputs.app == 'true' || steps.full.outputs.app == 'true' }}
         shell: bash
         run: |
-          set -euo pipefail
-          umask 077
-          install -d -m 0700 "$PRODUCTION_CI_ROOT" "$PRODUCTION_CI_SECRET_DIR"
-          cat > "$PRODUCTION_CI_ENV_FILE" <<'ENV'
-          DATABASE_NAME=genesis_platform
-          DATABASE_BOOTSTRAP_USER=genesis_bootstrap
-          DATABASE_MIGRATION_USER=genesis_migration
-          DATABASE_RUNTIME_ROLE=genesis_runtime
-          APP_NAME=Genesis Platform API
-          APP_VERSION=0.1.0
-          ACME_EMAIL=acme-contact-required@genesis.invalid
-          TRUST_PROXY_HOPS=1
-          JWT_ACCESS_EXPIRES_IN=15m
-          REFRESH_TOKEN_EXPIRES_IN_DAYS=30
-          LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION=1
-          API_CPUS=0.75
-          API_MEMORY_LIMIT=1g
-          API_PIDS_LIMIT=128
-          API_NODE_MAX_OLD_SPACE_MB=640
-          MIGRATE_CPUS=0.75
-          MIGRATE_MEMORY_LIMIT=1g
-          MIGRATE_PIDS_LIMIT=128
-          MIGRATE_NODE_MAX_OLD_SPACE_MB=640
-          POSTGRES_CPUS=1.0
-          POSTGRES_MEMORY_LIMIT=2g
-          POSTGRES_PIDS_LIMIT=256
-          ENV
-          printf '%s\n' 'synthetic-ci-bootstrap-password-only' > "$PRODUCTION_CI_SECRET_DIR/postgres-bootstrap-password"
-          printf '%s\n' 'synthetic-ci-migration-password-only' > "$PRODUCTION_CI_SECRET_DIR/database-migration-password"
-          printf '%s\n' 'synthetic-ci-runtime-password-only' > "$PRODUCTION_CI_SECRET_DIR/database-runtime-password"
-          printf '%s\n' 'synthetic-ci-jwt-access-secret-at-least-32-characters' > "$PRODUCTION_CI_SECRET_DIR/jwt-access-secret"
-          printf '%s\n' 'synthetic-ci-refresh-pepper-at-least-32-characters' > "$PRODUCTION_CI_SECRET_DIR/refresh-token-pepper"
-          printf '%s\n' 'synthetic-ci-lead-idempotency-keyring-only' > "$PRODUCTION_CI_SECRET_DIR/lead-idempotency-keys"
-          chmod 0600 \
-            "$PRODUCTION_CI_SECRET_DIR/postgres-bootstrap-password" \
-            "$PRODUCTION_CI_SECRET_DIR/database-migration-password" \
-            "$PRODUCTION_CI_SECRET_DIR/database-runtime-password" \
-            "$PRODUCTION_CI_SECRET_DIR/jwt-access-secret" \
-            "$PRODUCTION_CI_SECRET_DIR/refresh-token-pepper" \
-            "$PRODUCTION_CI_SECRET_DIR/lead-idempotency-keys"
-          cat > "$PRODUCTION_CI_OVERRIDE_FILE" <<OVERRIDE
-          secrets:
-            postgres_bootstrap_password:
-              file: $PRODUCTION_CI_SECRET_DIR/postgres-bootstrap-password
-            database_migration_password:
-              file: $PRODUCTION_CI_SECRET_DIR/database-migration-password
-            database_runtime_password:
-              file: $PRODUCTION_CI_SECRET_DIR/database-runtime-password
-            jwt_access_secret:
-              file: $PRODUCTION_CI_SECRET_DIR/jwt-access-secret
-            refresh_token_pepper:
-              file: $PRODUCTION_CI_SECRET_DIR/refresh-token-pepper
-            lead_idempotency_keys:
-              file: $PRODUCTION_CI_SECRET_DIR/lead-idempotency-keys
-          OVERRIDE
+          for attempt in {1..30}; do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' genesis-ci-postgres)" = healthy ]; then exit 0; fi
+            sleep 2
+          done
+          docker logs genesis-ci-postgres
+          exit 1
 
-      - name: Validate synthetic secret-backed production render
-        shell: bash
+      - name: Validate App surface
+        if: ${{ steps.delta.outputs.app == 'true' || steps.full.outputs.app == 'true' }}
         run: |
-          set -euo pipefail
-          docker compose \
-            --env-file "$PRODUCTION_CI_ENV_FILE" \
-            -f compose.production.yml \
-            -f "$PRODUCTION_CI_OVERRIDE_FILE" \
-            config --format json > "$PRODUCTION_CI_RENDER_FILE"
-          node <<'NODE'
-          const { readFileSync, statSync } = require('node:fs');
-          const { join } = require('node:path');
-          const config = JSON.parse(readFileSync(process.env.PRODUCTION_CI_RENDER_FILE, 'utf8'));
-          const apiImage = 'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7';
-          const postgresImage = 'postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
-          if (config.services.api.image !== apiImage || config.services.migrate.image !== apiImage) throw new Error('synthetic API image mismatch');
-          if (config.services.postgres.image !== postgresImage) throw new Error('synthetic PostgreSQL image mismatch');
-          if (config.services.api.environment.FRONTEND_URL !== 'https://app.agenciagenesismkt.com.br') throw new Error('synthetic frontend mismatch');
-          if (String(config.services.api.environment.LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) !== '1') throw new Error('synthetic Lead key version mismatch');
-          const roles = [
-            config.services.postgres.environment.POSTGRES_USER,
-            config.services.postgres.environment.DATABASE_MIGRATION_USER,
-            config.services.postgres.environment.DATABASE_RUNTIME_ROLE,
-          ];
-          if (roles.some((role) => !/^[a-z_][a-z0-9_]*$/.test(role)) || new Set(roles).size !== 3) throw new Error('synthetic database roles are invalid');
-          const secretFiles = {
-            postgres_bootstrap_password: 'postgres-bootstrap-password',
-            database_migration_password: 'database-migration-password',
-            database_runtime_password: 'database-runtime-password',
-            jwt_access_secret: 'jwt-access-secret',
-            refresh_token_pepper: 'refresh-token-pepper',
-            lead_idempotency_keys: 'lead-idempotency-keys',
-          };
-          for (const [name, filename] of Object.entries(secretFiles)) {
-            const expected = join(process.env.PRODUCTION_CI_SECRET_DIR, filename);
-            if (config.secrets?.[name]?.file !== expected) throw new Error(`synthetic secret path mismatch: ${name}`);
-            if ((statSync(expected).mode & 0o777) !== 0o600) throw new Error(`synthetic secret mode mismatch: ${name}`);
-            const value = readFileSync(expected, 'utf8').trim();
-            if (!value.startsWith('synthetic-ci-')) throw new Error(`synthetic secret marker mismatch: ${name}`);
-          }
-          NODE
+          npm run format:check
+          npm run lint
+          npm run build
+          npm run test -- --runInBand
+          npm run test:e2e -- --runInBand
+          npm run test:integration
 
-      - name: Validate production Compose with Docker
-        run: npm run production:compose:validate
-        env:
-          GENESIS_PRODUCTION_ENV_FILE: ${{ env.PRODUCTION_CI_ENV_FILE }}
+      - name: Stop isolated App database
+        if: ${{ always() && (steps.delta.outputs.app == 'true' || steps.full.outputs.app == 'true') }}
+        run: docker rm --force genesis-ci-postgres
 
-      - name: Remove synthetic production Compose inputs
-        if: ${{ always() }}
-        shell: bash
+      - name: Validate ADR-020 active Production surface
+        if: ${{ steps.delta.outputs.production == 'true' || steps.full.outputs.production == 'true' }}
         run: |
-          rm -f -- \
-            "$PRODUCTION_CI_RENDER_FILE" \
-            "$PRODUCTION_CI_OVERRIDE_FILE" \
-            "$PRODUCTION_CI_ENV_FILE" \
-            "$PRODUCTION_CI_SECRET_DIR/postgres-bootstrap-password" \
-            "$PRODUCTION_CI_SECRET_DIR/database-migration-password" \
-            "$PRODUCTION_CI_SECRET_DIR/database-runtime-password" \
-            "$PRODUCTION_CI_SECRET_DIR/jwt-access-secret" \
-            "$PRODUCTION_CI_SECRET_DIR/refresh-token-pepper" \
-            "$PRODUCTION_CI_SECRET_DIR/lead-idempotency-keys"
-          if [ -d "$PRODUCTION_CI_SECRET_DIR" ]; then
-            rmdir -- "$PRODUCTION_CI_SECRET_DIR"
-          fi
-          if [ -d "$PRODUCTION_CI_ROOT" ]; then
-            rmdir -- "$PRODUCTION_CI_ROOT"
-          fi
+          npx prettier --check compose.production.yml scripts/validate-production-compose.cjs test/production/functional-proxy-contract.test.cjs test/production/production-compose.test.cjs test/production/production-image.test.cjs test/production/production-runtime.test.cjs test/production/production-secret-wrappers.test.cjs test/production/deploy-api-simple-linux.test.cjs
+          node --test test/production/functional-proxy-contract.test.cjs test/production/production-compose.test.cjs test/production/production-image.test.cjs test/production/production-runtime.test.cjs test/production/production-secret-wrappers.test.cjs test/production/deploy-api-simple-linux.test.cjs
 
-      - name: Run focused production tests
-        run: npm run test:production
+      - name: Validate ADR-018 legacy Production surface
+        if: ${{ steps.delta.outputs.legacy_production == 'true' }}
+        run: node --test test/production/production-bundle.test.cjs test/production/deploy-api-release-linux.test.cjs test/production/release-tree-manager-linux.test.cjs
 
-      - name: Validate recovery contract
-        run: npm run recovery:validate
-
-      - name: Check recovery formatting
-        run: npm run format:check:recovery
-
-      - name: Run recovery unit and adversarial tests
-        run: sudo env "PATH=$PATH" npm run test:recovery
-
-      - name: Run isolated recovery integration
-        run: npm run test:recovery:integration
-
-      - name: Check application formatting
-        run: npm run format:check
-
-      - name: Run lint
-        run: npm run lint
-
-      - name: Build application
-        run: npm run build
-
-      - name: Run unit tests
-        run: npm run test -- --runInBand
-
-      - name: Run E2E tests
-        run: npm run test:e2e -- --runInBand
-
-      - name: Run integration tests
-        run: npm run test:integration
-
-  build-and-scan:
-    name: Build and scan production image
-    permissions:
-      contents: read
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    needs: validate
-    env:
-      DOCKER_BUILD_RECORD_UPLOAD: 'false'
-      IMAGE_REF: ghcr.io/arthurportodev/genesis-platform-api:sha-${{ github.sha }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-
-      - name: Read image identity
-        id: identity
-        shell: bash
+      - name: Validate Recovery modifier
+        if: ${{ steps.delta.outputs.recovery == 'true' || steps.full.outputs.recovery == 'true' }}
         run: |
-          node -e "const p=require('./package.json'); console.log('title='+p.name); console.log('description='+p.description); console.log('created='+new Date().toISOString())" >> "$GITHUB_OUTPUT"
+          npm run format:check:recovery
+          npm run recovery:validate
+          sudo env "PATH=$PATH" npm run test:recovery
+          npm run test:recovery:integration
 
-      - name: Generate immutable image metadata
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ghcr.io/arthurportodev/genesis-platform-api
-          flavor: latest=false
-          tags: type=raw,value=sha-${{ github.sha }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=sha-${{ github.sha }}
-            org.opencontainers.image.created=${{ steps.identity.outputs.created }}
-            org.opencontainers.image.title=${{ steps.identity.outputs.title }}
-            org.opencontainers.image.description=${{ steps.identity.outputs.description }}
+      - name: Build local production image
+        if: ${{ steps.delta.outputs.image_build_scan == 'true' || steps.full.outputs.image_build_scan == 'true' }}
+        run: >-
+          docker build --target production --tag "$IMAGE_REF"
+          --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          --label "org.opencontainers.image.revision=${GITHUB_SHA}"
+          --label "org.opencontainers.image.version=sha-${GITHUB_SHA}" .
 
-      - name: Build one local production image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          target: production
-          platforms: linux/amd64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          load: true
-          push: false
-          provenance: false
-          sbom: false
-
-      - name: Verify local image identity
-        shell: bash
-        run: |
-          docker image inspect "$IMAGE_REF" > "${{ runner.temp }}/local-image.json"
-          IMAGE_JSON="${{ runner.temp }}/local-image.json" node <<'NODE'
-          const { readFileSync } = require('node:fs');
-          const [image] = JSON.parse(readFileSync(process.env.IMAGE_JSON, 'utf8'));
-          const labels = image?.Config?.Labels ?? {};
-          const packageJson = require('./package.json');
-          const expected = {
-            'org.opencontainers.image.source': `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}`,
-            'org.opencontainers.image.revision': process.env.GITHUB_SHA,
-            'org.opencontainers.image.version': `sha-${process.env.GITHUB_SHA}`,
-            'org.opencontainers.image.title': packageJson.name,
-            'org.opencontainers.image.description': packageJson.description,
-          };
-          if (image?.Os !== 'linux' || image?.Architecture !== 'amd64') throw new Error('local image platform mismatch');
-          for (const [key, value] of Object.entries(expected)) if (labels[key] !== value) throw new Error(`local image label mismatch: ${key}`);
-          if (Number.isNaN(Date.parse(labels['org.opencontainers.image.created']))) throw new Error('local image created label is invalid');
-          NODE
-
-      - name: Validate local production runtime
+      - name: Validate local production image
+        if: ${{ steps.delta.outputs.image_build_scan == 'true' || steps.full.outputs.image_build_scan == 'true' }}
         env:
           PRODUCTION_IMAGE_UNDER_TEST: ${{ env.IMAGE_REF }}
         run: node --test test/production/production-image.test.cjs
 
+      - name: Verify local image identity
+        if: ${{ steps.delta.outputs.image_build_scan == 'true' || steps.full.outputs.image_build_scan == 'true' }}
+        shell: bash
+        run: |
+          docker image inspect "$IMAGE_REF" > "${{ runner.temp }}/local-image.json"
+          IMAGE_JSON="${{ runner.temp }}/local-image.json" node -e "const [i]=JSON.parse(require('node:fs').readFileSync(process.env.IMAGE_JSON)); const l=i.Config.Labels; if(i.Os!=='linux'||i.Architecture!=='amd64'||l['org.opencontainers.image.revision']!==process.env.GITHUB_SHA||l['org.opencontainers.image.source']!==process.env.GITHUB_SERVER_URL+'/'+process.env.GITHUB_REPOSITORY) process.exit(1)"
+
       - name: Scan local production image
+        if: ${{ steps.delta.outputs.image_build_scan == 'true' || steps.full.outputs.image_build_scan == 'true' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
