@@ -1,10 +1,10 @@
 # Genesis Platform API
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 Fase, trabalho vigente, próxima tarefa, estado operacional, blockers e decisões
 humanas são resolvidos somente na
-[memória canônica](docs/memory/project-state.v1.json). O
+[memória canônica](docs/memory/project-state.v2.json). O
 [estado atual](docs/CURRENT_STATE.md) é uma projeção gerada e não deve ser
 editado manualmente.
 
@@ -579,6 +579,6 @@ Os módulos de users e organizations não expõem CRUD. Invitations, memberships
 
 ## Continuidade
 
-Consulte a [memória canônica](docs/memory/project-state.v1.json) para descobrir
+Consulte a [memória canônica](docs/memory/project-state.v2.json) para descobrir
 o próximo trabalho. Este README preserva somente contratos duráveis de uso e
 desenvolvimento.

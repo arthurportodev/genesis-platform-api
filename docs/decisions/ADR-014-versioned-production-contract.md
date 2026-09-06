@@ -1,9 +1,9 @@
 # ADR-014 — Contrato versionado de PostgreSQL, secrets e bundle
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 Este ADR preserva o contrato durável e seu contexto histórico. Estado temporal
-é resolvido somente em `docs/memory/project-state.v1.json`.
+é resolvido somente em `docs/memory/project-state.v2.json`.
 
 - **Status:** Accepted
 - **Data:** 2026-08-08
@@ -114,4 +114,4 @@ monitoramento, Git remoto e publicação GHCR permanecem fora desta decisão.
 - Operações permanecem condicionadas aos contratos de
   [PRODUCTION.md](../PRODUCTION.md) e aos release gates da memória canônica.
 - A origem definitiva e seu trabalho autorizado são resolvidos em
-  `docs/memory/project-state.v1.json`.
+  `docs/memory/project-state.v2.json`.
