@@ -7,6 +7,7 @@ const {
   createTestRepository,
   git,
   v2Manifest,
+  v3Manifest,
   write,
 } = require('./helpers.cjs');
 
@@ -15,8 +16,28 @@ test('passes a valid scoped candidate', () => {
   write(cwd, 'docs/change.md', 'valid\n');
   const result = runPreflight({ cwd });
   assert.equal(result.status, 'passed');
-  assert.equal(result.normalizedManifestVersion, 2);
+  assert.equal(result.normalizedManifestVersion, 3);
   assert.equal(result.untrackedFiles, 1);
+});
+
+test('reports normalized validation surfaces for a V3 manifest', () => {
+  const { cwd, baseSha } = createTestRepository();
+  write(
+    cwd,
+    '.codex/task-manifest.json',
+    `${JSON.stringify(
+      v3Manifest(baseSha, {
+        validation: { surfaces: ['tooling', 'memory'] },
+      }),
+      null,
+      2,
+    )}\n`,
+  );
+  const result = runPreflight({ cwd });
+  assert.equal(result.status, 'passed');
+  assert.equal(result.validationMode, 'surfaces');
+  assert.deepEqual(result.validationSurfaces, ['memory', 'tooling']);
+  assert.deepEqual(result.validationLevels, []);
 });
 
 test('detects a branch mismatch', () => {

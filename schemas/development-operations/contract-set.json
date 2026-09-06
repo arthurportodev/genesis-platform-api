@@ -32,6 +32,10 @@
       "sha256": "5f881821277a49996bb7910dde95a90ebc2a34a2bf644822caffe2cae235613a"
     },
     {
+      "path": "schemas/development-operations/task-manifest.v3.schema.json",
+      "sha256": "1c66494b8f047a964e18d6ad2ae51685efb534c2ca7a3245240e3c46d77f7d98"
+    },
+    {
       "path": "schemas/development-operations/finding.v1.schema.json",
       "sha256": "5b3321d27d37ff31675e53594682dae0ba4ddaf19c4190f5a70dd869b29a8584"
     },

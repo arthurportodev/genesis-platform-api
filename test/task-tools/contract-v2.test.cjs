@@ -420,12 +420,12 @@ test('rejects schema-incompatible instances for every structured contract', () =
     readFileSync('.codex/task-manifest.example.json', 'utf8'),
   );
   assert.equal(
-    validateSchemaInstance('task-manifest.v2.schema.json', taskManifest),
+    validateSchemaInstance('task-manifest.v3.schema.json', taskManifest),
     taskManifest,
   );
   assert.throws(
     () =>
-      validateSchemaInstance('task-manifest.v2.schema.json', {
+      validateSchemaInstance('task-manifest.v3.schema.json', {
         ...taskManifest,
         unexpected: true,
       }),
@@ -436,6 +436,6 @@ test('rejects schema-incompatible instances for every structured contract', () =
 test('validates the canonical repository contract set', () => {
   const result = validateRepositoryContracts({ cwd: process.cwd() });
   assert.equal(result.status, 'passed');
-  assert.equal(result.schemas, 5);
+  assert.equal(result.schemas, 6);
   assert.equal(result.skills, 3);
 });

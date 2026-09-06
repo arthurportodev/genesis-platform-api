@@ -112,6 +112,8 @@ function runPreflight({ cwd = process.cwd(), startedAt = Date.now() } = {}) {
       ...new Set([...candidate.tracked, ...candidate.untracked]),
     ].sort(),
     expectedTransitions: manifest.git.expectedTransitions,
+    validationMode: manifest.validation.mode,
+    validationSurfaces: manifest.validation.surfaces,
     validationLevels: manifest.validation.levels,
     failures: [...new Set(failures)].sort(),
   };

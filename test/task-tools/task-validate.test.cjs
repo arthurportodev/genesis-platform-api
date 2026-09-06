@@ -6,7 +6,11 @@ const {
   runValidationPlan,
 } = require('../../scripts/task-validate.cjs');
 const { validateManifest } = require('../../scripts/lib/task-manifest.cjs');
-const { DEFAULT_SCRIPTS, defaultManifest } = require('./helpers.cjs');
+const {
+  DEFAULT_SCRIPTS,
+  defaultManifest,
+  v3Manifest,
+} = require('./helpers.cjs');
 
 const SHA = 'a'.repeat(40);
 
@@ -26,6 +30,30 @@ function manifest(profile, focusedScripts = []) {
     }),
     { scripts: DEFAULT_SCRIPTS },
   );
+}
+
+function surfaceManifest(taskClass, surfaces) {
+  const critical = taskClass === 'critical';
+  return validateManifest(
+    v3Manifest(SHA, {
+      task: { id: 'surface.1', title: 'Surface task', class: taskClass },
+      artifacts: critical
+        ? { taskPacket: '.codex/task-packets/surface.1.md' }
+        : {},
+      validation: { surfaces },
+      autonomy: {
+        allowHighCorrections: true,
+        requireIndependentReverification: critical,
+      },
+    }),
+    { scripts: DEFAULT_SCRIPTS },
+  );
+}
+
+function labels(taskClass, surfaces) {
+  return buildValidationPlan(surfaceManifest(taskClass, surfaces), {
+    npm_execpath: '/npm/cli.js',
+  }).map((entry) => entry.label);
 }
 
 test('critical delegates to the existing full Gate 2 validation', () => {
@@ -110,5 +138,90 @@ test('stops on first failure and preserves exit code and durations', () => {
   assert.equal(result.results[0].durationMs, 12);
   assert.equal(result.results[1].durationMs, 19);
   assert.equal(result.durationMs, 31);
-  assert.match(output.join(''), /Validation profile: focused/u);
+  assert.match(output.join(''), /Validation selection: focused/u);
+});
+
+test('Critical plus Tooling includes only tooling surface validation', () => {
+  assert.deepEqual(labels('critical', ['tooling']), [
+    'npm run task:preflight',
+    'npm run task:contracts',
+    'npm run format:check:task-tools',
+    'npm run test:task-tools',
+    'git diff --check',
+    'npm run task:fingerprint -- --json',
+  ]);
+});
+
+test('Critical plus App applies Critical App depth without Production', () => {
+  const plan = labels('critical', ['app']);
+  assert.deepEqual(plan, [
+    'npm run task:preflight',
+    'npm run task:contracts',
+    'npm run format:check',
+    'npm run lint',
+    'npm run build',
+    'npm test -- --runInBand',
+    'npm run test:integration',
+    'npm run test:e2e -- --runInBand',
+    'git diff --check',
+    'npm run task:fingerprint -- --json',
+  ]);
+  assert.equal(
+    plan.some((label) => label.includes('production')),
+    false,
+  );
+  assert.equal(
+    plan.some((label) => label.includes('recovery')),
+    false,
+  );
+});
+
+test('Normal plus Memory includes Memory without App or Production', () => {
+  assert.deepEqual(labels('normal', ['memory']), [
+    'npm run task:preflight',
+    'npm run task:contracts',
+    'npm run format:check:task-tools',
+    'node scripts/validate-project-memory.cjs --mode local',
+    'node --test test/project-memory/project-memory.test.cjs',
+    'git diff --check',
+    'npm run task:fingerprint -- --json',
+  ]);
+});
+
+test('Critical plus Memory keeps the Memory-only technical plan', () => {
+  assert.deepEqual(labels('critical', ['memory']), [
+    'npm run task:preflight',
+    'npm run task:contracts',
+    'npm run format:check:task-tools',
+    'node scripts/validate-project-memory.cjs --mode local',
+    'node --test test/project-memory/project-memory.test.cjs',
+    'git diff --check',
+    'npm run task:fingerprint -- --json',
+  ]);
+});
+
+test('App plus Production composes a deterministic union without duplication', () => {
+  const plan = labels('critical', ['production', 'app']);
+  assert.equal(plan.includes('npm run test:e2e -- --runInBand'), true);
+  assert.equal(plan.includes('npm run test:production'), true);
+  assert.equal(plan.includes('npm run test:recovery:integration'), true);
+  assert.equal(
+    plan.includes(
+      'docker build --target production -t genesis-platform-api:task-validation .',
+    ),
+    true,
+  );
+  assert.equal(new Set(plan).size, plan.length);
+});
+
+test('base validation runs once for mixed surfaces', () => {
+  const plan = labels('critical', ['app', 'tooling']);
+  for (const label of [
+    'npm run task:preflight',
+    'npm run task:contracts',
+    'git diff --check',
+    'npm run task:fingerprint -- --json',
+  ]) {
+    assert.equal(plan.filter((entry) => entry === label).length, 1);
+  }
 });
