@@ -112,10 +112,14 @@ const apiRules = [
     { imageBuildScan: true },
   ),
   rule(
+    'release-image-workflow',
+    (path) => path === '.github/workflows/release-image.yml',
+    ['production', 'tooling'],
+    { imageBuildScan: true },
+  ),
+  rule(
     'production-image',
-    (path) =>
-      hasName(path, ['Dockerfile', '.dockerignore']) ||
-      path === '.github/workflows/release-image.yml',
+    (path) => hasName(path, ['Dockerfile', '.dockerignore']),
     ['production'],
     { imageBuildScan: true },
   ),

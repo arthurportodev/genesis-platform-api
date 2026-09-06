@@ -141,6 +141,21 @@ test('dependency manifests conservatively select app, production and tooling', (
   }
 });
 
+test('release image workflow adds tooling without widening container files', () => {
+  const workflow = classifyPaths(
+    ['.github/workflows/release-image.yml'],
+    'api',
+  );
+  assert.deepEqual(workflow.surfaces, ['production', 'tooling']);
+  assert.equal(workflow.modifiers.imageBuildScan, true);
+
+  for (const path of ['Dockerfile', '.dockerignore']) {
+    const containerFile = classifyPaths([path], 'api');
+    assert.deepEqual(containerFile.surfaces, ['production']);
+    assert.equal(containerFile.modifiers.imageBuildScan, true);
+  }
+});
+
 test('ADR-018 paths are explicit legacy Production while ADR-020 stays active', () => {
   const legacy = classifyPaths(
     ['test/production/production-bundle.test.cjs'],

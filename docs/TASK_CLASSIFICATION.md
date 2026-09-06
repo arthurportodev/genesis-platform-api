@@ -80,6 +80,10 @@ Classe e surface são independentes. Critical preserva Task Packet, verifier,
 Gates e autorização humana mesmo com uma surface pequena. Surfaces mistas
 executam a união determinística dos planos sem repetir comandos comuns.
 
+Reconciliar em Memory um resultado de Production já observado não constitui
+deployment nem nova operação de Production. A classificação segue o delta
+documental e a validation surface é `memory`.
+
 Manifestos V1/V2 com `validation.profile` permanecem aceitos somente como
 legacy read durante a transição e conservam o comportamento anterior.
 
