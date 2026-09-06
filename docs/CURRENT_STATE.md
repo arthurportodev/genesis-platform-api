@@ -4,7 +4,7 @@
 
 This is a deterministic projection. Edit [project-state.v2.json](memory/project-state.v2.json), then regenerate this file.
 
-- **State revision:** PIPE-V2-04-PRODUCTION-KEEP-2026-09-06
+- **State revision:** PIPE-V2-04-POST-PROCESS-DURABILITY-2026-09-06
 - **Phase:** PIPE-V2 — Pipeline Experience V2
 - **Last completed product work:** PIPE-V2-04 — Nova oportunidade no Pipeline
 - **Outcome:** PRODUCTION_KEEP / PIPE-V2-04_LIVE
@@ -31,4 +31,4 @@ This is a deterministic projection. Edit [project-state.v2.json](memory/project-
 
 ## Follow-ups
 
-- **FOLLOW-UP-DEPLOYMENT-RUNBOOK-SIMPLIFICATION:** Align the Web deployment runbook with the simplified release policy: automatic minimal Production health checks, manual Product Owner feature acceptance for normal UI features, and automated feature smoke only when explicitly justified by risk.
+- None.

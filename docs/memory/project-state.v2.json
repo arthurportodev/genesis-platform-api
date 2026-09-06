@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.0.0",
-  "stateRevision": "PIPE-V2-04-PRODUCTION-KEEP-2026-09-06",
+  "stateRevision": "PIPE-V2-04-POST-PROCESS-DURABILITY-2026-09-06",
   "phase": {
     "id": "PIPE-V2",
     "title": "Pipeline Experience V2"
@@ -43,10 +43,5 @@
       "summary": "Review Vercel plan suitability before external onboarding or expanded commercial use."
     }
   ],
-  "followUps": [
-    {
-      "id": "FOLLOW-UP-DEPLOYMENT-RUNBOOK-SIMPLIFICATION",
-      "summary": "Align the Web deployment runbook with the simplified release policy: automatic minimal Production health checks, manual Product Owner feature acceptance for normal UI features, and automated feature smoke only when explicitly justified by risk."
-    }
-  ]
+  "followUps": []
 }
