@@ -51,7 +51,7 @@ risco que as fontes diretas não expliquem.
 
 ## Manifesto operacional local
 
-Tarefas Normal quando útil e todas as tarefas Critical usam `.codex/task-manifest.json`. O arquivo é transitório, não contém segredos, permanece ignorado somente por `.git/info/exclude` e não substitui documentação durável. O exemplo versionado está em `.codex/task-manifest.example.json`.
+Tarefas Normal quando útil e todas as tarefas Critical usam `.codex/task-manifest.json`. O arquivo é transitório, não contém segredos, permanece ignorado somente por `.git/info/exclude` e não substitui documentação durável. Ao trocar de tarefa, regenere-o para o novo branch, base e escopo ou remova-o. Artifacts históricos ignorados podem permanecer; não faça limpeza em massa. O exemplo versionado está em `.codex/task-manifest.example.json`.
 
 O Task Manifest V3 declara versão de contrato, identidade e classe, branch,
 base, transições Git, paths, artefatos locais e validation surfaces. O parser
@@ -138,9 +138,11 @@ pendente ou binding divergente.
 
 O Gate 3 permanece humano e verifica somente o Pull Request correto, head SHA, fingerprint ou commit aprovado, CI verde, branch atualizada, ausência de bloqueios e autorização explícita. Detalhes já comprovados no Gate 2 não são repetidos.
 
-## Um Pull Request por tarefa
+## Pull Requests da tarefa
 
-Código, testes, migrations e documentação durável afetada devem integrar o mesmo Pull Request. O conteúdo é redigido para que o merge torne o estado documentado verdadeiro, evitando um PR documental de encerramento.
+Uma tarefa funcional possui um Pull Request de entrega por repositório afetado quando necessário. Código, testes, migrations e documentação durável afetada devem integrar o PR correspondente. O conteúdo é redigido para que o merge torne o estado documentado verdadeiro, evitando PR documental de encerramento.
+
+Depois de um resultado terminal de release, é permitido um único Pull Request memory-only de closeout na autoridade canônica. Ele registra somente o estado durável `KEEP` ou `ROLLBACK`, não cria histórico e não autoriza nova operação de Production. Não existe closeout temporal duplicado no Web.
 
 Branch, SHAs transitórios, run IDs, job IDs, timestamps, comentários e conversas de revisão permanecem no GitHub, salvo requisito explícito de auditoria. `CURRENT_STATE.md`, `ROADMAP.md` e `TASK_LOG.md` registram apenas estado e resultados duráveis.
 
