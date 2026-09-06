@@ -4,10 +4,10 @@
 
 This is a deterministic projection. Edit [project-state.v2.json](memory/project-state.v2.json), then regenerate this file.
 
-- **State revision:** PIPE-V2-03A-PRODUCTION-KEEP-2026-09-05
+- **State revision:** PIPE-V2-04-PRODUCTION-KEEP-2026-09-06
 - **Phase:** PIPE-V2 — Pipeline Experience V2
-- **Last completed product work:** PIPE-V2-03A — Expected Value Editing
-- **Outcome:** PRODUCTION_KEEP / 03A_LIVE
+- **Last completed product work:** PIPE-V2-04 — Nova oportunidade no Pipeline
+- **Outcome:** PRODUCTION_KEEP / PIPE-V2-04_LIVE
 - **Current work:** none
 - **Next task:** undecided — PENDING-ROADMAP-PRIORITIZATION
 
@@ -15,8 +15,8 @@ This is a deterministic projection. Edit [project-state.v2.json](memory/project-
 
 - **API source:** a169369fd9760d32c922cc646df92cc0f5f632e1
 - **API image:** ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862
-- **Web source:** 90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6
-- **Web deployment:** dpl_DhUzyzKhq2e1emvUMLPYEnSWYFYt
+- **Web source:** e6a68f5c621d686977f8024aa45a9f6d871b3db8
+- **Web deployment:** dpl_5uBGzSwSp4FgwxJywsnjUF1EG5Tx
 - **Web domain:** https://app.agenciagenesismkt.com.br
 
 ## Open blockers
@@ -31,4 +31,4 @@ This is a deterministic projection. Edit [project-state.v2.json](memory/project-
 
 ## Follow-ups
 
-- **FOLLOW-UP-FEATURE-SMOKE-EVIDENCE:** Improve sanitized feature-smoke failure evidence with the synthetic Lead UUID, diagnostic substage, critical mutation method/path/status, and last completed assertion.
+- **FOLLOW-UP-DEPLOYMENT-RUNBOOK-SIMPLIFICATION:** Align the Web deployment runbook with the simplified release policy: automatic minimal Production health checks, manual Product Owner feature acceptance for normal UI features, and automated feature smoke only when explicitly justified by risk.

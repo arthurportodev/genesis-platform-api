@@ -1,14 +1,14 @@
 {
   "schemaVersion": "2.0.0",
-  "stateRevision": "PIPE-V2-03A-PRODUCTION-KEEP-2026-09-05",
+  "stateRevision": "PIPE-V2-04-PRODUCTION-KEEP-2026-09-06",
   "phase": {
     "id": "PIPE-V2",
     "title": "Pipeline Experience V2"
   },
   "lastCompleted": {
-    "id": "PIPE-V2-03A",
-    "title": "Expected Value Editing",
-    "outcome": "PRODUCTION_KEEP / 03A_LIVE"
+    "id": "PIPE-V2-04",
+    "title": "Nova oportunidade no Pipeline",
+    "outcome": "PRODUCTION_KEEP / PIPE-V2-04_LIVE"
   },
   "currentWork": {
     "status": "none"
@@ -23,8 +23,8 @@
       "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862"
     },
     "web": {
-      "sourceSha": "90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6",
-      "deploymentId": "dpl_DhUzyzKhq2e1emvUMLPYEnSWYFYt",
+      "sourceSha": "e6a68f5c621d686977f8024aa45a9f6d871b3db8",
+      "deploymentId": "dpl_5uBGzSwSp4FgwxJywsnjUF1EG5Tx",
       "domain": "https://app.agenciagenesismkt.com.br"
     }
   },
@@ -45,8 +45,8 @@
   ],
   "followUps": [
     {
-      "id": "FOLLOW-UP-FEATURE-SMOKE-EVIDENCE",
-      "summary": "Improve sanitized feature-smoke failure evidence with the synthetic Lead UUID, diagnostic substage, critical mutation method/path/status, and last completed assertion."
+      "id": "FOLLOW-UP-DEPLOYMENT-RUNBOOK-SIMPLIFICATION",
+      "summary": "Align the Web deployment runbook with the simplified release policy: automatic minimal Production health checks, manual Product Owner feature acceptance for normal UI features, and automated feature smoke only when explicitly justified by risk."
     }
   ]
 }
