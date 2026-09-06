@@ -43,10 +43,12 @@ test('documents the API authority and deterministic current-state projection', (
   const agents = read('AGENTS.md');
   const workflow = read('docs/DEVELOPMENT_WORKFLOW.md');
   for (const source of [agents, workflow]) {
-    assert.match(source, /docs\/memory\/project-state\.v1\.json/u);
+    assert.match(source, /docs\/memory\/project-state\.v2\.json/u);
   }
-  assert.match(workflow, /--mode cross-repo/u);
-  assert.match(workflow, /memoryRevision/u);
+  assert.match(workflow, /pointer estático/u);
+  assert.match(workflow, /no máximo uma escrita canônica/u);
+  assert.match(workflow, /--write-projection/u);
+  assert.doesNotMatch(workflow, /MERGED \/ NOT_DEPLOYED.*estado/iu);
 });
 
 test('documents explicit Critical Skill invocation and fallback', () => {

@@ -1,9 +1,9 @@
 # Visão geral do projeto
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 Fase, trabalho, operação, blockers, decisões e restrições atuais pertencem
-somente a `docs/memory/project-state.v1.json`. Este documento preserva produto e
+somente a `docs/memory/project-state.v2.json`. Este documento preserva produto e
 fronteiras duráveis; trechos datados abaixo são contexto histórico.
 
 ## Produto

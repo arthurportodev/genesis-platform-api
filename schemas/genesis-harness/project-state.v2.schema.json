@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.agenciagenesis.invalid/genesis-harness/project-state.v2.schema.json",
+  "title": "Genesis Platform canonical project state v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "stateRevision",
+    "phase",
+    "lastCompleted",
+    "currentWork",
+    "nextTask",
+    "live",
+    "openBlockers",
+    "activeRestrictions",
+    "followUps"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0.0"
+    },
+    "stateRevision": {
+      "$ref": "#/$defs/identifier"
+    },
+    "phase": {
+      "$ref": "#/$defs/namedState"
+    },
+    "lastCompleted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "outcome"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "$ref": "#/$defs/title"
+        },
+        "outcome": {
+          "$ref": "#/$defs/summary"
+        }
+      }
+    },
+    "currentWork": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "const": "none"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "id", "title"],
+          "properties": {
+            "status": {
+              "const": "active"
+            },
+            "id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "title": {
+              "$ref": "#/$defs/title"
+            }
+          }
+        }
+      ]
+    },
+    "nextTask": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "planningState"],
+          "properties": {
+            "status": {
+              "const": "undecided"
+            },
+            "planningState": {
+              "$ref": "#/$defs/identifier"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "id", "title"],
+          "properties": {
+            "status": {
+              "const": "decided"
+            },
+            "id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "title": {
+              "$ref": "#/$defs/title"
+            }
+          }
+        }
+      ]
+    },
+    "live": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api", "web"],
+      "properties": {
+        "api": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceSha", "image"],
+          "properties": {
+            "sourceSha": {
+              "$ref": "#/$defs/fullSha"
+            },
+            "image": {
+              "type": "string",
+              "pattern": "^ghcr\\.io/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$"
+            }
+          }
+        },
+        "web": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceSha", "deploymentId", "domain"],
+          "properties": {
+            "sourceSha": {
+              "$ref": "#/$defs/fullSha"
+            },
+            "deploymentId": {
+              "type": "string",
+              "pattern": "^dpl_[A-Za-z0-9]{20,80}$"
+            },
+            "domain": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            }
+          }
+        }
+      }
+    },
+    "openBlockers": {
+      "$ref": "#/$defs/notes"
+    },
+    "activeRestrictions": {
+      "$ref": "#/$defs/notes"
+    },
+    "followUps": {
+      "$ref": "#/$defs/notes"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,79}$"
+    },
+    "fullSha": {
+      "type": "string",
+      "pattern": "^(?!0{40}$)[a-f0-9]{40}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "namedState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "$ref": "#/$defs/title"
+        }
+      }
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "summary"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/note"
+      }
+    }
+  }
+}

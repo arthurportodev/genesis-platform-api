@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "2.0.0",
+  "stateRevision": "PIPE-V2-03A-PRODUCTION-KEEP-2026-09-05",
+  "phase": {
+    "id": "PIPE-V2",
+    "title": "Pipeline Experience V2"
+  },
+  "lastCompleted": {
+    "id": "PIPE-V2-03A",
+    "title": "Expected Value Editing",
+    "outcome": "PRODUCTION_KEEP / 03A_LIVE"
+  },
+  "currentWork": {
+    "status": "none"
+  },
+  "nextTask": {
+    "status": "undecided",
+    "planningState": "PENDING-ROADMAP-PRIORITIZATION"
+  },
+  "live": {
+    "api": {
+      "sourceSha": "a169369fd9760d32c922cc646df92cc0f5f632e1",
+      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862"
+    },
+    "web": {
+      "sourceSha": "90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6",
+      "deploymentId": "dpl_DhUzyzKhq2e1emvUMLPYEnSWYFYt",
+      "domain": "https://app.agenciagenesismkt.com.br"
+    }
+  },
+  "openBlockers": [],
+  "activeRestrictions": [
+    {
+      "id": "OR-SINGLE-VPS",
+      "summary": "Production uses one VPS and one failure domain."
+    },
+    {
+      "id": "OR-SINGLE-REPLICA",
+      "summary": "The public API remains limited to one replica while controls are process-local."
+    },
+    {
+      "id": "OR-VERCEL-HOBBY-TECHNICAL-MVP",
+      "summary": "Review Vercel plan suitability before external onboarding or expanded commercial use."
+    }
+  ],
+  "followUps": [
+    {
+      "id": "FOLLOW-UP-FEATURE-SMOKE-EVIDENCE",
+      "summary": "Improve sanitized feature-smoke failure evidence with the synthetic Lead UUID, diagnostic substage, critical mutation method/path/status, and last completed assertion."
+    }
+  ]
+}

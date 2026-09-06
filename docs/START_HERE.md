@@ -1,6 +1,6 @@
 # Comece aqui
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 Este diretório é a memória versionada da Genesis Platform. Comece pelo delta
 da tarefa e use as fontes abaixo como roteamento; não leia a sequência inteira
@@ -8,11 +8,11 @@ sem um gatilho concreto.
 
 ## Autoridades por domínio e roteamento
 
-<!-- genesis-source-authorities:v1 implementation=main-code temporal=docs/memory/project-state.v1.json projection=derived architecture=accepted-adrs history=explicit -->
+<!-- genesis-source-authorities:v2 implementation=main-code temporal=docs/memory/project-state.v2.json projection=derived architecture=accepted-adrs history=explicit -->
 
 - **Implementação:** código, migrations e testes da `main`.
-- **Tempo do projeto:** [memória canônica](memory/project-state.v1.json), que
-  resolve fase, trabalho, operação, blockers, decisões e restrições.
+- **Tempo do projeto:** [memória canônica](memory/project-state.v2.json), que
+  resolve fase, trabalho, bindings live, blockers, restrições e follow-ups.
 - **Leitura humana do tempo:** [estado atual](CURRENT_STATE.md), projeção
   determinística que nunca deve ser editada manualmente.
 - **Arquitetura:** [arquitetura](ARCHITECTURE.md),

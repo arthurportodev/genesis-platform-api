@@ -1,1263 +1,347 @@
-'use strict';
-
+const test = require('node:test');
 const assert = require('node:assert/strict');
-const { spawnSync } = require('node:child_process');
-const { createHash } = require('node:crypto');
 const {
-  cpSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { dirname, join } = require('node:path');
-const test = require('node:test');
+
 const {
-  AUTHORITY_PATH,
-  PROJECTION_PATH,
-  SCHEMA_PATH,
-  TARGET_STATE_REVISION,
-  WEB_INTEGRATED_SHA,
-  WEB_RECEIPT_BASE_SHA,
-  WEB_SHA,
-  WEB_TRANSITION_ID,
   MemoryError,
-  containingCommit,
   renderProjection,
-  validateCrossRepo,
-  validateOnboardingResponse,
-  validateRepositoryEvidence,
+  validateLocal,
+  validateSchemaContract,
   validateState,
 } = require('../../scripts/validate-project-memory.cjs');
 
-const ROOT = process.cwd();
-const SCRIPT = join(ROOT, 'scripts', 'validate-project-memory.cjs');
-const STABLE = [
-  'AGENTS.md',
-  'README.md',
-  'docs/START_HERE.md',
-  'docs/PROJECT_OVERVIEW.md',
-  'docs/ROADMAP.md',
-  'docs/PRODUCTION.md',
-  'docs/ARCHITECTURE.md',
-  'docs/SECURITY.md',
-  'docs/TASK_LOG.md',
-  'docs/DEVELOPMENT_WORKFLOW.md',
-  'docs/decisions/README.md',
-  'docs/decisions/ADR-012-development-operating-system-v2.md',
-  'docs/decisions/ADR-013-mvp-production-baseline.md',
-  'docs/decisions/ADR-014-versioned-production-contract.md',
-];
-const FIXTURES = [];
-const REPOSITORY_EVIDENCE_PREFIX =
-  'repo://arthurportodev/genesis-platform-api/';
-const HISTORICAL_REPOSITORY_EVIDENCE_PREFIX =
-  'https://github.com/arthurportodev/genesis-platform-api/blob/';
-const HISTORICAL_GIT_ROOT = mkdtempSync(
-  join(tmpdir(), 'genesis-memory-objects-'),
-);
-const ROOT_GIT_DIR = join(HISTORICAL_GIT_ROOT, 'repository.git').replaceAll(
-  '\\',
-  '/',
-);
-FIXTURES.push(HISTORICAL_GIT_ROOT);
-git(ROOT, ['clone', '--quiet', '--bare', '--shared', '.', ROOT_GIT_DIR]);
-const POINTER_SCHEMA = {
-  $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://github.com/arthurportodev/genesis-platform-web/schemas/genesis-harness/project-state.pointer.v1.schema.json',
-  title: 'Genesis Platform Web canonical-state pointer v1',
-  type: 'object',
-  additionalProperties: false,
-  required: [
-    'schemaVersion',
-    'instanceKind',
-    'project',
-    'mode',
-    'authority',
-    'receipt',
-  ],
-  properties: {
-    schemaVersion: { const: '1.0.0' },
-    instanceKind: { const: 'current' },
-    project: { const: 'genesis-platform' },
-    mode: { const: 'pointer-only' },
-    authority: {
-      type: 'object',
-      additionalProperties: false,
-      required: [
-        'repository',
-        'branch',
-        'path',
-        'acceptedSchemaMajor',
-        'resolutionOrder',
-      ],
-      properties: {
-        repository: { const: 'arthurportodev/genesis-platform-api' },
-        branch: { const: 'main' },
-        path: { const: AUTHORITY_PATH },
-        acceptedSchemaMajor: { const: 1 },
-        resolutionOrder: {
-          const: ['explicit-checkout', 'sibling-checkout', 'remote-read-only'],
-        },
-      },
-    },
-    receipt: {
-      type: 'object',
-      additionalProperties: false,
-      required: [
-        'transitionId',
-        'targetStateRevision',
-        'baseSha',
-        'revisionSource',
-        'generatedAt',
-      ],
-      properties: {
-        transitionId: {
-          type: 'string',
-          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{1,79}$',
-        },
-        targetStateRevision: {
-          type: 'string',
-          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$',
-        },
-        baseSha: { type: 'string', pattern: '^(?!0{40}$)[a-f0-9]{40}$' },
-        revisionSource: { const: 'containing-commit' },
-        generatedAt: { type: 'string', format: 'date-time' },
-      },
-    },
-  },
-};
+const CURRENT_AUTHORITY = 'docs/memory/project-state.v2.json';
+const V1_AUTHORITY = 'docs/memory/project-state.v1.json';
+const SCHEMA = 'schemas/genesis-harness/project-state.v2.schema.json';
 
-function candidatePointer() {
+function json(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function clone(value) {
+  return structuredClone(value);
+}
+
+function fictionalState(overrides = {}) {
   return {
-    schemaVersion: '1.0.0',
-    instanceKind: 'current',
-    project: 'genesis-platform',
-    mode: 'pointer-only',
-    authority: {
-      repository: 'arthurportodev/genesis-platform-api',
-      branch: 'main',
-      path: AUTHORITY_PATH,
-      acceptedSchemaMajor: 1,
-      resolutionOrder: [
-        'explicit-checkout',
-        'sibling-checkout',
-        'remote-read-only',
-      ],
+    schemaVersion: '2.0.0',
+    stateRevision: 'PRODUCT-STATE-42',
+    phase: {
+      id: 'PRODUCT-V3',
+      title: 'Fictional product phase',
     },
-    receipt: {
-      transitionId: WEB_TRANSITION_ID,
-      targetStateRevision: TARGET_STATE_REVISION,
-      baseSha: WEB_RECEIPT_BASE_SHA,
-      revisionSource: 'containing-commit',
-      generatedAt: '2026-09-05T12:28:19.7854393Z',
+    lastCompleted: {
+      id: 'PRODUCT-V3-04',
+      title: 'Fictional completed work',
+      outcome: 'Released successfully',
     },
+    currentWork: {
+      status: 'none',
+    },
+    nextTask: {
+      status: 'undecided',
+      planningState: 'PENDING-PRODUCT-PRIORITIZATION',
+    },
+    live: {
+      api: {
+        sourceSha: 'a'.repeat(40),
+        image: `ghcr.io/example/project-api@sha256:${'b'.repeat(64)}`,
+      },
+      web: {
+        sourceSha: 'c'.repeat(40),
+        deploymentId: `dpl_${'D'.repeat(24)}`,
+        domain: 'https://example.invalid',
+      },
+    },
+    openBlockers: [],
+    activeRestrictions: [],
+    followUps: [],
+    ...overrides,
   };
 }
 
-function target(root, path) {
-  return join(root, ...path.split('/'));
-}
-
-function copy(root, path) {
-  const destination = target(root, path);
-  mkdirSync(dirname(destination), { recursive: true });
-  cpSync(target(ROOT, path), destination);
-}
-
-function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'genesis-api-memory-'));
-  FIXTURES.push(root);
-  const authority = JSON.parse(
-    readFileSync(target(ROOT, AUTHORITY_PATH), 'utf8'),
-  );
-  const repositoryEvidence = authority.evidence
-    .filter((entry) => entry.uri.startsWith(REPOSITORY_EVIDENCE_PREFIX))
-    .map((entry) => entry.uri.slice(REPOSITORY_EVIDENCE_PREFIX.length));
-  const historicalRepositoryEvidence = authority.evidence
-    .filter((entry) =>
-      entry.uri.startsWith(HISTORICAL_REPOSITORY_EVIDENCE_PREFIX),
-    )
-    .map((entry) => {
-      const reference = entry.uri.slice(
-        HISTORICAL_REPOSITORY_EVIDENCE_PREFIX.length,
-      );
-      return reference.slice(reference.indexOf('/') + 1);
-    });
-  writeFileSync(join(root, '.git'), `gitdir: ${ROOT_GIT_DIR}\n`, 'utf8');
-  for (const path of new Set([
-    AUTHORITY_PATH,
-    SCHEMA_PATH,
-    PROJECTION_PATH,
-    ...STABLE,
-    ...repositoryEvidence,
-    ...historicalRepositoryEvidence,
-  ]))
-    copy(root, path);
-  return root;
-}
-
-function readJson(root, path = AUTHORITY_PATH) {
-  return JSON.parse(readFileSync(target(root, path), 'utf8'));
-}
-
-function writeJson(root, value, path = AUTHORITY_PATH) {
-  const destination = target(root, path);
-  mkdirSync(dirname(destination), { recursive: true });
-  writeFileSync(destination, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-}
-
-function run(root, args = ['--mode', 'local']) {
-  const result = spawnSync(process.execPath, [SCRIPT, ...args], {
-    cwd: root,
-    encoding: 'utf8',
-    shell: false,
-    windowsHide: true,
+function expectCode(fn, code) {
+  assert.throws(fn, (error) => {
+    assert.ok(error instanceof MemoryError);
+    assert.equal(error.code, code);
+    return true;
   });
-  return { ...result, json: result.stdout ? JSON.parse(result.stdout) : null };
 }
 
-function git(root, args) {
-  const result = spawnSync('git', args, {
-    cwd: root,
-    encoding: 'utf8',
-    shell: false,
-    windowsHide: true,
+test('accepts a minimal valid current state', () => {
+  assert.equal(validateState(fictionalState()).schemaVersion, '2.0.0');
+});
+
+test('rejects an unknown property', () => {
+  const state = fictionalState();
+  state.evidence = [];
+  expectCode(() => validateState(state), 'MEMORY_SCHEMA_INVALID');
+});
+
+test('rejects a missing required property', () => {
+  const state = fictionalState();
+  delete state.phase;
+  expectCode(() => validateState(state), 'MEMORY_SCHEMA_INVALID');
+});
+
+test('rejects malformed state revisions', () => {
+  const state = fictionalState({ stateRevision: 'bad revision' });
+  expectCode(() => validateState(state), 'MEMORY_SCHEMA_INVALID');
+});
+
+test('rejects malformed API and Web source SHAs', () => {
+  for (const target of ['api', 'web']) {
+    const state = fictionalState();
+    state.live[target].sourceSha = 'abc';
+    expectCode(() => validateState(state), 'MEMORY_SCHEMA_INVALID');
+  }
+});
+
+test('rejects malformed image digests', () => {
+  const state = fictionalState();
+  state.live.api.image = 'ghcr.io/example/project-api:latest';
+  expectCode(() => validateState(state), 'MEMORY_SCHEMA_INVALID');
+});
+
+test('rejects malformed Web deployment ids', () => {
+  const state = fictionalState();
+  state.live.web.deploymentId = 'deployment-current';
+  expectCode(() => validateState(state), 'MEMORY_SCHEMA_INVALID');
+});
+
+test('rejects secret-bearing keys and values', () => {
+  const key = fictionalState();
+  key.apiToken = 'redacted';
+  expectCode(() => validateState(key), 'MEMORY_SECRET_FORBIDDEN');
+
+  const value = fictionalState();
+  value.followUps.push({
+    id: 'FOLLOW-UP-ONE',
+    summary: 'Bearer credential-material',
   });
-  assert.equal(result.status, 0, result.stderr);
-  return result.stdout.trim();
-}
+  expectCode(() => validateState(value), 'MEMORY_SECRET_FORBIDDEN');
+});
 
-function gitWebFixture() {
-  const root = mkdtempSync(join(tmpdir(), 'genesis-web-provenance-'));
-  FIXTURES.push(root);
-  writeJson(
-    root,
-    candidatePointer(),
-    'docs/memory/project-state.pointer.v1.json',
-  );
-  writeJson(
-    root,
-    POINTER_SCHEMA,
-    'schemas/genesis-harness/project-state.pointer.v1.schema.json',
-  );
-  git(root, ['init']);
-  git(root, ['config', 'user.name', 'Genesis Memory Test']);
-  git(root, ['config', 'user.email', 'memory-test@example.invalid']);
-  git(root, ['add', '.']);
-  git(root, ['commit', '-m', 'Add Web pointer contract']);
-  return root;
-}
+test('accepts the exact currentWork none shape', () => {
+  const state = fictionalState({ currentWork: { status: 'none' } });
+  assert.equal(validateState(state).currentWork.status, 'none');
+});
 
-function expectCode(result, code, status = 1) {
-  assert.equal(result.status, status, result.stderr);
-  assert.equal(result.json.ok, false);
-  assert.equal(result.json.code, code);
-  assert.ok(result.stderr.length > 0);
-}
+test('accepts a valid active currentWork shape', () => {
+  const state = fictionalState({
+    currentWork: {
+      status: 'active',
+      id: 'PRODUCT-V3-05',
+      title: 'Active fictional work',
+    },
+  });
+  assert.equal(validateState(state).currentWork.status, 'active');
+});
 
-function evidence(uri, sha256) {
-  return {
-    evidence: [
-      {
-        id: 'EV-TEST-REPOSITORY',
-        kind: 'repository-file',
-        uri,
-        sha256,
-      },
-    ],
+test('rejects contradictory and mixed currentWork shapes', () => {
+  const completed = fictionalState();
+  completed.currentWork = {
+    status: 'active',
+    id: completed.lastCompleted.id,
+    title: 'Still active',
   };
-}
+  expectCode(() => validateState(completed), 'MEMORY_STATE_CONTRADICTION');
 
-function expectEvidenceCode(root, state, code) {
-  assert.throws(
-    () => validateRepositoryEvidence(root, state),
-    (error) => error instanceof MemoryError && error.code === code,
-  );
-}
-
-function historicalFixture() {
-  const root = mkdtempSync(join(tmpdir(), 'genesis-history-evidence-'));
-  FIXTURES.push(root);
-  git(root, ['init']);
-  git(root, ['config', 'user.name', 'Genesis Memory Test']);
-  git(root, ['config', 'user.email', 'memory-test@example.invalid']);
-  writeFileSync(target(root, 'evidence.txt'), 'historical bytes\n', 'utf8');
-  git(root, ['add', 'evidence.txt']);
-  git(root, ['commit', '-m', 'Record historical evidence']);
-  return {
-    root,
-    revision: git(root, ['rev-parse', 'HEAD']),
-    hash: createHash('sha256').update('historical bytes\n').digest('hex'),
+  const mixed = fictionalState();
+  mixed.currentWork = {
+    status: 'none',
+    id: 'PRODUCT-V3-05',
+    title: 'Should not exist',
   };
-}
-
-test.after(() => {
-  for (const root of FIXTURES) rmSync(root, { recursive: true, force: true });
+  expectCode(() => validateState(mixed), 'MEMORY_SCHEMA_INVALID');
 });
 
-test('accepts the complete API authority and generated projection', () => {
-  const result = run(ROOT);
-  assert.equal(result.status, 0, result.stderr);
-  const state = readJson(ROOT);
-  assert.deepEqual(result.json, {
-    ok: true,
-    code: 'MEMORY_VALID',
-    stateRevision: state.stateRevision,
-    schemaValidated: true,
-    semanticRulesValidated: true,
-    projectionCurrent: true,
-    stableSourcesValidated: true,
+test('accepts a decided next task', () => {
+  const state = fictionalState({
+    nextTask: {
+      status: 'decided',
+      id: 'PRODUCT-V3-05',
+      title: 'Next fictional work',
+    },
   });
+  assert.equal(validateState(state).nextTask.status, 'decided');
 });
 
-test('renders byte-identical output and check mode is idempotent', () => {
-  const root = fixture();
-  const before = readFileSync(target(root, PROJECTION_PATH), 'utf8');
-  const rendered = run(root, ['--mode', 'render']);
-  assert.equal(rendered.status, 0, rendered.stderr);
-  assert.equal(readFileSync(target(root, PROJECTION_PATH), 'utf8'), before);
-  assert.equal(run(root, ['--mode', 'render', '--check']).status, 0);
+test('accepts an undecided next task', () => {
+  const state = fictionalState();
+  assert.equal(validateState(state).nextTask.status, 'undecided');
 });
 
-test('rejects stale generated projection', () => {
-  const root = fixture();
-  writeFileSync(target(root, PROJECTION_PATH), '# stale\n', 'utf8');
-  expectCode(run(root), 'MEMORY_PROJECTION_STALE');
-});
-
-test('rejects invalid JSON and non-UTF-8 authority input', () => {
-  const root = fixture();
-  writeFileSync(target(root, AUTHORITY_PATH), '{', 'utf8');
-  expectCode(run(root), 'MEMORY_PARSE_ERROR');
-  writeFileSync(target(root, AUTHORITY_PATH), Buffer.from([0xff, 0xfe]));
-  expectCode(run(root), 'MEMORY_PARSE_ERROR');
-});
-
-test('rejects an unsupported schema version', () => {
-  const root = fixture();
-  const state = readJson(root);
-  state.schemaVersion = '2.0.0';
-  writeJson(root, state);
-  expectCode(run(root), 'MEMORY_SCHEMA_UNSUPPORTED');
-});
-
-test('rejects historical fixtures as current authority', () => {
-  const state = readJson(ROOT);
-  state.instanceKind = 'historical-fixture';
-  assert.throws(
-    () => validateState(state),
-    (error) => error.code === 'MEMORY_HISTORICAL_FIXTURE',
-  );
-});
-
-test('rejects unknown top-level properties', () => {
-  const root = fixture();
-  const state = readJson(root);
-  state.duplicateCurrentState = {};
-  writeJson(root, state);
-  expectCode(run(root), 'MEMORY_SCHEMA_INVALID');
-});
-
-test('applies the complete authority schema to nested properties and formats', () => {
-  for (const mutate of [
-    (state) => {
-      state.phase.unexpected = true;
-    },
-    (state) => {
-      state.evidence[0].sha256 = 'not-a-sha';
-    },
-    (state) => {
-      state.evidence[0].uri = 'not a uri';
-    },
-    (state) => {
-      delete state.blockers[0].summary;
-    },
-    (state) => {
-      state.nextTask.extra = true;
-    },
-  ]) {
-    const root = fixture();
-    const state = readJson(root);
-    mutate(state);
-    writeJson(root, state);
-    expectCode(run(root), 'MEMORY_SCHEMA_INVALID');
-  }
-});
-
-test('rejects a second authority and an API future SHA', () => {
-  for (const mutate of [
-    (state) => {
-      state.repositories.find((entry) => entry.id === 'web').role = 'authority';
-    },
-    (state) => {
-      state.repositories.find(
-        (entry) => entry.id === 'api',
-      ).memoryRevision.sha = 'a'.repeat(40);
-    },
-  ]) {
-    const state = readJson(ROOT);
-    mutate(state);
-    assert.throws(
-      () => validateState(state),
-      (error) => error.code === 'MEMORY_AUTHORITY_NOT_UNIQUE',
-    );
-  }
-});
-
-test('requires the exact Web pointer memoryRevision', () => {
-  const root = fixture();
-  const state = readJson(root);
-  state.repositories.find((entry) => entry.id === 'web').memoryRevision.sha =
-    'a'.repeat(40);
-  writeJson(root, state);
-  expectCode(run(root), 'MEMORY_WEB_REVISION_MISMATCH');
-});
-
-test('keeps the pointer receipt stable across later authority revisions', () => {
-  const state = readJson(ROOT);
-  state.stateRevision = 'LATER-AUTHORITY-REVISION-2026-08-26';
-  assert.equal(validateState(state), state);
-
-  state.pointerMetadata.targetStateRevision = state.stateRevision;
-  assert.throws(
-    () => validateState(state),
-    (error) => error.code === 'MEMORY_POINTER_MISMATCH',
-  );
-});
-
-test('rejects observed facts without direct observation time', () => {
-  const state = readJson(ROOT);
-  state.operationalState.facts[0].basis = 'observed';
-  assert.throws(
-    () => validateState(state),
-    (error) => error.code === 'MEMORY_OBSERVATION_INCOMPLETE',
-  );
-});
-
-test('rejects observedAt on documented or unknown facts', () => {
-  const state = readJson(ROOT);
-  state.operationalState.facts[0].observedAt = '2026-08-10T16:00:00Z';
-  assert.throws(
-    () => validateState(state),
-    (error) => error.code === 'MEMORY_OBSERVATION_INCOMPLETE',
-  );
-});
-
-test('requires the MVP08 remote tree binding to be explicitly superseded', () => {
-  const state = readJson(ROOT);
-  const fact = state.operationalState.facts.find(
-    (entry) => entry.id === 'OPS-MVP08-VPS-INTEGRITY-AUDIT',
-  );
-  fact.status = 'present';
-  fact.statement = 'remoteTreeBinding=REBIND_REQUIRED. Historical value.';
-  assert.throws(
-    () => validateState(state),
-    (error) => error.code === 'MEMORY_RELEASE_TREE_BINDING_INVALID',
-  );
-});
-
-test('binds application, containing release contracts, derived bundle, images and Web exactly', () => {
-  const state = readJson(ROOT);
-  assert.deepEqual(state.releaseBindings, {
-    apiApplicationRevision: 'a169369fd9760d32c922cc646df92cc0f5f632e1',
-    apiReleaseManifestRevision: { kind: 'containing-commit' },
-    apiReleaseTreeContractRevision: { kind: 'containing-commit' },
-    apiReleaseBundleFingerprint: {
-      kind: 'derived-from-containing-commit',
-      algorithm: 'sha256',
-      artifact: 'release-manifest.json',
-      releaseRole: 'current',
-    },
-    apiRollbackReleaseBundleFingerprint: {
-      kind: 'derived-from-containing-commit',
-      algorithm: 'sha256',
-      artifact: 'release-manifest.json',
-      releaseRole: 'rollback',
-    },
-    authorizedApiImage:
-      'ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862',
-    authorizedApiImageConfigDigest:
-      'sha256:6debf2bc06aa96cf42308b81908a7ca48d86089e02fe263350a716c643962a2a',
-    rollbackApiImage:
-      'ghcr.io/arthurportodev/genesis-platform-api@sha256:c53b283571955fa4ad2a056270bbc4b03222028e56d5177208c1a788696149f7',
-    webIntegratedRevision: WEB_INTEGRATED_SHA,
+test('rejects duplicate blocker, restriction, and follow-up ids', () => {
+  const state = fictionalState({
+    openBlockers: [{ id: 'CURRENT-ITEM', summary: 'A blocker.' }],
+    activeRestrictions: [{ id: 'CURRENT-ITEM', summary: 'A restriction.' }],
   });
-
-  for (const mutate of [
-    (candidate) => {
-      candidate.releaseBindings.apiApplicationRevision =
-        '1111111111111111111111111111111111111111';
-    },
-    (candidate) => {
-      candidate.releaseBindings.apiReleaseManifestRevision = {
-        kind: 'commit',
-        sha: '2222222222222222222222222222222222222222',
-      };
-    },
-    (candidate) => {
-      candidate.releaseBindings.apiReleaseTreeContractRevision = {
-        kind: 'commit',
-      };
-    },
-    (candidate) => {
-      candidate.releaseBindings.apiReleaseBundleFingerprint.algorithm =
-        'sha512';
-    },
-    (candidate) => {
-      candidate.releaseBindings.apiReleaseBundleFingerprint.releaseRole =
-        'rollback';
-    },
-    (candidate) => {
-      candidate.releaseBindings.apiRollbackReleaseBundleFingerprint.releaseRole =
-        'current';
-    },
-    (candidate) => {
-      candidate.releaseBindings.authorizedApiImage =
-        candidate.releaseBindings.rollbackApiImage;
-    },
-    (candidate) => {
-      candidate.releaseBindings.authorizedApiImageConfigDigest = `sha256:${'3'.repeat(64)}`;
-    },
-    (candidate) => {
-      candidate.releaseBindings.rollbackApiImage =
-        'ghcr.io/arthurportodev/genesis-platform-api:rollback';
-    },
-    (candidate) => {
-      candidate.releaseBindings.webIntegratedRevision =
-        '4444444444444444444444444444444444444444';
-    },
-  ]) {
-    const candidate = structuredClone(state);
-    mutate(candidate);
-    assert.throws(
-      () => validateState(candidate),
-      (error) =>
-        error.code === 'MEMORY_SCHEMA_INVALID' ||
-        error.code === 'MEMORY_RELEASE_BINDING_MISMATCH',
-    );
-  }
+  expectCode(() => validateState(state), 'MEMORY_DUPLICATE_ID');
 });
 
-test('rejects missing or misclassified control categories', () => {
-  for (const mutate of [
-    (state) => {
-      state.permanentInvariants = [];
-    },
-    (state) => {
-      state.releaseGates[0].id = 'OR-WRONG';
-    },
-    (state) => {
-      state.currentRestrictions[0].id = 'PI-WRONG';
-    },
-  ]) {
-    const state = readJson(ROOT);
-    mutate(state);
-    assert.throws(
-      () => validateState(state),
-      (error) => error.code === 'MEMORY_CONTROL_CLASSIFICATION_INVALID',
-    );
-  }
-});
-
-test('rejects unresolved evidence references', () => {
-  const state = readJson(ROOT);
-  state.releaseGates[0].sourceEvidenceIds = ['EV-MISSING'];
-  assert.throws(
-    () => validateState(state),
-    (error) => error.code === 'MEMORY_EVIDENCE_UNRESOLVED',
-  );
-});
-
-test('rejects an incomplete supersession record', () => {
-  const state = readJson(ROOT);
-  state.supersededPlans = [];
-  assert.throws(
-    () => validateState(state),
-    (error) => error.code === 'MEMORY_SUPERSESSION_INCOMPLETE',
-  );
-});
-
-test('rejects secret-bearing keys and secret-like values', () => {
-  for (const mutate of [
-    (state) => {
-      state.project.apiToken = 'not-real';
-    },
-    (state) => {
-      state.project.name = `github_pat_${'a'.repeat(24)}`;
-    },
-  ]) {
-    const state = readJson(ROOT);
-    mutate(state);
-    assert.throws(
-      () => validateState(state),
-      (error) => error.code === 'MEMORY_SECRET_DETECTED',
-    );
-  }
-});
-
-test('requires every stable source to delegate temporal authority', () => {
-  const root = fixture();
-  writeFileSync(target(root, 'README.md'), '# no authority\n', 'utf8');
-  expectCode(run(root), 'MEMORY_STABLE_SOURCE_HAS_STATE');
-});
-
-test('requires source authority by domain and never promotes ADR or projection over temporal JSON', () => {
-  const root = fixture();
-  const agentsPath = target(root, 'AGENTS.md');
-  const agents = readFileSync(agentsPath, 'utf8').replace(
-    'temporal=docs/memory/project-state.v1.json',
-    'temporal=accepted-adrs',
-  );
-  writeFileSync(agentsPath, agents, 'utf8');
-  expectCode(run(root), 'MEMORY_SOURCE_AUTHORITY_INVALID');
-});
-
-test('marker does not suppress a pending human decision assertion', () => {
-  const root = fixture();
-  const path = target(root, 'README.md');
-  writeFileSync(
-    path,
-    `${readFileSync(path, 'utf8')}\n\n## Decisões humanas pendentes\n\n**PENDING HUMAN DECISION**: escolher provedor.\n`,
-    'utf8',
-  );
-  expectCode(run(root), 'MEMORY_TEMPORAL_ASSERTION_FORBIDDEN');
-});
-
-test('marker does not suppress a hardcoded next task', () => {
-  const root = fixture();
-  const path = target(root, 'README.md');
-  writeFileSync(
-    path,
-    `${readFileSync(path, 'utf8')}\n\nPróxima tarefa: 0.8-MVP-99.\n`,
-    'utf8',
-  );
-  expectCode(run(root), 'MEMORY_TEMPORAL_ASSERTION_FORBIDDEN');
-});
-
-test('temporal lint covers phase, blockers, rollout, operational state and current gates', () => {
-  for (const assertion of [
-    'Fase atual: 0.8-MVP.',
-    '## Blockers abertos\n\n- BLOCK-X.',
-    'Rollout pendente até nova ordem.',
-    '## Estado atual\n\nServiço ativo.',
-    '## Gates atuais pendentes\n\n- RG-X.',
-  ]) {
-    const root = fixture();
-    const path = target(root, 'README.md');
-    writeFileSync(
-      path,
-      `${readFileSync(path, 'utf8')}\n\n${assertion}\n`,
-      'utf8',
-    );
-    expectCode(run(root), 'MEMORY_TEMPORAL_ASSERTION_FORBIDDEN');
-  }
-});
-
-test('explicitly bounded historical snapshot passes temporal lint', () => {
-  const root = fixture();
-  const path = target(root, 'README.md');
-  writeFileSync(
-    path,
-    `${readFileSync(path, 'utf8')}\n\n<!-- genesis-memory-history:start -->\n\n## Snapshot histórico do estado atual\n\nPróxima tarefa: snapshot-antigo.\n\n**PENDING HUMAN DECISION**\n\n<!-- genesis-memory-history:end -->\n`,
-    'utf8',
-  );
-  assert.equal(run(root).status, 0);
-});
-
-test('accepted ADR may state a durable decision but not current temporal state', () => {
-  const passingRoot = fixture();
-  const passingPath = target(
-    passingRoot,
-    'docs/decisions/ADR-012-development-operating-system-v2.md',
-  );
-  writeFileSync(
-    passingPath,
-    `${readFileSync(passingPath, 'utf8')}\n\nA arquitetura aprovada usa validação fail-closed.\n`,
-    'utf8',
-  );
-  assert.equal(run(passingRoot).status, 0);
-
-  const failingRoot = fixture();
-  const failingPath = target(
-    failingRoot,
-    'docs/decisions/ADR-012-development-operating-system-v2.md',
-  );
-  writeFileSync(
-    failingPath,
-    `${readFileSync(failingPath, 'utf8')}\n\n## Estado atual\n\nPróxima tarefa: 0.8-MVP-99.\n`,
-    'utf8',
-  );
-  expectCode(run(failingRoot), 'MEMORY_TEMPORAL_ASSERTION_FORBIDDEN');
-});
-
-test('rejects a whole-document history marker outside the explicit allowlist', () => {
-  const root = fixture();
-  const path = target(root, 'README.md');
-  writeFileSync(
-    path,
-    `${readFileSync(path, 'utf8')}\n<!-- genesis-memory-history:v1 -->\n`,
-    'utf8',
-  );
-  expectCode(run(root), 'MEMORY_HISTORY_MARKER_INVALID');
-});
-
-test('binds canonical decision evidence to the corrected ADR bytes', () => {
-  const root = fixture();
-  const path = target(
-    root,
-    'docs/decisions/ADR-013-mvp-production-baseline.md',
-  );
-  writeFileSync(path, `${readFileSync(path, 'utf8')}\nchanged\n`, 'utf8');
-  expectCode(run(root), 'MEMORY_EVIDENCE_HASH_MISMATCH');
-});
-
-test('keeps repo evidence bound to current regular-file bytes', () => {
-  const root = mkdtempSync(join(tmpdir(), 'genesis-current-evidence-'));
-  FIXTURES.push(root);
-  writeFileSync(target(root, 'current.txt'), 'current bytes\n', 'utf8');
-  const state = evidence(
-    `${REPOSITORY_EVIDENCE_PREFIX}current.txt`,
-    createHash('sha256').update('current bytes\n').digest('hex'),
-  );
-  assert.doesNotThrow(() => validateRepositoryEvidence(root, state));
-  writeFileSync(target(root, 'current.txt'), 'mutated bytes\n', 'utf8');
-  expectEvidenceCode(root, state, 'MEMORY_EVIDENCE_HASH_MISMATCH');
-});
-
-test('validates immutable historical bytes after the worktree evolves', () => {
-  const { root, revision, hash } = historicalFixture();
-  const state = evidence(
-    `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/evidence.txt`,
-    hash,
-  );
-  writeFileSync(
-    target(root, 'evidence.txt'),
-    'current bytes changed\n',
-    'utf8',
-  );
-  assert.doesNotThrow(() => validateRepositoryEvidence(root, state));
-  expectEvidenceCode(
-    root,
-    evidence(state.evidence[0].uri, '0'.repeat(64)),
-    'MEMORY_EVIDENCE_HASH_MISMATCH',
-  );
-});
-
-test('fails closed for missing historical revisions, paths, and non-commit objects', () => {
-  const { root, revision, hash } = historicalFixture();
-  expectEvidenceCode(
-    root,
-    evidence(
-      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${'f'.repeat(40)}/evidence.txt`,
-      hash,
-    ),
-    'MEMORY_EVIDENCE_REVISION_INVALID',
-  );
-  expectEvidenceCode(
-    root,
-    evidence(
-      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/missing.txt`,
-      hash,
-    ),
-    'MEMORY_EVIDENCE_OBJECT_INVALID',
-  );
-  const blob = git(root, ['rev-parse', `${revision}:evidence.txt`]);
-  expectEvidenceCode(
-    root,
-    evidence(
-      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${blob}/evidence.txt`,
-      hash,
-    ),
-    'MEMORY_EVIDENCE_REVISION_INVALID',
-  );
-});
-
-test('rejects unsafe or unsupported historical repository references', () => {
-  const { root, revision, hash } = historicalFixture();
-  const invalid = [
-    [
-      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}ABC/evidence.txt`,
-      'MEMORY_EVIDENCE_REVISION_INVALID',
-    ],
-    [
-      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/../evidence.txt`,
-      'MEMORY_EVIDENCE_PATH_INVALID',
-    ],
-    [
-      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}//absolute.txt`,
-      'MEMORY_EVIDENCE_PATH_INVALID',
-    ],
-    [
-      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/dir\\file.txt`,
-      'MEMORY_EVIDENCE_PATH_INVALID',
-    ],
-    [
-      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/bad%2Fpath.txt`,
-      'MEMORY_EVIDENCE_PATH_INVALID',
-    ],
-    [
-      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/evidence;touch-pwned`,
-      'MEMORY_EVIDENCE_PATH_INVALID',
-    ],
-    [
-      `https://github.com/other/repository/blob/${revision}/evidence.txt`,
-      'MEMORY_EVIDENCE_REPOSITORY_UNSUPPORTED',
-    ],
-  ];
-  for (const [uri, code] of invalid)
-    expectEvidenceCode(root, evidence(uri, hash), code);
-  assert.equal(existsSync(target(root, 'touch-pwned')), false);
-});
-
-test('rejects a historical symlink entry', () => {
-  const { root, hash } = historicalFixture();
-  const blob = git(root, ['hash-object', '-w', 'evidence.txt']);
-  git(root, [
-    'update-index',
-    '--add',
-    '--cacheinfo',
-    '120000',
-    blob,
-    'evidence-link',
+test('accepts complete API and Web live bindings', () => {
+  assert.deepEqual(Object.keys(validateState(fictionalState()).live), [
+    'api',
+    'web',
   ]);
-  git(root, ['commit', '-m', 'Record symlink entry']);
-  const revision = git(root, ['rev-parse', 'HEAD']);
-  expectEvidenceCode(
-    root,
-    evidence(
-      `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}${revision}/evidence-link`,
-      hash,
-    ),
-    'MEMORY_EVIDENCE_OBJECT_INVALID',
-  );
 });
 
-test('preserves the exact MVP08 historical binding while current Compose evolves', () => {
-  const canonical = readJson(ROOT).evidence.find(
-    (entry) => entry.id === 'EV-MVP08-R1-RELEASE-BINDING',
-  );
-  assert.deepEqual(canonical, {
-    id: 'EV-MVP08-R1-RELEASE-BINDING',
-    kind: 'repository-file',
-    uri: `${HISTORICAL_REPOSITORY_EVIDENCE_PREFIX}ca82e44aaec44bc9080c2aa627dc4dc1f0e35949/compose.production.yml`,
-    sha256: '09ee24584afecef641cb075c6e0488f86bdb0e771abf5ad168357715f3b0e4f4',
-    capturedAt: '2026-08-14T07:58:01.159Z',
+test('rejects a missing live binding', () => {
+  const state = fictionalState();
+  delete state.live.api.image;
+  expectCode(() => validateState(state), 'MEMORY_SCHEMA_INVALID');
+});
+
+test('accepts alternate fictional task and state identifiers', () => {
+  const first = fictionalState();
+  const second = fictionalState({
+    stateRevision: 'ANOTHER-STATE-900',
+    phase: { id: 'ANOTHER-PHASE', title: 'Another phase' },
+    lastCompleted: {
+      id: 'ANOTHER-TASK-08',
+      title: 'Another completed task',
+      outcome: 'Accepted',
+    },
   });
-  const root = fixture();
+  assert.doesNotThrow(() => validateState(first));
+  assert.doesNotThrow(() => validateState(second));
+});
+
+test('accepts alternate valid SHAs, image digests, and deployment ids', () => {
+  const state = fictionalState();
+  state.live.api.sourceSha = 'd'.repeat(40);
+  state.live.api.image = `ghcr.io/another/project@sha256:${'e'.repeat(64)}`;
+  state.live.web.sourceSha = 'f'.repeat(40);
+  state.live.web.deploymentId = `dpl_${'9'.repeat(32)}`;
+  assert.doesNotThrow(() => validateState(state));
+});
+
+test('validator source contains no current task or release instance constants', () => {
+  const source = readFileSync('scripts/validate-project-memory.cjs', 'utf8');
+  assert.doesNotMatch(
+    source,
+    /PIPE-V2-03A|a169369f|e0d3613f|90dc36a3|DhUzyz|transitionId|memoryRevision/u,
+  );
+});
+
+test('rejects an unsupported schema major', () => {
+  const state = fictionalState({ schemaVersion: '3.0.0' });
+  expectCode(() => validateState(state), 'MEMORY_SCHEMA_UNSUPPORTED');
+});
+
+test('schema contract is strict and closes every object', () => {
+  const schema = json(SCHEMA);
+  assert.equal(validateSchemaContract(schema).additionalProperties, false);
+  const invalid = clone(schema);
+  invalid.temporary = true;
+  expectCode(() => validateSchemaContract(invalid), 'MEMORY_SCHEMA_INVALID');
+});
+
+test('projection rendering is deterministic, concise, and history-free', () => {
+  const rendered = renderProjection(fictionalState());
+  assert.equal(rendered, renderProjection(fictionalState()));
+  assert.match(rendered, /deterministic projection/u);
+  assert.doesNotMatch(
+    rendered,
+    /evidence catalog|release-tree|deployment history|resolved blocker/iu,
+  );
+  assert.ok(Buffer.byteLength(rendered) < 3000);
+});
+
+test('projection drift is detected and regenerated content passes', () => {
+  const root = mkdtempSync(join(tmpdir(), 'genesis-memory-v2-'));
+  const authorityPath = 'docs/memory/project-state.v2.json';
+  const schemaPath = 'schemas/project-state.v2.schema.json';
+  const projectionPath = 'docs/CURRENT_STATE.md';
+  for (const path of [authorityPath, schemaPath, projectionPath]) {
+    mkdirSync(dirname(join(root, ...path.split('/'))), { recursive: true });
+  }
+  const state = fictionalState();
+  writeFileSync(join(root, ...authorityPath.split('/')), JSON.stringify(state));
+  writeFileSync(join(root, ...schemaPath.split('/')), readFileSync(SCHEMA));
+  writeFileSync(join(root, ...projectionPath.split('/')), 'hand-edited\n');
+  expectCode(
+    () => validateLocal(root, { authorityPath, schemaPath, projectionPath }),
+    'MEMORY_PROJECTION_DRIFT',
+  );
   writeFileSync(
-    target(root, 'compose.production.yml'),
-    'legitimate future Compose bytes\n',
-    'utf8',
+    join(root, ...projectionPath.split('/')),
+    renderProjection(state),
   );
-  const result = run(root);
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.json.code, 'MEMORY_VALID');
-});
-
-test('memory validation CI checkout includes immutable evidence history', () => {
-  const workflow = readFileSync(
-    target(ROOT, '.github/workflows/ci.yml'),
-    'utf8',
-  );
-  const validateJob = workflow.match(/^  validate:\r?\n[\s\S]*$/mu)?.[0];
-  assert.ok(validateJob);
-  assert.match(
-    validateJob,
-    /uses: actions\/checkout@[a-f0-9]{40}[^\r\n]*\r?\n\s+with:\r?\n\s+fetch-depth: 0/u,
+  assert.equal(
+    validateLocal(root, { authorityPath, schemaPath, projectionPath }).status,
+    'READY',
   );
 });
 
-test('records approved destinations as documented without reopening resolved choices', () => {
-  const state = readJson(ROOT);
-  const decisions = new Set(
-    state.pendingHumanDecisions.map((entry) => entry.id),
+test('current authority and projection validate locally', () => {
+  const result = validateLocal();
+  assert.equal(result.status, 'READY');
+  assert.equal(result.schemaVersion, '2.0.0');
+});
+
+test('one-time migration preserves useful current v1 semantics', () => {
+  const v1 = json(V1_AUTHORITY);
+  const v2 = json(CURRENT_AUTHORITY);
+  assert.equal(v2.stateRevision, v1.stateRevision);
+  assert.deepEqual(v2.phase, {
+    id: v1.phase.id,
+    title: v1.phase.title,
+  });
+  assert.deepEqual(v2.lastCompleted, {
+    id: v1.phase.lastCompleted.id,
+    title: v1.phase.lastCompleted.title,
+    outcome: 'PRODUCTION_KEEP / 03A_LIVE',
+  });
+  assert.equal(v2.currentWork.status, v1.currentWork.status);
+  assert.equal(v2.nextTask.status, 'undecided');
+  assert.equal(v2.nextTask.planningState, v1.nextTask.id);
+  assert.equal(
+    v2.live.api.sourceSha,
+    v1.releaseBindings.apiApplicationRevision,
   );
-  assert.equal(decisions.has('HD-DOMAIN'), false);
-  assert.equal(decisions.has('HD-BACKUP'), false);
-  assert.match(
-    state.pendingHumanDecisions.find((entry) => entry.id === 'HD-MONITORING')
-      .question,
-    /alertas, destinatários e escalonamento/u,
+  assert.equal(v2.live.api.image, v1.releaseBindings.authorizedApiImage);
+  assert.equal(v2.live.web.sourceSha, v1.releaseBindings.webIntegratedRevision);
+
+  const webFact = v1.operationalState.facts.find(
+    (fact) => fact.id === 'OPS-PIPE-V2-WEB-PRODUCTION',
   );
-  const facts = Object.fromEntries(
-    state.operationalState.facts.map((entry) => [entry.id, entry]),
+  assert.match(webFact.statement, new RegExp(v2.live.web.deploymentId, 'u'));
+  assert.match(webFact.statement, /app\.agenciagenesismkt\.com\.br/u);
+  assert.equal(
+    v2.openBlockers.length,
+    v1.blockers.filter((blocker) => blocker.status !== 'resolved').length,
   );
   for (const id of [
-    'OPS-APPROVED-EDGE',
-    'OPS-APPROVED-RUNTIME',
-    'OPS-APPROVED-DELIVERY',
-    'OPS-APPROVED-RECOVERY',
-    'OPS-APPROVED-MONITORING',
-    'OPS-RECOVERY-TOOLING',
+    'OR-SINGLE-VPS',
+    'OR-SINGLE-REPLICA',
+    'OR-VERCEL-HOBBY-TECHNICAL-MVP',
   ]) {
-    assert.equal(facts[id].basis, 'documented');
-    assert.equal(Object.hasOwn(facts[id], 'observedAt'), false);
+    assert.ok(v1.currentRestrictions.some((item) => item.id === id));
+    assert.ok(v2.activeRestrictions.some((item) => item.id === id));
   }
-  assert.match(
-    facts['OPS-APPROVED-RECOVERY'].statement,
-    /RPO de 24 horas.*frequência de 12 horas.*RTO lógico sintético de quatro horas.*30\/90 dias.*duas cópias verificadas.*trash-only/u,
-  );
-  assert.match(
-    facts['OPS-RECOVERY-TOOLING'].statement,
-    /genesis_backup somente sob autorização explícita.*OAuth externo.*status In production.*scope drive\.file.*nenhum backup, OAuth, role, timer ou restore live foi executado/u,
-  );
-  assert.equal(facts['OPS-GHCR-VISIBILITY'].basis, 'observed');
-  assert.equal(facts['OPS-GHCR-VISIBILITY'].status, 'present');
-  assert.ok(facts['OPS-GHCR-VISIBILITY'].observedAt);
-});
-
-test('requires TASK_LOG to remain explicitly historical', () => {
-  const root = fixture();
-  writeFileSync(target(root, 'docs/TASK_LOG.md'), '# history\n', 'utf8');
-  expectCode(run(root), 'MEMORY_HISTORY_MARKER_REQUIRED');
-});
-
-test('projection is derived only from the authority object', () => {
-  const state = readJson(ROOT);
-  const projection = renderProjection(state);
-  assert.equal(projection, readFileSync(target(ROOT, PROJECTION_PATH), 'utf8'));
-  assert.match(
-    projection,
-    new RegExp(state.nextTask.id.replaceAll('.', '\\.')),
-  );
-  assert.match(projection, /containing-commit/u);
-  assert.match(projection, /a169369fd9760d32c922cc646df92cc0f5f632e1/u);
-  assert.match(projection, /sha256:e0d3613fbf77/u);
-  assert.match(projection, /sha256:c53b28357195/u);
-  assert.match(projection, /LEGACY \/ SUPERSEDED/u);
-  assert.match(projection, new RegExp(WEB_INTEGRATED_SHA, 'u'));
-});
-
-test('records PIPE-V2-03A as closed with durable Production KEEP', () => {
-  const state = readJson(ROOT);
-  const facts = Object.fromEntries(
-    state.operationalState.facts.map((entry) => [entry.id, entry]),
-  );
-  const evidence = new Set(state.evidence.map((entry) => entry.id));
-
-  assert.equal(state.stateRevision, TARGET_STATE_REVISION);
-  assert.equal(state.currentWork.status, 'none');
-  assert.match(state.currentWork.summary, /PRODUCTION_KEEP \/ 03A_LIVE/u);
-  assert.deepEqual(state.nextTask, {
-    id: 'PENDING-ROADMAP-PRIORITIZATION',
-    title:
-      'Priorizar o próximo marco do produto a partir dos planos versionados',
-  });
-  assert.equal(state.repositories[1].memoryRevision.sha, WEB_SHA);
-  assert.equal(
-    state.pointerMetadata.targetStateRevision,
-    TARGET_STATE_REVISION,
-  );
-  assert.equal(
-    state.releaseBindings.apiApplicationRevision,
-    'a169369fd9760d32c922cc646df92cc0f5f632e1',
-  );
-  assert.equal(state.releaseBindings.webIntegratedRevision, WEB_INTEGRATED_SHA);
-  assert.match(
-    facts['OPS-PIPE-V2-03A-PRODUCTION-KEEP'].statement,
-    /IMPLEMENTED, MERGED e 03A_LIVE.*a169369fd9760d32c922cc646df92cc0f5f632e1.*90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6.*atomicamente/u,
-  );
-  assert.equal(facts['OPS-PIPE-V2-API-PRODUCTION'].status, 'present');
-  assert.match(
-    facts['OPS-PIPE-V2-API-PRODUCTION'].statement,
-    /a169369fd9760d32c922cc646df92cc0f5f632e1.*e0d3613f.*Migration Level 1.*pending migrations \[\].*KEEP/u,
-  );
-  assert.equal(facts['OPS-PIPE-V2-WEB-PRODUCTION'].status, 'present');
-  assert.match(
-    facts['OPS-PIPE-V2-WEB-PRODUCTION'].statement,
-    /90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6.*dpl_DhUzyzKhq2e1emvUMLPYEnSWYFYt.*dpl_2DVvUezpSGPtmzenNkabDH1qt67J.*T\+0\/T\+30\/T\+120.*KEEP/u,
-  );
-  assert.match(
-    facts['OPS-PIPE-V2-WEB-API-INTEGRATION'].statement,
-    /7bd8e64b-d9d6-49ca-ba2d-5d7bf54d668e.*Anápolis.*200000.*R\$ 2\.000,00.*null → 123450 → 200000/u,
-  );
-  assert.match(
-    facts['OPS-GENESIS-SMOKE-PROFILE-V1'].statement,
-    /generated-host.*production-core.*production-feature.*073910f4-18f4-4528-89f6-5b603e675c10.*798e0d69-78a8-4538-abe6-245f62787d64.*8935997b-88cd-4111-8391-59b2803627fd.*20d64e028523bca1bd2cd3780ac14ea8cd184ae1adfa30e2a43e3fd22c4187dc/u,
-  );
-  assert.match(
-    facts['OPS-PIPE-V2-03A-API-TOOLING-SEPARATION'].statement,
-    /a169369fd9760d32c922cc646df92cc0f5f632e1.*e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862.*7cba39e7c5869cdcb9d00eeb58f278e009ebf474.*4242a35bf5b3d288209a7e94429c892b7eecb031012e704fb794501c6d909ade.*não foram promovidos.*operator:owner resolve.*read-only/u,
-  );
-  assert.match(
-    facts['OPS-PIPE-V2-03A-WEB-TOOLING-SEPARATION'].statement,
-    /90dc36a3e8a53c1e1852b6acfb8b4c05c97e44e6.*984811c13f3454f58aa524cd7663f7982d3910a8.*9c626245c381c3186011059a8716d5b67b752038.*não representam novo deployment funcional/u,
-  );
-  assert.equal(
-    facts['OPS-PIPE-V2-03A-SMOKE-EVIDENCE-FOLLOW-UP'].status,
-    'partial',
-  );
-  assert.match(
-    facts['OPS-PIPE-V2-03A-SMOKE-EVIDENCE-FOLLOW-UP'].statement,
-    /não bloqueante, não requerido para 03A.*UUID.*method\/path\/status.*última assertion/u,
-  );
-  assert.equal(facts['OPS-MVP08-RELEASE-TREE-CONTRACT'].status, 'absent');
-  assert.match(
-    facts['OPS-MVP08-RELEASE-TREE-CONTRACT'].statement,
-    /^LEGACY \/ SUPERSEDED/u,
-  );
-  assert.equal(evidence.has('EV-PIPE-V2-API-PRODUCTION-KEEP'), true);
-  assert.equal(evidence.has('EV-PIPE-V2-WEB-PRODUCTION-KEEP'), true);
-  assert.equal(evidence.has('EV-PIPE-V2-03A-API-PR83'), true);
-  assert.equal(evidence.has('EV-PIPE-V2-03A-API-CI'), true);
-  assert.equal(evidence.has('EV-PIPE-V2-03A-WEB-PR26'), true);
-  assert.equal(evidence.has('EV-PIPE-V2-03A-WEB-CI'), true);
-  assert.equal(evidence.has('EV-PIPE-V2-03A-FINAL-PRODUCTION-KEEP'), true);
-  assert.equal(evidence.has('EV-GENESIS-SMOKE-PROFILE-V1'), true);
-  assert.equal(evidence.has('EV-PIPE-V2-03A-TOOLING-SEPARATION'), true);
-  assert.equal(evidence.has('EV-PIPE-V2-03A-WEB-RECOVERY-KEEP'), true);
-  assert.equal(evidence.has('EV-PIPE-V2-03A-SMOKE-EVIDENCE-FOLLOW-UP'), true);
-});
-
-test('cross-repo contract resolves the clean final Web-first receipt', () => {
-  const web = mkdtempSync(join(tmpdir(), 'genesis-web-pointer-'));
-  FIXTURES.push(web);
-  const pointerPath = target(web, 'docs/memory/project-state.pointer.v1.json');
-  mkdirSync(dirname(pointerPath), { recursive: true });
-  writeJson(
-    web,
-    {
-      schemaVersion: '1.0.0',
-      instanceKind: 'current',
-      project: 'genesis-platform',
-      mode: 'pointer-only',
-      authority: {
-        repository: 'arthurportodev/genesis-platform-api',
-        branch: 'main',
-        path: AUTHORITY_PATH,
-        acceptedSchemaMajor: 1,
-        resolutionOrder: [
-          'explicit-checkout',
-          'sibling-checkout',
-          'remote-read-only',
-        ],
-      },
-      receipt: {
-        transitionId: WEB_TRANSITION_ID,
-        targetStateRevision: TARGET_STATE_REVISION,
-        baseSha: WEB_RECEIPT_BASE_SHA,
-        revisionSource: 'containing-commit',
-        generatedAt: '2026-09-05T12:28:19.7854393Z',
-      },
-    },
-    'docs/memory/project-state.pointer.v1.json',
-  );
-  const result = validateCrossRepo(readJson(ROOT), web, {
-    pointerSchema: POINTER_SCHEMA,
-    resolveContainingCommit: () => WEB_SHA,
-  });
-  assert.equal(result.commit, WEB_SHA);
-  assert.equal(result.pointer.mode, 'pointer-only');
-});
-
-test('cross-repo contract rejects previous and arbitrary Web containing commits', () => {
-  for (const commit of [
-    'd5e0f35e21b9fcf8039b0cae2fcbed85374fb174',
-    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-  ]) {
-    const web = mkdtempSync(join(tmpdir(), 'genesis-web-revision-'));
-    FIXTURES.push(web);
-    writeJson(
-      web,
-      candidatePointer(),
-      'docs/memory/project-state.pointer.v1.json',
-    );
-    assert.throws(
-      () =>
-        validateCrossRepo(readJson(ROOT), web, {
-          pointerSchema: POINTER_SCHEMA,
-          resolveContainingCommit: () => commit,
-        }),
-      (error) => error.code === 'MEMORY_WEB_REVISION_MISMATCH',
-    );
-  }
-});
-
-test('cross-repo contract rejects unavailable containing-commit provenance', () => {
-  const web = mkdtempSync(join(tmpdir(), 'genesis-web-provenance-'));
-  FIXTURES.push(web);
-  writeJson(
-    web,
-    candidatePointer(),
-    'docs/memory/project-state.pointer.v1.json',
-  );
-  assert.throws(
-    () =>
-      validateCrossRepo(readJson(ROOT), web, {
-        pointerSchema: POINTER_SCHEMA,
-        resolveContainingCommit: () => null,
-      }),
-    (error) => error.code === 'MEMORY_POINTER_PROVENANCE_INVALID',
-  );
-});
-
-test('containing-commit provenance binds both the pointer and its schema', () => {
-  const web = gitWebFixture();
-  const pointerCommit = git(web, ['rev-parse', 'HEAD']);
-  assert.equal(containingCommit(web), pointerCommit);
-
-  const schemaPath =
-    'schemas/genesis-harness/project-state.pointer.v1.schema.json';
-  const schema = readJson(web, schemaPath);
-  schema.additionalProperties = true;
-  writeJson(web, schema, schemaPath);
-  assert.equal(containingCommit(web), null);
-
-  git(web, ['add', schemaPath]);
-  git(web, ['commit', '-m', 'Diverge pointer schema']);
-  assert.equal(containingCommit(web), null);
-});
-
-test('cross-repo contract rejects incompatible pointer schemas', () => {
-  const web = mkdtempSync(join(tmpdir(), 'genesis-web-schema-contract-'));
-  FIXTURES.push(web);
-  writeJson(
-    web,
-    candidatePointer(),
-    'docs/memory/project-state.pointer.v1.json',
-  );
-  const schemas = [
-    {},
-    { ...structuredClone(POINTER_SCHEMA), additionalProperties: true },
-    (() => {
-      const schema = structuredClone(POINTER_SCHEMA);
-      delete schema.properties.receipt.properties.revisionSource;
-      return schema;
-    })(),
-  ];
-  for (const pointerSchema of schemas)
-    assert.throws(
-      () =>
-        validateCrossRepo(readJson(ROOT), web, {
-          pointerSchema,
-          resolveContainingCommit: () => WEB_SHA,
-        }),
-      (error) => error.code === 'MEMORY_POINTER_SCHEMA_MISMATCH',
-    );
-});
-
-test('cross-repo contract rejects divergent receipt and authority identity', () => {
-  for (const mutate of [
-    (pointer) => {
-      pointer.receipt.targetStateRevision = 'MVP-10B-LIVE-2026-08-21';
-    },
-    (pointer) => {
-      pointer.receipt.transitionId = 'MVP-10C-CROSS-REPO';
-    },
-    (pointer) => {
-      pointer.receipt.baseSha = WEB_SHA;
-    },
-    (pointer) => {
-      pointer.authority.repository = 'example.invalid/wrong-authority';
-    },
-  ]) {
-    const web = mkdtempSync(join(tmpdir(), 'genesis-web-contract-'));
-    FIXTURES.push(web);
-    const pointer = candidatePointer();
-    mutate(pointer);
-    writeJson(web, pointer, 'docs/memory/project-state.pointer.v1.json');
-    assert.throws(
-      () =>
-        validateCrossRepo(readJson(ROOT), web, {
-          pointerSchema: POINTER_SCHEMA,
-          resolveContainingCommit: () => WEB_SHA,
-        }),
-      (error) =>
-        error.code === 'MEMORY_TRANSITION_PENDING' ||
-        error.code === 'MEMORY_POINTER_MISMATCH',
-    );
-  }
-});
-
-test('cross-repo source failure never falls back to the generated projection', () => {
-  const result = run(ROOT, [
-    '--mode',
-    'cross-repo',
-    '--web-source',
-    join(tmpdir(), 'genesis-missing-web-source'),
+  assert.deepEqual(Object.keys(v2), [
+    'schemaVersion',
+    'stateRevision',
+    'phase',
+    'lastCompleted',
+    'currentWork',
+    'nextTask',
+    'live',
+    'openBlockers',
+    'activeRestrictions',
+    'followUps',
   ]);
-  expectCode(result, 'AUTHORITY_UNAVAILABLE');
-  assert.equal(result.json.staleFallbackUsed, false);
-  assert.doesNotMatch(result.stdout, /Web integrado na main/iu);
-});
-
-test('cross-repo schema rejects extra temporal or secret-bearing pointer data', () => {
-  for (const property of ['phase', 'authorizationToken']) {
-    const web = mkdtempSync(join(tmpdir(), 'genesis-web-pointer-invalid-'));
-    FIXTURES.push(web);
-    const pointer = {
-      schemaVersion: '1.0.0',
-      instanceKind: 'current',
-      project: 'genesis-platform',
-      mode: 'pointer-only',
-      authority: {
-        repository: 'arthurportodev/genesis-platform-api',
-        branch: 'main',
-        path: AUTHORITY_PATH,
-        acceptedSchemaMajor: 1,
-        resolutionOrder: ['explicit-checkout'],
-      },
-      receipt: {
-        transitionId: WEB_TRANSITION_ID,
-        targetStateRevision: TARGET_STATE_REVISION,
-        baseSha: WEB_RECEIPT_BASE_SHA,
-        revisionSource: 'containing-commit',
-        generatedAt: '2026-09-05T12:28:19.7854393Z',
-      },
-      [property]: property === 'phase' ? { id: 'forbidden' } : 'forbidden',
-    };
-    writeJson(web, pointer, 'docs/memory/project-state.pointer.v1.json');
-    assert.throws(
-      () =>
-        validateCrossRepo(readJson(ROOT), web, {
-          pointerSchema: POINTER_SCHEMA,
-        }),
-      (error) =>
-        error.code === 'MEMORY_POINTER_MISMATCH' ||
-        error.code === 'MEMORY_SECRET_DETECTED',
-    );
-  }
-});
-
-test('dynamic onboarding oracle derives current values without hardcoding task ids', () => {
-  const state = readJson(ROOT);
-  const response = {
-    stateRevision: state.stateRevision,
-    phaseId: state.phase.id,
-    lastCompletedId: state.phase.lastCompleted.id,
-    currentWorkStatus: state.currentWork.status,
-    nextTaskId: state.nextTask.id,
-    webMemoryRevision: WEB_SHA,
-    operationalFacts: Object.fromEntries(
-      state.operationalState.facts.map((fact) => [fact.id, fact.basis]),
-    ),
-    blockerIds: state.blockers
-      .filter((entry) => entry.status === 'open')
-      .map((entry) => entry.id),
-    pendingDecisionIds: state.pendingHumanDecisions.map((entry) => entry.id),
-    restrictionIds: state.currentRestrictions.map((entry) => entry.id),
-    supersededPlanIds: state.supersededPlans.map((entry) => entry.id),
-    supersededUsedAsCurrent: false,
-    mutations: 0,
-    secretsExposed: 0,
-    startedNextTask: false,
-    humanQuestions: 0,
-    humanInterventions: 0,
-    sourceCount: 3,
-    durationSeconds: 120,
-    indeterminateAnswers: 0,
-  };
-  const result = validateOnboardingResponse(state, response);
-  assert.equal(result.ok, true);
-  assert.equal(result.humanInterventionRate, 0);
-  response.nextTaskId = 'superseded-task';
-  assert.equal(validateOnboardingResponse(state, response).ok, false);
-});
-
-test('invalid usage exits 2 with a machine-readable code', () => {
-  expectCode(run(ROOT, ['--mode', 'cross-repo']), 'USAGE_ERROR', 2);
+  assert.doesNotMatch(
+    JSON.stringify(v2),
+    /evidenceIds|releaseTree|rollback|pendingHumanDecisions|supersededPlans/iu,
+  );
 });

@@ -1,10 +1,10 @@
 # Architecture Decision Records
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 ADRs preservam decisões e história. Eles não são autoridade de fase, trabalho,
 operação ou restrições atuais; esses fatos vêm de
-`docs/memory/project-state.v1.json`.
+`docs/memory/project-state.v2.json`.
 
 ADRs registram decisões arquiteturais relevantes, seu contexto, alternativas e consequências. Eles explicam por que o sistema tomou uma direção; não substituem código, migrations ou documentação operacional.
 

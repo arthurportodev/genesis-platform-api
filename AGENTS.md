@@ -1,15 +1,15 @@
 # Protocolo de continuidade
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 ## Memória temporal canônica
 
-Resolva fase, trabalho vigente, próxima tarefa, estado operacional, blockers,
-decisões pendentes e restrições atuais exclusivamente em
-`docs/memory/project-state.v1.json`. `docs/CURRENT_STATE.md` é sua projeção
+Resolva fase, último produto concluído, trabalho vigente, próxima tarefa,
+bindings live, blockers, restrições e follow-ups exclusivamente em
+`docs/memory/project-state.v2.json`. `docs/CURRENT_STATE.md` é sua projeção
 determinística para leitura humana. Documentos estáveis e ADRs não substituem a
-autoridade; `docs/TASK_LOG.md` é histórico. O Web mantém somente um pointer e
-deve ser validado por receipt e `memoryRevision` antes do uso.
+autoridade; `docs/TASK_LOG.md` é histórico. O Web mantém somente um pointer
+V2 estático, sem cópia temporal ou receipt por tarefa.
 
 ## Objetivo
 
@@ -37,13 +37,13 @@ delta não explicar o comportamento ou as fontes permanecerem inconsistentes.
 
 ## Autoridades por domínio
 
-<!-- genesis-source-authorities:v1 implementation=main-code temporal=docs/memory/project-state.v1.json projection=derived architecture=accepted-adrs history=explicit -->
+<!-- genesis-source-authorities:v2 implementation=main-code temporal=docs/memory/project-state.v2.json projection=derived architecture=accepted-adrs history=explicit -->
 
 Não existe uma hierarquia linear única para perguntas de domínios diferentes:
 
 - **verdade de implementação:** código, migrations e testes da `main`;
 - **verdade temporal do projeto:**
-  [project-state.v1.json](docs/memory/project-state.v1.json);
+  [project-state.v2.json](docs/memory/project-state.v2.json);
 - **projeção humana:** [CURRENT_STATE.md](docs/CURRENT_STATE.md), sempre derivada
   da autoridade temporal e nunca editada manualmente;
 - **decisões e justificativas arquiteturais:** ADRs aceitos;

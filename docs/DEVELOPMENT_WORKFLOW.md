@@ -1,15 +1,24 @@
 # Fluxo de desenvolvimento
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 ## Atualização da memória canônica
 
-Mudanças de fase, trabalho, operação, blockers, decisões ou restrições atualizam
-`docs/memory/project-state.v1.json` no mesmo candidato. Gere
-`docs/CURRENT_STATE.md` com `node scripts/validate-project-memory.cjs --mode
-render`, valide com `--mode local` e, para transições cross-repo, valide o
-pointer Web com `--mode cross-repo --web-source <checkout>`. O Web entra
-primeiro; a API registra o `memoryRevision` Web exato e entra por último.
+A API mantém a única autoridade temporal mutável em
+`docs/memory/project-state.v2.json`. O Web usa um pointer estático e não recebe
+commits quando o estado muda. Um pin exato da autoridade pertence ao manifesto,
+à evidência transitória ou a um argumento de validação.
+
+Cada tarefa de produto faz no máximo uma escrita canônica. Sem release, essa
+escrita acompanha o ponto em que o estado durável se torna verdadeiro. Com
+release, Git e PR registram implementação e merge; a memória recebe somente o
+resultado final KEEP ou ROLLBACK. Não se cria por rotina um estado intermediário
+`MERGED / NOT_DEPLOYED`.
+
+Gere `docs/CURRENT_STATE.md` com
+`node scripts/validate-project-memory.cjs --write-projection` e valide com
+`--mode local`. Histórico e evidência permanecem em Git, PRs, ADRs,
+`TASK_LOG` e GitHub Actions; não são copiados para a memória atual.
 
 ## Ciclo de uma tarefa
 

@@ -108,7 +108,7 @@ test('does not match operational paths or misleading names', () => {
     'compose.production.yml',
     '.env.production.example',
     'schemas/image-impact.json',
-    'schemas/genesis-harness/project-state.v1.schema.json',
+    'schemas/genesis-harness/project-state.v2.schema.json',
     '.agents/skills/example.md',
     '.codex/task-manifest.json',
     'docker/postgres/init-runtime-role.sh',

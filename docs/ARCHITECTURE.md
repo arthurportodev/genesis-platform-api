@@ -1,10 +1,10 @@
 # Arquitetura
 
-<!-- genesis-memory-authority:v1 path=docs/memory/project-state.v1.json -->
+<!-- genesis-memory-authority:v2 path=docs/memory/project-state.v2.json -->
 
 Este documento preserva arquitetura e fronteiras duráveis. Progresso, estado
 operacional e próximo trabalho pertencem somente a
-`docs/memory/project-state.v1.json`.
+`docs/memory/project-state.v2.json`.
 
 <!-- genesis-memory-history:start -->
 
