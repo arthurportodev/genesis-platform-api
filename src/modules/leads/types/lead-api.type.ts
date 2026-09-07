@@ -23,7 +23,11 @@ export interface LeadView {
   responsibleMembershipId: string | null;
   status: LeadStatus;
   stage: LeadStage;
-  latestCycleNumber: string;
+  pipelineId: string | null;
+  pipelineStageId: string | null;
+  pipelineName: string | null;
+  pipelineStageName: string | null;
+  latestCycleNumber: string | null;
   returnReviewPending: boolean;
   revision: string;
   createdAt: Date;
@@ -65,6 +69,10 @@ export interface LeadListItem {
   responsibleMembershipId: string | null;
   status: LeadStatus;
   stage: LeadStage;
+  pipelineId: string | null;
+  pipelineStageId: string | null;
+  pipelineName: string | null;
+  pipelineStageName: string | null;
   expectedValueMinor: string | null;
   source: string;
   lastEntryAt: string;
@@ -139,7 +147,7 @@ export interface LeadDetailView extends LeadView {
     source: string;
     receivedAt: string;
   };
-  latestCycle: LeadCommercialCycleView;
+  latestCycle: LeadCommercialCycleView | null;
   pendingReturn: {
     id: string;
     cycleId: string;
@@ -170,6 +178,10 @@ export interface LeadTimelineView {
   newStatus: LeadStatus | null;
   previousStage: LeadStage | null;
   newStage: LeadStage | null;
+  previousPipelineStageId: string | null;
+  previousStageName: string | null;
+  newPipelineStageId: string | null;
+  newStageName: string | null;
   lostReason: LeadLostReason | null;
   archiveReason: LeadArchiveReason | null;
   activityId: string | null;
@@ -255,6 +267,10 @@ export interface LeadCommercialCycleView {
   cycleNumber: string;
   openingReason: LeadCycleOpeningReason;
   startingStage: LeadStage;
+  pipelineId: string;
+  pipelineStageId: string;
+  startingPipelineStageId: string;
+  startingStageName: string;
   openedByMembershipId: string | null;
   openedAt: Date;
   expectedValueMinor: string | null;
@@ -262,6 +278,8 @@ export interface LeadCommercialCycleView {
   closedAt: Date | null;
   closingStatus: Exclude<LeadStatus, LeadStatus.ACTIVE> | null;
   stageAtClose: LeadStage | null;
+  stageAtClosePipelineStageId: string | null;
+  stageAtCloseName: string | null;
   lostReason: LeadLostReason | null;
   archiveReason: LeadArchiveReason | null;
   reasonNote: string | null;

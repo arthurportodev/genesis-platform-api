@@ -20,6 +20,8 @@ import {
   leadInformationFingerprint,
   leadManualCreateFingerprint,
   leadRequestFingerprint,
+  leadStageMoveFingerprint,
+  leadCycleStartFingerprint,
   LeadCommandFingerprintInput,
   LeadExpectedValueFingerprintInput,
   LeadFollowUpFingerprintInput,
@@ -133,6 +135,80 @@ describe('Lead commercial pipeline', () => {
     expect(leadManualCreateFingerprint(input, '1', key)).not.toBe(
       leadManualCreateFingerprint(input, '0', key),
     );
+  });
+
+  it('binds explicit pipeline selection without changing the legacy fingerprint', () => {
+    const input = normalizeLeadInput(
+      {
+        displayName: 'Maria',
+        primaryPhone: '+5562999999999',
+        source: LeadSource.MANUAL,
+      },
+      '+5562999999999',
+    );
+    const legacy = leadManualCreateFingerprint(input, null, key);
+    const none = leadManualCreateFingerprint(input, null, key, 'none', null);
+    const pipelineId = randomUUID();
+    const selected = leadManualCreateFingerprint(
+      input,
+      null,
+      key,
+      'pipeline',
+      pipelineId,
+    );
+    expect(new Set([legacy, none, selected]).size).toBe(3);
+    expect(
+      leadManualCreateFingerprint(input, null, key, 'pipeline', randomUUID()),
+    ).not.toBe(selected);
+  });
+
+  it('binds dynamic move and cycle-start resource identities', () => {
+    const stageId = randomUUID();
+    const pipelineId = randomUUID();
+    const move = leadStageMoveFingerprint(
+      {
+        organizationId: tenant.organizationId,
+        actorMembershipId: tenant.membershipId,
+        leadId,
+        expectedRevision: '4',
+        pipelineStageId: stageId,
+      },
+      key,
+    );
+    expect(
+      leadStageMoveFingerprint(
+        {
+          organizationId: tenant.organizationId,
+          actorMembershipId: tenant.membershipId,
+          leadId,
+          expectedRevision: '4',
+          pipelineStageId: randomUUID(),
+        },
+        key,
+      ),
+    ).not.toBe(move);
+    const start = leadCycleStartFingerprint(
+      {
+        organizationId: tenant.organizationId,
+        actorMembershipId: tenant.membershipId,
+        leadId,
+        expectedRevision: '4',
+        pipelineId,
+      },
+      key,
+    );
+    expect(
+      leadCycleStartFingerprint(
+        {
+          organizationId: tenant.organizationId,
+          actorMembershipId: tenant.membershipId,
+          leadId,
+          expectedRevision: '5',
+          pipelineId,
+        },
+        key,
+      ),
+    ).not.toBe(start);
   });
 
   it('binds every field of an atomic information intent', () => {

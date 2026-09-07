@@ -43,3 +43,37 @@ Ciclos e revisões são protegidos contra reescrita histórica por checks e trig
 ## Implementação
 
 Implementado como candidato local da Tarefa 0.3.2 pela migration aditiva `1785433200000-ManageLeadCommercialPipeline.ts`, pelas entidades e endpoints do `LeadsModule` e pelos testes PostgreSQL e E2E correspondentes.
+
+## Revisão — PIPE-V2-06 Fase A (2026-09-07)
+
+A autoridade futura de posição comercial passa do enum fixo para `Pipeline` e
+`PipelineStage`, ambos tenant-scoped. O enum e suas colunas permanecem como
+ponte de compatibilidade durante o rollout API-first; não são removidos nesta
+fase.
+
+O `LeadCommercialCycle` continua sendo a associação histórica autoritativa com
+o processo. Ele referencia Pipeline e Stage por UUID e preserva snapshots dos
+nomes na abertura e no fechamento. A timeline também preserva IDs e nomes nos
+eventos de transição, portanto renomear um Stage muda a apresentação atual sem
+reescrever o passado.
+
+`Lead` mantém somente o snapshot operacional atual e agora admite zero ou um
+ciclo aberto. Um Lead `active` sem ciclo usa `pipeline_id = null` e
+`pipeline_stage_id = null`; com ciclo aberto, os dois IDs coincidem com o
+ciclo. Leads terminais não têm ciclo aberto nem snapshot corrente. O início
+explícito de ciclo seleciona um Pipeline e usa seu primeiro Stage ativo. Para
+um Lead já ativo registra apenas `lead.cycle.started`; para um Lead terminal
+preserva `lead.reactivated`.
+
+Transições sequenciais entre Pipelines encerram um ciclo e abrem outro. O mesmo
+ciclo não muda de Pipeline, e um Lead não participa simultaneamente de mais de
+um processo no MVP. A API legada de criação, movimento e Kanban permanece
+disponível até a Fase Web da mesma iniciativa; a revisão correspondente do
+ADR-013 fica pendente para essa fase.
+
+Durante essa ponte, os cinco Stages do Pipeline default mantêm slots posicionais
+estáveis para o enum legado. Rename é permitido, mas create, reorder e archive
+desses slots são recusados até a remoção da ponte; Pipelines customizados não
+têm essa restrição. O contrato nullable de Lead sem ciclo exige o opt-in
+`X-Genesis-Lead-Contract: pipeline-v2`; sem ele, coleções legadas omitem esses
+Leads e detail/timeline/cycles não expõem shapes incompatíveis ao Web atual.

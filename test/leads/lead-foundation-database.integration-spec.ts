@@ -7,6 +7,7 @@ import { ManageLeadCommercialPipeline1785433200000 } from '../../src/database/mi
 import { ManageLeadActivitiesFollowUp1785519600000 } from '../../src/database/migrations/1785519600000-ManageLeadActivitiesFollowUp';
 import { AddLeadOperationalReadIndexes1785606000000 } from '../../src/database/migrations/1785606000000-AddLeadOperationalReadIndexes';
 import { ManageLeadCommercialCycleExpectedValue1788289200000 } from '../../src/database/migrations/1788289200000-ManageLeadCommercialCycleExpectedValue';
+import { AddCustomPipelinesAndStages1788375600000 } from '../../src/database/migrations/1788375600000-AddCustomPipelinesAndStages';
 import { OperationalInvitationActivationReadiness } from '../../src/modules/invitations/ports/invitation-activation-readiness.port';
 import { Membership } from '../../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../../src/modules/memberships/enums/membership-role.enum';
@@ -70,6 +71,7 @@ describe('Lead foundation database integration', () => {
     await new ManageLeadCommercialCycleExpectedValue1788289200000().up(
       migrationRunner,
     );
+    await new AddCustomPipelinesAndStages1788375600000().up(migrationRunner);
     configureIntegrationRuntimeEnvironment();
     runtime = createIntegrationRuntimeDataSource();
     await runtime.initialize();
@@ -161,8 +163,13 @@ describe('Lead foundation database integration', () => {
     const followUpMigration = new ManageLeadActivitiesFollowUp1785519600000();
     const financialMigration =
       new ManageLeadCommercialCycleExpectedValue1788289200000();
+    const customPipelineMigration =
+      new AddCustomPipelinesAndStages1788375600000();
     await migrationRunner.startTransaction();
     try {
+      await expect(
+        customPipelineMigration.down(migrationRunner),
+      ).resolves.toBeUndefined();
       await expect(
         financialMigration.down(migrationRunner),
       ).resolves.toBeUndefined();
@@ -226,6 +233,9 @@ describe('Lead foundation database integration', () => {
       ).resolves.toBeUndefined();
       await expect(
         financialMigration.up(migrationRunner),
+      ).resolves.toBeUndefined();
+      await expect(
+        customPipelineMigration.up(migrationRunner),
       ).resolves.toBeUndefined();
       const [backfilled] = (await migrationRunner.query(
         `SELECT lead.status, lead.stage, lead.revision::text AS revision,
@@ -1461,7 +1471,7 @@ describe('Lead foundation database integration', () => {
     const active = await service.get(ownerTenant, created.leadId);
     expect(active).toMatchObject({
       status: 'active',
-      stage: LeadStage.QUALIFICATION,
+      stage: LeadStage.NEW,
       latestCycleNumber: '2',
       returnReviewPending: false,
     });
@@ -1510,7 +1520,7 @@ describe('Lead foundation database integration', () => {
       service.get(ownerTenant, created.leadId),
     ).resolves.toMatchObject({
       status: 'won',
-      stage: LeadStage.QUALIFICATION,
+      stage: LeadStage.NEW,
       returnReviewPending: false,
       revision: '10',
     });
@@ -1659,6 +1669,10 @@ describe('Lead foundation database integration', () => {
     ).rejects.toMatchObject({ status: 412 });
 
     const detail = await reads.detail(ownerTenant, created.leadId);
+    expect(detail.latestCycle).not.toBeNull();
+    if (detail.latestCycle === null) {
+      throw new Error('expected the legacy lead to have a commercial cycle');
+    }
     expect(detail.latestCycle.expectedValueMinor).toBe('9007199254740993');
     const cycles = await reads.cycles(ownerTenant, created.leadId, {
       limit: 20,
@@ -1726,10 +1740,9 @@ describe('Lead foundation database integration', () => {
       phone,
     );
     expect(duplicate.leadId).toBe(created.leadId);
-    expect(
-      (await reads.detail(ownerTenant, created.leadId)).latestCycle
-        .expectedValueMinor,
-    ).toBe('125001');
+    const duplicateDetail = await reads.detail(ownerTenant, created.leadId);
+    expect(duplicateDetail.latestCycle).not.toBeNull();
+    expect(duplicateDetail.latestCycle?.expectedValueMinor).toBe('125001');
 
     await expect(
       service.win(
@@ -1969,7 +1982,7 @@ describe('Lead foundation database integration', () => {
       city: beforeCommonFailure.city,
       revision: beforeCommonFailure.revision,
     });
-    expect(afterCommonFailure.latestCycle.expectedValueMinor).toBe('250');
+    expect(afterCommonFailure.latestCycle?.expectedValueMinor).toBe('250');
     await expect(
       service.updateInformation(
         tenant,
@@ -1998,8 +2011,8 @@ describe('Lead foundation database integration', () => {
       city: beforeFinancialFailure.city,
       revision: beforeFinancialFailure.revision,
     });
-    expect(afterFinancialFailure.latestCycle.expectedValueMinor).toBe(
-      beforeFinancialFailure.latestCycle.expectedValueMinor,
+    expect(afterFinancialFailure.latestCycle?.expectedValueMinor).toBe(
+      beforeFinancialFailure.latestCycle?.expectedValueMinor,
     );
   });
 
@@ -2309,7 +2322,7 @@ describe('Lead foundation database integration', () => {
       service.get(ownerTenant, archive.leadId),
     ).resolves.toMatchObject({
       status: 'active',
-      stage: LeadStage.QUALIFICATION,
+      stage: LeadStage.NEW,
       latestCycleNumber: '2',
       returnReviewPending: false,
     });
@@ -3420,6 +3433,112 @@ describe('Lead foundation database integration', () => {
     await expect(
       new ManageLeadActivitiesFollowUp1785519600000().down(migrationRunner),
     ).rejects.toThrow('Unsafe rollback');
+  });
+
+  it('backfills the rich legacy dataset and safely round-trips the compatibility migration', async () => {
+    const migration = new AddCustomPipelinesAndStages1788375600000();
+    await migration.down(migrationRunner);
+    const [before] = await owner.query<
+      Array<{
+        leads: string;
+        cycles: string;
+        timeline: string;
+        expectedValues: string;
+        returnReviews: string;
+        assignedLeads: string;
+        nextActions: string;
+      }>
+    >(`SELECT
+      (SELECT count(*)::text FROM public.leads) AS leads,
+      (SELECT count(*)::text FROM public.lead_commercial_cycles) AS cycles,
+      (SELECT count(*)::text FROM public.lead_timeline_events) AS timeline,
+      (SELECT count(*)::text FROM public.lead_commercial_cycles
+        WHERE expected_value_minor IS NOT NULL) AS "expectedValues",
+      (SELECT count(*)::text FROM public.lead_return_reviews) AS "returnReviews",
+      (SELECT count(*)::text FROM public.leads
+        WHERE responsible_membership_id IS NOT NULL) AS "assignedLeads",
+      (SELECT count(*)::text FROM public.lead_next_actions) AS "nextActions"`);
+
+    await migration.up(migrationRunner);
+    const [parity] = await owner.query<
+      Array<{
+        countsPreserved: boolean;
+        defaultsValid: boolean;
+        activeSnapshotsValid: boolean;
+        terminalSnapshotsValid: boolean;
+        historyValid: boolean;
+        tenantLinksValid: boolean;
+      }>
+    >(
+      `SELECT
+        (SELECT jsonb_build_array(count(*),
+          (SELECT count(*) FROM public.lead_commercial_cycles),
+          (SELECT count(*) FROM public.lead_timeline_events),
+          (SELECT count(*) FROM public.lead_commercial_cycles WHERE expected_value_minor IS NOT NULL),
+          (SELECT count(*) FROM public.lead_return_reviews),
+          (SELECT count(*) FROM public.leads WHERE responsible_membership_id IS NOT NULL),
+          (SELECT count(*) FROM public.lead_next_actions)) FROM public.leads)
+          = jsonb_build_array($1::bigint,$2::bigint,$3::bigint,$4::bigint,$5::bigint,$6::bigint,$7::bigint)
+          AS "countsPreserved",
+        NOT EXISTS (SELECT 1 FROM public.organizations organization
+          WHERE (SELECT count(*) FROM public.pipelines pipeline
+            WHERE pipeline.organization_id=organization.id AND pipeline.is_default)<>1
+          OR (SELECT count(*) FROM public.pipeline_stages stage
+            JOIN public.pipelines pipeline ON pipeline.id=stage.pipeline_id
+              AND pipeline.organization_id=stage.organization_id
+            WHERE pipeline.organization_id=organization.id AND pipeline.is_default
+              AND stage.archived_at IS NULL)<>5) AS "defaultsValid",
+        NOT EXISTS (SELECT 1 FROM public.leads lead
+          LEFT JOIN public.lead_commercial_cycles cycle ON cycle.lead_id=lead.id
+            AND cycle.organization_id=lead.organization_id AND cycle.closed_at IS NULL
+          WHERE lead.status='active' AND (cycle.id IS NULL
+            OR lead.pipeline_id IS DISTINCT FROM cycle.pipeline_id
+            OR lead.pipeline_stage_id IS DISTINCT FROM cycle.pipeline_stage_id))
+          AS "activeSnapshotsValid",
+        NOT EXISTS (SELECT 1 FROM public.leads lead
+          WHERE lead.status<>'active' AND (lead.pipeline_id IS NOT NULL
+            OR lead.pipeline_stage_id IS NOT NULL)) AS "terminalSnapshotsValid",
+        NOT EXISTS (SELECT 1 FROM public.lead_commercial_cycles cycle
+          WHERE cycle.pipeline_id IS NULL OR cycle.pipeline_stage_id IS NULL
+            OR cycle.starting_pipeline_stage_id IS NULL OR cycle.starting_stage_name IS NULL
+            OR (cycle.closed_at IS NULL)<>(cycle.stage_at_close_pipeline_stage_id IS NULL)
+            OR (cycle.closed_at IS NULL)<>(cycle.stage_at_close_name IS NULL))
+          AND NOT EXISTS (SELECT 1 FROM public.lead_timeline_events event
+            WHERE (event.previous_stage IS NOT NULL
+                AND (event.previous_pipeline_stage_id IS NULL OR event.previous_stage_name IS NULL))
+              OR (event.new_stage IS NOT NULL
+                AND (event.new_pipeline_stage_id IS NULL OR event.new_stage_name IS NULL)))
+          AS "historyValid",
+        NOT EXISTS (SELECT 1 FROM public.leads lead
+          LEFT JOIN public.pipelines pipeline ON pipeline.id=lead.pipeline_id
+          LEFT JOIN public.pipeline_stages stage ON stage.id=lead.pipeline_stage_id
+          WHERE lead.pipeline_id IS NOT NULL AND (pipeline.organization_id<>lead.organization_id
+            OR stage.organization_id<>lead.organization_id OR stage.pipeline_id<>lead.pipeline_id))
+          AS "tenantLinksValid"`,
+      [
+        before?.leads,
+        before?.cycles,
+        before?.timeline,
+        before?.expectedValues,
+        before?.returnReviews,
+        before?.assignedLeads,
+        before?.nextActions,
+      ],
+    );
+    expect(parity).toEqual({
+      countsPreserved: true,
+      defaultsValid: true,
+      activeSnapshotsValid: true,
+      terminalSnapshotsValid: true,
+      historyValid: true,
+      tenantLinksValid: true,
+    });
+
+    await migration.down(migrationRunner);
+    await expect(
+      owner.query(`SELECT to_regclass('public.pipelines') AS relation`),
+    ).resolves.toEqual([{ relation: null }]);
+    await migration.up(migrationRunner);
   });
 
   async function createFixture(): Promise<Fixture> {

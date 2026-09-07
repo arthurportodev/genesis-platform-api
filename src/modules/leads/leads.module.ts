@@ -9,6 +9,7 @@ import { TenantContextModule } from '../tenant-context/tenant-context.module';
 import { NoStoreInterceptor } from '../invitations/interceptors/no-store.interceptor';
 import { FormLeadsController } from './controllers/form-leads.controller';
 import { LeadsController } from './controllers/leads.controller';
+import { PipelinesController } from './controllers/pipelines.controller';
 import { LeadEntry } from './entities/lead-entry.entity';
 import { LeadTimelineEvent } from './entities/lead-timeline-event.entity';
 import { Lead } from './entities/lead.entity';
@@ -36,6 +37,9 @@ import {
   LeadReadRateLimitGuard,
 } from './guards/lead-read-rate-limit.guards';
 import { LeadsService } from './services/leads.service';
+import { PipelinesService } from './services/pipelines.service';
+import { Pipeline } from './entities/pipeline.entity';
+import { PipelineStage } from './entities/pipeline-stage.entity';
 
 @Module({
   imports: [
@@ -48,14 +52,17 @@ import { LeadsService } from './services/leads.service';
       LeadActivity,
       LeadNote,
       LeadNextAction,
+      Pipeline,
+      PipelineStage,
     ]),
     AuthModule,
     AuthorizationModule,
     TenantContextModule,
   ],
-  controllers: [LeadsController, FormLeadsController],
+  controllers: [LeadsController, FormLeadsController, PipelinesController],
   providers: [
     LeadsService,
+    PipelinesService,
     LeadOperationalReadService,
     FormSignatureService,
     FormRateLimiter,

@@ -164,6 +164,10 @@ export class CreateLeadDto {
 export class FormLeadDto extends CreateLeadDto {}
 
 export class CreateManualLeadDto extends CreateLeadDto {
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
+  @IsUUID('4')
+  pipelineId?: string | null;
+
   @IsOptional()
   @ValidateIf((_object, value) => value !== null)
   @IsString()
@@ -356,8 +360,18 @@ export class LeadMetricsDto {
 }
 
 export class MoveLeadDto {
+  @IsOptional()
   @IsEnum(LeadStage)
-  stage!: LeadStage;
+  stage?: LeadStage;
+
+  @IsOptional()
+  @IsUUID('4')
+  pipelineStageId?: string;
+}
+
+export class StartLeadCycleDto {
+  @IsUUID('4')
+  pipelineId!: string;
 }
 
 export class LoseLeadDto {

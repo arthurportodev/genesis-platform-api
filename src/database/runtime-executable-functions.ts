@@ -23,4 +23,13 @@ export const LEAD_RUNTIME_EXECUTABLE_FUNCTIONS = [
 export const CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS = [
   ...RUNTIME_EXECUTABLE_FUNCTIONS,
   ...LEAD_RUNTIME_EXECUTABLE_FUNCTIONS,
+  'app_private.archive_pipeline_stage(uuid,uuid,uuid,uuid,uuid,bigint)',
+  'app_private.create_pipeline(uuid,uuid,uuid,uuid,text,jsonb)',
+  'app_private.create_pipeline_stage(uuid,uuid,uuid,uuid,uuid,bigint,text)',
+  'app_private.execute_lead_cycle_start_command(uuid,uuid,uuid,uuid,bigint,uuid,smallint,text,jsonb,uuid)',
+  'app_private.execute_lead_stage_move_command(uuid,uuid,uuid,uuid,bigint,uuid,smallint,text,jsonb,uuid)',
+  'app_private.ingest_lead_with_pipeline(uuid,uuid,uuid,text,text,text,text,text,text,text,text,uuid,text,text,text,text,text,text,text,uuid,smallint,text,jsonb,text,uuid)',
+  'app_private.rename_pipeline(uuid,uuid,uuid,uuid,bigint,text)',
+  'app_private.rename_pipeline_stage(uuid,uuid,uuid,uuid,uuid,bigint,text)',
+  'app_private.reorder_pipeline_stages(uuid,uuid,uuid,uuid,bigint,uuid[])',
 ].sort();

@@ -72,6 +72,10 @@ describe('Lead HTTP contract (e2e)', () => {
     responsibleMembershipId: null,
     status: LeadStatus.ACTIVE,
     stage: LeadStage.NEW,
+    pipelineId: 'f9e167c9-816f-47c5-9f15-8b09329ae797',
+    pipelineStageId: 'a458e2c2-f193-4505-84e8-4137c0c75d08',
+    pipelineName: 'Pipeline Comercial',
+    pipelineStageName: 'Novo',
     latestCycleNumber: '1',
     returnReviewPending: false,
     revision: '1',
@@ -103,6 +107,7 @@ describe('Lead HTTP contract (e2e)', () => {
     updateInformation: jest.fn(),
     assign: jest.fn(),
     move: jest.fn(),
+    startCycle: jest.fn(),
     setExpectedValue: jest.fn(),
     win: jest.fn(),
     lose: jest.fn(),
@@ -126,6 +131,9 @@ describe('Lead HTTP contract (e2e)', () => {
     metrics: jest.fn(),
     detail: jest.fn(),
     cycles: jest.fn(),
+    assertContractVisibility: jest.fn() as jest.MockedFunction<
+      LeadOperationalReadService['assertContractVisibility']
+    >,
   };
 
   beforeAll(async () => {
@@ -190,7 +198,10 @@ describe('Lead HTTP contract (e2e)', () => {
 
   afterAll(async () => app.close());
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    reads.assertContractVisibility.mockResolvedValue(undefined);
+  });
 
   it('returns 201 plus strong ETag for owner creation and defaults source to manual', async () => {
     tenantGuard.role = MembershipRole.OWNER;
@@ -235,6 +246,37 @@ describe('Lead HTTP contract (e2e)', () => {
       );
     },
   );
+
+  it('requires the explicit pipeline-v2 contract for pipeline selection', async () => {
+    leads.createManual.mockResolvedValue({
+      responseStatus: 201,
+      replayed: false,
+      lead: { ...view, latestCycleNumber: null },
+    });
+    const body = {
+      displayName: 'Lead sem pipeline',
+      primaryPhone: '+5562999999999',
+      pipelineId: null,
+    };
+    await request(app.getHttpServer() as Server)
+      .post('/api/v1/leads')
+      .set('Idempotency-Key', randomUUID())
+      .send(body)
+      .expect(400);
+    expect(leads.createManual).not.toHaveBeenCalled();
+
+    await request(app.getHttpServer() as Server)
+      .post('/api/v1/leads')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Genesis-Lead-Contract', 'pipeline-v2')
+      .send(body)
+      .expect(201);
+    expect(leads.createManual).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ pipelineId: null }),
+      expect.any(String),
+    );
+  });
 
   it.each(['', '-1', ' 1', '+1', '1.0', '1e3', '00'])(
     'rejects invalid creation expected value %j',
@@ -358,7 +400,31 @@ describe('Lead HTTP contract (e2e)', () => {
       leadId,
       '1',
       key,
-      'qualification',
+      { stage: 'qualification' },
+    );
+  });
+
+  it('routes explicit cycle start with revision and idempotency preconditions', async () => {
+    const key = randomUUID();
+    const pipelineId = randomUUID();
+    leads.startCycle.mockResolvedValue({
+      responseStatus: 204,
+      revision: '2',
+      replayed: false,
+    });
+    await request(app.getHttpServer() as Server)
+      .post(`/api/v1/leads/${leadId}/cycles`)
+      .set('If-Match', `"lead:${leadId}:1"`)
+      .set('Idempotency-Key', key)
+      .send({ pipelineId })
+      .expect(204)
+      .expect('ETag', `"lead:${leadId}:2"`);
+    expect(leads.startCycle).toHaveBeenCalledWith(
+      expect.any(Object),
+      leadId,
+      '1',
+      key,
+      { pipelineId },
     );
   });
 
@@ -923,6 +989,7 @@ describe('Lead HTTP contract (e2e)', () => {
         limit: 25,
         sort: 'createdAt:desc',
       }),
+      false,
     );
 
     await request(app.getHttpServer() as Server)
@@ -938,11 +1005,96 @@ describe('Lead HTTP contract (e2e)', () => {
       .get(`/api/v1/leads/${leadId}`)
       .expect(200)
       .expect('ETag', `"lead:${leadId}:1"`);
-    expect(reads.detail).toHaveBeenCalledWith(expect.any(Object), leadId);
+    expect(reads.detail).toHaveBeenCalledWith(
+      expect.any(Object),
+      leadId,
+      false,
+    );
 
     await request(app.getHttpServer() as Server)
       .get('/api/v1/leads/kanban?limit=21')
       .expect(400);
+  });
+
+  it('gates nullable lead reads behind a fail-closed pipeline-v2 contract', async () => {
+    reads.list.mockResolvedValue({
+      items: [],
+      page: {
+        limit: 25,
+        total: 0,
+        asOf: '2026-07-27T12:00:00.000Z',
+        nextCursor: null,
+      },
+    });
+    reads.detail.mockResolvedValue({
+      ...view,
+      latestCycleNumber: null,
+      latestEntry: { id: randomUUID() },
+      latestCycle: null,
+      pendingReturn: null,
+      counts: { timeline: 1, cycles: 0, activities: 0, notes: 0 },
+    });
+
+    await request(app.getHttpServer() as Server)
+      .get('/api/v1/leads?sort=createdAt%3Adesc')
+      .set('X-Genesis-Lead-Contract', 'pipeline-v2')
+      .expect(200);
+    expect(reads.list).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      expect.any(Object),
+      true,
+    );
+
+    await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}`)
+      .set('X-Genesis-Lead-Contract', 'pipeline-v2')
+      .expect(200);
+    expect(reads.detail).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      leadId,
+      true,
+    );
+
+    await request(app.getHttpServer() as Server)
+      .get('/api/v1/leads?sort=createdAt%3Adesc')
+      .set('X-Genesis-Lead-Contract', 'unknown')
+      .expect(400);
+    expect(reads.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps legacy timeline and cycle reads opaque for lead-only records', async () => {
+    reads.assertContractVisibility.mockImplementation(
+      (_tenant, _leadId, pipelineV2: boolean) =>
+        pipelineV2
+          ? Promise.resolve()
+          : Promise.reject(new NotFoundException('Lead not found.')),
+    );
+    leads.timeline.mockResolvedValue({
+      items: [],
+      page: { nextCursor: null, limit: 25 },
+    });
+    reads.cycles.mockResolvedValue({
+      items: [],
+      page: { nextCursor: null, limit: 20 },
+    });
+
+    await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}/timeline?limit=25`)
+      .expect(404);
+    await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}/cycles?limit=20`)
+      .expect(404);
+    await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}/timeline?limit=25`)
+      .set('X-Genesis-Lead-Contract', 'pipeline-v2')
+      .expect(200);
+    await request(app.getHttpServer() as Server)
+      .get(`/api/v1/leads/${leadId}/cycles?limit=20`)
+      .set('X-Genesis-Lead-Contract', 'pipeline-v2')
+      .expect(200);
+    expect(
+      reads.assertContractVisibility.mock.calls.map((call) => call[2]),
+    ).toEqual([false, false, true, true]);
   });
 
   it('returns uniform 404 from the resource boundary', async () => {

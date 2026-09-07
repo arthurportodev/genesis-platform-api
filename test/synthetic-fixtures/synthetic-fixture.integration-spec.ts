@@ -16,6 +16,8 @@ import { CreateLeadFoundation1785346800000 } from '../../src/database/migrations
 import { ManageLeadCommercialPipeline1785433200000 } from '../../src/database/migrations/1785433200000-ManageLeadCommercialPipeline';
 import { ManageLeadActivitiesFollowUp1785519600000 } from '../../src/database/migrations/1785519600000-ManageLeadActivitiesFollowUp';
 import { AddLeadOperationalReadIndexes1785606000000 } from '../../src/database/migrations/1785606000000-AddLeadOperationalReadIndexes';
+import { ManageLeadCommercialCycleExpectedValue1788289200000 } from '../../src/database/migrations/1788289200000-ManageLeadCommercialCycleExpectedValue';
+import { AddCustomPipelinesAndStages1788375600000 } from '../../src/database/migrations/1788375600000-AddCustomPipelinesAndStages';
 import { createBasePostgresOptions } from '../../src/database/typeorm-base.options';
 import { assertSyntheticFixtureOperationalRole } from '../../src/database/synthetic-fixtures/cli';
 import { FileSyntheticFixtureManifestStore } from '../../src/database/synthetic-fixtures/synthetic-fixture-manifest';
@@ -827,6 +829,8 @@ function createOwnerDataSource(): DataSource {
       ManageLeadCommercialPipeline1785433200000,
       ManageLeadActivitiesFollowUp1785519600000,
       AddLeadOperationalReadIndexes1785606000000,
+      ManageLeadCommercialCycleExpectedValue1788289200000,
+      AddCustomPipelinesAndStages1788375600000,
     ],
     migrationsTableName: 'migrations',
     logging: false,

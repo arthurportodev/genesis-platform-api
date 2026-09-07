@@ -83,6 +83,24 @@ export class LeadTimelineEvent {
     nullable: true,
   })
   newStage!: LeadStage | null;
+  @Column({ name: 'previous_pipeline_stage_id', type: 'uuid', nullable: true })
+  previousPipelineStageId!: string | null;
+  @Column({
+    name: 'previous_stage_name',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
+  previousStageName!: string | null;
+  @Column({ name: 'new_pipeline_stage_id', type: 'uuid', nullable: true })
+  newPipelineStageId!: string | null;
+  @Column({
+    name: 'new_stage_name',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
+  newStageName!: string | null;
   @Column({
     name: 'lost_reason',
     type: 'enum',
