@@ -4,10 +4,10 @@
 
 This is a deterministic projection. Edit [project-state.v2.json](memory/project-state.v2.json), then regenerate this file.
 
-- **State revision:** PIPE-V2-04-POST-PROCESS-DURABILITY-2026-09-06
+- **State revision:** PIPE-V2-05-PRODUCTION-KEEP-2026-09-06
 - **Phase:** PIPE-V2 — Pipeline Experience V2
-- **Last completed product work:** PIPE-V2-04 — Nova oportunidade no Pipeline
-- **Outcome:** PRODUCTION_KEEP / PIPE-V2-04_LIVE
+- **Last completed product work:** PIPE-V2-05 — Pipeline Interaction & Visual Polish
+- **Outcome:** PRODUCTION_KEEP / PIPE-V2-05_LIVE
 - **Current work:** none
 - **Next task:** undecided — PENDING-ROADMAP-PRIORITIZATION
 
@@ -15,8 +15,8 @@ This is a deterministic projection. Edit [project-state.v2.json](memory/project-
 
 - **API source:** a169369fd9760d32c922cc646df92cc0f5f632e1
 - **API image:** ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862
-- **Web source:** e6a68f5c621d686977f8024aa45a9f6d871b3db8
-- **Web deployment:** dpl_5uBGzSwSp4FgwxJywsnjUF1EG5Tx
+- **Web source:** 481f806cc76ac106a1585e0767c01ded621f71f9
+- **Web deployment:** dpl_FjaHSef4NMvKLTcj8f5wMBz34piJ
 - **Web domain:** https://app.agenciagenesismkt.com.br
 
 ## Open blockers

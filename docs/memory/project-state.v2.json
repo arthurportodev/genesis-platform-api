@@ -1,14 +1,14 @@
 {
   "schemaVersion": "2.0.0",
-  "stateRevision": "PIPE-V2-04-POST-PROCESS-DURABILITY-2026-09-06",
+  "stateRevision": "PIPE-V2-05-PRODUCTION-KEEP-2026-09-06",
   "phase": {
     "id": "PIPE-V2",
     "title": "Pipeline Experience V2"
   },
   "lastCompleted": {
-    "id": "PIPE-V2-04",
-    "title": "Nova oportunidade no Pipeline",
-    "outcome": "PRODUCTION_KEEP / PIPE-V2-04_LIVE"
+    "id": "PIPE-V2-05",
+    "title": "Pipeline Interaction & Visual Polish",
+    "outcome": "PRODUCTION_KEEP / PIPE-V2-05_LIVE"
   },
   "currentWork": {
     "status": "none"
@@ -23,8 +23,8 @@
       "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862"
     },
     "web": {
-      "sourceSha": "e6a68f5c621d686977f8024aa45a9f6d871b3db8",
-      "deploymentId": "dpl_5uBGzSwSp4FgwxJywsnjUF1EG5Tx",
+      "sourceSha": "481f806cc76ac106a1585e0767c01ded621f71f9",
+      "deploymentId": "dpl_FjaHSef4NMvKLTcj8f5wMBz34piJ",
       "domain": "https://app.agenciagenesismkt.com.br"
     }
   },
