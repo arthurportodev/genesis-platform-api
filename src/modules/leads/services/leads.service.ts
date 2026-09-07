@@ -27,8 +27,10 @@ import {
   ListLeadTimelineDto,
   ListLeadsDto,
   LoseLeadDto,
+  MoveLeadDto,
   RescheduleLeadNextActionDto,
   SetLeadExpectedValueDto,
+  StartLeadCycleDto,
   UpdateLeadDto,
   UpdateLeadInformationDto,
 } from '../dto/lead.dto';
@@ -53,10 +55,14 @@ import {
   leadExpectedValueFingerprint,
   leadInformationFingerprint,
   leadFollowUpFingerprint,
+  leadStageMoveFingerprint,
+  leadCycleStartFingerprint,
   LeadCommandFingerprintInput,
   LeadExpectedValueFingerprintInput,
   LeadInformationFingerprintInput,
   LeadFollowUpFingerprintInput,
+  LeadStageMoveFingerprintInput,
+  LeadCycleStartFingerprintInput,
   normalizeLeadInput,
 } from '../security/lead-fingerprint';
 import {
@@ -85,7 +91,11 @@ interface LeadRow {
   responsibleMembershipId: string | null;
   status: LeadStatus;
   stage: LeadStage;
-  latestCycleNumber: string;
+  pipelineId: string | null;
+  pipelineStageId: string | null;
+  pipelineName: string | null;
+  pipelineStageName: string | null;
+  latestCycleNumber: string | null;
   returnReviewPending: boolean;
   revision: string;
   createdAt: Date;
@@ -178,6 +188,18 @@ export class LeadsService {
     const expectedValueMinor = this.normalizeExpectedValueMinor(
       dto.expectedValueMinor ?? null,
     );
+    const explicitSelection = dto.pipelineId !== undefined;
+    const selectionKind = explicitSelection
+      ? dto.pipelineId === null
+        ? 'none'
+        : 'pipeline'
+      : 'legacy-default';
+    const pipelineId = dto.pipelineId ?? null;
+    if (selectionKind === 'none' && expectedValueMinor !== null) {
+      throw new BadRequestException(
+        'Expected value requires a commercial cycle.',
+      );
+    }
     const row = await this.dataSource.transaction(async (manager) => {
       const result = await this.executeIngest(
         manager,
@@ -187,7 +209,19 @@ export class LeadsService {
         idempotencyKey,
         version,
         (input, candidateKey) =>
-          leadManualCreateFingerprint(input, expectedValueMinor, candidateKey),
+          leadManualCreateFingerprint(
+            input,
+            expectedValueMinor,
+            candidateKey,
+            selectionKind,
+            pipelineId,
+          ),
+        explicitSelection
+          ? {
+              kind: selectionKind as 'none' | 'pipeline',
+              pipelineId,
+            }
+          : undefined,
       );
       if (
         result.outcome === 'created' &&
@@ -354,6 +388,10 @@ export class LeadsService {
               event.new_status AS "newStatus",
               event.previous_stage AS "previousStage",
               event.new_stage AS "newStage",
+              event.previous_pipeline_stage_id AS "previousPipelineStageId",
+              event.previous_stage_name AS "previousStageName",
+              event.new_pipeline_stage_id AS "newPipelineStageId",
+              event.new_stage_name AS "newStageName",
               event.lost_reason AS "lostReason",
               event.archive_reason AS "archiveReason",
               event.activity_id AS "activityId", event.note_id AS "noteId",
@@ -515,8 +553,12 @@ export class LeadsService {
     parameters.push(query.limit + 1);
     const rows = await this.dataSource.query<LeadCommercialCycleView[]>(
       `SELECT cycle.id, cycle.cycle_number::text AS "cycleNumber",
+              cycle.pipeline_id AS "pipelineId",
+              cycle.pipeline_stage_id AS "pipelineStageId",
               cycle.opening_reason AS "openingReason",
               cycle.starting_stage AS "startingStage",
+              cycle.starting_pipeline_stage_id AS "startingPipelineStageId",
+              cycle.starting_stage_name AS "startingStageName",
                cycle.opened_by_membership_id AS "openedByMembershipId",
                cycle.opened_at AS "openedAt",
                cycle.expected_value_minor::text AS "expectedValueMinor",
@@ -524,6 +566,8 @@ export class LeadsService {
               cycle.closed_at AS "closedAt",
               cycle.closing_status AS "closingStatus",
               cycle.stage_at_close AS "stageAtClose",
+              cycle.stage_at_close_pipeline_stage_id AS "stageAtClosePipelineStageId",
+              cycle.stage_at_close_name AS "stageAtCloseName",
               cycle.lost_reason AS "lostReason",
               cycle.archive_reason AS "archiveReason",
               cycle.reason_note AS "reasonNote"
@@ -886,18 +930,52 @@ export class LeadsService {
     leadId: string,
     expectedRevision: string,
     idempotencyKey: string,
-    stage: LeadStage,
+    dto: MoveLeadDto | LeadStage,
   ): Promise<LeadCommandResult> {
+    const intent: MoveLeadDto = typeof dto === 'string' ? { stage: dto } : dto;
+    if (
+      (intent.stage === undefined) ===
+      (intent.pipelineStageId === undefined)
+    ) {
+      throw new BadRequestException(
+        'Exactly one move destination must be provided.',
+      );
+    }
+    if (intent.pipelineStageId !== undefined) {
+      return this.executeStageMove(
+        tenant,
+        leadId,
+        expectedRevision,
+        idempotencyKey,
+        intent.pipelineStageId,
+      );
+    }
     return this.executeCommand(
       tenant,
       leadId,
       expectedRevision,
       idempotencyKey,
       LeadCommand.MOVE,
-      stage,
+      intent.stage as LeadStage,
       null,
       null,
       null,
+    );
+  }
+
+  startCycle(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+    dto: StartLeadCycleDto,
+  ): Promise<LeadCommandResult> {
+    return this.executeCycleStart(
+      tenant,
+      leadId,
+      expectedRevision,
+      idempotencyKey,
+      dto.pipelineId,
     );
   }
 
@@ -1279,6 +1357,120 @@ export class LeadsService {
     return result;
   }
 
+  private async executeStageMove(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+    pipelineStageId: string,
+  ): Promise<LeadCommandResult> {
+    await this.readiness.assertManualReady();
+    const version = this.config.idempotencyCurrentKeyVersion as number;
+    const input: LeadStageMoveFingerprintInput = {
+      organizationId: tenant.organizationId,
+      actorMembershipId: tenant.membershipId,
+      leadId,
+      expectedRevision,
+      pipelineStageId,
+    };
+    const fingerprints = Object.fromEntries(
+      [...this.config.idempotencyKeys.entries()].map(
+        ([candidateVersion, candidateKey]) => [
+          String(candidateVersion),
+          leadStageMoveFingerprint(input, candidateKey),
+        ],
+      ),
+    );
+    try {
+      const rows = await this.dataSource.query<CommandRow[]>(
+        `SELECT revision::text AS revision, replayed,
+          response_status AS "responseStatus"
+         FROM app_private.execute_lead_stage_move_command(
+          $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::bigint,$6::uuid,
+          $7::smallint,$8::text,$9::jsonb,$10::uuid)`,
+        [
+          tenant.userId,
+          tenant.membershipId,
+          tenant.organizationId,
+          leadId,
+          expectedRevision,
+          idempotencyKey,
+          version,
+          leadStageMoveFingerprint(
+            input,
+            this.config.idempotencyKeys.get(version) as Buffer,
+          ),
+          JSON.stringify(fingerprints),
+          pipelineStageId,
+        ],
+      );
+      const result = rows[0];
+      if (result === undefined) {
+        throw new ServiceUnavailableException('Lead command is unavailable.');
+      }
+      return result;
+    } catch (error) {
+      this.mapDatabaseError(error);
+    }
+  }
+
+  private async executeCycleStart(
+    tenant: TenantContext,
+    leadId: string,
+    expectedRevision: string,
+    idempotencyKey: string,
+    pipelineId: string,
+  ): Promise<LeadCommandResult> {
+    await this.readiness.assertManualReady();
+    const version = this.config.idempotencyCurrentKeyVersion as number;
+    const input: LeadCycleStartFingerprintInput = {
+      organizationId: tenant.organizationId,
+      actorMembershipId: tenant.membershipId,
+      leadId,
+      expectedRevision,
+      pipelineId,
+    };
+    const fingerprints = Object.fromEntries(
+      [...this.config.idempotencyKeys.entries()].map(
+        ([candidateVersion, candidateKey]) => [
+          String(candidateVersion),
+          leadCycleStartFingerprint(input, candidateKey),
+        ],
+      ),
+    );
+    try {
+      const rows = await this.dataSource.query<CommandRow[]>(
+        `SELECT revision::text AS revision, replayed,
+          response_status AS "responseStatus"
+         FROM app_private.execute_lead_cycle_start_command(
+          $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::bigint,$6::uuid,
+          $7::smallint,$8::text,$9::jsonb,$10::uuid)`,
+        [
+          tenant.userId,
+          tenant.membershipId,
+          tenant.organizationId,
+          leadId,
+          expectedRevision,
+          idempotencyKey,
+          version,
+          leadCycleStartFingerprint(
+            input,
+            this.config.idempotencyKeys.get(version) as Buffer,
+          ),
+          JSON.stringify(fingerprints),
+          pipelineId,
+        ],
+      );
+      const result = rows[0];
+      if (result === undefined) {
+        throw new ServiceUnavailableException('Lead command is unavailable.');
+      }
+      return result;
+    } catch (error) {
+      this.mapDatabaseError(error);
+    }
+  }
+
   private normalizeReasonNote(
     value: string | undefined,
     required: boolean,
@@ -1358,6 +1550,10 @@ export class LeadsService {
       input: ReturnType<typeof normalizeLeadInput>,
       key: Buffer,
     ) => string,
+    selection?: {
+      kind: 'none' | 'pipeline';
+      pipelineId: string | null;
+    },
   ): Promise<IngestRow> {
     const input = normalizeLeadInput(dto, normalizeLeadPhone(dto.primaryPhone));
     if (channel === LeadIntakeChannel.GENESIS_FORM) {
@@ -1377,10 +1573,12 @@ export class LeadsService {
         `SELECT outcome, lead_id AS "leadId", revision::text AS revision,
                 replayed, actor_can_view AS visible,
                 response_status AS "responseStatus"
-         FROM app_private.ingest_lead(
+         FROM app_private.${selection === undefined ? 'ingest_lead' : 'ingest_lead_with_pipeline'}(
            $1::uuid,$2::uuid,$3::uuid,$4::text,$5::text,$6::text,$7::text,
            $8::text,$9::text,$10::text,$11::text,$12::uuid,$13::text,$14::text,
-           $15::text,$16::text,$17::text,$18::text,$19::text,$20::uuid,$21::smallint,$22::text,$23::jsonb)`,
+           $15::text,$16::text,$17::text,$18::text,$19::text,$20::uuid,$21::smallint,$22::text,$23::jsonb${
+             selection === undefined ? '' : ',$24::text,$25::uuid'
+           })`,
         [
           tenant?.userId ?? null,
           tenant?.membershipId ?? null,
@@ -1408,6 +1606,9 @@ export class LeadsService {
             this.config.idempotencyKeys.get(version) as Buffer,
           ),
           JSON.stringify(fingerprints),
+          ...(selection === undefined
+            ? []
+            : [selection.kind, selection.pipelineId]),
         ],
       );
     } catch (error) {
@@ -1484,8 +1685,11 @@ export class LeadsService {
       lead.company_name AS "companyName", lead.instagram, lead.city,
       lead.service_interest AS "serviceInterest",
       lead.responsible_membership_id AS "responsibleMembershipId",
-      lead.status, lead.stage,
-      (lead.next_cycle_number - 1)::text AS "latestCycleNumber",
+      lead.status, lead.stage, lead.pipeline_id AS "pipelineId",
+      lead.pipeline_stage_id AS "pipelineStageId", pipeline.name AS "pipelineName",
+      pipeline_stage.name AS "pipelineStageName",
+      CASE WHEN lead.next_cycle_number = 1 THEN NULL
+        ELSE (lead.next_cycle_number - 1)::text END AS "latestCycleNumber",
       EXISTS (
         SELECT 1 FROM public.lead_return_reviews review
         WHERE review.organization_id = lead.organization_id
@@ -1497,6 +1701,11 @@ export class LeadsService {
       last_entry.attribution AS "lastAttribution",
       pending_action.summary AS "nextAction"
       FROM public.leads lead
+      LEFT JOIN public.pipelines pipeline ON pipeline.id = lead.pipeline_id
+        AND pipeline.organization_id = lead.organization_id
+      LEFT JOIN public.pipeline_stages pipeline_stage ON pipeline_stage.id = lead.pipeline_stage_id
+        AND pipeline_stage.pipeline_id = lead.pipeline_id
+        AND pipeline_stage.organization_id = lead.organization_id
       JOIN LATERAL (
         SELECT jsonb_build_object(
           'source', entry.source, 'sourceDetail', entry.source_detail,

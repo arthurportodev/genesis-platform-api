@@ -61,12 +61,16 @@ export class Lead {
   status!: LeadStatus;
   @Column({ type: 'enum', enum: LeadStage, enumName: 'lead_stage_enum' })
   stage!: LeadStage;
+  @Column({ name: 'pipeline_id', type: 'uuid', nullable: true })
+  pipelineId!: string | null;
+  @Column({ name: 'pipeline_stage_id', type: 'uuid', nullable: true })
+  pipelineStageId!: string | null;
   @Column({ type: 'bigint', default: 0 }) revision!: string;
   @Column({ name: 'next_entry_sequence', type: 'bigint', default: 1 })
   nextEntrySequence!: string;
   @Column({ name: 'next_event_sequence', type: 'bigint', default: 1 })
   nextEventSequence!: string;
-  @Column({ name: 'next_cycle_number', type: 'bigint', default: 2 })
+  @Column({ name: 'next_cycle_number', type: 'bigint', default: 1 })
   nextCycleNumber!: string;
   @CreateDateColumn({
     name: 'created_at',

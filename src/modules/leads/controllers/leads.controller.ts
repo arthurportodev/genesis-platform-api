@@ -46,6 +46,7 @@ import {
   EmptyLeadCommandDto,
   RescheduleLeadNextActionDto,
   SetLeadExpectedValueDto,
+  StartLeadCycleDto,
   UpdateLeadDto,
   UpdateLeadInformationDto,
 } from '../dto/lead.dto';
@@ -90,8 +91,15 @@ export class LeadsController {
     @CurrentTenant() tenant: TenantContext,
     @Body() dto: CreateManualLeadDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Headers('x-genesis-lead-contract') contract: string | undefined,
     @Res({ passthrough: true }) response: Response,
   ): Promise<LeadView | undefined> {
+    const pipelineV2 = this.pipelineV2Contract(contract);
+    if (dto.pipelineId !== undefined && !pipelineV2) {
+      throw new BadRequestException(
+        'Explicit pipeline selection requires the pipeline-v2 contract.',
+      );
+    }
     const key = this.idempotencyKey(idempotencyKey);
     const result = await this.leads.createManual(tenant, dto, key);
     response.status(
@@ -115,8 +123,9 @@ export class LeadsController {
   list(
     @CurrentTenant() tenant: TenantContext,
     @Query() query: ListLeadsDto,
+    @Headers('x-genesis-lead-contract') contract: string | undefined,
   ): Promise<LeadListResponse> {
-    return this.reads.list(tenant, query);
+    return this.reads.list(tenant, query, this.pipelineV2Contract(contract));
   }
 
   @Get('kanban')
@@ -133,8 +142,13 @@ export class LeadsController {
   myActions(
     @CurrentTenant() tenant: TenantContext,
     @Query() query: LeadMyActionsDto,
+    @Headers('x-genesis-lead-contract') contract: string | undefined,
   ): Promise<LeadListResponse> {
-    return this.reads.myActions(tenant, query);
+    return this.reads.myActions(
+      tenant,
+      query,
+      this.pipelineV2Contract(contract),
+    );
   }
 
   @Get('work/unassigned')
@@ -143,8 +157,13 @@ export class LeadsController {
   unassigned(
     @CurrentTenant() tenant: TenantContext,
     @Query() query: LeadUnassignedQueueDto,
+    @Headers('x-genesis-lead-contract') contract: string | undefined,
   ): Promise<LeadListResponse> {
-    return this.reads.unassigned(tenant, query);
+    return this.reads.unassigned(
+      tenant,
+      query,
+      this.pipelineV2Contract(contract),
+    );
   }
 
   @Get('work/return-reviews')
@@ -153,8 +172,13 @@ export class LeadsController {
   returnReviews(
     @CurrentTenant() tenant: TenantContext,
     @Query() query: LeadReturnReviewQueueDto,
+    @Headers('x-genesis-lead-contract') contract: string | undefined,
   ): Promise<LeadReturnReviewQueueResponse> {
-    return this.reads.returnReviews(tenant, query);
+    return this.reads.returnReviews(
+      tenant,
+      query,
+      this.pipelineV2Contract(contract),
+    );
   }
 
   @Get('metrics/summary')
@@ -172,9 +196,14 @@ export class LeadsController {
   async get(
     @CurrentTenant() tenant: TenantContext,
     @Param() params: LeadParamsDto,
+    @Headers('x-genesis-lead-contract') contract: string | undefined,
     @Res({ passthrough: true }) response: Response,
   ): Promise<LeadDetailView> {
-    const lead = await this.reads.detail(tenant, params.leadId);
+    const lead = await this.reads.detail(
+      tenant,
+      params.leadId,
+      this.pipelineV2Contract(contract),
+    );
     response.setHeader('ETag', this.etag(lead));
     return lead;
   }
@@ -185,8 +214,15 @@ export class LeadsController {
     @CurrentTenant() tenant: TenantContext,
     @Param() params: LeadParamsDto,
     @Query() query: ListLeadTimelineDto,
+    @Headers('x-genesis-lead-contract') contract: string | undefined,
   ): Promise<LeadTimelineResponse> {
-    return this.leads.timeline(tenant, params.leadId, query);
+    return this.reads
+      .assertContractVisibility(
+        tenant,
+        params.leadId,
+        this.pipelineV2Contract(contract),
+      )
+      .then(() => this.leads.timeline(tenant, params.leadId, query));
   }
 
   @Get(':leadId/next-action')
@@ -211,8 +247,34 @@ export class LeadsController {
     @CurrentTenant() tenant: TenantContext,
     @Param() params: LeadParamsDto,
     @Query() query: ListLeadCyclesDto,
+    @Headers('x-genesis-lead-contract') contract: string | undefined,
   ): Promise<LeadCycleListResponse> {
-    return this.reads.cycles(tenant, params.leadId, query);
+    return this.reads
+      .assertContractVisibility(
+        tenant,
+        params.leadId,
+        this.pipelineV2Contract(contract),
+      )
+      .then(() => this.reads.cycles(tenant, params.leadId, query));
+  }
+
+  @Post(':leadId/cycles')
+  async startCycle(
+    @CurrentTenant() tenant: TenantContext,
+    @Param() params: LeadParamsDto,
+    @Body() dto: StartLeadCycleDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const result = await this.leads.startCycle(
+      tenant,
+      params.leadId,
+      this.expectedRevision(ifMatch, params.leadId),
+      this.idempotencyKey(idempotencyKey),
+      dto,
+    );
+    this.commandResponse(response, params.leadId, result);
   }
 
   @Patch(':leadId')
@@ -402,7 +464,7 @@ export class LeadsController {
       params.leadId,
       this.expectedRevision(ifMatch, params.leadId),
       this.idempotencyKey(idempotencyKey),
-      dto.stage,
+      dto,
     );
     this.commandResponse(response, params.leadId, result);
   }
@@ -531,6 +593,12 @@ export class LeadsController {
       throw new BadRequestException('Invalid Idempotency-Key.');
     }
     return value;
+  }
+
+  private pipelineV2Contract(value: string | undefined): boolean {
+    if (value === undefined) return false;
+    if (value === 'pipeline-v2') return true;
+    throw new BadRequestException('Unsupported lead contract.');
   }
 
   private expectedRevision(value: string | undefined, leadId: string): string {

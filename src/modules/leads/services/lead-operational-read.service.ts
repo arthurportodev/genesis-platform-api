@@ -106,6 +106,7 @@ export class LeadOperationalReadService {
   async list(
     tenant: TenantContext,
     query: ListLeadsDto,
+    pipelineV2 = true,
   ): Promise<LeadListResponse> {
     this.validateListQuery(query);
     const filterMac = this.filterMac('list', [
@@ -114,6 +115,7 @@ export class LeadOperationalReadService {
       tenant.userId,
       query.sort,
       this.listFilterIdentity(query),
+      pipelineV2,
     ]);
     const cursor = query.cursor
       ? this.decodeCursor(query.cursor, 'list', query.sort, filterMac)
@@ -121,6 +123,9 @@ export class LeadOperationalReadService {
 
     return this.withOperationalQuery(async (runner) => {
       const parts = this.baseParts(tenant, query);
+      if (!pipelineV2) {
+        parts.predicates.push(this.legacyCompatibilityPredicate());
+      }
       if (query.status === undefined) {
         parts.predicates.push(`lead.status <> 'archived'`);
       } else {
@@ -206,21 +211,27 @@ export class LeadOperationalReadService {
   async myActions(
     tenant: TenantContext,
     query: LeadMyActionsDto,
+    pipelineV2 = true,
   ): Promise<LeadListResponse> {
-    return this.list(tenant, {
-      limit: query.limit,
-      cursor: query.cursor,
-      responsibleMembershipId: query.responsibleMembershipId,
-      assignedToMe:
-        query.responsibleMembershipId === undefined ? 'true' : undefined,
-      nextActionState: query.state,
-      sort: LeadListSort.NEXT_ACTION_DUE_AT_ASC,
-    });
+    return this.list(
+      tenant,
+      {
+        limit: query.limit,
+        cursor: query.cursor,
+        responsibleMembershipId: query.responsibleMembershipId,
+        assignedToMe:
+          query.responsibleMembershipId === undefined ? 'true' : undefined,
+        nextActionState: query.state,
+        sort: LeadListSort.NEXT_ACTION_DUE_AT_ASC,
+      },
+      pipelineV2,
+    );
   }
 
   async unassigned(
     tenant: TenantContext,
     query: LeadUnassignedQueueDto,
+    pipelineV2 = true,
   ): Promise<LeadListResponse> {
     if (
       query.responsibleMembershipId !== undefined ||
@@ -228,20 +239,24 @@ export class LeadOperationalReadService {
     ) {
       throw new BadRequestException('Invalid assignment filters.');
     }
-    return this.list(tenant, {
-      q: query.q,
-      status: query.status ?? LeadStatus.ACTIVE,
-      source: query.source,
-      nextActionState: query.nextActionState,
-      createdFrom: query.createdFrom,
-      createdTo: query.createdTo,
-      lastEntryFrom: query.lastEntryFrom,
-      lastEntryTo: query.lastEntryTo,
-      unassigned: 'true',
-      limit: query.limit,
-      cursor: query.cursor,
-      sort: LeadListSort.CREATED_AT_DESC,
-    });
+    return this.list(
+      tenant,
+      {
+        q: query.q,
+        status: query.status ?? LeadStatus.ACTIVE,
+        source: query.source,
+        nextActionState: query.nextActionState,
+        createdFrom: query.createdFrom,
+        createdTo: query.createdTo,
+        lastEntryFrom: query.lastEntryFrom,
+        lastEntryTo: query.lastEntryTo,
+        unassigned: 'true',
+        limit: query.limit,
+        cursor: query.cursor,
+        sort: LeadListSort.CREATED_AT_DESC,
+      },
+      pipelineV2,
+    );
   }
 
   private baseParts(
@@ -340,7 +355,9 @@ export class LeadOperationalReadService {
       lead.primary_phone AS "primaryPhone", lead.email,
       lead.company_name AS "companyName",
       lead.responsible_membership_id AS "responsibleMembershipId",
-      lead.status, lead.stage,
+      lead.status, lead.stage, lead.pipeline_id AS "pipelineId",
+      lead.pipeline_stage_id AS "pipelineStageId", pipeline.name AS "pipelineName",
+      pipeline_stage.name AS "pipelineStageName",
       latest_cycle.expected_value_minor::text AS "expectedValueMinor",
       first_entry.source,
       last_entry.received_at AS "lastEntryAt",
@@ -381,10 +398,15 @@ export class LeadOperationalReadService {
     LEFT JOIN public.lead_next_actions pending_action
       ON pending_action.organization_id = lead.organization_id
      AND pending_action.lead_id = lead.id AND pending_action.status = 'pending'
-    JOIN public.lead_commercial_cycles latest_cycle
+    LEFT JOIN public.lead_commercial_cycles latest_cycle
       ON latest_cycle.organization_id = lead.organization_id
      AND latest_cycle.lead_id = lead.id
-     AND latest_cycle.cycle_number = lead.next_cycle_number - 1`;
+     AND latest_cycle.cycle_number = lead.next_cycle_number - 1
+    LEFT JOIN public.pipelines pipeline ON pipeline.id = lead.pipeline_id
+     AND pipeline.organization_id = lead.organization_id
+    LEFT JOIN public.pipeline_stages pipeline_stage ON pipeline_stage.id = lead.pipeline_stage_id
+     AND pipeline_stage.pipeline_id = lead.pipeline_id
+     AND pipeline_stage.organization_id = lead.organization_id`;
   }
 
   private addSearch(parts: SqlParts, rawQuery: string | undefined): void {
@@ -524,6 +546,10 @@ export class LeadOperationalReadService {
       responsibleMembershipId: row.responsibleMembershipId ?? null,
       status: row.status as LeadStatus,
       stage: row.stage as LeadStage,
+      pipelineId: row.pipelineId ?? null,
+      pipelineStageId: row.pipelineStageId ?? null,
+      pipelineName: row.pipelineName ?? null,
+      pipelineStageName: row.pipelineStageName ?? null,
       expectedValueMinor: row.expectedValueMinor ?? null,
       source: row.source as string,
       lastEntryAt: this.iso(row.lastEntryAt as Date | string),
@@ -811,7 +837,10 @@ export class LeadOperationalReadService {
 
     return this.withOperationalQuery(async (runner) => {
       const parts = this.baseParts(tenant, query);
-      parts.predicates.push(`lead.status = 'active'`);
+      parts.predicates.push(
+        `lead.status = 'active'`,
+        this.legacyCompatibilityPredicate(),
+      );
       const requestedStages =
         query.stage === undefined ? STAGES : [query.stage];
       const stageValues = requestedStages
@@ -958,6 +987,7 @@ export class LeadOperationalReadService {
   async returnReviews(
     tenant: TenantContext,
     query: LeadReturnReviewQueueDto,
+    pipelineV2 = true,
   ): Promise<LeadReturnReviewQueueResponse> {
     if (query.q !== undefined) this.normalizeSearch(query.q);
     const identity = [
@@ -989,6 +1019,9 @@ export class LeadOperationalReadService {
         `lead.status <> 'active'`,
         `review.status = 'pending'`,
       );
+      if (!pipelineV2) {
+        parts.predicates.push(this.legacyCompatibilityPredicate());
+      }
       parts.joins.push(`JOIN public.lead_return_reviews review
         ON review.organization_id = lead.organization_id
        AND review.lead_id = lead.id
@@ -1213,13 +1246,18 @@ export class LeadOperationalReadService {
     });
   }
 
-  async detail(tenant: TenantContext, leadId: string): Promise<LeadDetailView> {
+  async detail(
+    tenant: TenantContext,
+    leadId: string,
+    pipelineV2 = true,
+  ): Promise<LeadDetailView> {
     return this.withOperationalQuery(async (runner) => {
       const rows = (await runner.query(
         `WITH ${this.authorizedActorCte()}, authorized_lead AS MATERIALIZED (
           SELECT lead.* FROM authorized_actor actor
           JOIN public.leads lead ON lead.organization_id = $1 AND lead.id = $4
-          WHERE actor.role <> 'member' OR lead.responsible_membership_id = actor.id
+          WHERE (actor.role <> 'member' OR lead.responsible_membership_id = actor.id)
+            AND ($5::boolean OR ${this.legacyCompatibilityPredicate()})
         )
         SELECT CASE WHEN lead.id IS NULL THEN NULL ELSE jsonb_build_object(
           'id', lead.id, 'displayName', lead.display_name,
@@ -1228,7 +1266,10 @@ export class LeadOperationalReadService {
           'city', lead.city, 'serviceInterest', lead.service_interest,
           'responsibleMembershipId', lead.responsible_membership_id,
           'status', lead.status, 'stage', lead.stage,
-          'latestCycleNumber', (lead.next_cycle_number - 1)::text,
+          'pipelineId', lead.pipeline_id, 'pipelineStageId', lead.pipeline_stage_id,
+          'pipelineName', pipeline.name, 'pipelineStageName', pipeline_stage.name,
+          'latestCycleNumber', CASE WHEN lead.next_cycle_number = 1 THEN NULL
+            ELSE (lead.next_cycle_number - 1)::text END,
           'returnReviewPending', pending_return.id IS NOT NULL,
           'revision', lead.revision::text, 'createdAt', lead.created_at,
           'updatedAt', lead.updated_at,
@@ -1242,6 +1283,11 @@ export class LeadOperationalReadService {
         ) END AS item
         FROM authorized_actor actor
         LEFT JOIN authorized_lead lead ON true
+        LEFT JOIN public.pipelines pipeline ON pipeline.id = lead.pipeline_id
+          AND pipeline.organization_id = lead.organization_id
+        LEFT JOIN public.pipeline_stages pipeline_stage ON pipeline_stage.id = lead.pipeline_stage_id
+          AND pipeline_stage.pipeline_id = lead.pipeline_id
+          AND pipeline_stage.organization_id = lead.organization_id
         LEFT JOIN LATERAL (
           SELECT jsonb_build_object('source', entry.source,
             'sourceDetail', entry.source_detail, 'utmSource', entry.utm_source,
@@ -1266,12 +1312,18 @@ export class LeadOperationalReadService {
         LEFT JOIN LATERAL (
           SELECT jsonb_build_object('id', cycle.id,
             'cycleNumber', cycle.cycle_number::text,
+            'pipelineId', cycle.pipeline_id,
+            'pipelineStageId', cycle.pipeline_stage_id,
             'expectedValueMinor', cycle.expected_value_minor::text,
             'openingReason', cycle.opening_reason, 'startingStage', cycle.starting_stage,
+            'startingPipelineStageId', cycle.starting_pipeline_stage_id,
+            'startingStageName', cycle.starting_stage_name,
             'openedByMembershipId', cycle.opened_by_membership_id,
             'openedAt', cycle.opened_at, 'closedByMembershipId', cycle.closed_by_membership_id,
             'closedAt', cycle.closed_at, 'closingStatus', cycle.closing_status,
             'stageAtClose', cycle.stage_at_close, 'lostReason', cycle.lost_reason,
+            'stageAtClosePipelineStageId', cycle.stage_at_close_pipeline_stage_id,
+            'stageAtCloseName', cycle.stage_at_close_name,
             'archiveReason', cycle.archive_reason,
             'reasonNote', cycle.reason_note) AS summary
           FROM public.lead_commercial_cycles cycle
@@ -1307,7 +1359,13 @@ export class LeadOperationalReadService {
               WHERE note.organization_id = lead.organization_id AND note.lead_id = lead.id)
           ) AS summary
         ) counts ON true`,
-        [tenant.organizationId, tenant.membershipId, tenant.userId, leadId],
+        [
+          tenant.organizationId,
+          tenant.membershipId,
+          tenant.userId,
+          leadId,
+          pipelineV2,
+        ],
       )) as Array<{ item: LeadDetailView | null }>;
       const item = rows[0]?.item;
       if (item === undefined || item === null)
@@ -1322,6 +1380,50 @@ export class LeadOperationalReadService {
       }
       return item;
     });
+  }
+
+  async assertContractVisibility(
+    tenant: TenantContext,
+    leadId: string,
+    pipelineV2: boolean,
+  ): Promise<void> {
+    await this.withOperationalQuery(async (runner) => {
+      const rows = (await runner.query(
+        `WITH ${this.authorizedActorCte()}
+         SELECT EXISTS (
+           SELECT 1 FROM authorized_actor actor
+           JOIN public.leads lead ON lead.organization_id = $1 AND lead.id = $4
+           WHERE (actor.role <> 'member' OR lead.responsible_membership_id = actor.id)
+             AND ($5::boolean OR ${this.legacyCompatibilityPredicate()})
+         ) AS visible`,
+        [
+          tenant.organizationId,
+          tenant.membershipId,
+          tenant.userId,
+          leadId,
+          pipelineV2,
+        ],
+      )) as Array<{ visible: boolean }>;
+      if (rows[0]?.visible !== true) {
+        throw new NotFoundException('Lead not found.');
+      }
+    });
+  }
+
+  private legacyCompatibilityPredicate(): string {
+    return `EXISTS (
+      SELECT 1 FROM public.pipelines compatibility_pipeline
+      WHERE compatibility_pipeline.organization_id = lead.organization_id
+        AND compatibility_pipeline.is_default
+        AND compatibility_pipeline.id = COALESCE(
+          lead.pipeline_id,
+          (SELECT compatibility_cycle.pipeline_id
+             FROM public.lead_commercial_cycles compatibility_cycle
+            WHERE compatibility_cycle.organization_id = lead.organization_id
+              AND compatibility_cycle.lead_id = lead.id
+            ORDER BY compatibility_cycle.cycle_number DESC LIMIT 1)
+        )
+    )`;
   }
 
   async cycles(
@@ -1351,12 +1453,18 @@ export class LeadOperationalReadService {
         )
         SELECT authorized.id IS NOT NULL AS "leadVisible",
           cycle.id, cycle.cycle_number::text AS "cycleNumber",
+          cycle.pipeline_id AS "pipelineId",
+          cycle.pipeline_stage_id AS "pipelineStageId",
           cycle.expected_value_minor::text AS "expectedValueMinor",
           cycle.opening_reason AS "openingReason", cycle.starting_stage AS "startingStage",
+          cycle.starting_pipeline_stage_id AS "startingPipelineStageId",
+          cycle.starting_stage_name AS "startingStageName",
           cycle.opened_by_membership_id AS "openedByMembershipId",
           cycle.opened_at AS "openedAt", cycle.closed_by_membership_id AS "closedByMembershipId",
           cycle.closed_at AS "closedAt", cycle.closing_status AS "closingStatus",
           cycle.stage_at_close AS "stageAtClose", cycle.lost_reason AS "lostReason",
+          cycle.stage_at_close_pipeline_stage_id AS "stageAtClosePipelineStageId",
+          cycle.stage_at_close_name AS "stageAtCloseName",
           cycle.archive_reason AS "archiveReason", cycle.reason_note AS "reasonNote"
         FROM authorized_actor actor LEFT JOIN authorized_lead authorized ON true
         LEFT JOIN LATERAL (SELECT candidate.* FROM public.lead_commercial_cycles candidate

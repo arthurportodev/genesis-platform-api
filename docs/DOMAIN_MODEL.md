@@ -146,12 +146,19 @@ Entidades de negócio tenant-scoped devem conter `organization_id` e depender do
 
 ## Pipeline, ciclos e retornos 0.3.2
 
-- `Lead.status` usa `active`, `won`, `lost` ou `archived`; `Lead.stage` usa `new`, `qualification`, `diagnosis`, `proposal` ou `negotiation`.
-- Movimentações entre estágios são livres enquanto o Lead está ativo. Fechamento preserva o estágio; reativação volta a `active/qualification` e incrementa o número do ciclo.
-- `LeadCommercialCycle` mantém o histórico imutável de abertura e fechamento. Existe exatamente um ciclo aberto para Lead ativo e nenhum para Lead encerrado, protegido também por constraint triggers diferidos.
+- `Lead.status` usa `active`, `won`, `lost` ou `archived`. `Lead.stage` e o enum de cinco valores permanecem como ponte temporária para clientes legados; `PipelineStage.id` é a identidade autoritativa da posição atual.
+- Cada Organization possui exatamente um `Pipeline` default. O catálogo inicial contém Novo, Qualificação, Diagnóstico, Proposta e Negociação, provisionados transacionalmente também para novas Organizations.
+- `Pipeline` e `PipelineStage` são tenant-scoped. Pipeline tem nome e revisão; Stage tem UUID imutável, nome editável, posição inteira positiva e archive sem delete. Nome e posição ativos são únicos dentro do escopo correspondente.
+- `Lead` mantém snapshots nullable de Pipeline e Stage para leitura operacional. Um Lead `active` pode ter zero ou um ciclo aberto; sem ciclo os snapshots são nulos, e com ciclo coincidem com a associação corrente do ciclo. Leads terminais não conservam snapshot corrente.
+- `LeadCommercialCycle` mantém o histórico imutável de abertura e fechamento, sua associação ao Pipeline e snapshots de nome do Stage na abertura e no fechamento. Renames posteriores não reescrevem esses snapshots.
+- O início explícito de ciclo usa o primeiro Stage ativo do Pipeline escolhido. Em Lead já ativo sem ciclo registra `lead.cycle.started`; em Lead terminal registra `lead.reactivated`. Processos em Pipelines diferentes são sequenciais e usam ciclos diferentes.
+- Movimentações entre Stages são livres dentro do Pipeline do ciclo aberto. Fechamento preserva o Stage factual e limpa o snapshot corrente do Lead.
 - Perda exige um motivo tipado; arquivamento usa motivos próprios. `reasonNote` pertence ao ciclo encerrado, é obrigatório somente para `other`, tem no máximo 500 caracteres e não admite controles ou quebras de linha.
 - Uma Entry recebida após fechamento preserva status, estágio e assignment e abre ou agrega um único `LeadReturnReview` pendente. Reativar terminaliza a revisão e abre novo ciclo; descartar apenas terminaliza a revisão.
 - Comandos de lifecycle são idempotentes por tenant, ator, comando e UUID v4, usam fingerprint HMAC versionado e controle otimista por revisão. Efeitos efetivos incrementam revisão e timeline exatamente uma vez; mover para o mesmo estágio é no-op persistido.
+- A criação manual distingue a ponte legada (Pipeline default), `pipelineId: null` (Lead sem ciclo) e Pipeline UUID (ciclo no primeiro Stage). Expected Value continua pertencendo exclusivamente ao ciclo.
+- Configuração de Pipeline e Stage é restrita a owner/admin. Enquanto o Web legado usa os cinco slots do Pipeline default, seus Stages podem ser renomeados, mas create, reorder e archive ficam bloqueados; Pipelines customizados oferecem todas essas operações. Archive de Stage customizado bloqueia o último Stage ativo e qualquer Stage ocupado por ciclo aberto; não existe archive de Pipeline no MVP.
+- Leituras que admitem Lead sem ciclo exigem o opt-in `X-Genesis-Lead-Contract: pipeline-v2`. Sem esse opt-in, coleções legadas omitem Lead-only e detail/timeline/cycles o tratam como não visível, evitando publicar `latestCycle` nullable para o Web ainda ativo.
 - Owner/admin podem editar dados básicos e assignment de Leads encerrados; member pode lê-los enquanto atribuído, mas não editar dados básicos após o fechamento. Offboarding continua limpando assignment sem alterar lifecycle.
 
 ## Activities, Notes e Next Action 0.3.3

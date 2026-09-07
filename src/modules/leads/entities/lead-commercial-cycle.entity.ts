@@ -27,6 +27,8 @@ export class LeadCommercialCycle {
   @PrimaryGeneratedColumn('uuid') id!: string;
   @Column({ name: 'organization_id', type: 'uuid' }) organizationId!: string;
   @Column({ name: 'lead_id', type: 'uuid' }) leadId!: string;
+  @Column({ name: 'pipeline_id', type: 'uuid' }) pipelineId!: string;
+  @Column({ name: 'pipeline_stage_id', type: 'uuid' }) pipelineStageId!: string;
   @Column({ name: 'cycle_number', type: 'bigint' }) cycleNumber!: string;
   @Column({
     name: 'opening_reason',
@@ -42,6 +44,10 @@ export class LeadCommercialCycle {
     enumName: 'lead_stage_enum',
   })
   startingStage!: LeadStage;
+  @Column({ name: 'starting_pipeline_stage_id', type: 'uuid' })
+  startingPipelineStageId!: string;
+  @Column({ name: 'starting_stage_name', type: 'varchar', length: 120 })
+  startingStageName!: string;
   @Column({ name: 'opened_by_membership_id', type: 'uuid', nullable: true })
   openedByMembershipId!: string | null;
   @Column({ name: 'opened_at', type: 'timestamptz' }) openedAt!: Date;
@@ -67,6 +73,19 @@ export class LeadCommercialCycle {
     nullable: true,
   })
   stageAtClose!: LeadStage | null;
+  @Column({
+    name: 'stage_at_close_pipeline_stage_id',
+    type: 'uuid',
+    nullable: true,
+  })
+  stageAtClosePipelineStageId!: string | null;
+  @Column({
+    name: 'stage_at_close_name',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
+  stageAtCloseName!: string | null;
   @Column({
     name: 'lost_reason',
     type: 'enum',

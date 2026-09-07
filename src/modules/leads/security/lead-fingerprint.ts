@@ -106,12 +106,16 @@ export function leadManualCreateFingerprint(
   input: NormalizedLeadInput,
   expectedValueMinor: string | null,
   key: Buffer,
+  selectionKind: 'legacy-default' | 'none' | 'pipeline' = 'legacy-default',
+  pipelineId: string | null = null,
 ): string {
-  if (expectedValueMinor === null) return leadRequestFingerprint(input, key);
+  if (selectionKind === 'legacy-default' && expectedValueMinor === null) {
+    return leadRequestFingerprint(input, key);
+  }
   return createHmac('sha256', key)
     .update(
       JSON.stringify([
-        2,
+        selectionKind === 'legacy-default' ? 2 : 3,
         input.displayName,
         input.primaryPhone,
         input.email,
@@ -127,7 +131,67 @@ export function leadManualCreateFingerprint(
         input.utmContent,
         input.utmTerm,
         input.responsibleMembershipId,
+        ...(selectionKind === 'legacy-default'
+          ? []
+          : [selectionKind, pipelineId]),
         expectedValueMinor,
+      ]),
+      'utf8',
+    )
+    .digest('hex');
+}
+
+export interface LeadStageMoveFingerprintInput {
+  organizationId: string;
+  actorMembershipId: string;
+  leadId: string;
+  expectedRevision: string;
+  pipelineStageId: string;
+}
+
+export function leadStageMoveFingerprint(
+  input: LeadStageMoveFingerprintInput,
+  key: Buffer,
+): string {
+  return createHmac('sha256', key)
+    .update(
+      JSON.stringify([
+        2,
+        input.organizationId,
+        input.actorMembershipId,
+        input.leadId,
+        LeadCommand.MOVE,
+        input.expectedRevision,
+        'pipeline-stage',
+        input.pipelineStageId,
+      ]),
+      'utf8',
+    )
+    .digest('hex');
+}
+
+export interface LeadCycleStartFingerprintInput {
+  organizationId: string;
+  actorMembershipId: string;
+  leadId: string;
+  expectedRevision: string;
+  pipelineId: string;
+}
+
+export function leadCycleStartFingerprint(
+  input: LeadCycleStartFingerprintInput,
+  key: Buffer,
+): string {
+  return createHmac('sha256', key)
+    .update(
+      JSON.stringify([
+        1,
+        input.organizationId,
+        input.actorMembershipId,
+        input.leadId,
+        'start_cycle',
+        input.expectedRevision,
+        input.pipelineId,
       ]),
       'utf8',
     )
