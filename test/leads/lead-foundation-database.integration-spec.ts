@@ -52,6 +52,19 @@ interface IngestResult {
   responseStatus: number;
 }
 
+async function runPipelineMigrationInSingleTransaction(
+  queryRunner: QueryRunner,
+): Promise<void> {
+  await queryRunner.startTransaction();
+  try {
+    await new AddCustomPipelinesAndStages1788375600000().up(queryRunner);
+    await queryRunner.commitTransaction();
+  } catch (error) {
+    await queryRunner.rollbackTransaction();
+    throw error;
+  }
+}
+
 describe('Lead foundation database integration', () => {
   let owner: DataSource;
   let runtime: DataSource;
@@ -71,7 +84,36 @@ describe('Lead foundation database integration', () => {
     await new ManageLeadCommercialCycleExpectedValue1788289200000().up(
       migrationRunner,
     );
-    await new AddCustomPipelinesAndStages1788375600000().up(migrationRunner);
+    await owner.query(`INSERT INTO public.migrations (timestamp, name) VALUES
+      (1785346800000, 'CreateLeadFoundation1785346800000'),
+      (1785433200000, 'ManageLeadCommercialPipeline1785433200000'),
+      (1785519600000, 'ManageLeadActivitiesFollowUp1785519600000'),
+      (1785606000000, 'AddLeadOperationalReadIndexes1785606000000'),
+      (1788289200000, 'ManageLeadCommercialCycleExpectedValue1788289200000')`);
+    const productionPath = new DataSource({
+      ...owner.options,
+      migrations: [AddCustomPipelinesAndStages1788375600000],
+    });
+    await productionPath.initialize();
+    try {
+      const applied = await productionPath.runMigrations({
+        transaction: 'all',
+      });
+      expect(applied.map((entry) => entry.name)).toEqual([
+        'AddCustomPipelinesAndStages1788375600000',
+      ]);
+      const [inventory] = await productionPath.query<
+        Array<{ count: number; head: string }>
+      >(`SELECT count(*)::int AS count,
+        (array_agg(name ORDER BY id DESC))[1] AS head
+        FROM public.migrations`);
+      expect(inventory).toEqual({
+        count: 12,
+        head: 'AddCustomPipelinesAndStages1788375600000',
+      });
+    } finally {
+      await productionPath.destroy();
+    }
     configureIntegrationRuntimeEnvironment();
     runtime = createIntegrationRuntimeDataSource();
     await runtime.initialize();
@@ -84,6 +126,18 @@ describe('Lead foundation database integration', () => {
       await owner.dropDatabase();
       await owner.destroy();
     }
+  });
+
+  it('records the empty database pipeline migration through one transaction', async () => {
+    const [inventory] = await owner.query<
+      Array<{ count: number; head: string }>
+    >(`SELECT count(*)::int AS count,
+      (array_agg(name ORDER BY id DESC))[1] AS head
+      FROM public.migrations`);
+    expect(inventory).toEqual({
+      count: 12,
+      head: 'AddCustomPipelinesAndStages1788375600000',
+    });
   });
 
   it('reverts and reapplies exactly the nine operational indexes on UTF8', async () => {
@@ -234,6 +288,10 @@ describe('Lead foundation database integration', () => {
       await expect(
         financialMigration.up(migrationRunner),
       ).resolves.toBeUndefined();
+      await migrationRunner.query(`SET CONSTRAINTS
+        trg_leads_cycle_consistency,
+        trg_lead_cycles_consistency,
+        trg_leads_next_action_consistency DEFERRED`);
       await expect(
         customPipelineMigration.up(migrationRunner),
       ).resolves.toBeUndefined();
@@ -3436,6 +3494,17 @@ describe('Lead foundation database integration', () => {
   });
 
   it('backfills the rich legacy dataset and safely round-trips the compatibility migration', async () => {
+    const regressionFixture = await createFixture();
+    await createLeadService().createManual(
+      ownerTenant(regressionFixture),
+      {
+        displayName: 'F-002 transactional upgrade',
+        primaryPhone: '+5562555555565',
+        source: LeadSource.MANUAL,
+        expectedValueMinor: '1234',
+      },
+      randomUUID(),
+    );
     const migration = new AddCustomPipelinesAndStages1788375600000();
     await migration.down(migrationRunner);
     const [before] = await owner.query<
@@ -3459,7 +3528,7 @@ describe('Lead foundation database integration', () => {
         WHERE responsible_membership_id IS NOT NULL) AS "assignedLeads",
       (SELECT count(*)::text FROM public.lead_next_actions) AS "nextActions"`);
 
-    await migration.up(migrationRunner);
+    await runPipelineMigrationInSingleTransaction(migrationRunner);
     const [parity] = await owner.query<
       Array<{
         countsPreserved: boolean;
@@ -3468,6 +3537,7 @@ describe('Lead foundation database integration', () => {
         terminalSnapshotsValid: boolean;
         historyValid: boolean;
         tenantLinksValid: boolean;
+        migrationRecorded: boolean;
       }>
     >(
       `SELECT
@@ -3514,7 +3584,10 @@ describe('Lead foundation database integration', () => {
           LEFT JOIN public.pipeline_stages stage ON stage.id=lead.pipeline_stage_id
           WHERE lead.pipeline_id IS NOT NULL AND (pipeline.organization_id<>lead.organization_id
             OR stage.organization_id<>lead.organization_id OR stage.pipeline_id<>lead.pipeline_id))
-          AS "tenantLinksValid"`,
+          AS "tenantLinksValid",
+        EXISTS (SELECT 1 FROM public.migrations
+          WHERE name='AddCustomPipelinesAndStages1788375600000')
+          AS "migrationRecorded"`,
       [
         before?.leads,
         before?.cycles,
@@ -3532,13 +3605,68 @@ describe('Lead foundation database integration', () => {
       terminalSnapshotsValid: true,
       historyValid: true,
       tenantLinksValid: true,
+      migrationRecorded: true,
+    });
+
+    const expectedTriggers = [
+      'trg_leads_cycle_consistency',
+      'trg_lead_cycles_consistency',
+      'trg_lead_return_reviews_consistency',
+      'trg_leads_next_action_consistency',
+      'trg_lead_next_actions_consistency',
+      'trg_lead_activities_next_action_consistency',
+      'trg_lead_cycles_protect',
+      'trg_lead_return_reviews_protect',
+      'trg_lead_timeline_events_append_only',
+      'trg_lead_timeline_events_append_only_statement',
+      'trg_leads_pipeline_snapshot',
+      'trg_leads_sync_open_cycle',
+      'trg_cycles_pipeline_snapshot',
+      'trg_timeline_pipeline_snapshot',
+      'trg_pipelines_invariants',
+      'trg_pipeline_stages_invariants',
+    ];
+    const deferredTriggers = [
+      'trg_leads_cycle_consistency',
+      'trg_lead_cycles_consistency',
+      'trg_lead_return_reviews_consistency',
+      'trg_leads_next_action_consistency',
+      'trg_lead_next_actions_consistency',
+      'trg_lead_activities_next_action_consistency',
+    ];
+    const [triggerState] = await owner.query<
+      Array<{
+        count: number;
+        enabled: boolean;
+        deferred: boolean;
+        functionsPresent: boolean;
+      }>
+    >(
+      `SELECT count(*)::int AS count,
+        bool_and(trigger.tgenabled = 'O') AS enabled,
+        bool_and(CASE WHEN trigger.tgname = ANY($2::text[])
+          THEN trigger.tgdeferrable AND trigger.tginitdeferred
+          ELSE true END) AS deferred,
+        to_regprocedure('app_private.assert_lead_cycle_consistency()') IS NOT NULL
+          AND to_regprocedure('app_private.assert_lead_next_action_consistency()') IS NOT NULL
+          AND to_regprocedure('app_private.prepare_lead_pipeline_snapshot()') IS NOT NULL
+          AS "functionsPresent"
+       FROM pg_trigger trigger
+       WHERE NOT trigger.tgisinternal AND trigger.tgname = ANY($1::text[])`,
+      [expectedTriggers, deferredTriggers],
+    );
+    expect(triggerState).toEqual({
+      count: expectedTriggers.length,
+      enabled: true,
+      deferred: true,
+      functionsPresent: true,
     });
 
     await migration.down(migrationRunner);
     await expect(
       owner.query(`SELECT to_regclass('public.pipelines') AS relation`),
     ).resolves.toEqual([{ relation: null }]);
-    await migration.up(migrationRunner);
+    await runPipelineMigrationInSingleTransaction(migrationRunner);
   });
 
   async function createFixture(): Promise<Fixture> {
