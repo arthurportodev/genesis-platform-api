@@ -1,14 +1,14 @@
 {
   "schemaVersion": "2.0.0",
-  "stateRevision": "PIPE-V2-05-PRODUCTION-KEEP-2026-09-06",
+  "stateRevision": "PIPE-V2-06-PRODUCTION-KEEP-2026-09-07",
   "phase": {
     "id": "PIPE-V2",
     "title": "Pipeline Experience V2"
   },
   "lastCompleted": {
-    "id": "PIPE-V2-05",
-    "title": "Pipeline Interaction & Visual Polish",
-    "outcome": "PRODUCTION_KEEP / PIPE-V2-05_LIVE"
+    "id": "PIPE-V2-06",
+    "title": "Custom Pipelines & Stages",
+    "outcome": "PRODUCTION_KEEP / PIPE-V2-06_LIVE"
   },
   "currentWork": {
     "status": "none"
@@ -19,12 +19,12 @@
   },
   "live": {
     "api": {
-      "sourceSha": "a169369fd9760d32c922cc646df92cc0f5f632e1",
-      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:e0d3613fbf7795c7416ec6a10f26cb54c77112351694bdb9bb2c1974eb258862"
+      "sourceSha": "30d999876ad67472c019bd540a166e61ceee61ca",
+      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:416c997915c49d7331d517c879c485f1e312585a0a32786f3464cd808d0f97a3"
     },
     "web": {
-      "sourceSha": "481f806cc76ac106a1585e0767c01ded621f71f9",
-      "deploymentId": "dpl_FjaHSef4NMvKLTcj8f5wMBz34piJ",
+      "sourceSha": "daab09257c335a2fb53b592a525bc5518bdf17c1",
+      "deploymentId": "dpl_ArBFkjj28BDHcrE1rFHewCyzAQKH",
       "domain": "https://app.agenciagenesismkt.com.br"
     }
   },
@@ -43,5 +43,18 @@
       "summary": "Review Vercel plan suitability before external onboarding or expanded commercial use."
     }
   ],
-  "followUps": []
+  "followUps": [
+    {
+      "id": "FU-VERCEL-EXACT-IDENTITY",
+      "summary": "Before the next Web release, reconcile the Vercel runbook so exact-deployment releases use a staged Production candidate and prior Production deployments are restored through routing/Instant Rollback without rebuild."
+    },
+    {
+      "id": "FU-PIPELINE-CONFLICT-FEEDBACK",
+      "summary": "Differentiate Pipeline configuration conflict feedback from stale-revision feedback instead of grouping HTTP 409 and 412 into the same Web message."
+    },
+    {
+      "id": "FU-TASK-VALIDATE-DATABASE-ENV",
+      "summary": "Make surface-mode task validation provide the PostgreSQL DATABASE_* environment to database suites so explicit reruns are not required."
+    }
+  ]
 }
