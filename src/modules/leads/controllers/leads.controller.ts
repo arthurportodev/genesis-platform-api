@@ -101,7 +101,7 @@ export class LeadsController {
       );
     }
     const key = this.idempotencyKey(idempotencyKey);
-    const result = await this.leads.createManual(tenant, dto, key);
+    const result = await this.leads.createManual(tenant, dto, key, pipelineV2);
     response.status(
       tenant.role === MembershipRole.MEMBER
         ? HttpStatus.NO_CONTENT

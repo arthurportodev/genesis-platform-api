@@ -3,6 +3,8 @@ import { NextFunction, Request, Response } from 'express';
 
 const TRUSTED_CLIENT_IP = Symbol('genesis.trusted-client-ip');
 
+const FUNCTIONAL_GENESIS_HEADERS = new Set(['x-genesis-lead-contract']);
+
 const INTERNAL_AND_FORWARDING_HEADERS = new Set([
   'cf-connecting-ip',
   'client-ip',
@@ -98,7 +100,8 @@ function redactInternalHeaders(request: Request): void {
   for (const name of Object.keys(request.headers)) {
     const lower = name.toLowerCase();
     if (
-      lower.startsWith('x-genesis-') ||
+      (lower.startsWith('x-genesis-') &&
+        !FUNCTIONAL_GENESIS_HEADERS.has(lower)) ||
       INTERNAL_AND_FORWARDING_HEADERS.has(lower)
     ) {
       delete request.headers[name];
@@ -109,7 +112,8 @@ function redactInternalHeaders(request: Request): void {
     const name = request.rawHeaders[index] ?? '';
     const lower = name.toLowerCase();
     if (
-      lower.startsWith('x-genesis-') ||
+      (lower.startsWith('x-genesis-') &&
+        !FUNCTIONAL_GENESIS_HEADERS.has(lower)) ||
       INTERNAL_AND_FORWARDING_HEADERS.has(lower)
     ) {
       continue;

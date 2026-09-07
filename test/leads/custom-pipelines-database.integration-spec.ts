@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { DataSource, QueryRunner } from 'typeorm';
 import { LeadConfig } from '../../src/config/lead.config';
 import { AddCustomPipelinesAndStages1788375600000 } from '../../src/database/migrations/1788375600000-AddCustomPipelinesAndStages';
+import { AllowDefaultPipelineStageConfiguration1788811200000 } from '../../src/database/migrations/1788811200000-AllowDefaultPipelineStageConfiguration';
 import { CreateLeadFoundation1785346800000 } from '../../src/database/migrations/1785346800000-CreateLeadFoundation';
 import { ManageLeadCommercialPipeline1785433200000 } from '../../src/database/migrations/1785433200000-ManageLeadCommercialPipeline';
 import { ManageLeadActivitiesFollowUp1785519600000 } from '../../src/database/migrations/1785519600000-ManageLeadActivitiesFollowUp';
@@ -57,6 +58,9 @@ describe('custom pipelines database foundation', () => {
       migrationRunner,
     );
     await new AddCustomPipelinesAndStages1788375600000().up(migrationRunner);
+    await new AllowDefaultPipelineStageConfiguration1788811200000().up(
+      migrationRunner,
+    );
     configureIntegrationRuntimeEnvironment();
     runtime = createIntegrationRuntimeDataSource();
     await runtime.initialize();
@@ -100,6 +104,38 @@ describe('custom pipelines database foundation', () => {
         positions: [1, 2, 3, 4, 5],
       });
     }
+  });
+
+  it('reverts and reapplies the default-stage function correction on real PostgreSQL', async () => {
+    const migration = new AllowDefaultPipelineStageConfiguration1788811200000();
+    const lockCount = async () => {
+      const [row] = await owner.query<Array<{ count: number }>>(
+        `SELECT count(*)::int AS count FROM pg_proc procedure
+         JOIN pg_namespace namespace ON namespace.oid=procedure.pronamespace
+         WHERE namespace.nspname='app_private'
+           AND procedure.proname IN (
+             'create_pipeline_stage',
+             'reorder_pipeline_stages',
+             'archive_pipeline_stage'
+           )
+           AND pg_get_functiondef(procedure.oid)
+             LIKE '%default pipeline stages are compatibility-locked%'`,
+      );
+      return row?.count;
+    };
+
+    expect(await lockCount()).toBe(0);
+    try {
+      await migration.down(migrationRunner);
+      expect(await lockCount()).toBe(3);
+      await migration.up(migrationRunner);
+      expect(await lockCount()).toBe(0);
+      await migration.down(migrationRunner);
+      expect(await lockCount()).toBe(3);
+    } finally {
+      await migration.up(migrationRunner);
+    }
+    expect(await lockCount()).toBe(0);
   });
 
   it('creates and configures tenant-scoped pipelines with revision and archive guards', async () => {
@@ -219,6 +255,7 @@ describe('custom pipelines database foundation', () => {
         pipelineId: null,
       },
       randomUUID(),
+      true,
     );
     expect(leadOnly.lead).toMatchObject({
       status: 'active',
@@ -237,8 +274,54 @@ describe('custom pipelines database foundation', () => {
           expectedValueMinor: '100',
         },
         randomUUID(),
+        true,
       ),
     ).rejects.toMatchObject({ status: 400 });
+    const absentPipeline = await leads.createManual(
+      tenant,
+      {
+        displayName: 'Lead sem seleção explícita',
+        primaryPhone: uniquePhone(),
+        source: LeadSource.MANUAL,
+      },
+      randomUUID(),
+      true,
+    );
+    expect(absentPipeline.lead).toMatchObject({
+      pipelineId: null,
+      pipelineStageId: null,
+      latestCycleNumber: null,
+    });
+    await expect(
+      leads.createManual(
+        tenant,
+        {
+          displayName: 'Valor sem seleção explícita',
+          primaryPhone: uniquePhone(),
+          source: LeadSource.MANUAL,
+          expectedValueMinor: '100',
+        },
+        randomUUID(),
+        true,
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+    const selectedPipeline = await leads.createManual(
+      tenant,
+      {
+        displayName: 'Lead com pipeline selecionado',
+        primaryPhone: uniquePhone(),
+        source: LeadSource.MANUAL,
+        pipelineId,
+        expectedValueMinor: '2500',
+      },
+      randomUUID(),
+      true,
+    );
+    expect(selectedPipeline.lead).toMatchObject({
+      pipelineId,
+      pipelineStageId: firstStageId,
+      latestCycleNumber: '1',
+    });
     const detail = await reads.detail(tenant, leadOnly.lead?.id as string);
     expect(detail.latestCycle).toBeNull();
     expect(detail.counts.cycles).toBe(0);
@@ -431,8 +514,9 @@ describe('custom pipelines database foundation', () => {
     });
   });
 
-  it('keeps the five default bridge slots stable through rename and rejects structural mutations', async () => {
+  it('configures the default pipeline while preserving the five legacy bridge stages', async () => {
     const fixture = await createFixture();
+    const foreign = await createFixture();
     const leads = createLeadService();
     const pipelines = createPipelineService();
     const tenant = ownerTenant(fixture);
@@ -451,31 +535,72 @@ describe('custom pipelines database foundation', () => {
       );
       defaultPipeline = result.pipeline;
     }
+    const extraStageId = randomUUID();
+    const beforeCreateRevision = defaultPipeline?.revision as string;
+    const withExtra = await pipelines.createStage(
+      tenant,
+      defaultPipeline?.id as string,
+      extraStageId,
+      beforeCreateRevision,
+      'Fechamento',
+    );
+    expect(withExtra.pipeline).toMatchObject({ revision: '6' });
+    const renamedExtra = await pipelines.renameStage(
+      tenant,
+      defaultPipeline?.id as string,
+      extraStageId,
+      withExtra.pipeline.revision,
+      'Fechamento final',
+    );
+    expect(renamedExtra.pipeline.revision).toBe('7');
     await expect(
       pipelines.createStage(
         tenant,
         defaultPipeline?.id as string,
         randomUUID(),
-        defaultPipeline?.revision as string,
-        'Extra',
+        beforeCreateRevision,
+        'Stale',
+      ),
+    ).rejects.toMatchObject({ status: 412 });
+    await expect(
+      pipelines.createStage(
+        tenant,
+        defaultPipeline?.id as string,
+        randomUUID(),
+        renamedExtra.pipeline.revision,
+        'Fechamento final',
       ),
     ).rejects.toMatchObject({ status: 409 });
     await expect(
-      pipelines.reorder(
-        tenant,
+      pipelines.createStage(
+        ownerTenant(foreign),
         defaultPipeline?.id as string,
-        defaultPipeline?.revision as string,
-        { stageIds: [...stageIds].reverse() },
+        randomUUID(),
+        withExtra.pipeline.revision,
+        'Cross tenant',
       ),
-    ).rejects.toMatchObject({ status: 409 });
-    await expect(
-      pipelines.archiveStage(
-        tenant,
-        defaultPipeline?.id as string,
-        stageIds[4],
-        defaultPipeline?.revision as string,
-      ),
-    ).rejects.toMatchObject({ status: 409 });
+    ).rejects.toMatchObject({ status: 404 });
+    const requestedOrder = [...stageIds].reverse().concat(extraStageId);
+    const reordered = await pipelines.reorder(
+      tenant,
+      defaultPipeline?.id as string,
+      renamedExtra.pipeline.revision,
+      { stageIds: requestedOrder },
+    );
+    expect(reordered.pipeline.stages.map((stage) => stage.id)).toEqual(
+      requestedOrder,
+    );
+    const archived = await pipelines.archiveStage(
+      tenant,
+      defaultPipeline?.id as string,
+      extraStageId,
+      reordered.pipeline.revision,
+    );
+    expect(
+      archived.pipeline.stages
+        .filter((stage) => stage.archivedAt === null)
+        .map((stage) => stage.id),
+    ).toEqual([...stageIds].reverse());
 
     const created = await leads.createManual(
       tenant,
@@ -488,7 +613,7 @@ describe('custom pipelines database foundation', () => {
     );
     expect(created.lead).toMatchObject({
       stage: LeadStage.NEW,
-      pipelineStageName: 'Bridge 1',
+      pipelineStageName: 'Bridge 5',
     });
     const legacyStages = [
       LeadStage.QUALIFICATION,
@@ -508,9 +633,44 @@ describe('custom pipelines database foundation', () => {
       current = await leads.get(tenant, current?.id as string);
       expect(current).toMatchObject({
         stage,
-        pipelineStageName: `Bridge ${index + 2}`,
+        pipelineStageName: `Bridge ${4 - index}`,
       });
     }
+
+    await expect(
+      pipelines.archiveStage(
+        tenant,
+        defaultPipeline?.id as string,
+        stageIds[0],
+        archived.pipeline.revision,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+
+    const lastStageFixture = await createFixture();
+    const lastStageTenant = ownerTenant(lastStageFixture);
+    let lastStagePipeline = (await pipelines.list(lastStageTenant)).find(
+      (pipeline) => pipeline.isDefault,
+    );
+    const lastStageIds =
+      lastStagePipeline?.stages.map((stage) => stage.id) ?? [];
+    for (const stageId of lastStageIds.slice(0, 4)) {
+      lastStagePipeline = (
+        await pipelines.archiveStage(
+          lastStageTenant,
+          lastStagePipeline?.id as string,
+          stageId,
+          lastStagePipeline?.revision as string,
+        )
+      ).pipeline;
+    }
+    await expect(
+      pipelines.archiveStage(
+        lastStageTenant,
+        lastStagePipeline?.id as string,
+        lastStageIds[4],
+        lastStagePipeline?.revision as string,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
 
     const externalPhone = uniquePhone();
     await runtime.query(
@@ -533,7 +693,7 @@ describe('custom pipelines database foundation', () => {
        WHERE lead.organization_id=$1 AND lead.primary_phone=$2`,
       [fixture.organization.id, externalPhone],
     );
-    expect(external).toEqual({ stage: 'new', stageName: 'Bridge 1' });
+    expect(external).toEqual({ stage: 'new', stageName: 'Bridge 5' });
     await expect(
       new AddCustomPipelinesAndStages1788375600000().down(migrationRunner),
     ).rejects.toThrow('Unsafe rollback: custom pipeline state already exists.');
