@@ -310,6 +310,14 @@ export class AddCustomPipelinesAndStages1788375600000 implements MigrationInterf
       new_pipeline_stage_id = mapped.new_stage_id,
       new_stage_name = mapped.new_stage_name
       FROM mapped WHERE event.id = mapped.event_id`);
+    await queryRunner.query(`SET CONSTRAINTS
+      trg_leads_cycle_consistency,
+      trg_lead_cycles_consistency,
+      trg_leads_next_action_consistency IMMEDIATE`);
+    await queryRunner.query(`SET CONSTRAINTS
+      trg_leads_cycle_consistency,
+      trg_lead_cycles_consistency,
+      trg_leads_next_action_consistency DEFERRED`);
     await queryRunner.query(
       'ALTER TABLE public.lead_commercial_cycles ENABLE TRIGGER TRG_lead_cycles_protect',
     );
