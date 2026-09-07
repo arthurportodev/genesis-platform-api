@@ -332,6 +332,8 @@ test('builds a deterministic non-operational candidate with historical bindings'
       'ManageLeadActivitiesFollowUp1785519600000',
       'AddLeadOperationalReadIndexes1785606000000',
       'ManageLeadCommercialCycleExpectedValue1788289200000',
+      'AddCustomPipelinesAndStages1788375600000',
+      'AllowDefaultPipelineStageConfiguration1788811200000',
     ],
   });
   assert.deepEqual(builtFirst.manifest.releaseTree, RELEASE_TREE);

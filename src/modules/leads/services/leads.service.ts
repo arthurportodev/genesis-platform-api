@@ -182,15 +182,16 @@ export class LeadsService {
     tenant: TenantContext,
     dto: CreateManualLeadDto,
     idempotencyKey: string,
+    pipelineV2 = false,
   ): Promise<LeadIngestResult> {
     await this.readiness.assertManualReady();
     const version = this.config.idempotencyCurrentKeyVersion as number;
     const expectedValueMinor = this.normalizeExpectedValueMinor(
       dto.expectedValueMinor ?? null,
     );
-    const explicitSelection = dto.pipelineId !== undefined;
+    const explicitSelection = pipelineV2 || dto.pipelineId !== undefined;
     const selectionKind = explicitSelection
-      ? dto.pipelineId === null
+      ? dto.pipelineId === undefined || dto.pipelineId === null
         ? 'none'
         : 'pipeline'
       : 'legacy-default';

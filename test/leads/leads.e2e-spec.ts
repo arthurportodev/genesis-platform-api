@@ -13,6 +13,7 @@ import { Test } from '@nestjs/testing';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { Server } from 'node:http';
 import request from 'supertest';
+import { createTrustedWebProxyMiddleware } from '../../src/common/http/trusted-client-ip';
 import { AccessTokenGuard } from '../../src/modules/auth/guards/access-token.guard';
 import { RoleGuard } from '../../src/modules/authorization/guards/role.guard';
 import { NoStoreInterceptor } from '../../src/modules/invitations/interceptors/no-store.interceptor';
@@ -58,6 +59,7 @@ class TenantFixtureGuard implements CanActivate {
 
 describe('Lead HTTP contract (e2e)', () => {
   let app: INestApplication;
+  let trustedApp: INestApplication;
   let tenantGuard: TenantFixtureGuard;
   const leadId = '08fc7c73-498e-4c05-9b83-cdd9d612e32e';
   const view: LeadView = {
@@ -139,64 +141,73 @@ describe('Lead HTTP contract (e2e)', () => {
   beforeAll(async () => {
     tenantGuard = new TenantFixtureGuard();
     const allow = { canActivate: () => true };
-    const moduleRef = await Test.createTestingModule({
-      controllers: [LeadsController, FormLeadsController],
-      providers: [
-        NoStoreInterceptor,
-        FormRateLimiter,
-        FormSignatureService,
-        FormLeadReadinessGuard,
-        FormRateLimitGuard,
-        FormSignatureGuard,
-        { provide: LEAD_READINESS, useValue: readiness },
-        {
-          provide: ConfigService,
-          useValue: {
-            getOrThrow: () => ({
-              formReadiness: true,
-              formOrganizationId: randomUUID(),
-              formCurrentKeyVersion: 1,
-              formKeys: new Map([[1, formKey]]),
-              idempotencyCurrentKeyVersion: 1,
-              idempotencyKeys: new Map([[1, Buffer.alloc(32, 1)]]),
-              publicReplicaCount: 1,
-              rateLimitWindowSeconds: 900,
-              formIpMaxAttempts: 100,
-              formKeyMaxAttempts: 100,
-              rateLimitMaxBuckets: 100,
-            }),
+    const createApp = async (trustedProxy: boolean) => {
+      const moduleRef = await Test.createTestingModule({
+        controllers: [LeadsController, FormLeadsController],
+        providers: [
+          NoStoreInterceptor,
+          FormRateLimiter,
+          FormSignatureService,
+          FormLeadReadinessGuard,
+          FormRateLimitGuard,
+          FormSignatureGuard,
+          { provide: LEAD_READINESS, useValue: readiness },
+          {
+            provide: ConfigService,
+            useValue: {
+              getOrThrow: () => ({
+                formReadiness: true,
+                formOrganizationId: randomUUID(),
+                formCurrentKeyVersion: 1,
+                formKeys: new Map([[1, formKey]]),
+                idempotencyCurrentKeyVersion: 1,
+                idempotencyKeys: new Map([[1, Buffer.alloc(32, 1)]]),
+                publicReplicaCount: 1,
+                rateLimitWindowSeconds: 900,
+                formIpMaxAttempts: 100,
+                formKeyMaxAttempts: 100,
+                rateLimitMaxBuckets: 100,
+              }),
+            },
           },
-        },
-        { provide: LeadsService, useValue: leads },
-        { provide: LeadOperationalReadService, useValue: reads },
-      ],
-    })
-      .overrideGuard(AccessTokenGuard)
-      .useValue(allow)
-      .overrideGuard(TenantContextGuard)
-      .useValue(tenantGuard)
-      .overrideGuard(ManualLeadReadinessGuard)
-      .useValue(allow)
-      .overrideGuard(RoleGuard)
-      .useValue(allow)
-      .overrideGuard(LeadReadRateLimitGuard)
-      .useValue(allow)
-      .overrideGuard(LeadMetricsRateLimitGuard)
-      .useValue(allow)
-      .compile();
-    app = moduleRef.createNestApplication({ rawBody: true });
-    app.setGlobalPrefix('api/v1');
-    app.useGlobalPipes(
-      new ValidationPipe({
-        transform: true,
-        whitelist: true,
-        forbidNonWhitelisted: true,
-      }),
-    );
-    await app.init();
+          { provide: LeadsService, useValue: leads },
+          { provide: LeadOperationalReadService, useValue: reads },
+        ],
+      })
+        .overrideGuard(AccessTokenGuard)
+        .useValue(allow)
+        .overrideGuard(TenantContextGuard)
+        .useValue(tenantGuard)
+        .overrideGuard(ManualLeadReadinessGuard)
+        .useValue(allow)
+        .overrideGuard(RoleGuard)
+        .useValue(allow)
+        .overrideGuard(LeadReadRateLimitGuard)
+        .useValue(allow)
+        .overrideGuard(LeadMetricsRateLimitGuard)
+        .useValue(allow)
+        .compile();
+      const created = moduleRef.createNestApplication({ rawBody: true });
+      if (trustedProxy) created.use(createTrustedWebProxyMiddleware(true));
+      created.setGlobalPrefix('api/v1');
+      created.useGlobalPipes(
+        new ValidationPipe({
+          transform: true,
+          whitelist: true,
+          forbidNonWhitelisted: true,
+        }),
+      );
+      await created.init();
+      return created;
+    };
+    app = await createApp(false);
+    trustedApp = await createApp(true);
   });
 
-  afterAll(async () => app.close());
+  afterAll(async () => {
+    await trustedApp.close();
+    await app.close();
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -243,6 +254,7 @@ describe('Lead HTTP contract (e2e)', () => {
         expect.any(Object),
         expect.objectContaining({ expectedValueMinor }),
         expect.any(String),
+        false,
       );
     },
   );
@@ -275,7 +287,112 @@ describe('Lead HTTP contract (e2e)', () => {
       expect.any(Object),
       expect.objectContaining({ pipelineId: null }),
       expect.any(String),
+      true,
     );
+  });
+
+  it('preserves pipeline-v2 through the trusted proxy boundary for creation', async () => {
+    const pipelineId = randomUUID();
+    leads.createManual.mockResolvedValue({
+      responseStatus: 201,
+      replayed: false,
+      lead: view,
+    });
+
+    await request(trustedApp.getHttpServer() as Server)
+      .post('/api/v1/leads')
+      .set('X-Genesis-Proxy-Attested', 'v1')
+      .set('X-Genesis-Client-IP', '203.0.113.9')
+      .set('X-Genesis-Lead-Contract', 'pipeline-v2')
+      .set('X-Genesis-Arbitrary', 'must-be-redacted')
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        displayName: 'Selected pipeline',
+        primaryPhone: '+5562999999999',
+        pipelineId,
+      })
+      .expect(201);
+
+    expect(leads.createManual).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ pipelineId }),
+      expect.any(String),
+      true,
+    );
+  });
+
+  it('preserves pipeline-v2 through the trusted proxy boundary for nullable reads', async () => {
+    const emptyPage = {
+      items: [],
+      page: {
+        limit: 25,
+        total: 0,
+        asOf: '2026-07-27T12:00:00.000Z',
+        nextCursor: null,
+      },
+    };
+    reads.list.mockResolvedValue(emptyPage);
+    reads.myActions.mockResolvedValue(emptyPage);
+    reads.unassigned.mockResolvedValue(emptyPage);
+    reads.returnReviews.mockResolvedValue(emptyPage);
+    reads.detail.mockResolvedValue({
+      ...view,
+      latestEntry: { id: randomUUID() },
+      latestCycle: null,
+      pendingReturn: null,
+      counts: { timeline: 1, cycles: 0, activities: 0, notes: 0 },
+    });
+    leads.timeline.mockResolvedValue({
+      items: [],
+      page: { nextCursor: null, limit: 25 },
+    });
+    reads.cycles.mockResolvedValue({
+      items: [],
+      page: { nextCursor: null, limit: 20 },
+    });
+    const get = (path: string) =>
+      request(trustedApp.getHttpServer() as Server)
+        .get(path)
+        .set('X-Genesis-Proxy-Attested', 'v1')
+        .set('X-Genesis-Client-IP', '203.0.113.9')
+        .set('X-Genesis-Lead-Contract', 'pipeline-v2');
+
+    await get('/api/v1/leads?sort=createdAt%3Adesc').expect(200);
+    await get(`/api/v1/leads/${leadId}`).expect(200);
+    await get(`/api/v1/leads/${leadId}/timeline?limit=25`).expect(200);
+    await get(`/api/v1/leads/${leadId}/cycles?limit=20`).expect(200);
+    await get('/api/v1/leads/work/my-actions?limit=25').expect(200);
+    await get('/api/v1/leads/work/unassigned?limit=25').expect(200);
+    await get('/api/v1/leads/work/return-reviews?limit=25').expect(200);
+
+    expect(reads.list).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      expect.any(Object),
+      true,
+    );
+    expect(reads.detail).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      leadId,
+      true,
+    );
+    expect(reads.myActions).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      expect.any(Object),
+      true,
+    );
+    expect(reads.unassigned).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      expect.any(Object),
+      true,
+    );
+    expect(reads.returnReviews).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      expect.any(Object),
+      true,
+    );
+    expect(
+      reads.assertContractVisibility.mock.calls.map((call) => call[2]),
+    ).toEqual([true, true]);
   });
 
   it.each(['', '-1', ' 1', '+1', '1.0', '1e3', '00'])(

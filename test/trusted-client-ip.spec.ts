@@ -72,6 +72,8 @@ describe('trusted web proxy client IP', () => {
       ['Fly-Client-IP', '198.51.100.95'],
       ['X-Client-IP', '198.51.100.94'],
       ['X-Envoy-External-Address', '198.51.100.93'],
+      ['X-Genesis-Lead-Contract', 'pipeline-v2'],
+      ['X-Genesis-Arbitrary', 'must-be-redacted'],
       ['Authorization', 'Bearer synthetic'],
     ]);
     const { response } = responseRecorder();
@@ -81,6 +83,30 @@ describe('trusted web proxy client IP', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(getTrustedClientIp(request)).toBe('203.0.113.9');
+    expect(request.headers).toEqual({
+      'x-genesis-lead-contract': 'pipeline-v2',
+      authorization: 'Bearer synthetic',
+    });
+    expect(request.rawHeaders).toEqual([
+      'X-Genesis-Lead-Contract',
+      'pipeline-v2',
+      'Authorization',
+      'Bearer synthetic',
+    ]);
+  });
+
+  it('does not invent the functional contract when it is absent', () => {
+    const request = requestWithHeaders([
+      ['X-Genesis-Proxy-Attested', 'v1'],
+      ['X-Genesis-Client-IP', '203.0.113.9'],
+      ['Authorization', 'Bearer synthetic'],
+    ]);
+    const { response } = responseRecorder();
+    const next = jest.fn();
+
+    createTrustedWebProxyMiddleware(true)(request, response, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
     expect(request.headers).toEqual({ authorization: 'Bearer synthetic' });
     expect(request.rawHeaders).toEqual(['Authorization', 'Bearer synthetic']);
   });

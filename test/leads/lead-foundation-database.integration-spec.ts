@@ -8,6 +8,7 @@ import { ManageLeadActivitiesFollowUp1785519600000 } from '../../src/database/mi
 import { AddLeadOperationalReadIndexes1785606000000 } from '../../src/database/migrations/1785606000000-AddLeadOperationalReadIndexes';
 import { ManageLeadCommercialCycleExpectedValue1788289200000 } from '../../src/database/migrations/1788289200000-ManageLeadCommercialCycleExpectedValue';
 import { AddCustomPipelinesAndStages1788375600000 } from '../../src/database/migrations/1788375600000-AddCustomPipelinesAndStages';
+import { AllowDefaultPipelineStageConfiguration1788811200000 } from '../../src/database/migrations/1788811200000-AllowDefaultPipelineStageConfiguration';
 import { OperationalInvitationActivationReadiness } from '../../src/modules/invitations/ports/invitation-activation-readiness.port';
 import { Membership } from '../../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../../src/modules/memberships/enums/membership-role.enum';
@@ -58,6 +59,9 @@ async function runPipelineMigrationInSingleTransaction(
   await queryRunner.startTransaction();
   try {
     await new AddCustomPipelinesAndStages1788375600000().up(queryRunner);
+    await new AllowDefaultPipelineStageConfiguration1788811200000().up(
+      queryRunner,
+    );
     await queryRunner.commitTransaction();
   } catch (error) {
     await queryRunner.rollbackTransaction();
@@ -92,7 +96,10 @@ describe('Lead foundation database integration', () => {
       (1788289200000, 'ManageLeadCommercialCycleExpectedValue1788289200000')`);
     const productionPath = new DataSource({
       ...owner.options,
-      migrations: [AddCustomPipelinesAndStages1788375600000],
+      migrations: [
+        AddCustomPipelinesAndStages1788375600000,
+        AllowDefaultPipelineStageConfiguration1788811200000,
+      ],
     });
     await productionPath.initialize();
     try {
@@ -101,6 +108,7 @@ describe('Lead foundation database integration', () => {
       });
       expect(applied.map((entry) => entry.name)).toEqual([
         'AddCustomPipelinesAndStages1788375600000',
+        'AllowDefaultPipelineStageConfiguration1788811200000',
       ]);
       const [inventory] = await productionPath.query<
         Array<{ count: number; head: string }>
@@ -108,8 +116,8 @@ describe('Lead foundation database integration', () => {
         (array_agg(name ORDER BY id DESC))[1] AS head
         FROM public.migrations`);
       expect(inventory).toEqual({
-        count: 12,
-        head: 'AddCustomPipelinesAndStages1788375600000',
+        count: 13,
+        head: 'AllowDefaultPipelineStageConfiguration1788811200000',
       });
     } finally {
       await productionPath.destroy();
@@ -135,8 +143,8 @@ describe('Lead foundation database integration', () => {
       (array_agg(name ORDER BY id DESC))[1] AS head
       FROM public.migrations`);
     expect(inventory).toEqual({
-      count: 12,
-      head: 'AddCustomPipelinesAndStages1788375600000',
+      count: 13,
+      head: 'AllowDefaultPipelineStageConfiguration1788811200000',
     });
   });
 
@@ -219,8 +227,13 @@ describe('Lead foundation database integration', () => {
       new ManageLeadCommercialCycleExpectedValue1788289200000();
     const customPipelineMigration =
       new AddCustomPipelinesAndStages1788375600000();
+    const correctionMigration =
+      new AllowDefaultPipelineStageConfiguration1788811200000();
     await migrationRunner.startTransaction();
     try {
+      await expect(
+        correctionMigration.down(migrationRunner),
+      ).resolves.toBeUndefined();
       await expect(
         customPipelineMigration.down(migrationRunner),
       ).resolves.toBeUndefined();
@@ -294,6 +307,9 @@ describe('Lead foundation database integration', () => {
         trg_leads_next_action_consistency DEFERRED`);
       await expect(
         customPipelineMigration.up(migrationRunner),
+      ).resolves.toBeUndefined();
+      await expect(
+        correctionMigration.up(migrationRunner),
       ).resolves.toBeUndefined();
       const [backfilled] = (await migrationRunner.query(
         `SELECT lead.status, lead.stage, lead.revision::text AS revision,
