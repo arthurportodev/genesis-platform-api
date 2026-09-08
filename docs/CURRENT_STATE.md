@@ -4,17 +4,17 @@
 
 This is a deterministic projection. Edit [project-state.v2.json](memory/project-state.v2.json), then regenerate this file.
 
-- **State revision:** PIPE-V2-06-PRODUCTION-KEEP-2026-09-07
-- **Phase:** PIPE-V2 — Pipeline Experience V2
-- **Last completed product work:** PIPE-V2-06 — Custom Pipelines & Stages
-- **Outcome:** PRODUCTION_KEEP / PIPE-V2-06_LIVE
+- **State revision:** AUTH-V2-01-PRODUCTION-KEEP-2026-09-08
+- **Phase:** AUTH-V2 — Authentication V2
+- **Last completed product work:** AUTH-V2-01 — Fundação de Challenges e Envio OTP
+- **Outcome:** PRODUCTION_KEEP / AUTH-V2-01_LIVE
 - **Current work:** none
-- **Next task:** undecided — PENDING-ROADMAP-PRIORITIZATION
+- **Next task:** AUTH-V2-02 — Cadastro e verificação de e-mail
 
 ## Live bindings
 
-- **API source:** 30d999876ad67472c019bd540a166e61ceee61ca
-- **API image:** ghcr.io/arthurportodev/genesis-platform-api@sha256:416c997915c49d7331d517c879c485f1e312585a0a32786f3464cd808d0f97a3
+- **API source:** 9c031ff0e3790d6b0b6628a3435ca3a3d22fb48a
+- **API image:** ghcr.io/arthurportodev/genesis-platform-api@sha256:80fe64c2fb563c308bc7aecf6d212aed89cbc06bffcfbcd12d4a1ee7b584fcc0
 - **Web source:** daab09257c335a2fb53b592a525bc5518bdf17c1
 - **Web deployment:** dpl_ArBFkjj28BDHcrE1rFHewCyzAQKH
 - **Web domain:** https://app.agenciagenesismkt.com.br

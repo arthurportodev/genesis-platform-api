@@ -1,26 +1,27 @@
 {
   "schemaVersion": "2.0.0",
-  "stateRevision": "PIPE-V2-06-PRODUCTION-KEEP-2026-09-07",
+  "stateRevision": "AUTH-V2-01-PRODUCTION-KEEP-2026-09-08",
   "phase": {
-    "id": "PIPE-V2",
-    "title": "Pipeline Experience V2"
+    "id": "AUTH-V2",
+    "title": "Authentication V2"
   },
   "lastCompleted": {
-    "id": "PIPE-V2-06",
-    "title": "Custom Pipelines & Stages",
-    "outcome": "PRODUCTION_KEEP / PIPE-V2-06_LIVE"
+    "id": "AUTH-V2-01",
+    "title": "Fundação de Challenges e Envio OTP",
+    "outcome": "PRODUCTION_KEEP / AUTH-V2-01_LIVE"
   },
   "currentWork": {
     "status": "none"
   },
   "nextTask": {
-    "status": "undecided",
-    "planningState": "PENDING-ROADMAP-PRIORITIZATION"
+    "status": "decided",
+    "id": "AUTH-V2-02",
+    "title": "Cadastro e verificação de e-mail"
   },
   "live": {
     "api": {
-      "sourceSha": "30d999876ad67472c019bd540a166e61ceee61ca",
-      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:416c997915c49d7331d517c879c485f1e312585a0a32786f3464cd808d0f97a3"
+      "sourceSha": "9c031ff0e3790d6b0b6628a3435ca3a3d22fb48a",
+      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:80fe64c2fb563c308bc7aecf6d212aed89cbc06bffcfbcd12d4a1ee7b584fcc0"
     },
     "web": {
       "sourceSha": "daab09257c335a2fb53b592a525bc5518bdf17c1",
