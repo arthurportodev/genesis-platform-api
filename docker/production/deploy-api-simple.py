@@ -371,6 +371,8 @@ def verify_git_operational_snapshot(
     runner: CommandRunner,
     *,
     files: Sequence[str] = OPERATIONAL_FILES,
+    require_detached: bool = False,
+    require_full_clean: bool = False,
 ) -> None:
     require(
         SHA_PATTERN.fullmatch(operational_source_sha) is not None,
@@ -396,6 +398,13 @@ def verify_git_operational_snapshot(
         head == operational_source_sha and approved_commit == operational_source_sha,
         "OPERATIONAL_SOURCE_NOT_APPROVED",
     )
+    if require_detached:
+        symbolic = runner.run(
+            ("git", "-C", str(root), "symbolic-ref", "-q", "HEAD"),
+            check=False,
+            timeout_seconds=COMMAND_READ_TIMEOUT_SECONDS,
+        )
+        require(symbolic.returncode == 1, "OPERATIONAL_SOURCE_NOT_DETACHED")
     status = runner.run(
         (
             "git",
@@ -404,8 +413,7 @@ def verify_git_operational_snapshot(
             "status",
             "--porcelain=v1",
             "--untracked-files=all",
-            "--",
-            *normalized_files,
+            *(("--", *normalized_files) if not require_full_clean else ()),
         ),
         timeout_seconds=COMMAND_READ_TIMEOUT_SECONDS,
     )
@@ -426,10 +434,35 @@ def verify_git_operational_snapshot(
             ("git", "-C", str(root), "hash-object", "--", relative),
             timeout_seconds=COMMAND_READ_TIMEOUT_SECONDS,
         ).stdout.strip()
+        tree_entry = runner.run(
+            (
+                "git",
+                "-C",
+                str(root),
+                "ls-tree",
+                operational_source_sha,
+                "--",
+                relative,
+            ),
+            timeout_seconds=COMMAND_READ_TIMEOUT_SECONDS,
+        ).stdout
+        tree_match = re.fullmatch(
+            rf"(100644|100755) blob ([a-f0-9]{{40}})\t{re.escape(relative)}\r?\n?",
+            tree_entry,
+        )
         require(
             re.fullmatch(r"[a-f0-9]{40}", approved_blob) is not None
-            and worktree_blob == approved_blob,
+            and worktree_blob == approved_blob
+            and tree_match is not None
+            and tree_match.group(2) == approved_blob,
             "OPERATIONAL_SOURCE_BYTES_DIVERGED",
+        )
+        expected_mode = 0o644 if tree_match.group(1) == "100644" else 0o755
+        validate_regular_metadata(
+            root / relative,
+            policy=MetadataPolicy(uid=None, gid=None),
+            expected_mode=expected_mode,
+            reason_code="OPERATIONAL_SOURCE_METADATA_DIVERGED",
         )
 
 
@@ -630,15 +663,24 @@ def atomic_replace_bytes(
         with os.fdopen(descriptor, "wb", closefd=True) as output:
             output.write(content)
             output.flush()
+            callback("after_write", target)
+            callback("before_fsync_file", target)
+            os.fsync(output.fileno())
+            callback("after_fsync_file", target)
             if hasattr(os, "fchmod"):
                 os.fchmod(output.fileno(), mode)
             else:
                 os.chmod(temporary, mode)
             _set_file_owner(output.fileno(), uid, gid)
-            callback("after_write", target)
-            callback("before_fsync_file", target)
+            callback("before_fsync_metadata", target)
             os.fsync(output.fileno())
-            callback("after_fsync_file", target)
+            callback("after_fsync_metadata", target)
+        validate_regular_metadata(
+            temporary,
+            policy=MetadataPolicy(uid=uid, gid=gid),
+            expected_mode=mode,
+            reason_code="ATOMIC_REPLACEMENT_METADATA_DIVERGED",
+        )
         callback("before_replace", target)
         os.replace(temporary, target)
         replaced = True
@@ -1099,6 +1141,597 @@ def probe_deployment_lock(
                 fcntl.flock(descriptor, fcntl.LOCK_UN)
     finally:
         os.close(descriptor)
+
+
+@dataclasses.dataclass(frozen=True)
+class OperationalFileIdentity:
+    path: str
+    sha256: str
+    mode: str
+
+    def as_dict(self) -> dict[str, str]:
+        return {"path": self.path, "sha256": self.sha256, "mode": self.mode}
+
+
+@dataclasses.dataclass(frozen=True)
+class OperationalInstallPlan:
+    current_source_sha: str
+    target_source_sha: str
+    changed: tuple[OperationalFileIdentity, ...]
+    unchanged: tuple[OperationalFileIdentity, ...]
+    target_manifest: Mapping[str, Any]
+    manifest_change: bool
+    same_filesystem_parent: bool
+
+    @property
+    def install_required(self) -> bool:
+        return bool(self.changed) or self.manifest_change
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "currentOperationalSourceSha": self.current_source_sha,
+            "targetOperationalSourceSha": self.target_source_sha,
+            "changedFiles": [entry.as_dict() for entry in self.changed],
+            "unchangedFiles": [entry.as_dict() for entry in self.unchanged],
+            "sourceValid": True,
+            "destinationValid": True,
+            "sameFilesystemParent": self.same_filesystem_parent,
+            "manifestChange": self.manifest_change,
+            "installRequired": self.install_required,
+            "authorizationPlanSha256": operational_plan_digest(self),
+            "mutationCount": 0,
+        }
+
+
+def operational_plan_digest(plan: OperationalInstallPlan) -> str:
+    payload = {
+        "currentOperationalSourceSha": plan.current_source_sha,
+        "targetOperationalSourceSha": plan.target_source_sha,
+        "changedFiles": [entry.as_dict() for entry in plan.changed],
+        "unchangedFiles": [entry.as_dict() for entry in plan.unchanged],
+        "targetManifestSha256": hashlib.sha256(
+            operational_manifest_bytes(plan.target_manifest)
+        ).hexdigest(),
+        "manifestChange": plan.manifest_change,
+        "sameFilesystemParent": plan.same_filesystem_parent,
+    }
+    encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def operational_manifest_bytes(payload: Mapping[str, Any]) -> bytes:
+    return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def operational_entries(payload: Mapping[str, Any]) -> dict[str, OperationalFileIdentity]:
+    raw_entries = payload.get("files")
+    require(isinstance(raw_entries, list), "INVALID_OPERATIONAL_MANIFEST")
+    result: dict[str, OperationalFileIdentity] = {}
+    for raw in raw_entries:
+        require(
+            isinstance(raw, dict) and set(raw) == {"path", "sha256", "mode"},
+            "INVALID_OPERATIONAL_MANIFEST",
+        )
+        path = normalized_relative_path(raw["path"])
+        require(
+            path not in result
+            and re.fullmatch(r"[a-f0-9]{64}", raw["sha256"]) is not None
+            and re.fullmatch(r"0[0-7]{3}", raw["mode"]) is not None,
+            "INVALID_OPERATIONAL_MANIFEST",
+        )
+        result[path] = OperationalFileIdentity(path, raw["sha256"], raw["mode"])
+    return result
+
+
+def ensure_no_orphan_operational_install(
+    paths: DeploymentPaths,
+    *,
+    policy: MetadataPolicy,
+    allowed_names: Iterable[str] = (),
+) -> None:
+    parent = paths.deploy_root.parent
+    validate_safe_directory(parent, policy=policy)
+    allowed = set(allowed_names)
+    pattern = re.compile(r"^\.operational-(?:install|backup)-[a-f0-9]{16}$")
+    try:
+        entries = tuple(parent.iterdir())
+    except OSError as error:
+        raise DeployStop("OPERATIONAL_INSTALL_PARENT_UNAVAILABLE") from error
+    for entry in entries:
+        if pattern.fullmatch(entry.name) and entry.name not in allowed:
+            raise DeployStop("ORPHAN_OPERATIONAL_INSTALL_STATE")
+
+
+def prove_same_filesystem(*paths: Path) -> bool:
+    try:
+        devices = {path.stat().st_dev for path in paths}
+    except OSError as error:
+        raise DeployStop("OPERATIONAL_FILESYSTEM_PROOF_FAILED") from error
+    require(len(devices) == 1, "OPERATIONAL_FILESYSTEM_DIVERGED")
+    return True
+
+
+def verify_operational_files_against_manifest(
+    root: Path,
+    payload: Mapping[str, Any],
+    *,
+    policy: MetadataPolicy,
+    files: Sequence[str],
+    include_manifest: bool,
+) -> None:
+    validate_safe_directory(root, policy=policy)
+    entries = operational_entries(payload)
+    require(set(entries) == set(files), "OPERATIONAL_ALLOWLIST_DIVERGED")
+    actual_files: set[str] = set()
+    actual_directories: set[str] = {""}
+    for current, directories, filenames in os.walk(root, followlinks=False):
+        current_path = Path(current)
+        relative_dir = current_path.relative_to(root).as_posix()
+        if relative_dir == ".":
+            relative_dir = ""
+        validate_safe_directory(current_path, policy=policy)
+        actual_directories.add(relative_dir)
+        for directory in directories:
+            require(not (current_path / directory).is_symlink(), "OPERATIONAL_SYMLINK")
+        for filename in filenames:
+            actual_files.add((PurePosixPath(relative_dir) / filename).as_posix())
+    expected_files = set(files)
+    if include_manifest:
+        expected_files.add("operational-integrity.json")
+    require(actual_directories == expected_directories(files), "OPERATIONAL_DIRECTORY_SET_DIVERGED")
+    require(actual_files == expected_files, "OPERATIONAL_FILE_SET_DIVERGED")
+    if include_manifest:
+        validate_regular_metadata(
+            root / "operational-integrity.json",
+            policy=policy,
+            expected_mode=0o600,
+            reason_code="INVALID_OPERATIONAL_MANIFEST",
+        )
+    for relative, entry in entries.items():
+        target = root / relative
+        validate_regular_metadata(
+            target,
+            policy=policy,
+            expected_mode=int(entry.mode, 8),
+            reason_code="OPERATIONAL_FILE_METADATA_DIVERGED",
+        )
+        require(sha256_file(target) == entry.sha256, "OPERATIONAL_FILE_HASH_DIVERGED")
+
+
+def build_operational_install_plan(
+    source_root: Path,
+    paths: DeploymentPaths,
+    current_source_sha: str,
+    target_source_sha: str,
+    runner: CommandRunner,
+    *,
+    policy: MetadataPolicy = MetadataPolicy(),
+    files: Sequence[str] = OPERATIONAL_FILES,
+    probe_lock: bool = True,
+    allowed_transient_names: Iterable[str] = (),
+) -> OperationalInstallPlan:
+    require(SHA_PATTERN.fullmatch(current_source_sha) is not None, "INVALID_CURRENT_OPERATIONAL_SOURCE_SHA")
+    require(SHA_PATTERN.fullmatch(target_source_sha) is not None, "INVALID_OPERATIONAL_SOURCE_SHA")
+    validate_safe_directory(source_root, policy=MetadataPolicy(uid=None, gid=None), reason_code="INVALID_OPERATIONAL_SOURCE")
+    verify_git_operational_snapshot(
+        source_root,
+        target_source_sha,
+        runner,
+        files=files,
+        require_detached=True,
+        require_full_clean=True,
+    )
+    target_manifest = _operational_manifest_payload(
+        source_root,
+        paths.production_env,
+        target_source_sha,
+        files=files,
+    )
+    verify_operational_integrity(paths, current_source_sha, policy=policy, files=files)
+    current_manifest = safe_json(paths.manifest, "INVALID_OPERATIONAL_MANIFEST")
+    current_entries = operational_entries(current_manifest)
+    target_entries = operational_entries(target_manifest)
+    require(set(current_entries) == set(files) == set(target_entries), "OPERATIONAL_ALLOWLIST_DIVERGED")
+    changed: list[OperationalFileIdentity] = []
+    unchanged: list[OperationalFileIdentity] = []
+    for relative in files:
+        target = target_entries[relative]
+        current = current_entries[relative]
+        if target.sha256 != current.sha256:
+            changed.append(target)
+        else:
+            require(target.mode == current.mode, "OPERATIONAL_MODE_ONLY_CHANGE_UNSUPPORTED")
+            unchanged.append(target)
+    ensure_no_orphan_operational_install(
+        paths,
+        policy=policy,
+        allowed_names=allowed_transient_names,
+    )
+    if probe_lock:
+        probe_deployment_lock(paths.lock, policy)
+    same_filesystem_parent = prove_same_filesystem(
+        paths.deploy_root.parent,
+        paths.deploy_root,
+    )
+    return OperationalInstallPlan(
+        current_source_sha,
+        target_source_sha,
+        tuple(changed),
+        tuple(unchanged),
+        target_manifest,
+        current_manifest != target_manifest,
+        same_filesystem_parent,
+    )
+
+
+def operational_install_authorization(plan: OperationalInstallPlan, run_id: str) -> str:
+    require(RUN_ID_PATTERN.fullmatch(run_id) is not None, "INVALID_RUN_ID")
+    changes = ",".join(
+        f"{entry.path}={entry.sha256}@{entry.mode}" for entry in plan.changed
+    )
+    return (
+        f"{run_id}:{plan.current_source_sha}:{plan.target_source_sha}:"
+        f"{operational_plan_digest(plan)}:{changes}"
+    )
+
+
+def verify_operational_operator_invocation(source_root: Path) -> None:
+    invoked = Path(sys.argv[0])
+    expected = source_root / "docker/production/deploy-api-simple.py"
+    require(invoked.is_absolute(), "OPERATIONAL_OPERATOR_PATH_NOT_ABSOLUTE")
+    try:
+        require(
+            not invoked.is_symlink()
+            and invoked.resolve(strict=True) == expected.resolve(strict=True),
+            "OPERATIONAL_OPERATOR_SOURCE_DIVERGED",
+        )
+    except OSError as error:
+        raise DeployStop("OPERATIONAL_OPERATOR_SOURCE_DIVERGED") from error
+
+
+def _fsync_directory(path: Path) -> None:
+    if os.name == "nt":
+        return
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _create_operational_directory(
+    path: Path,
+    *,
+    policy: MetadataPolicy,
+) -> None:
+    validate_safe_directory(path.parent, policy=policy)
+    require(not path.exists() and not path.is_symlink(), "OPERATIONAL_TRANSIENT_ALREADY_EXISTS")
+    try:
+        path.mkdir(mode=0o700)
+        if hasattr(os, "chown") and policy.uid is not None and policy.gid is not None:
+            os.chown(path, policy.uid, policy.gid)
+        path.chmod(0o700)
+        _fsync_directory(path.parent)
+    except OSError as error:
+        raise DeployStop("OPERATIONAL_TRANSIENT_CREATE_FAILED") from error
+    validate_safe_directory(path, policy=policy)
+
+
+def _create_operational_subdirectories(
+    root: Path,
+    files: Sequence[str],
+    *,
+    policy: MetadataPolicy,
+) -> None:
+    directories = sorted(expected_directories(files) - {""}, key=lambda value: (value.count("/"), value))
+    for relative in directories:
+        target = root / relative
+        if target.exists() or target.is_symlink():
+            validate_safe_directory(target, policy=policy)
+            continue
+        target.mkdir(mode=0o700)
+        if hasattr(os, "chown") and policy.uid is not None and policy.gid is not None:
+            os.chown(target, policy.uid, policy.gid)
+        target.chmod(0o700)
+        _fsync_directory(target.parent)
+        validate_safe_directory(target, policy=policy)
+
+
+def _remove_operational_transient(
+    path: Path,
+    *,
+    run_id: str,
+    policy: MetadataPolicy,
+) -> None:
+    require(
+        path.parent.name != ""
+        and path.name in {
+            f".operational-install-{run_id}",
+            f".operational-backup-{run_id}",
+        },
+        "INVALID_OPERATIONAL_TRANSIENT",
+    )
+    if not path.exists() and not path.is_symlink():
+        return
+    validate_safe_directory(path, policy=policy)
+    shutil.rmtree(path)
+    _fsync_directory(path.parent)
+
+
+def _copy_operational_file(
+    source: Path,
+    target: Path,
+    identity: OperationalFileIdentity,
+    *,
+    policy: MetadataPolicy,
+    hook: FaultHook | None = None,
+) -> None:
+    validate_regular_metadata(
+        source,
+        policy=MetadataPolicy(uid=None, gid=None),
+        expected_mode=int(identity.mode, 8),
+        reason_code="OPERATIONAL_SOURCE_METADATA_DIVERGED",
+    )
+    require(sha256_file(source) == identity.sha256, "OPERATIONAL_SOURCE_BYTES_DIVERGED")
+    atomic_replace_bytes(
+        target,
+        source.read_bytes(),
+        mode=int(identity.mode, 8),
+        uid=policy.uid,
+        gid=policy.gid,
+        hook=hook,
+    )
+    validate_regular_metadata(
+        target,
+        policy=policy,
+        expected_mode=int(identity.mode, 8),
+        reason_code="OPERATIONAL_FILE_METADATA_DIVERGED",
+    )
+    require(sha256_file(target) == identity.sha256, "OPERATIONAL_FILE_HASH_DIVERGED")
+
+
+def _fail_closed_manifest_bytes() -> bytes:
+    return b'{"schemaVersion":"genesis-operational-integrity.fail-closed.v1"}\n'
+
+
+def install_operational_bytes(
+    source_root: Path,
+    paths: DeploymentPaths,
+    *,
+    run_id: str,
+    current_source_sha: str,
+    target_source_sha: str,
+    authorization: str,
+    runner: CommandRunner,
+    policy: MetadataPolicy = MetadataPolicy(),
+    files: Sequence[str] = OPERATIONAL_FILES,
+    hook: FaultHook | None = None,
+    rollback_hook: FaultHook | None = None,
+) -> dict[str, Any]:
+    require(RUN_ID_PATTERN.fullmatch(run_id) is not None, "INVALID_RUN_ID")
+    plan = build_operational_install_plan(
+        source_root,
+        paths,
+        current_source_sha,
+        target_source_sha,
+        runner,
+        policy=policy,
+        files=files,
+        probe_lock=False,
+    )
+    require(
+        authorization == operational_install_authorization(plan, run_id),
+        "OPERATIONAL_INSTALL_NOT_AUTHORIZED",
+    )
+    if not plan.install_required:
+        probe_deployment_lock(paths.lock, policy)
+        return {**plan.as_dict(), "result": "ALREADY_INSTALLED"}
+
+    parent = paths.deploy_root.parent
+    stage = parent / f".operational-install-{run_id}"
+    backup = parent / f".operational-backup-{run_id}"
+    callback = hook or (lambda _stage, _path: None)
+    rollback_callback = rollback_hook or (lambda _stage, _path: None)
+    old_manifest_bytes = paths.manifest.read_bytes()
+    current_manifest = safe_json(paths.manifest, "INVALID_OPERATIONAL_MANIFEST")
+    current_entries = operational_entries(current_manifest)
+    destination_mutated = False
+    backup_ready = False
+    try:
+        _create_operational_directory(stage, policy=policy)
+        _create_operational_subdirectories(stage, files, policy=policy)
+        for entry in (*plan.changed, *plan.unchanged):
+            _copy_operational_file(
+                source_root / entry.path,
+                stage / entry.path,
+                entry,
+                policy=policy,
+                hook=lambda name, path: callback(f"stage:{name}", path),
+            )
+        atomic_replace_bytes(
+            stage / "operational-integrity.json",
+            operational_manifest_bytes(plan.target_manifest),
+            mode=0o600,
+            uid=policy.uid,
+            gid=policy.gid,
+            hook=lambda name, path: callback(f"stage-manifest:{name}", path),
+        )
+        verify_operational_files_against_manifest(
+            stage,
+            plan.target_manifest,
+            policy=policy,
+            files=files,
+            include_manifest=True,
+        )
+        require(
+            (stage / "operational-integrity.json").read_bytes()
+            == operational_manifest_bytes(plan.target_manifest),
+            "OPERATIONAL_STAGING_MANIFEST_DIVERGED",
+        )
+
+        with DeploymentLock(paths.lock, policy):
+            locked_plan = build_operational_install_plan(
+                source_root,
+                paths,
+                current_source_sha,
+                target_source_sha,
+                runner,
+                policy=policy,
+                files=files,
+                probe_lock=False,
+                allowed_transient_names=(stage.name,),
+            )
+            require(locked_plan == plan, "OPERATIONAL_INSTALL_PLAN_DIVERGED")
+            require(
+                authorization == operational_install_authorization(locked_plan, run_id),
+                "OPERATIONAL_INSTALL_NOT_AUTHORIZED",
+            )
+            _create_operational_directory(backup, policy=policy)
+            _create_operational_subdirectories(
+                backup,
+                tuple(entry.path for entry in plan.changed),
+                policy=policy,
+            )
+            prove_same_filesystem(stage, backup, paths.deploy_root)
+
+            for entry in plan.changed:
+                previous = current_entries[entry.path]
+                _copy_operational_file(
+                    paths.deploy_root / entry.path,
+                    backup / entry.path,
+                    previous,
+                    policy=policy,
+                    hook=lambda name, path: callback(f"backup:{name}", path),
+                )
+            atomic_replace_bytes(
+                backup / "operational-integrity.json",
+                old_manifest_bytes,
+                mode=0o600,
+                uid=policy.uid,
+                gid=policy.gid,
+                hook=lambda name, path: callback(f"backup-manifest:{name}", path),
+            )
+            for entry in plan.changed:
+                previous = current_entries[entry.path]
+                require(
+                    sha256_file(backup / entry.path) == previous.sha256,
+                    "OPERATIONAL_BACKUP_DIVERGED",
+                )
+            require(
+                (backup / "operational-integrity.json").read_bytes() == old_manifest_bytes,
+                "OPERATIONAL_BACKUP_DIVERGED",
+            )
+            backup_ready = True
+
+            for entry in plan.changed:
+                # Atomic replacement can succeed before a later fsync or fault
+                # hook reports failure, so rollback must already be armed.
+                destination_mutated = True
+                _copy_operational_file(
+                    stage / entry.path,
+                    paths.deploy_root / entry.path,
+                    entry,
+                    policy=policy,
+                    hook=lambda name, path: callback(f"install:{name}", path),
+                )
+            verify_operational_files_against_manifest(
+                paths.deploy_root,
+                plan.target_manifest,
+                policy=policy,
+                files=files,
+                include_manifest=True,
+            )
+            callback("before_manifest_install", paths.manifest)
+            destination_mutated = True
+            atomic_replace_bytes(
+                paths.manifest,
+                (stage / "operational-integrity.json").read_bytes(),
+                mode=0o600,
+                uid=policy.uid,
+                gid=policy.gid,
+                hook=lambda name, path: callback(f"manifest:{name}", path),
+            )
+            verify_operational_integrity(
+                paths,
+                target_source_sha,
+                policy=policy,
+                files=files,
+            )
+            _remove_operational_transient(backup, run_id=run_id, policy=policy)
+            _remove_operational_transient(stage, run_id=run_id, policy=policy)
+            return {
+                **plan.as_dict(),
+                "result": "INSTALLED",
+                "sameFilesystemProof": True,
+                "mutationCount": len(plan.changed) + 1,
+            }
+    except Exception as error:
+        first_reason = error.reason_code if isinstance(error, DeployStop) else "UNEXPECTED_OPERATIONAL_INSTALL_FAILURE"
+        rollback_reason: str | None = None
+        try:
+            if destination_mutated:
+                atomic_replace_bytes(
+                    paths.manifest,
+                    _fail_closed_manifest_bytes(),
+                    mode=0o600,
+                    uid=policy.uid,
+                    gid=policy.gid,
+                )
+            if backup_ready:
+                for entry in plan.changed:
+                    previous = current_entries[entry.path]
+                    _copy_operational_file(
+                        backup / entry.path,
+                        paths.deploy_root / entry.path,
+                        previous,
+                        policy=policy,
+                        hook=lambda name, path: rollback_callback(f"rollback:{name}", path),
+                    )
+                rollback_callback("before_manifest_restore", paths.manifest)
+                atomic_replace_bytes(
+                    paths.manifest,
+                    old_manifest_bytes,
+                    mode=0o600,
+                    uid=policy.uid,
+                    gid=policy.gid,
+                    hook=lambda name, path: rollback_callback(f"rollback-manifest:{name}", path),
+                )
+            verify_operational_integrity(
+                paths,
+                current_source_sha,
+                policy=policy,
+                files=files,
+            )
+            _remove_operational_transient(backup, run_id=run_id, policy=policy)
+            _remove_operational_transient(stage, run_id=run_id, policy=policy)
+            return {
+                **plan.as_dict(),
+                "result": "INSTALL_FAILED_ROLLED_BACK",
+                "failureReasonCode": first_reason,
+                "mutationCount": 0,
+            }
+        except Exception as rollback_error:
+            rollback_reason = (
+                rollback_error.reason_code
+                if isinstance(rollback_error, DeployStop)
+                else "UNEXPECTED_OPERATIONAL_ROLLBACK_FAILURE"
+            )
+            if destination_mutated:
+                with contextlib.suppress(Exception):
+                    atomic_replace_bytes(
+                        paths.manifest,
+                        _fail_closed_manifest_bytes(),
+                        mode=0o600,
+                        uid=policy.uid,
+                        gid=policy.gid,
+                    )
+            return {
+                **plan.as_dict(),
+                "result": "INSTALL_FAILED_FAIL_CLOSED",
+                "failureReasonCode": first_reason,
+                "rollbackReasonCode": rollback_reason,
+                "mutationCount": 0,
+            }
 
 
 class EvidenceStore:
@@ -1832,6 +2465,34 @@ def write_manifest_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def prepare_operational_command(args: argparse.Namespace) -> int:
+    verify_operational_operator_invocation(args.source_root)
+    plan = build_operational_install_plan(
+        args.source_root,
+        DeploymentPaths(),
+        args.current_operational_source_sha,
+        args.operational_source_sha,
+        CommandRunner(),
+    )
+    print(json.dumps(plan.as_dict(), sort_keys=True))
+    return 0
+
+
+def install_operational_command(args: argparse.Namespace) -> int:
+    verify_operational_operator_invocation(args.source_root)
+    result = install_operational_bytes(
+        args.source_root,
+        DeploymentPaths(),
+        run_id=args.run_id,
+        current_source_sha=args.current_operational_source_sha,
+        target_source_sha=args.operational_source_sha,
+        authorization=args.authorization,
+        runner=CommandRunner(),
+    )
+    print(json.dumps(result, sort_keys=True))
+    return 0 if result["result"] in {"INSTALLED", "ALREADY_INSTALLED"} else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="deploy-api-simple.py")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1842,6 +2503,15 @@ def build_parser() -> argparse.ArgumentParser:
     manifest.add_argument("--output", type=Path, required=True)
     manifest.add_argument("--uid", type=int, default=0)
     manifest.add_argument("--gid", type=int, default=0)
+
+    for name in ("prepare-operational", "install-operational"):
+        command = subparsers.add_parser(name)
+        command.add_argument("--source-root", type=Path, required=True)
+        command.add_argument("--current-operational-source-sha", required=True)
+        command.add_argument("--operational-source-sha", required=True)
+        if name == "install-operational":
+            command.add_argument("--run-id", required=True)
+            command.add_argument("--authorization", required=True)
 
     for name in ("preflight", "execute"):
         command = subparsers.add_parser(name)
@@ -1863,6 +2533,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "manifest":
             return write_manifest_command(args)
+        if args.command == "prepare-operational":
+            return prepare_operational_command(args)
+        if args.command == "install-operational":
+            return install_operational_command(args)
         runner = CommandRunner()
         if args.command == "preflight":
             snapshot, _compose = preflight(
