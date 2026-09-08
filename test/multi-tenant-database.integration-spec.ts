@@ -57,6 +57,8 @@ describe('Multi-tenant database integration', () => {
     ]);
 
     await connection.undoLastMigration();
+    await connection.undoLastMigration();
+    await connection.undoLastMigration();
     const invitationTablesAfterOwnershipRollback = await connection.query<
       CountRow[]
     >(`

@@ -73,6 +73,12 @@ describe('Membership management (e2e)', () => {
       { log: jest.fn() },
       { initialOwnerPassword: ownerPassword },
     );
+    await connection
+      .getRepository(User)
+      .update(
+        { email: 'contato@agenciagenesismkt.com.br' },
+        { emailVerifiedAt: new Date() },
+      );
     organization = await connection
       .getRepository(Organization)
       .findOneByOrFail({ slug: 'agencia-genesis' });
@@ -301,6 +307,7 @@ describe('Membership management (e2e)', () => {
       status: UserStatus.ACTIVE,
       passwordHash: await hashPassword(password),
       passwordChangedAt: new Date(),
+      emailVerifiedAt: new Date(),
     });
     return connection.getRepository(Membership).save({
       userId: user.id,

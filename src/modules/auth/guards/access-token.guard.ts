@@ -41,7 +41,8 @@ export class DatabaseAccessTokenAuthenticator implements AccessTokenAuthenticato
       session === null ||
       session.status !== AuthSessionStatus.ACTIVE ||
       session.expiresAt.getTime() <= Date.now() ||
-      session.user.status !== UserStatus.ACTIVE
+      session.user.status !== UserStatus.ACTIVE ||
+      session.user.emailVerifiedAt === null
     ) {
       throw new UnauthorizedException('Invalid access token.');
     }

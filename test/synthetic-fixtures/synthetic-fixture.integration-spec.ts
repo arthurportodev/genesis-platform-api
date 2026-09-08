@@ -198,15 +198,23 @@ describe('Synthetic fixture tooling database integration', () => {
       await readFile(path, 'utf8'),
     ) as SyntheticFixtureManifest;
     const users = await owner.query<
-      Array<{ id: string; passwordHash: string; status: string }>
+      Array<{
+        id: string;
+        passwordHash: string;
+        status: string;
+        emailVerifiedAt: Date;
+      }>
     >(
-      `SELECT id, password_hash AS "passwordHash", status::text AS status
+      `SELECT id, password_hash AS "passwordHash", status::text AS status,
+              email_verified_at AS "emailVerifiedAt"
        FROM public.users WHERE id = ANY($1::uuid[]) ORDER BY id`,
       [manifest.users.map(({ id }) => id)],
     );
     expect(users).toHaveLength(3);
-    for (const user of users)
+    for (const user of users) {
       expect(user.passwordHash).toMatch(/^\$argon2id\$/u);
+      expect(user.emailVerifiedAt).toBeInstanceOf(Date);
+    }
     for (const [index, role] of ['ownerA', 'memberA', 'ownerB'].entries()) {
       const manifestUser = manifest.users.find((user) => user.role === role);
       const databaseUser = users.find((user) => user.id === manifestUser?.id);
@@ -743,6 +751,7 @@ describe('Synthetic fixture tooling database integration', () => {
       tokenService,
       auditService,
       rateLimiter,
+      { continuationForLogin: jest.fn() } as never,
     );
   }
 

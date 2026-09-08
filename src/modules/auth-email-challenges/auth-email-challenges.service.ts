@@ -27,15 +27,27 @@ export type ChallengeIssueResult =
       status: 'sent' | 'delivery_unavailable';
       challengeId: string;
       expiresAt: Date;
+      resendAvailableAt: Date;
     };
+
+export interface EmailVerificationChallengeContext {
+  challengeId: string;
+  userId: string;
+  expiresAt: Date;
+  resendAvailableAt: Date;
+  stage: 'otp' | 'consumed' | 'invalidated';
+  emailVerifiedAt: Date | null;
+}
 
 interface LockedUser {
   email: string;
   status: string;
+  emailVerifiedAt: Date | null;
 }
 interface IssueMaterial {
   challengeId: string;
   expiresAt: Date;
+  resendAvailableAt: Date;
   email: string;
   otp: string;
 }
@@ -78,6 +90,70 @@ export class AuthEmailChallengesService {
     return this.consume(userId, challengeId, code, 'password_reset');
   }
 
+  async resolveEmailVerificationChallenge(
+    challengeId: string,
+  ): Promise<EmailVerificationChallengeContext | null> {
+    if (!isUUID(challengeId)) return null;
+    const rows = await this.dataSource.query<
+      Array<{
+        challengeId: string;
+        userId: string;
+        expiresAt: Date;
+        resendAvailableAt: Date;
+        stage: 'otp' | 'consumed' | 'invalidated';
+        emailVerifiedAt: Date | null;
+      }>
+    >(
+      `SELECT challenge.id AS "challengeId",
+              challenge.user_id AS "userId",
+              challenge.expires_at AS "expiresAt",
+              challenge.last_sent_at + ($2::integer * interval '1 second')
+                AS "resendAvailableAt",
+              challenge.stage,
+              application_user.email_verified_at AS "emailVerifiedAt"
+       FROM public.auth_email_challenges AS challenge
+       JOIN public.users AS application_user
+         ON application_user.id = challenge.user_id
+       WHERE challenge.id = $1::uuid
+         AND challenge.purpose = 'email_verification'
+         AND application_user.status = 'active'`,
+      [challengeId.toLowerCase(), this.config.cooldownSeconds],
+    );
+    return rows[0] ?? null;
+  }
+
+  async currentEmailVerificationChallenge(
+    userId: string,
+  ): Promise<EmailVerificationChallengeContext | null> {
+    if (!isUUID(userId)) return null;
+    const rows = await this.dataSource.query<
+      EmailVerificationChallengeContext[]
+    >(
+      `SELECT challenge.id AS "challengeId",
+              challenge.user_id AS "userId",
+              challenge.expires_at AS "expiresAt",
+              challenge.last_sent_at + ($2::integer * interval '1 second')
+                AS "resendAvailableAt",
+              challenge.stage,
+              application_user.email_verified_at AS "emailVerifiedAt"
+       FROM public.auth_email_challenges AS challenge
+       JOIN public.users AS application_user
+         ON application_user.id = challenge.user_id
+       WHERE challenge.user_id = $1::uuid
+         AND challenge.purpose = 'email_verification'
+         AND challenge.stage = 'otp'
+         AND challenge.expires_at > clock_timestamp()
+         AND challenge.failed_attempts < $3::integer
+         AND application_user.status = 'active'`,
+      [
+        userId.toLowerCase(),
+        this.config.cooldownSeconds,
+        this.config.maxAttempts,
+      ],
+    );
+    return rows[0] ?? null;
+  }
+
   private ready(): Buffer {
     if (
       this.config.pepper?.length !== 32 ||
@@ -99,7 +175,8 @@ export class AuthEmailChallengesService {
       userId,
     ]);
     const rows = await manager.query<LockedUser[]>(
-      'SELECT email, status FROM public.users WHERE id = $1',
+      `SELECT email, status, email_verified_at AS "emailVerifiedAt"
+       FROM public.users WHERE id = $1`,
       [userId],
     );
     return rows[0] ?? null;
@@ -127,7 +204,12 @@ export class AuthEmailChallengesService {
           manager,
         ): Promise<IssueMaterial | 'unavailable' | 'rate_limited'> => {
           const user = await this.lockUser(manager, userId);
-          if (!user || user.status !== 'active') return 'unavailable';
+          if (
+            !user ||
+            user.status !== 'active' ||
+            (purpose === 'email_verification' && user.emailVerifiedAt !== null)
+          )
+            return 'unavailable';
           const repository = manager.getRepository(AuthEmailChallenge);
           const existing = await repository
             .createQueryBuilder('challenge')
@@ -171,6 +253,9 @@ export class AuthEmailChallengesService {
           const expiresAt = new Date(
             now.getTime() + this.config.ttlSeconds * 1000,
           );
+          const resendAvailableAt = new Date(
+            now.getTime() + this.config.cooldownSeconds * 1000,
+          );
           const values = {
             id: challengeId,
             userId,
@@ -194,7 +279,13 @@ export class AuthEmailChallengesService {
             purpose,
             manager,
           );
-          return { challengeId, expiresAt, email: user.email, otp };
+          return {
+            challengeId,
+            expiresAt,
+            resendAvailableAt,
+            email: user.email,
+            otp,
+          };
         },
       );
       if (typeof material === 'string') return { status: material };
@@ -229,6 +320,7 @@ export class AuthEmailChallengesService {
         status: sent ? 'sent' : 'delivery_unavailable',
         challengeId: material.challengeId,
         expiresAt: material.expiresAt,
+        resendAvailableAt: material.resendAvailableAt,
       };
     } catch {
       // TypeORM errors include SQL parameters; never expose them to HTTP/loggers.

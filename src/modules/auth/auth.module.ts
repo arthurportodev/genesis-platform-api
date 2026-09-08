@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthSessionsModule } from '../auth-sessions/auth-sessions.module';
+import { AuthEmailChallengesModule } from '../auth-email-challenges/auth-email-challenges.module';
 import { AuthSession } from '../auth-sessions/entities/auth-session.entity';
 import { CredentialsModule } from '../credentials/credentials.module';
 import { Membership } from '../memberships/entities/membership.entity';
@@ -16,15 +17,18 @@ import {
 import { CsrfGuard } from './guards/csrf.guard';
 import { AuthAuditService } from './services/auth-audit.service';
 import { InMemoryLoginRateLimiter } from './services/in-memory-login-rate-limiter.service';
+import { InMemoryRegistrationRateLimiter } from './services/in-memory-registration-rate-limiter.service';
 import { LoginRateLimiter } from './services/login-rate-limiter.port';
 import { TokenService } from './services/token.service';
 import { WebSessionService } from './services/web-session.service';
+import { PublicAuthService } from './services/public-auth.service';
 
 @Module({
   imports: [
     JwtModule.register({}),
     TypeOrmModule.forFeature([User, AuthSession, Membership]),
     AuthSessionsModule,
+    AuthEmailChallengesModule,
     CredentialsModule,
   ],
   controllers: [AuthController],
@@ -40,6 +44,8 @@ import { WebSessionService } from './services/web-session.service';
     AccessTokenGuard,
     CsrfGuard,
     WebSessionService,
+    PublicAuthService,
+    InMemoryRegistrationRateLimiter,
     {
       provide: LoginRateLimiter,
       useClass: InMemoryLoginRateLimiter,

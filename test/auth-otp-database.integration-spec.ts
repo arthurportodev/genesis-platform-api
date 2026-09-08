@@ -34,6 +34,7 @@ describe('OTP foundation on the complete PostgreSQL migration chain', () => {
   let user: User;
   let messages: EmailMessage[];
   const config: AuthOtpConfig = {
+    publicFlowsEnabled: true,
     pepper: randomBytes(32),
     ttlSeconds: 600,
     maxAttempts: 5,
@@ -41,6 +42,10 @@ describe('OTP foundation on the complete PostgreSQL migration chain', () => {
     sendWindowSeconds: 3600,
     maxSends: 5,
     emailFrom: 'Genesis <auth@example.com>',
+    registrationRateLimitWindowSeconds: 900,
+    registrationEmailIpMaxAttempts: 5,
+    registrationIpMaxAttempts: 20,
+    registrationRateLimitMaxBuckets: 10_000,
   };
   let sender: EmailTransport;
 

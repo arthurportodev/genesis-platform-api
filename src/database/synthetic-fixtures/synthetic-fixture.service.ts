@@ -385,16 +385,18 @@ export class SyntheticFixtureService {
     hashes: Record<SyntheticUserRole, string>,
   ): Promise<Record<SyntheticUserRole, User>> {
     const repository = manager.getRepository(User);
-    const create = async (role: SyntheticUserRole): Promise<User> =>
-      repository.save(
+    const create = async (role: SyntheticUserRole): Promise<User> => {
+      const verifiedAt = this.now();
+      return repository.save(
         repository.create({
           ...formula.users[role],
           status: UserStatus.ACTIVE,
           passwordHash: hashes[role],
-          passwordChangedAt: this.now(),
-          emailVerifiedAt: null,
+          passwordChangedAt: verifiedAt,
+          emailVerifiedAt: verifiedAt,
         }),
       );
+    };
     return {
       ownerA: await create('ownerA'),
       memberA: await create('memberA'),

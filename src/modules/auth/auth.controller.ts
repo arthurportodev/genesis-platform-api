@@ -19,9 +19,19 @@ import {
 } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { LoginDto } from './dto/login.dto';
+import {
+  EmailVerificationResendDto,
+  EmailVerificationVerifyDto,
+} from './dto/email-verification.dto';
+import { RegisterDto } from './dto/register.dto';
 import { AccessTokenGuard } from './guards/access-token.guard';
 import { CsrfGuard } from './guards/csrf.guard';
 import { WebSessionService } from './services/web-session.service';
+import {
+  EmailVerifiedResponse,
+  PublicAuthService,
+  VerificationRequiredResponse,
+} from './services/public-auth.service';
 import {
   AuthenticatedUser,
   AuthRequestContext,
@@ -33,6 +43,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly webSessionService: WebSessionService,
+    private readonly publicAuthService: PublicAuthService,
   ) {}
 
   @Get('csrf')
@@ -60,6 +71,42 @@ export class AuthController {
       result.refreshExpiresAt,
     );
     return result.response;
+  }
+
+  @Post('register')
+  @UseGuards(CsrfGuard)
+  @HttpCode(HttpStatus.CREATED)
+  @Header('Cache-Control', 'no-store')
+  register(
+    @Body() input: RegisterDto,
+    @Req() request: Request,
+  ): Promise<VerificationRequiredResponse> {
+    return this.publicAuthService.register(input, this.getContext(request));
+  }
+
+  @Post('email-verification/resend')
+  @UseGuards(CsrfGuard)
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  resendEmailVerification(
+    @Body() input: EmailVerificationResendDto,
+  ): Promise<VerificationRequiredResponse> {
+    return this.publicAuthService.resend(input.challengeId);
+  }
+
+  @Post('email-verification/verify')
+  @UseGuards(CsrfGuard)
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  verifyEmail(
+    @Body() input: EmailVerificationVerifyDto,
+    @Req() request: Request,
+  ): Promise<EmailVerifiedResponse> {
+    return this.publicAuthService.verify(
+      input.challengeId,
+      input.code,
+      this.getContext(request),
+    );
   }
 
   @Post('refresh')

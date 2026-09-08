@@ -110,6 +110,8 @@ const SECRET_FILES = {
   jwt_access_secret: '/opt/genesis/secrets/jwt-access-secret',
   refresh_token_pepper: '/opt/genesis/secrets/refresh-token-pepper',
   lead_idempotency_keys: '/opt/genesis/secrets/lead-idempotency-keys',
+  auth_otp_pepper: '/opt/genesis/secrets/auth-otp-pepper',
+  resend_api_key: '/opt/genesis/secrets/resend-api-key',
 };
 const SERVICE_SECRETS = {
   postgres: [
@@ -123,6 +125,8 @@ const SERVICE_SECRETS = {
     'jwt_access_secret',
     'refresh_token_pepper',
     'lead_idempotency_keys',
+    'auth_otp_pepper',
+    'resend_api_key',
   ],
 };
 const FORBIDDEN_SECRET_ENV = new Set([
@@ -133,6 +137,8 @@ const FORBIDDEN_SECRET_ENV = new Set([
   'JWT_ACCESS_SECRET',
   'REFRESH_TOKEN_PEPPER',
   'LEAD_IDEMPOTENCY_KEYS',
+  'AUTH_OTP_PEPPER',
+  'RESEND_API_KEY',
 ]);
 const REQUIRED_BINDINGS = [
   ['postgres', 'POSTGRES_DB', 'DATABASE_NAME'],
@@ -519,6 +525,7 @@ function validateProductionCompose(
     'INVITATION_ACTIVATION_READINESS',
     'INVITATION_WORKER_ENABLED',
     'LEAD_FORM_READINESS',
+    'AUTH_OTP_PUBLIC_FLOWS_ENABLED',
   ]) {
     check(
       String(api.environment?.[key]) === 'false',

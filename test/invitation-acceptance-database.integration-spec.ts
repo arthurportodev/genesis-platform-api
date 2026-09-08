@@ -1323,6 +1323,8 @@ describe('Invitation acceptance and delivery database smoke', () => {
 
   it('fails migration rollback before removing activation objects with real data', async () => {
     await owner.undoLastMigration();
+    await owner.undoLastMigration();
+    await owner.undoLastMigration();
     await expect(owner.undoLastMigration()).rejects.toThrow(
       'Cannot revert invitation activation migration while activation data exists.',
     );

@@ -4,6 +4,7 @@ import { AuthAuditService } from '../src/modules/auth/services/auth-audit.servic
 import { LoginRateLimiter } from '../src/modules/auth/services/login-rate-limiter.port';
 import { PasswordService } from '../src/modules/auth/services/password.service';
 import { TokenService } from '../src/modules/auth/services/token.service';
+import { PublicAuthService } from '../src/modules/auth/services/public-auth.service';
 import { User } from '../src/modules/users/entities/user.entity';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
 
@@ -35,6 +36,10 @@ describe('AuthService', () => {
     recordFailure,
     resetCredential,
   } as unknown as LoginRateLimiter;
+  const continuationForLogin = jest.fn();
+  const publicAuth = {
+    continuationForLogin,
+  } as unknown as PublicAuthService;
   const service = new AuthService(
     users,
     memberships,
@@ -43,6 +48,7 @@ describe('AuthService', () => {
     {} as TokenService,
     auditService,
     rateLimiter,
+    publicAuth,
   );
   const context = { ipAddress: '127.0.0.1', userAgent: 'test-agent' };
   const credentials = { email: 'user@example.com', password: 'not-disclosed' };
@@ -61,6 +67,7 @@ describe('AuthService', () => {
       email: credentials.email,
       passwordHash: 'encoded-hash',
       status: UserStatus.ACTIVE,
+      emailVerifiedAt: new Date(),
     });
     verifyForLogin.mockResolvedValueOnce(false);
     await expect(service.login(credentials, context)).rejects.toThrow(
@@ -95,6 +102,35 @@ describe('AuthService', () => {
     );
   });
 
+  it('returns a structured continuation for a correct unverified credential', async () => {
+    const continuation = {
+      challengeId: '10000000-0000-4000-8000-000000000001',
+      expiresAt: new Date('2030-01-01T00:10:00.000Z'),
+      resendAvailableAt: new Date('2030-01-01T00:01:00.000Z'),
+    };
+    getOne.mockResolvedValueOnce({
+      id: '10000000-0000-4000-8000-000000000002',
+      email: credentials.email,
+      passwordHash: 'encoded-hash',
+      status: UserStatus.ACTIVE,
+      emailVerifiedAt: null,
+    });
+    verifyForLogin.mockResolvedValueOnce(true);
+    continuationForLogin.mockResolvedValueOnce(continuation);
+
+    await expect(service.login(credentials, context)).rejects.toMatchObject({
+      response: {
+        statusCode: 403,
+        code: 'EMAIL_VERIFICATION_REQUIRED',
+        continuation,
+      },
+    });
+    expect(resetCredential).toHaveBeenCalledWith(
+      context.ipAddress,
+      credentials.email,
+    );
+  });
+
   it('returns a sanitized current-user response', async () => {
     findOneBy.mockResolvedValueOnce({
       id: 'user-id',
@@ -102,6 +138,7 @@ describe('AuthService', () => {
       email: credentials.email,
       status: UserStatus.ACTIVE,
       passwordHash: 'must-not-leak',
+      emailVerifiedAt: new Date(),
     });
 
     await expect(

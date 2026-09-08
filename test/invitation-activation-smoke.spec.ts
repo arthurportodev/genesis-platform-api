@@ -1,8 +1,6 @@
-import { HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ActivateInvitationDto } from '../src/modules/invitations/dto/activate-invitation.dto';
 import { InvitationActivationHashCapacity } from '../src/modules/invitations/services/invitation-activation-hash-capacity.service';
-import { InvitationActivationObservability } from '../src/modules/invitations/services/invitation-activation-observability.service';
 
 const token =
   '123e4567-e89b-42d3-a456-426614174000.2.1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -55,20 +53,19 @@ describe('Invitation activation public boundary', () => {
       getOrThrow: () => ({ activationHashConcurrency: 1 }),
     } as unknown as ConfigService;
     const rateLimited = jest.fn();
-    const observability = {
-      rateLimited,
-    } as unknown as InvitationActivationObservability;
-    const capacity = new InvitationActivationHashCapacity(
-      config,
-      observability,
-    );
+    const capacity = new InvitationActivationHashCapacity(config);
     let release: (() => void) | undefined;
     const first = capacity.run(
       () => new Promise<void>((resolve) => (release = resolve)),
     );
-    await expect(capacity.run(() => Promise.resolve())).rejects.toEqual(
-      new HttpException('Too many requests.', 429),
-    );
+    await expect(
+      capacity.run(
+        () => Promise.resolve(),
+        () => {
+          rateLimited('hash_capacity');
+        },
+      ),
+    ).rejects.toMatchObject({ status: 429 });
     expect(rateLimited).toHaveBeenCalledWith('hash_capacity');
     release?.();
     await first;

@@ -1,6 +1,7 @@
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import {
+  AUTH_REGISTRATION_RUNTIME_EXECUTABLE_FUNCTIONS,
   CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS,
   RUNTIME_EXECUTABLE_FUNCTIONS,
 } from '../../../database/runtime-executable-functions';
@@ -217,7 +218,12 @@ export class OperationalMembershipReadiness implements MembershipReadiness {
       'app_private.required_lead_fingerprint_key_versions()',
     )
       ? CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS
-      : [...RUNTIME_EXECUTABLE_FUNCTIONS].sort();
+      : actual.includes('app_private.register_unverified_user(text,text,text)')
+        ? [
+            ...RUNTIME_EXECUTABLE_FUNCTIONS,
+            ...AUTH_REGISTRATION_RUNTIME_EXECUTABLE_FUNCTIONS,
+          ].sort()
+        : [...RUNTIME_EXECUTABLE_FUNCTIONS].sort();
     return JSON.stringify(actual) === JSON.stringify(expected);
   }
 

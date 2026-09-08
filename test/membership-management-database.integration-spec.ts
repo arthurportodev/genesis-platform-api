@@ -66,6 +66,8 @@ describe('Membership ownership database integration', () => {
 
   it('fails the pre-audit closed with only a code and count, then migrates after remediation', async () => {
     await owner.undoLastMigration();
+    await owner.undoLastMigration();
+    await owner.undoLastMigration();
     const legacySearchPaths = await owner.query<
       Array<{ name: string; config: string[] }>
     >(
@@ -100,7 +102,7 @@ describe('Membership ownership database integration', () => {
     await owner.getRepository(Organization).update(orphan.id, {
       status: OrganizationStatus.INACTIVE,
     });
-    await expect(owner.runMigrations()).resolves.toHaveLength(1);
+    await expect(owner.runMigrations()).resolves.toHaveLength(3);
     await owner.getRepository(Organization).delete(orphan.id);
   });
 
@@ -900,6 +902,8 @@ describe('Membership ownership database integration', () => {
   });
 
   it('fails rollback closed after real membership audit exists', async () => {
+    await owner.undoLastMigration();
+    await owner.undoLastMigration();
     await expect(owner.undoLastMigration()).rejects.toThrow(
       /M5492 membership ownership audit exists; forward-fix required/u,
     );

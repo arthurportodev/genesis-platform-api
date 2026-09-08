@@ -132,6 +132,22 @@ describe('DatabaseAccessTokenAuthenticator', () => {
     });
   });
 
+  it('rejects an active session owned by an unverified user', async () => {
+    const userId = randomUUID();
+    const sessionId = randomUUID();
+    const token = await issueAccessToken(userId, sessionId);
+    const session = createSession(
+      AuthSessionStatus.ACTIVE,
+      60_000,
+      UserStatus.ACTIVE,
+    );
+    session.user.emailVerifiedAt = null;
+    getOne.mockResolvedValueOnce(session);
+    await expect(authenticator.authenticate(token)).rejects.toThrow(
+      'Invalid access token.',
+    );
+  });
+
   async function issueAccessToken(
     userId: string,
     sessionId: string,
@@ -146,6 +162,7 @@ describe('DatabaseAccessTokenAuthenticator', () => {
   ): AuthSession {
     const user = new User();
     user.status = userStatus;
+    user.emailVerifiedAt = new Date();
     const session = new AuthSession();
     session.status = status;
     session.expiresAt = new Date(Date.now() + expirationOffset);

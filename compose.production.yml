@@ -139,6 +139,8 @@ services:
       JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-30}
       API_PUBLIC_REPLICA_COUNT: 1
+      AUTH_OTP_PUBLIC_FLOWS_ENABLED: 'false'
+      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:-}
       INVITATION_ISSUANCE_READINESS: 'false'
       INVITATION_ACCEPTANCE_READINESS: 'false'
       INVITATION_ACTIVATION_READINESS: 'false'
@@ -151,6 +153,8 @@ services:
       - jwt_access_secret
       - refresh_token_pepper
       - lead_idempotency_keys
+      - auth_otp_pepper
+      - resend_api_key
     volumes:
       - ./docker/production/api-entrypoint.sh:/opt/genesis/bin/api-entrypoint.sh:ro
     expose:
@@ -196,6 +200,10 @@ secrets:
     file: /opt/genesis/secrets/refresh-token-pepper
   lead_idempotency_keys:
     file: /opt/genesis/secrets/lead-idempotency-keys
+  auth_otp_pepper:
+    file: /opt/genesis/secrets/auth-otp-pepper
+  resend_api_key:
+    file: /opt/genesis/secrets/resend-api-key
 
 volumes:
   postgres_data:
