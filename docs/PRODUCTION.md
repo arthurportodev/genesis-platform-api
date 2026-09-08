@@ -500,23 +500,57 @@ avançados de supply chain são backlog pós-MVP.
 O procedimento vigente para novos deploys da API é o
 `SIMPLE_VPS_DEPLOYMENT` do [ADR-020](decisions/ADR-020-simple-vps-deployment.md),
 implementado por `docker/production/deploy-api-simple.py`. A implementação desta
-Task prepara e testa o operador, mas não instala arquivos nem autoriza uma
-execução na VPS.
+Task prepara e testa o operador. Nenhum comando documentado nesta seção concede
+por si só autorização para alterar a VPS ou executar um deploy.
 
 O diretório `/opt/genesis/deploy` é fixo, `root:root` e não gravável por
 group/other. Ele contém somente a allowlist do operador e
 `operational-integrity.json`; não há diretório por release. Para uma instalação
-futura, o manifesto é criado a partir de um checkout Git limpo cujo `HEAD` seja
-exatamente o `operationalSourceSha` aprovado no Gate A. O comando rejeita bytes
-dirty ou um commit diferente:
+futura, os bytes são lidos pelo próprio operador executado a partir de um checkout
+Git limpo, detached, cujo `HEAD` seja exatamente o `operationalSourceSha`
+aprovado. O destino nunca é usado para carregar o código do instalador. O
+comando rejeita checkout attached, bytes dirty, commit, blob, mode, symlink ou
+hardlink divergente.
+
+`prepare-operational` é read-only. Ele valida a geração instalada, a allowlist
+completa da origem, o lock canônico e o filesystem, e retorna o delta determinístico
+com hash e mode de cada arquivo, sem criar lock, staging ou evidência:
 
 ```bash
-python3 <approved-checkout>/docker/production/deploy-api-simple.py manifest \
-  --source-root <approved-checkout> \
-  --production-env /opt/genesis/config/production.env \
-  --operational-source-sha <approved-40-hex-source-sha> \
-  --output /opt/genesis/deploy/operational-integrity.json
+python3 /absolute/approved-checkout/docker/production/deploy-api-simple.py prepare-operational \
+  --source-root /absolute/approved-checkout \
+  --current-operational-source-sha <installed-40-hex-source-sha> \
+  --operational-source-sha <target-40-hex-source-sha>
 ```
+
+Uma autorização separada deve copiar exatamente a identidade
+`<runId>:<currentOperationalSourceSha>:<targetOperationalSourceSha>:<authorizationPlanSha256>:<path=sha256@mode,...>`.
+O digest vincula também unchanged files, manifest candidato e prova do
+filesystem, enquanto a lista final torna explícitos paths, hashes e modes que
+podem mudar. Somente então `install-operational` pode usar a mesma origem e a
+mesma identidade:
+
+```bash
+python3 /absolute/approved-checkout/docker/production/deploy-api-simple.py install-operational \
+  --source-root /absolute/approved-checkout \
+  --current-operational-source-sha <installed-40-hex-source-sha> \
+  --operational-source-sha <target-40-hex-source-sha> \
+  --run-id <approved-16-hex-run-id> \
+  --authorization '<approved-exact-identity>'
+```
+
+O instalador prepara a allowlist completa em um diretório root-only no mesmo
+filesystem, adquire `/run/genesis-api-deploy.lock`, revalida o plano e preserva
+em backup transitório somente os arquivos alterados e o manifesto anterior.
+Ele substitui duravelmente apenas os arquivos alterados e instala
+`operational-integrity.json` por último. Sucesso remove staging e backup;
+reexecução da identidade já instalada retorna `ALREADY_INSTALLED` sem escrita.
+
+Falha restaura os bytes e o manifesto anteriores e retorna
+`INSTALL_FAILED_ROLLED_BACK`. Se a restauração não puder ser comprovada, grava
+um manifesto fail-closed, conserva staging e backup para investigação e retorna
+`INSTALL_FAILED_FAIL_CLOSED`. Diretório transitório órfão bloqueia novas
+instalações; não existe cleanup automático nem segunda tentativa implícita.
 
 `production.env` contém exatamente a configuração não secreta aprovada, é
 `root:root 0600` e tem SHA-256 vinculado pelo manifesto. O pointer separado
