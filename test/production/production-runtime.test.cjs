@@ -73,6 +73,8 @@ function writeSecrets(root, suffix = '') {
     lead_idempotency_keys: JSON.stringify({
       1: Buffer.alloc(32, 7).toString('base64'),
     }),
+    auth_otp_pepper: Buffer.alloc(32, 9).toString('base64'),
+    resend_api_key: marker('resend'),
   };
   for (const [name, value] of Object.entries(values)) {
     writeFileSync(join(directory, name), `${value}\n`, { mode: 0o440 });
@@ -100,6 +102,8 @@ function writeOverride(root, name, volume, secrets, traefikVolume, extra = '') {
       `  jwt_access_secret:\n    file: ${file('jwt_access_secret')}`,
       `  refresh_token_pepper:\n    file: ${file('refresh_token_pepper')}`,
       `  lead_idempotency_keys:\n    file: ${file('lead_idempotency_keys')}`,
+      `  auth_otp_pepper:\n    file: ${file('auth_otp_pepper')}`,
+      `  resend_api_key:\n    file: ${file('resend_api_key')}`,
       'volumes:',
       '  postgres_data:',
       '    external: true',
@@ -306,6 +310,14 @@ function testWrapperRuntime(root, values, suffix) {
     join(wrapperRoot, 'lead_idempotency_keys'),
     `${values.lead_idempotency_keys}\n`,
   );
+  writeFileSync(
+    join(wrapperRoot, 'auth_otp_pepper'),
+    `${values.auth_otp_pepper}\n`,
+  );
+  writeFileSync(
+    join(wrapperRoot, 'resend_api_key'),
+    `${values.resend_api_key}\n`,
+  );
   const hashes = succeed('docker', [
     'run',
     '--rm',
@@ -319,7 +331,7 @@ function testWrapperRuntime(root, values, suffix) {
     '/wrapper.sh',
     '/bin/sh',
     '-c',
-    'printf \'%s\' "$DATABASE_PASSWORD" | sha256sum; printf \'%s\' "$JWT_ACCESS_SECRET" | sha256sum; printf \'%s\' "$REFRESH_TOKEN_PEPPER" | sha256sum; printf \'%s\' "$LEAD_IDEMPOTENCY_KEYS" | sha256sum',
+    'printf \'%s\' "$DATABASE_PASSWORD" | sha256sum; printf \'%s\' "$JWT_ACCESS_SECRET" | sha256sum; printf \'%s\' "$REFRESH_TOKEN_PEPPER" | sha256sum; printf \'%s\' "$LEAD_IDEMPOTENCY_KEYS" | sha256sum; printf \'%s\' "$AUTH_OTP_PEPPER" | sha256sum; printf \'%s\' "$RESEND_API_KEY" | sha256sum',
   ])
     .split(/\r?\n/u)
     .map((line) => line.split(/\s+/u)[0]);
@@ -328,6 +340,8 @@ function testWrapperRuntime(root, values, suffix) {
     sha(values.jwt_access_secret),
     sha(values.refresh_token_pepper),
     sha(values.lead_idempotency_keys),
+    sha(values.auth_otp_pepper),
+    sha(values.resend_api_key),
   ]);
 
   const pid = succeed('docker', [

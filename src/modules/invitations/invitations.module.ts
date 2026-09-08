@@ -35,7 +35,6 @@ import { InvitationTokenCodec } from './services/invitation-token-codec.service'
 import { InvitationsService } from './services/invitations.service';
 import { InvitationAcceptanceService } from './services/invitation-acceptance.service';
 import { InvitationAcceptanceRateLimiter } from './services/invitation-acceptance-rate-limiter.service';
-import { InvitationActivationHashCapacity } from './services/invitation-activation-hash-capacity.service';
 import { InvitationActivationService } from './services/invitation-activation.service';
 import { InvitationActivationObservability } from './services/invitation-activation-observability.service';
 import {
@@ -118,7 +117,6 @@ import { NoStoreInterceptor } from './interceptors/no-store.interceptor';
     InvitationsService,
     InvitationAcceptanceService,
     InvitationAcceptanceRateLimiter,
-    InvitationActivationHashCapacity,
     InvitationActivationObservability,
     InvitationActivationService,
     InvitationInspectRateLimitGuard,

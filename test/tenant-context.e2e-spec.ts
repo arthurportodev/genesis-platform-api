@@ -107,6 +107,9 @@ describe('Tenant context (e2e)', () => {
       { log: jest.fn() },
       { initialOwnerPassword },
     );
+    await connection
+      .getRepository(User)
+      .update({ email: ownerEmail }, { emailVerifiedAt: new Date() });
     await createTenantFixtures();
 
     const { AppModule } = await import('../src/app.module');
@@ -336,6 +339,7 @@ describe('Tenant context (e2e)', () => {
         status: UserStatus.ACTIVE,
         passwordHash: await hashPassword(secondUserPassword),
         passwordChangedAt: new Date(),
+        emailVerifiedAt: new Date(),
       }),
     );
     const organizations = connection.getRepository(Organization);

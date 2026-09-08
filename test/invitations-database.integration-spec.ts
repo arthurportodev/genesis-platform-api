@@ -66,6 +66,10 @@ describe('Organization invitations database integration', () => {
     await connection.undoLastMigration();
     expect(await invitationTableNames()).toHaveLength(4);
     await connection.undoLastMigration();
+    expect(await invitationTableNames()).toHaveLength(4);
+    await connection.undoLastMigration();
+    expect(await invitationTableNames()).toHaveLength(4);
+    await connection.undoLastMigration();
     expect(await invitationTableNames()).toEqual([]);
     await connection.runMigrations();
     expect(await invitationTableNames()).toHaveLength(4);
@@ -78,6 +82,8 @@ describe('Organization invitations database integration', () => {
     }
     const groupRole = `audit_trigger_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
 
+    await connection.undoLastMigration();
+    await connection.undoLastMigration();
     await connection.undoLastMigration();
     await connection.undoLastMigration();
     await connection.undoLastMigration();
@@ -362,6 +368,12 @@ describe('Organization invitations database integration', () => {
       },
       {
         signature: 'app_private.lock_invitation_context(uuid[],uuid[],uuid[])',
+      },
+      {
+        signature: 'app_private.register_unverified_user(text,text,text)',
+      },
+      {
+        signature: 'app_private.verify_user_email(uuid,uuid)',
       },
     ]);
 

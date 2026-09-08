@@ -111,6 +111,9 @@ describe('Role authorization (e2e)', () => {
       { log: jest.fn() },
       { initialOwnerPassword },
     );
+    await connection
+      .getRepository(User)
+      .update({ email: ownerEmail }, { emailVerifiedAt: new Date() });
     await createRoleFixtures();
 
     const { AppModule } = await import('../src/app.module');

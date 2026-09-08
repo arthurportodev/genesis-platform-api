@@ -116,7 +116,7 @@ describe('Lead foundation database integration', () => {
         (array_agg(name ORDER BY id DESC))[1] AS head
         FROM public.migrations`);
       expect(inventory).toEqual({
-        count: 13,
+        count: 15,
         head: 'AllowDefaultPipelineStageConfiguration1788811200000',
       });
     } finally {
@@ -143,7 +143,7 @@ describe('Lead foundation database integration', () => {
       (array_agg(name ORDER BY id DESC))[1] AS head
       FROM public.migrations`);
     expect(inventory).toEqual({
-      count: 13,
+      count: 15,
       head: 'AllowDefaultPipelineStageConfiguration1788811200000',
     });
   });

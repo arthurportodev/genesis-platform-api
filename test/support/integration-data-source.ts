@@ -5,6 +5,8 @@ import { CreateOrganizationInvitations1785004800000 } from '../../src/database/m
 import { DeliverInvitationAcceptance1785087600000 } from '../../src/database/migrations/1785087600000-DeliverInvitationAcceptance';
 import { ActivateNewInvitationUser1785174000000 } from '../../src/database/migrations/1785174000000-ActivateNewInvitationUser';
 import { ManageMembershipOwnership1785260400000 } from '../../src/database/migrations/1785260400000-ManageMembershipOwnership';
+import { CreateAuthEmailChallenges1788900000000 } from '../../src/database/migrations/1788900000000-CreateAuthEmailChallenges';
+import { DeliverPublicEmailVerification1788986400000 } from '../../src/database/migrations/1788986400000-DeliverPublicEmailVerification';
 import { createBasePostgresOptions } from '../../src/database/typeorm-base.options';
 import { AuthAuditLog } from '../../src/modules/auth-sessions/entities/auth-audit-log.entity';
 import { AuthRefreshToken } from '../../src/modules/auth-sessions/entities/auth-refresh-token.entity';
@@ -16,6 +18,7 @@ import { OrganizationInvitation } from '../../src/modules/invitations/entities/o
 import { InvitationDeliveryOutbox } from '../../src/modules/invitations/entities/invitation-delivery-outbox.entity';
 import { OrganizationCommandIdempotency } from '../../src/modules/invitations/entities/organization-command-idempotency.entity';
 import { OrganizationAuditLog } from '../../src/modules/organization-audit/entities/organization-audit-log.entity';
+import { AuthEmailChallenge } from '../../src/modules/auth-email-challenges/auth-email-challenge.entity';
 
 export const INTEGRATION_RUNTIME_PASSWORD = 'runtime-test-only';
 
@@ -30,6 +33,7 @@ const integrationEntities = [
   InvitationDeliveryOutbox,
   OrganizationCommandIdempotency,
   OrganizationAuditLog,
+  AuthEmailChallenge,
 ];
 
 export function createIntegrationDataSource(): DataSource {
@@ -59,6 +63,8 @@ export function createIntegrationDataSource(): DataSource {
       DeliverInvitationAcceptance1785087600000,
       ActivateNewInvitationUser1785174000000,
       ManageMembershipOwnership1785260400000,
+      CreateAuthEmailChallenges1788900000000,
+      DeliverPublicEmailVerification1788986400000,
     ],
     migrationsTableName: 'migrations',
     logging: false,

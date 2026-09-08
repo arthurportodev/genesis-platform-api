@@ -1,4 +1,10 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
@@ -21,6 +27,7 @@ import { OrganizationStatus } from '../organizations/enums/organization-status.e
 import { LoginDto } from './dto/login.dto';
 import { AuthAuditService } from './services/auth-audit.service';
 import { LoginRateLimiter } from './services/login-rate-limiter.port';
+import { PublicAuthService } from './services/public-auth.service';
 import { TokenService } from './services/token.service';
 import {
   AuthenticatedUser,
@@ -78,6 +85,7 @@ export class AuthService {
     private readonly tokenService: TokenService,
     private readonly auditService: AuthAuditService,
     private readonly rateLimiter: LoginRateLimiter,
+    private readonly publicAuth: PublicAuthService,
   ) {}
 
   async login(
@@ -108,6 +116,26 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
     }
 
+    if (user.emailVerifiedAt === null) {
+      this.rateLimiter.resetCredential(context.ipAddress, email);
+      const continuation = await this.publicAuth.continuationForLogin(user.id);
+      await this.auditService.record({
+        ...context,
+        eventType: AuthAuditEventType.LOGIN_FAILED,
+        userId: user.id,
+        metadata: { reason: 'email_verification_required' },
+      });
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.FORBIDDEN,
+          code: 'EMAIL_VERIFICATION_REQUIRED',
+          message: 'Email verification is required.',
+          ...(continuation ? { continuation } : {}),
+        },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     const operation = await this.dataSource.transaction(async (manager) => {
       await manager.query(
         `SELECT app_private.lock_auth_refresh_user($1::uuid)`,
@@ -117,7 +145,8 @@ export class AuthService {
         id: user.id,
         status: UserStatus.ACTIVE,
       });
-      if (lockedUser === null) return null;
+      if (lockedUser === null || lockedUser.emailVerifiedAt === null)
+        return null;
 
       const sessionId = randomUUID();
       const refreshToken = this.tokenService.generateRefreshToken(sessionId);
@@ -336,7 +365,7 @@ export class AuthService {
       id: currentUser.userId,
       status: UserStatus.ACTIVE,
     });
-    if (user === null) {
+    if (user === null || user.emailVerifiedAt === null) {
       throw new UnauthorizedException('Invalid access token.');
     }
     return this.toPublicUser(user);
@@ -349,7 +378,7 @@ export class AuthService {
       id: currentUser.userId,
       status: UserStatus.ACTIVE,
     });
-    if (user === null) {
+    if (user === null || user.emailVerifiedAt === null) {
       throw new UnauthorizedException('Invalid access token.');
     }
 
@@ -497,14 +526,17 @@ export class AuthService {
     if (
       session.status !== AuthSessionStatus.ACTIVE ||
       session.expiresAt.getTime() <= now.getTime() ||
-      session.user.status !== UserStatus.ACTIVE
+      session.user.status !== UserStatus.ACTIVE ||
+      session.user.emailVerifiedAt === null
     ) {
       if (session.status === AuthSessionStatus.ACTIVE) {
         this.revokeSession(
           session,
           session.user.status !== UserStatus.ACTIVE
             ? 'user_inactive'
-            : 'expired',
+            : session.user.emailVerifiedAt === null
+              ? 'email_unverified'
+              : 'expired',
           now,
         );
         await sessions.save(session);

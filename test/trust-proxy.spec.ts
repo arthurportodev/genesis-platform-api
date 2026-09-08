@@ -23,6 +23,7 @@ import { CsrfGuard } from '../src/modules/auth/guards/csrf.guard';
 import { AuthAuditService } from '../src/modules/auth/services/auth-audit.service';
 import { InMemoryLoginRateLimiter } from '../src/modules/auth/services/in-memory-login-rate-limiter.service';
 import { LoginRateLimiter } from '../src/modules/auth/services/login-rate-limiter.port';
+import { PublicAuthService } from '../src/modules/auth/services/public-auth.service';
 import { TokenService } from '../src/modules/auth/services/token.service';
 import { WebSessionService } from '../src/modules/auth/services/web-session.service';
 import { PASSWORD_LOGIN_VERIFIER } from '../src/modules/credentials/ports/password-login-verifier.port';
@@ -244,6 +245,12 @@ async function createAuthHarness(hops: number): Promise<AuthHarness> {
       {
         provide: TokenService,
         useValue: {},
+      },
+      {
+        provide: PublicAuthService,
+        useValue: {
+          requireEmailVerification: jest.fn(),
+        },
       },
       {
         provide: DataSource,

@@ -31,7 +31,7 @@ test('migration wrapper has a fixed path, exact newline handling and terminal ex
   );
 });
 
-test('API wrapper exports only its four service secrets from fixed paths', () => {
+test('API wrapper exports only its six service secrets from fixed paths', () => {
   assertWrapper(
     api,
     [
@@ -39,12 +39,16 @@ test('API wrapper exports only its four service secrets from fixed paths', () =>
       '/run/secrets/jwt_access_secret',
       '/run/secrets/refresh_token_pepper',
       '/run/secrets/lead_idempotency_keys',
+      '/run/secrets/auth_otp_pepper',
+      '/run/secrets/resend_api_key',
     ],
     [
       'DATABASE_PASSWORD',
       'JWT_ACCESS_SECRET',
       'REFRESH_TOKEN_PEPPER',
       'LEAD_IDEMPOTENCY_KEYS',
+      'AUTH_OTP_PEPPER',
+      'RESEND_API_KEY',
     ],
   );
   assert.doesNotMatch(api, /DATABASE_MIGRATION_PASSWORD|POSTGRES_PASSWORD/u);

@@ -29,6 +29,10 @@ read_secret /run/secrets/refresh_token_pepper 'refresh-token pepper'
 export REFRESH_TOKEN_PEPPER=$secret_value
 read_secret /run/secrets/lead_idempotency_keys 'Lead idempotency keyring'
 export LEAD_IDEMPOTENCY_KEYS=$secret_value
+read_secret /run/secrets/auth_otp_pepper 'authentication OTP pepper'
+export AUTH_OTP_PEPPER=$secret_value
+read_secret /run/secrets/resend_api_key 'Resend API key'
+export RESEND_API_KEY=$secret_value
 unset secret_path secret_label secret_value secret_with_sentinel
 
 if [ "$#" -eq 0 ]; then

@@ -85,6 +85,9 @@ describe('Authentication endpoints (e2e)', () => {
         initialOwnerPassword,
       },
     );
+    await connection
+      .getRepository(User)
+      .update({ email: ownerEmail }, { emailVerifiedAt: new Date() });
     const organization = await connection
       .getRepository(Organization)
       .findOneByOrFail({ slug: 'agencia-genesis' });
@@ -405,6 +408,7 @@ describe('Authentication endpoints (e2e)', () => {
       email: `bootstrap-${randomUUID()}@example.com`,
       name: 'Bootstrap Empty',
       status: UserStatus.ACTIVE,
+      emailVerifiedAt: new Date(),
     });
     const sessionId = randomUUID();
     await connection.getRepository(AuthSession).save({

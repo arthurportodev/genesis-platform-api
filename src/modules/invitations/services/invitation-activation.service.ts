@@ -91,8 +91,9 @@ export class InvitationActivationService {
       }
       throw error;
     }
-    const passwordHash = await this.hashCapacity.run(() =>
-      this.passwordHasher.hash(dto.password),
+    const passwordHash = await this.hashCapacity.run(
+      () => this.passwordHasher.hash(dto.password),
+      () => this.observability.rateLimited('hash_capacity'),
     );
 
     try {

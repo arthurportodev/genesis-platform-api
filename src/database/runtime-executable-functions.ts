@@ -20,9 +20,15 @@ export const LEAD_RUNTIME_EXECUTABLE_FUNCTIONS = [
   'app_private.update_lead(uuid,uuid,uuid,uuid,bigint,text,text,text,text,text,text,text)',
 ] as const;
 
+export const AUTH_REGISTRATION_RUNTIME_EXECUTABLE_FUNCTIONS = [
+  'app_private.register_unverified_user(text,text,text)',
+  'app_private.verify_user_email(uuid,uuid)',
+] as const;
+
 export const CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS = [
   ...RUNTIME_EXECUTABLE_FUNCTIONS,
   ...LEAD_RUNTIME_EXECUTABLE_FUNCTIONS,
+  ...AUTH_REGISTRATION_RUNTIME_EXECUTABLE_FUNCTIONS,
   'app_private.archive_pipeline_stage(uuid,uuid,uuid,uuid,uuid,bigint)',
   'app_private.create_pipeline(uuid,uuid,uuid,uuid,text,jsonb)',
   'app_private.create_pipeline_stage(uuid,uuid,uuid,uuid,uuid,bigint,text)',

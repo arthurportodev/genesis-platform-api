@@ -2,6 +2,9 @@ import { registerAs } from '@nestjs/config';
 import Joi from 'joi';
 
 export const authOtpEnvironmentFields = {
+  AUTH_OTP_PUBLIC_FLOWS_ENABLED: Joi.string()
+    .valid('true', 'false')
+    .default('false'),
   AUTH_OTP_PEPPER: Joi.string()
     .allow('')
     .custom((value: string, helpers) => {
@@ -32,9 +35,30 @@ export const authOtpEnvironmentFields = {
     .pattern(/^[^\r\n]+$/u)
     .allow('')
     .default(''),
+  AUTH_REGISTRATION_RATE_LIMIT_WINDOW_SECONDS: Joi.number()
+    .integer()
+    .min(1)
+    .max(86_400)
+    .default(900),
+  AUTH_REGISTRATION_EMAIL_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(1_000)
+    .default(5),
+  AUTH_REGISTRATION_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(10_000)
+    .default(20),
+  AUTH_REGISTRATION_RATE_LIMIT_MAX_BUCKETS: Joi.number()
+    .integer()
+    .min(2)
+    .max(1_000_000)
+    .default(10_000),
 };
 
 export interface AuthOtpConfig {
+  publicFlowsEnabled: boolean;
   pepper: Buffer | null;
   ttlSeconds: number;
   maxAttempts: number;
@@ -42,16 +66,52 @@ export interface AuthOtpConfig {
   sendWindowSeconds: number;
   maxSends: number;
   emailFrom: string;
+  registrationRateLimitWindowSeconds: number;
+  registrationEmailIpMaxAttempts: number;
+  registrationIpMaxAttempts: number;
+  registrationRateLimitMaxBuckets: number;
 }
 
-export default registerAs('authOtp', (): AuthOtpConfig => ({
-  pepper: process.env.AUTH_OTP_PEPPER
+export default registerAs('authOtp', (): AuthOtpConfig => {
+  const publicFlowsEnabled =
+    process.env.AUTH_OTP_PUBLIC_FLOWS_ENABLED === 'true';
+  const pepper = process.env.AUTH_OTP_PEPPER
     ? Buffer.from(process.env.AUTH_OTP_PEPPER, 'base64')
-    : null,
-  ttlSeconds: Number(process.env.AUTH_OTP_TTL_SECONDS ?? 600),
-  maxAttempts: Number(process.env.AUTH_OTP_MAX_ATTEMPTS ?? 5),
-  cooldownSeconds: Number(process.env.AUTH_OTP_RESEND_COOLDOWN_SECONDS ?? 60),
-  sendWindowSeconds: Number(process.env.AUTH_OTP_SEND_WINDOW_SECONDS ?? 3600),
-  maxSends: Number(process.env.AUTH_OTP_MAX_SENDS ?? 5),
-  emailFrom: process.env.AUTH_EMAIL_FROM?.trim() ?? '',
-}));
+    : null;
+  const emailFrom = process.env.AUTH_EMAIL_FROM?.trim() ?? '';
+  const resendApiKey = process.env.RESEND_API_KEY?.trim() ?? '';
+  const publicReplicaCount = Number(process.env.API_PUBLIC_REPLICA_COUNT ?? 1);
+  if (
+    publicFlowsEnabled &&
+    (pepper?.length !== 32 ||
+      emailFrom === '' ||
+      resendApiKey === '' ||
+      publicReplicaCount !== 1)
+  ) {
+    throw new Error(
+      'Public OTP flows require a dedicated pepper, email sender, Resend key, and exactly one public API replica.',
+    );
+  }
+  return {
+    publicFlowsEnabled,
+    pepper,
+    ttlSeconds: Number(process.env.AUTH_OTP_TTL_SECONDS ?? 600),
+    maxAttempts: Number(process.env.AUTH_OTP_MAX_ATTEMPTS ?? 5),
+    cooldownSeconds: Number(process.env.AUTH_OTP_RESEND_COOLDOWN_SECONDS ?? 60),
+    sendWindowSeconds: Number(process.env.AUTH_OTP_SEND_WINDOW_SECONDS ?? 3600),
+    maxSends: Number(process.env.AUTH_OTP_MAX_SENDS ?? 5),
+    emailFrom,
+    registrationRateLimitWindowSeconds: Number(
+      process.env.AUTH_REGISTRATION_RATE_LIMIT_WINDOW_SECONDS ?? 900,
+    ),
+    registrationEmailIpMaxAttempts: Number(
+      process.env.AUTH_REGISTRATION_EMAIL_IP_MAX_ATTEMPTS ?? 5,
+    ),
+    registrationIpMaxAttempts: Number(
+      process.env.AUTH_REGISTRATION_IP_MAX_ATTEMPTS ?? 20,
+    ),
+    registrationRateLimitMaxBuckets: Number(
+      process.env.AUTH_REGISTRATION_RATE_LIMIT_MAX_BUCKETS ?? 10_000,
+    ),
+  };
+});
