@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
-const { resolve } = require('node:path');
+const { mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join, resolve } = require('node:path');
 const test = require('node:test');
 const {
   API_IMAGE_EXPRESSION,
@@ -18,21 +19,37 @@ const {
   validateStaticConfigSelection,
 } = require('../../scripts/validate-production-compose.cjs');
 
-function loadMode(mode, selectedStaticConfig) {
+function loadMode(
+  mode,
+  selectedStaticConfig,
+  { envFile = resolve('.env.production.example'), environment = {} } = {},
+) {
   const contract = MODE_CONTRACTS[mode];
   const composePaths = [resolve(BASE_COMPOSE)];
   if (contract.override) composePaths.push(resolve(contract.override));
   return loadProductionCompose({
     cwd: process.cwd(),
     composePaths,
-    envFile: resolve('.env.production.example'),
+    envFile,
     environment: {
       API_IMAGE: API_RELEASE_BINDINGS.current.image,
+      ...environment,
       ...(selectedStaticConfig === undefined
         ? {}
         : { TRAEFIK_PUBLIC_HTTP_CONFIG: selectedStaticConfig }),
     },
   });
+}
+
+function withProductionEnv(source, callback) {
+  const directory = mkdtempSync(join(tmpdir(), 'genesis-production-env-'));
+  const envFile = join(directory, 'production.env');
+  writeFileSync(envFile, source);
+  try {
+    return callback(envFile);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 const loaded = loadMode('base');
@@ -47,6 +64,89 @@ test('renders and validates the complete production Compose contract', () => {
     serviceNames: ['api', 'migrate', 'postgres', 'traefik'],
     failures: [],
   });
+});
+
+test('renders auth runtime configuration only from the canonical env file', () => {
+  const example = readFileSync('.env.production.example', 'utf8');
+  const historical = example
+    .split(/\r?\n/u)
+    .filter(
+      (line) =>
+        !line.startsWith('AUTH_OTP_PUBLIC_FLOWS_ENABLED=') &&
+        !line.startsWith('AUTH_EMAIL_FROM='),
+    )
+    .join('\n');
+  const inherited = {
+    AUTH_OTP_PUBLIC_FLOWS_ENABLED: process.env.AUTH_OTP_PUBLIC_FLOWS_ENABLED,
+    AUTH_EMAIL_FROM: process.env.AUTH_EMAIL_FROM,
+  };
+  process.env.AUTH_OTP_PUBLIC_FLOWS_ENABLED = 'true';
+  process.env.AUTH_EMAIL_FROM = 'attacker@example.com';
+  try {
+    withProductionEnv(`${historical}\n`, (envFile) => {
+      const historicalLoaded = loadMode('base', undefined, { envFile });
+      assert.equal(
+        historicalLoaded.config.services.api.environment
+          .AUTH_OTP_PUBLIC_FLOWS_ENABLED,
+        'false',
+      );
+      assert.equal(
+        historicalLoaded.config.services.api.environment.AUTH_EMAIL_FROM,
+        '',
+      );
+    });
+  } finally {
+    for (const [key, value] of Object.entries(inherited)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+
+  const enabled = example
+    .replace(
+      'AUTH_OTP_PUBLIC_FLOWS_ENABLED=false',
+      'AUTH_OTP_PUBLIC_FLOWS_ENABLED=true',
+    )
+    .replace('AUTH_EMAIL_FROM=', 'AUTH_EMAIL_FROM=Genesis <auth@example.com>');
+  withProductionEnv(enabled, (envFile) => {
+    const enabledLoaded = loadMode('base', undefined, { envFile });
+    assert.equal(
+      enabledLoaded.status,
+      'passed',
+      enabledLoaded.failures.join('\n'),
+    );
+    assert.equal(
+      enabledLoaded.config.services.api.environment
+        .AUTH_OTP_PUBLIC_FLOWS_ENABLED,
+      'true',
+    );
+    assert.equal(
+      enabledLoaded.config.services.api.environment.AUTH_EMAIL_FROM,
+      'Genesis <auth@example.com>',
+    );
+    assert.equal(
+      validateProductionCompose(enabledLoaded.config, enabledLoaded.rawConfig)
+        .status,
+      'passed',
+    );
+  });
+});
+
+test('rejects invalid auth flag renders and preserves canonical interpolation', () => {
+  assert.equal(
+    loaded.rawConfig.services.api.environment.AUTH_OTP_PUBLIC_FLOWS_ENABLED,
+    '${AUTH_OTP_PUBLIC_FLOWS_ENABLED:-false}',
+  );
+  assert.equal(
+    loaded.rawConfig.services.api.environment.AUTH_EMAIL_FROM,
+    '${AUTH_EMAIL_FROM:-}',
+  );
+  const invalid = structuredClone(loaded.config);
+  invalid.services.api.environment.AUTH_OTP_PUBLIC_FLOWS_ENABLED = '1';
+  assert.equal(
+    validateProductionCompose(invalid, loaded.rawConfig).status,
+    'failed',
+  );
 });
 
 test('pins every image by approved digest for linux/amd64', () => {
@@ -224,6 +324,8 @@ test('keeps all secret values outside environment and interpolation', () => {
     'JWT_ACCESS_SECRET',
     'REFRESH_TOKEN_PEPPER',
     'LEAD_IDEMPOTENCY_KEYS',
+    'AUTH_OTP_PEPPER',
+    'RESEND_API_KEY',
   ];
   for (const config of [loaded.config, loaded.rawConfig]) {
     const serialized = JSON.stringify(config.services);
@@ -403,6 +505,8 @@ test('keeps the versioned environment example non-secret', () => {
     'JWT_ACCESS_SECRET',
     'REFRESH_TOKEN_PEPPER',
     'LEAD_IDEMPOTENCY_KEYS',
+    'AUTH_OTP_PEPPER',
+    'RESEND_API_KEY',
   ]) {
     assert.doesNotMatch(source, new RegExp(`^${name}=`, 'mu'));
   }

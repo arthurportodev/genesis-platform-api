@@ -820,8 +820,22 @@ test(
           'JWT_ACCESS_SECRET=',
           'REFRESH_TOKEN_PEPPER=',
           'LEAD_IDEMPOTENCY_KEYS=',
+          'AUTH_OTP_PEPPER=',
+          'RESEND_API_KEY=',
         ]) {
           assert.equal(env.includes(forbidden), false);
+        }
+        if (service === 'api') {
+          assert.equal(
+            inspection.Config.Env.includes(
+              'AUTH_OTP_PUBLIC_FLOWS_ENABLED=false',
+            ),
+            true,
+          );
+          assert.equal(
+            inspection.Config.Env.includes('AUTH_EMAIL_FROM='),
+            true,
+          );
         }
         const secretTargets = inspection.Mounts.filter((mount) =>
           mount.Destination.startsWith('/run/secrets/'),

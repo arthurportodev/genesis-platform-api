@@ -93,6 +93,8 @@ PRODUCTION_ENV_KEYS = frozenset(
         "TRUST_PROXY_HOPS",
         "JWT_ACCESS_EXPIRES_IN",
         "REFRESH_TOKEN_EXPIRES_IN_DAYS",
+        "AUTH_OTP_PUBLIC_FLOWS_ENABLED",
+        "AUTH_EMAIL_FROM",
         "LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION",
         "API_CPUS",
         "API_MEMORY_LIMIT",
@@ -109,6 +111,17 @@ PRODUCTION_ENV_KEYS = frozenset(
         "TRAEFIK_MEMORY_LIMIT",
         "TRAEFIK_PIDS_LIMIT",
     }
+)
+TRANSITIONAL_PRODUCTION_ENV_DEFAULTS = {
+    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+    "AUTH_EMAIL_FROM": "",
+}
+TRANSITIONAL_PRODUCTION_ENV_KEYS = frozenset(TRANSITIONAL_PRODUCTION_ENV_DEFAULTS)
+PRODUCTION_ENV_KEYS_BEFORE_AUTH_WIRING = PRODUCTION_ENV_KEYS - TRANSITIONAL_PRODUCTION_ENV_KEYS
+EMPTY_PRODUCTION_ENV_KEYS = frozenset({"AUTH_EMAIL_FROM"})
+EMAIL_ADDRESS_PATTERN = r"[^<>\s@]+@[^<>\s@]+(?:\.[^<>\s@]+)+"
+EMAIL_FROM_PATTERN = re.compile(
+    rf"(?:{EMAIL_ADDRESS_PATTERN}|[^<>\r\n]+\s+<{EMAIL_ADDRESS_PATTERN}>)"
 )
 COMPOSE_CONTROL_KEYS = frozenset(
     {
@@ -304,30 +317,52 @@ def parse_env_bytes(source: bytes) -> dict[str, str]:
         require("=" in line, "INVALID_PRODUCTION_ENV")
         key, value = line.split("=", 1)
         require(re.fullmatch(r"[A-Z][A-Z0-9_]*", key) is not None, "INVALID_PRODUCTION_ENV")
-        require(key not in parsed and value != "", "INVALID_PRODUCTION_ENV")
+        require(
+            key not in parsed and (value != "" or key in EMPTY_PRODUCTION_ENV_KEYS),
+            "INVALID_PRODUCTION_ENV",
+        )
         parsed[key] = value
     return parsed
 
 
-def validate_production_values(values: Mapping[str, str]) -> None:
-    require(set(values) == PRODUCTION_ENV_KEYS, "PRODUCTION_ENV_KEYS_DIVERGED")
+def validate_production_values(values: Mapping[str, str]) -> dict[str, str]:
+    keys = set(values)
+    require(
+        keys in {PRODUCTION_ENV_KEYS_BEFORE_AUTH_WIRING, PRODUCTION_ENV_KEYS},
+        "PRODUCTION_ENV_KEYS_DIVERGED",
+    )
+    normalized = {**TRANSITIONAL_PRODUCTION_ENV_DEFAULTS, **values}
     for key in ("DATABASE_NAME", "DATABASE_BOOTSTRAP_USER", "DATABASE_MIGRATION_USER", "DATABASE_RUNTIME_ROLE"):
-        require(re.fullmatch(r"[a-z_][a-z0-9_]*", values[key]) is not None, "INVALID_PRODUCTION_ENV_VALUE")
-    require(len({values[key] for key in ("DATABASE_BOOTSTRAP_USER", "DATABASE_MIGRATION_USER", "DATABASE_RUNTIME_ROLE")}) == 3, "INVALID_PRODUCTION_ENV_VALUE")
-    require(values["TRUST_PROXY_HOPS"] == "1", "INVALID_PRODUCTION_ENV_VALUE")
-    require(values["LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION"] == "1", "INVALID_PRODUCTION_ENV_VALUE")
-    require(re.fullmatch(r"[^@\s]+@[^@\s]+", values["ACME_EMAIL"]) is not None, "INVALID_PRODUCTION_ENV_VALUE")
+        require(re.fullmatch(r"[a-z_][a-z0-9_]*", normalized[key]) is not None, "INVALID_PRODUCTION_ENV_VALUE")
+    require(len({normalized[key] for key in ("DATABASE_BOOTSTRAP_USER", "DATABASE_MIGRATION_USER", "DATABASE_RUNTIME_ROLE")}) == 3, "INVALID_PRODUCTION_ENV_VALUE")
+    require(normalized["TRUST_PROXY_HOPS"] == "1", "INVALID_PRODUCTION_ENV_VALUE")
+    require(normalized["LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION"] == "1", "INVALID_PRODUCTION_ENV_VALUE")
+    require(re.fullmatch(r"[^@\s]+@[^@\s]+", normalized["ACME_EMAIL"]) is not None, "INVALID_PRODUCTION_ENV_VALUE")
     for key in ("API_PIDS_LIMIT", "API_NODE_MAX_OLD_SPACE_MB", "MIGRATE_PIDS_LIMIT", "MIGRATE_NODE_MAX_OLD_SPACE_MB", "POSTGRES_PIDS_LIMIT", "TRAEFIK_PIDS_LIMIT", "REFRESH_TOKEN_EXPIRES_IN_DAYS"):
-        require(values[key].isdigit() and int(values[key]) > 0, "INVALID_PRODUCTION_ENV_VALUE")
+        require(normalized[key].isdigit() and int(normalized[key]) > 0, "INVALID_PRODUCTION_ENV_VALUE")
     for key in ("API_CPUS", "MIGRATE_CPUS", "POSTGRES_CPUS", "TRAEFIK_CPUS"):
         try:
-            valid = float(values[key]) > 0
+            valid = float(normalized[key]) > 0
         except ValueError:
             valid = False
         require(valid, "INVALID_PRODUCTION_ENV_VALUE")
     for key in ("API_MEMORY_LIMIT", "MIGRATE_MEMORY_LIMIT", "POSTGRES_MEMORY_LIMIT", "TRAEFIK_MEMORY_LIMIT"):
-        require(re.fullmatch(r"[1-9][0-9]*[kKmMgG]", values[key]) is not None, "INVALID_PRODUCTION_ENV_VALUE")
-    require(re.fullmatch(r"[1-9][0-9]*[smhd]", values["JWT_ACCESS_EXPIRES_IN"]) is not None, "INVALID_PRODUCTION_ENV_VALUE")
+        require(re.fullmatch(r"[1-9][0-9]*[kKmMgG]", normalized[key]) is not None, "INVALID_PRODUCTION_ENV_VALUE")
+    require(re.fullmatch(r"[1-9][0-9]*[smhd]", normalized["JWT_ACCESS_EXPIRES_IN"]) is not None, "INVALID_PRODUCTION_ENV_VALUE")
+    public_flows = normalized["AUTH_OTP_PUBLIC_FLOWS_ENABLED"]
+    email_from = normalized["AUTH_EMAIL_FROM"]
+    require(public_flows in {"true", "false"}, "INVALID_PRODUCTION_ENV_VALUE")
+    require(
+        len(email_from) <= 320 and "\r" not in email_from and "\n" not in email_from,
+        "INVALID_PRODUCTION_ENV_VALUE",
+    )
+    if public_flows == "true":
+        require(
+            email_from == email_from.strip()
+            and EMAIL_FROM_PATTERN.fullmatch(email_from) is not None,
+            "INVALID_PRODUCTION_ENV_VALUE",
+        )
+    return normalized
 
 
 def verify_git_operational_snapshot(
@@ -541,8 +576,7 @@ def verify_operational_integrity(
     validate_regular_metadata(paths.production_env, policy=policy, expected_mode=0o600, reason_code="PRODUCTION_ENV_METADATA_DIVERGED")
     require(sha256_file(paths.production_env) == config["sha256"], "PRODUCTION_ENV_HASH_DIVERGED")
     values = parse_env_bytes(paths.production_env.read_bytes())
-    validate_production_values(values)
-    return values
+    return validate_production_values(values)
 
 
 def pointer_bytes(image: str) -> bytes:
@@ -658,12 +692,16 @@ class ComposeClient:
         self,
         runner: CommandRunner,
         paths: DeploymentPaths,
-        production_keys: Iterable[str],
+        production_values: Mapping[str, str],
         parent_environment: Mapping[str, str] | None = None,
     ):
         self.runner = runner
         self.paths = paths
-        self.production_keys = tuple(production_keys)
+        self.production_values = dict(production_values)
+        require(
+            set(self.production_values) == PRODUCTION_ENV_KEYS,
+            "PRODUCTION_ENV_KEYS_DIVERGED",
+        )
         self.parent_environment = dict(os.environ if parent_environment is None else parent_environment)
 
     def base_argv(self) -> list[str]:
@@ -694,7 +732,7 @@ class ComposeClient:
     ) -> CommandResult:
         environment = sanitized_child_environment(
             self.parent_environment,
-            self.production_keys,
+            PRODUCTION_ENV_KEYS,
             api_image=candidate_image,
         )
         return self.runner.run(
@@ -710,7 +748,11 @@ class ComposeClient:
             rendered = json.loads(result.stdout)
         except json.JSONDecodeError as error:
             raise DeployStop("COMPOSE_RENDER_INVALID") from error
-        validate_rendered_compose(rendered, expected_image)
+        validate_rendered_compose(
+            rendered,
+            expected_image,
+            expected_production_values=self.production_values,
+        )
         return rendered
 
     def service_id(self, service: str) -> str:
@@ -751,7 +793,12 @@ class ComposeClient:
         )
 
 
-def validate_rendered_compose(config: Mapping[str, Any], expected_image: str) -> None:
+def validate_rendered_compose(
+    config: Mapping[str, Any],
+    expected_image: str,
+    *,
+    expected_production_values: Mapping[str, str] | None = None,
+) -> None:
     require(IMAGE_PATTERN.fullmatch(expected_image) is not None, "INVALID_API_IMAGE")
     require(config.get("name") == "genesis", "COMPOSE_PROJECT_DIVERGED")
     services = config.get("services")
@@ -765,6 +812,18 @@ def validate_rendered_compose(config: Mapping[str, Any], expected_image: str) ->
     require(set(services["postgres"].get("networks", {})) == {"database"}, "COMPOSE_NETWORK_DIVERGED")
     require(set(services["migrate"].get("networks", {})) == {"database"}, "COMPOSE_NETWORK_DIVERGED")
     require(set(services["traefik"].get("networks", {})) == {"edge"}, "COMPOSE_NETWORK_DIVERGED")
+    if expected_production_values is not None:
+        require(
+            set(expected_production_values) == PRODUCTION_ENV_KEYS,
+            "PRODUCTION_ENV_KEYS_DIVERGED",
+        )
+        api_environment = services["api"].get("environment")
+        require(isinstance(api_environment, dict), "COMPOSE_AUTH_CONFIG_DIVERGED")
+        for key in TRANSITIONAL_PRODUCTION_ENV_KEYS:
+            require(
+                str(api_environment.get(key, "")) == expected_production_values[key],
+                "COMPOSE_AUTH_CONFIG_DIVERGED",
+            )
 
 
 def parse_migration_inventory(source: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -1404,7 +1463,7 @@ def preflight(
         timeout_seconds=COMMAND_READ_TIMEOUT_SECONDS,
     )
     require(result.returncode == 0, "POSTGRES_VOLUME_UNAVAILABLE")
-    compose = ComposeClient(runner, paths, values.keys())
+    compose = ComposeClient(runner, paths, values)
     rendered_config = compose.render(current_pointer)
     api_id = compose.service_id("api")
     postgres_id = compose.service_id("postgres")
