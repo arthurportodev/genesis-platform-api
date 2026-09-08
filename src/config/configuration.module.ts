@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import appConfig from './app.config';
 import authConfig from './auth.config';
+import authOtpConfig from './auth-otp.config';
 import databaseConfig from './database.config';
 import invitationConfig from './invitation.config';
 import leadConfig from './lead.config';
@@ -16,6 +17,7 @@ import { environmentValidationSchema } from './environment.validation';
       load: [
         appConfig,
         authConfig,
+        authOtpConfig,
         databaseConfig,
         invitationConfig,
         leadConfig,
