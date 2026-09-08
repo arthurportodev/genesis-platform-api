@@ -140,6 +140,10 @@ const FORBIDDEN_SECRET_ENV = new Set([
   'AUTH_OTP_PEPPER',
   'RESEND_API_KEY',
 ]);
+const AUTH_RUNTIME_CONFIG_KEYS = [
+  'AUTH_OTP_PUBLIC_FLOWS_ENABLED',
+  'AUTH_EMAIL_FROM',
+];
 const REQUIRED_BINDINGS = [
   ['postgres', 'POSTGRES_DB', 'DATABASE_NAME'],
   ['postgres', 'POSTGRES_USER', 'DATABASE_BOOTSTRAP_USER'],
@@ -525,7 +529,6 @@ function validateProductionCompose(
     'INVITATION_ACTIVATION_READINESS',
     'INVITATION_WORKER_ENABLED',
     'LEAD_FORM_READINESS',
-    'AUTH_OTP_PUBLIC_FLOWS_ENABLED',
   ]) {
     check(
       String(api.environment?.[key]) === 'false',
@@ -533,6 +536,13 @@ function validateProductionCompose(
       failures,
     );
   }
+  check(
+    ['true', 'false'].includes(
+      String(api.environment?.AUTH_OTP_PUBLIC_FLOWS_ENABLED),
+    ),
+    'AUTH_OTP_PUBLIC_FLOWS_ENABLED must render as true or false',
+    failures,
+  );
   check(
     String(api.environment?.LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) === '1',
     'Lead idempotency key version must be 1',
@@ -632,6 +642,19 @@ function validateTraefikSources(cwd, failures) {
     }
   }
   if (Object.keys(sources).length !== Object.keys(paths).length) return;
+
+  check(
+    /^\s+AUTH_OTP_PUBLIC_FLOWS_ENABLED:\s+\$\{AUTH_OTP_PUBLIC_FLOWS_ENABLED:-false\}$/mu.test(
+      sources.base,
+    ),
+    'AUTH_OTP_PUBLIC_FLOWS_ENABLED must use the canonical safe-default interpolation',
+    failures,
+  );
+  check(
+    /^\s+AUTH_EMAIL_FROM:\s+\$\{AUTH_EMAIL_FROM:-\}$/mu.test(sources.base),
+    'AUTH_EMAIL_FROM must use the canonical optional interpolation',
+    failures,
+  );
 
   const traefikBase =
     sources.base.match(/\n  traefik:[\s\S]*?\n  postgres:/u)?.[0] ?? '';
@@ -1195,10 +1218,13 @@ function runComposeConfig({
   args.push('config');
   if (noInterpolate) args.push('--no-interpolate');
   args.push('--format', 'json');
+  const childEnvironment = { ...process.env };
+  for (const key of AUTH_RUNTIME_CONFIG_KEYS) delete childEnvironment[key];
+  Object.assign(childEnvironment, environment);
   return spawnSync('docker', args, {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, ...environment },
+    env: childEnvironment,
   });
 }
 
@@ -1269,6 +1295,7 @@ function main() {
 if (require.main === module) main();
 
 module.exports = {
+  AUTH_RUNTIME_CONFIG_KEYS,
   API_IMAGE_EXPRESSION,
   API_RELEASE_BINDINGS,
   BASELINE_REPAIR_BINDINGS,

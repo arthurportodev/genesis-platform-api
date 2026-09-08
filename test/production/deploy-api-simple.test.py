@@ -45,7 +45,9 @@ PRODUCTION_MIGRATIONS = (
 )
 
 
-def production_env_bytes() -> bytes:
+def production_env_bytes(
+    auth_values: dict[str, str] | None = None,
+) -> bytes:
     values = {
         "DATABASE_NAME": "genesis_platform",
         "DATABASE_BOOTSTRAP_USER": "genesis_bootstrap",
@@ -73,6 +75,8 @@ def production_env_bytes() -> bytes:
         "TRAEFIK_MEMORY_LIMIT": "256m",
         "TRAEFIK_PIDS_LIMIT": "128",
     }
+    if auth_values is not None:
+        values.update(auth_values)
     return "".join(f"{key}={values[key]}\n" for key in values).encode()
 
 
@@ -131,6 +135,67 @@ class IntegrityFixture:
 
     def close(self):
         self.temporary.cleanup()
+
+
+class ProductionEnvironmentContractTests(unittest.TestCase):
+    def historical_values(self) -> dict[str, str]:
+        return deploy.parse_env_bytes(production_env_bytes())
+
+    def test_normalizes_historical_config_to_safe_auth_defaults(self):
+        normalized = deploy.validate_production_values(self.historical_values())
+        self.assertEqual(set(normalized), deploy.PRODUCTION_ENV_KEYS)
+        self.assertEqual(normalized["AUTH_OTP_PUBLIC_FLOWS_ENABLED"], "false")
+        self.assertEqual(normalized["AUTH_EMAIL_FROM"], "")
+
+    def test_accepts_complete_disabled_and_enabled_auth_config(self):
+        for auth_values in (
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                "AUTH_EMAIL_FROM": "",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "auth@example.com",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "Genesis <auth@example.com>",
+            },
+        ):
+            with self.subTest(auth_values=auth_values):
+                parsed = deploy.parse_env_bytes(production_env_bytes(auth_values))
+                self.assertEqual(deploy.validate_production_values(parsed), parsed)
+
+    def test_rejects_partial_invalid_or_unsafe_auth_config(self):
+        invalid_cases = (
+            {"AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false"},
+            {"AUTH_EMAIL_FROM": "auth@example.com"},
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "1",
+                "AUTH_EMAIL_FROM": "auth@example.com",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "not-an-email",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "auth@example.com\r\nBcc: attacker@example.com",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": f"{'x' * 310}@example.com",
+            },
+        )
+        for auth_values in invalid_cases:
+            with self.subTest(auth_values=auth_values):
+                values = {**self.historical_values(), **auth_values}
+                with self.assertRaises(deploy.DeployStop):
+                    deploy.validate_production_values(values)
 
 
 class OperationalIntegrityTests(unittest.TestCase):
@@ -328,6 +393,8 @@ class PointerAndEnvironmentTests(unittest.TestCase):
         parent = {
             "API_IMAGE": PREVIOUS,
             "DATABASE_NAME": "hostile",
+            "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+            "AUTH_EMAIL_FROM": "attacker@example.com",
             "COMPOSE_FILE": "hostile.yml",
             "DOCKER_HOST": "tcp://hostile",
             "UNRELATED": "kept",
@@ -352,11 +419,22 @@ class CommandTimeoutTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["timeout"], 0.01)
 
 
-def rendered(image: str) -> dict:
+def rendered(
+    image: str,
+    auth_values: dict[str, str] | None = None,
+) -> dict:
+    auth_values = auth_values or {
+        "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+        "AUTH_EMAIL_FROM": "",
+    }
     return {
         "name": "genesis",
         "services": {
-            "api": {"image": image, "networks": {"database": {}, "edge": {}}},
+            "api": {
+                "image": image,
+                "networks": {"database": {}, "edge": {}},
+                "environment": auth_values,
+            },
             "migrate": {"image": image, "networks": {"database": {}}},
             "postgres": {"image": "postgres@sha256:" + "3" * 64, "networks": {"database": {}}},
             "traefik": {"image": "traefik@sha256:" + "4" * 64, "networks": {"edge": {}}},
@@ -387,11 +465,20 @@ class ComposeTests(unittest.TestCase):
     def test_canonical_argv_and_override_only_for_candidate_migrations(self):
         root = Path("C:/fixture/deploy").absolute()
         runner = RecordingRunner(json.dumps(rendered(PREVIOUS)))
+        production_values = deploy.validate_production_values(
+            deploy.parse_env_bytes(production_env_bytes())
+        )
         compose = deploy.ComposeClient(
             runner,
             self.paths(root),
-            deploy.PRODUCTION_ENV_KEYS,
-            {"API_IMAGE": PREVIOUS, "COMPOSE_FILE": "hostile", "SAFE": "yes"},
+            production_values,
+            {
+                "API_IMAGE": PREVIOUS,
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "attacker@example.com",
+                "COMPOSE_FILE": "hostile",
+                "SAFE": "yes",
+            },
         )
         compose.render(PREVIOUS)
         argv, options = runner.calls[0]
@@ -412,6 +499,8 @@ class ComposeTests(unittest.TestCase):
         self.assertNotIn("API_IMAGE", options["env"])
         self.assertEqual(options["env"]["SAFE"], "yes")
         self.assertNotIn("COMPOSE_FILE", options["env"])
+        self.assertNotIn("AUTH_OTP_PUBLIC_FLOWS_ENABLED", options["env"])
+        self.assertNotIn("AUTH_EMAIL_FROM", options["env"])
         runner.output = "[X] 1 Existing\n"
         compose.migration_inventory(CANDIDATE)
         self.assertEqual(runner.calls[1][1]["env"]["API_IMAGE"], CANDIDATE)
@@ -426,6 +515,28 @@ class ComposeTests(unittest.TestCase):
     def test_rendered_previous_and_candidate_invariants(self):
         deploy.validate_rendered_compose(rendered(PREVIOUS), PREVIOUS)
         deploy.validate_rendered_compose(rendered(CANDIDATE), CANDIDATE)
+        enabled = deploy.validate_production_values(
+            deploy.parse_env_bytes(
+                production_env_bytes(
+                    {
+                        "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                        "AUTH_EMAIL_FROM": "Genesis <auth@example.com>",
+                    }
+                )
+            )
+        )
+        deploy.validate_rendered_compose(
+            rendered(CANDIDATE, enabled),
+            CANDIDATE,
+            expected_production_values=enabled,
+        )
+        divergent = rendered(CANDIDATE)
+        with self.assertRaisesRegex(deploy.DeployStop, "COMPOSE_AUTH_CONFIG_DIVERGED"):
+            deploy.validate_rendered_compose(
+                divergent,
+                CANDIDATE,
+                expected_production_values=enabled,
+            )
         for mutation, reason in (
             (lambda value: value["services"]["api"].update(ports=["3000:3000"]), "COMPOSE_PUBLIC_PORT_DIVERGED"),
             (lambda value: value["services"]["postgres"].update(ports=["5432:5432"]), "COMPOSE_PUBLIC_PORT_DIVERGED"),

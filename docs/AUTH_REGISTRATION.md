@@ -48,13 +48,23 @@ e-mail como verificado e não recebe um OTP adicional.
 
 A configuração versionada monta na API os arquivos
 `/opt/genesis/secrets/auth-otp-pepper` e
-`/opt/genesis/secrets/resend-api-key`. `AUTH_EMAIL_FROM` é configuração não
-secreta. Nenhum valor real faz parte do repositório.
+`/opt/genesis/secrets/resend-api-key`. `AUTH_EMAIL_FROM` e
+`AUTH_OTP_PUBLIC_FLOWS_ENABLED` são configurações não secretas cuja autoridade
+em Production é exclusivamente `/opt/genesis/config/production.env`. O operador
+remove valores homônimos herdados do ambiente SSH antes de chamar o Compose.
+Nenhum valor real faz parte do repositório.
+
+Durante a transição, o operador aceita o arquivo histórico com as duas chaves
+ausentes e o normaliza para flag `false` e remetente vazio. O contrato novo deve
+conter ambas as chaves; presença parcial, flag diferente de `true`/`false`,
+remetente com CR/LF ou remetente inválido durante ativação falham fechado. O
+Compose também conserva `false` como default seguro.
 
 Uma release futura deve seguir esta ordem:
 
-1. instalar os dois secret files e definir `AUTH_EMAIL_FROM`;
-2. manter `AUTH_OTP_PUBLIC_FLOWS_ENABLED=false` durante a preparação;
+1. instalar os dois secret files e instalar atomicamente o `production.env` com
+   `AUTH_EMAIL_FROM` e `AUTH_OTP_PUBLIC_FLOWS_ENABLED=false`;
+2. comprovar o novo `operationalSourceSha` e a integridade operacional;
 3. publicar API e aplicar a migration pelo operador canônico;
 4. publicar a Web compatível;
 5. validar health, login existente e os endpoints ainda fechados;
