@@ -15,7 +15,8 @@ export interface AuthAuditInput extends AuthRequestContext {
   metadata?: AuthAuditMetadata;
 }
 
-const SENSITIVE_METADATA_KEY = /password|token|secret|hash|authorization/i;
+const SENSITIVE_METADATA_KEY =
+  /password|token|secret|hash|authorization|otp|code|grant/i;
 
 export function sanitizeAuditMetadata(
   metadata: AuthAuditMetadata = {},

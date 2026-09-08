@@ -1,4 +1,8 @@
 export enum AuthAuditEventType {
+  OTP_ISSUED = 'auth.otp.issued',
+  OTP_CONSUMED = 'auth.otp.consumed',
+  OTP_REJECTED = 'auth.otp.rejected',
+  OTP_DELIVERY_FAILED = 'auth.otp.delivery_failed',
   LOGIN_SUCCEEDED = 'auth.login.succeeded',
   LOGIN_FAILED = 'auth.login.failed',
   REFRESH_SUCCEEDED = 'auth.refresh.succeeded',

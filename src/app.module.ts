@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthEmailChallengesModule } from './modules/auth-email-challenges/auth-email-challenges.module';
 import { ConfigurationModule } from './config/configuration.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
@@ -16,6 +17,7 @@ import { UsersModule } from './modules/users/users.module';
     DatabaseModule,
     HealthModule,
     AuthModule,
+    AuthEmailChallengesModule,
     UsersModule,
     OrganizationsModule,
     MembershipsModule,

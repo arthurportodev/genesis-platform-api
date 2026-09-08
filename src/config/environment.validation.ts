@@ -1,6 +1,8 @@
 import Joi from 'joi';
+import { authOtpEnvironmentFields } from './auth-otp.config';
 
 export const environmentValidationSchema = Joi.object({
+  ...authOtpEnvironmentFields,
   NODE_ENV: Joi.string()
     .valid('development', 'test', 'production')
     .default('development'),
