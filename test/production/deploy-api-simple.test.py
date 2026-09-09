@@ -120,7 +120,6 @@ class IntegrityFixture:
             evidence_root=Path(self.temporary.name) / "evidence",
             registry_credentials=Path(self.temporary.name) / "registry.json",
             smoke_credentials=Path(self.temporary.name) / "smoke.json",
-            release_evidence=Path(self.temporary.name) / "release.json",
             recovery_runner=Path(self.temporary.name) / "backup-runner.sh",
             recovery_env=Path(self.temporary.name) / "recovery.env",
             recovery_status=Path(self.temporary.name) / "backup-status.json",
@@ -214,7 +213,6 @@ class OperationalInstallerFixture:
             evidence_root=self.parent / "evidence",
             registry_credentials=self.parent / "registry.json",
             smoke_credentials=self.parent / "smoke.json",
-            release_evidence=self.parent / "release.json",
             recovery_runner=self.parent / "backup-runner.sh",
             recovery_env=self.parent / "recovery.env",
             recovery_status=self.parent / "backup-status.json",
@@ -2418,61 +2416,6 @@ class EvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(deploy.DeployStop, "EVIDENCE_REDACTION_FAILED"):
                 deploy.validate_redacted_evidence(value)
 
-    def test_release_evidence_binds_candidate_and_level_two_pending(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "release.json"
-            path.write_text(
-                json.dumps(
-                    {
-                        "applicationSourceSha": APPLICATION_SOURCE_SHA,
-                        "operationalSourceSha": OPERATIONAL_SOURCE_SHA,
-                        "candidateImage": CANDIDATE,
-                        "status": "approved",
-                        "approvedLevel2Pending": ["MigrationOne"],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            chmod(path, 0o600)
-            self.assertEqual(
-                deploy.prove_release_evidence(
-                    path,
-                    APPLICATION_SOURCE_SHA,
-                    OPERATIONAL_SOURCE_SHA,
-                    CANDIDATE,
-                    deploy.MetadataPolicy(uid=None, gid=None),
-                ),
-                ("MigrationOne",),
-            )
-            payload = json.loads(path.read_text())
-            payload["candidateImage"] = PREVIOUS
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            with self.assertRaisesRegex(
-                deploy.DeployStop, "RELEASE_EVIDENCE_INVALID"
-            ):
-                deploy.prove_release_evidence(
-                    path,
-                    APPLICATION_SOURCE_SHA,
-                    OPERATIONAL_SOURCE_SHA,
-                    CANDIDATE,
-                    deploy.MetadataPolicy(uid=None, gid=None),
-                )
-            payload["candidateImage"] = CANDIDATE
-            payload["operationalSourceSha"] = "c" * 40
-            path.write_text(json.dumps(payload), encoding="utf-8")
-            with self.assertRaisesRegex(
-                deploy.DeployStop,
-                "RELEASE_EVIDENCE_INVALID",
-            ):
-                deploy.prove_release_evidence(
-                    path,
-                    APPLICATION_SOURCE_SHA,
-                    OPERATIONAL_SOURCE_SHA,
-                    CANDIDATE,
-                    deploy.MetadataPolicy(uid=None, gid=None),
-                )
-
-
 class FakeCompose:
     def __init__(self, inventories=None, fail_recreate_after=None, fail_migrate=False):
         self.inventories = list(inventories or [((), ())])
@@ -2538,7 +2481,7 @@ class PreflightCompose:
 
 
 class PreflightTests(unittest.TestCase):
-    def test_preflight_uses_runtime_authority_and_read_only_inventory(self):
+    def test_preflight_uses_runtime_authority_without_release_evidence(self):
         compose = PreflightCompose()
         states = {
             "api-container": deploy.ContainerState(
@@ -2572,7 +2515,6 @@ class PreflightTests(unittest.TestCase):
             mock.patch.object(deploy, "read_pointer", return_value=PREVIOUS),
             mock.patch.object(deploy, "validate_secret_metadata"),
             mock.patch.object(deploy, "validate_regular_metadata"),
-            mock.patch.object(deploy, "prove_release_evidence", return_value=()),
             mock.patch.object(
                 deploy.shutil,
                 "disk_usage",
@@ -2598,6 +2540,8 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(snapshot.previous_image, PREVIOUS)
         self.assertIs(returned_compose, compose)
         self.assertEqual(compose.inventory_images, [PREVIOUS])
+        self.assertFalse(hasattr(deploy, "RELEASE_EVIDENCE"))
+        self.assertNotIn("release_evidence", deploy.DeploymentPaths.__dataclass_fields__)
 
 
 class FakeSmoke:
@@ -2708,7 +2652,19 @@ class RuntimeHealthWaitTests(unittest.TestCase):
 
 
 class FlowTests(unittest.TestCase):
-    def run_flow(self, compose, *, level=1, expected_pending=(), smoke=None, candidate=CANDIDATE, checkpoint_error=None, runtime_states=None):
+    def run_flow(
+        self,
+        compose,
+        *,
+        level=1,
+        expected_pending=(),
+        recreate_same_image=False,
+        authorization=None,
+        smoke=None,
+        candidate=CANDIDATE,
+        checkpoint_error=None,
+        runtime_states=None,
+    ):
         temporary = tempfile.TemporaryDirectory()
         root = Path(temporary.name)
         evidence = root / "evidence"
@@ -2748,11 +2704,6 @@ class FlowTests(unittest.TestCase):
         patchers = [
             mock.patch.object(deploy, "DeploymentLock", DummyLock),
             mock.patch.object(deploy, "preflight", return_value=(snapshot, compose)),
-            mock.patch.object(
-                deploy,
-                "prove_release_evidence",
-                return_value=tuple(expected_pending),
-            ),
             mock.patch.object(deploy, "prove_image"),
             mock.patch.object(deploy, "write_pointer", side_effect=recording_write_pointer),
             mock.patch.object(
@@ -2760,33 +2711,44 @@ class FlowTests(unittest.TestCase):
                 "read_pointer",
                 side_effect=lambda *_args, **_kwargs: pointer_state["image"],
             ),
-            mock.patch.object(deploy, "verify_dependencies", return_value="new-api"),
             mock.patch.object(deploy, "inspect_container", side_effect=inspect_runtime),
+            mock.patch.object(deploy, "external_health"),
             mock.patch.object(deploy, "observe"),
             mock.patch.object(deploy, "run_checkpoint"),
         ]
         started = [patcher.start() for patcher in patchers]
+        compose.external_health_mock = started[6]
+        compose.observe_mock = started[7]
         checkpoint_mock = started[-1]
         checkpoint_mock.side_effect = checkpoint_error
         self.addCleanup(lambda: [patcher.stop() for patcher in reversed(patchers)])
-        result = deploy.execute_deployment(
-            RecordingRunner(), paths,
-            run_id="a" * 16,
-            application_source_sha=APPLICATION_SOURCE_SHA,
-            operational_source_sha=OPERATIONAL_SOURCE_SHA,
-            candidate_image=candidate,
-            level=level, expected_pending=expected_pending,
-            authorization=deploy.authorization_value(
-                "a" * 16,
-                APPLICATION_SOURCE_SHA,
-                OPERATIONAL_SOURCE_SHA,
-                candidate,
-                level,
-            ),
-            expected_hostname="fixture", minimum_free_bytes=0,
-            policy=deploy.MetadataPolicy(uid=None, gid=None),
-            smoke_factory=lambda: smoke or FakeSmoke(), sleep=compose.sleep_calls.append,
-        )
+        try:
+            result = deploy.execute_deployment(
+                RecordingRunner(), paths,
+                run_id="a" * 16,
+                application_source_sha=APPLICATION_SOURCE_SHA,
+                operational_source_sha=OPERATIONAL_SOURCE_SHA,
+                candidate_image=candidate,
+                level=level, expected_pending=expected_pending,
+                recreate_same_image=recreate_same_image,
+                authorization=authorization
+                if authorization is not None
+                else deploy.authorization_value(
+                    "a" * 16,
+                    APPLICATION_SOURCE_SHA,
+                    OPERATIONAL_SOURCE_SHA,
+                    candidate,
+                    level,
+                    expected_pending,
+                    recreate_same_image,
+                ),
+                expected_hostname="fixture", minimum_free_bytes=0,
+                policy=deploy.MetadataPolicy(uid=None, gid=None),
+                smoke_factory=lambda: smoke or FakeSmoke(), sleep=compose.sleep_calls.append,
+            )
+        except Exception:
+            temporary.cleanup()
+            raise
         return temporary, result, checkpoint_mock
 
     def test_level_one_keep_and_no_migration(self):
@@ -2812,6 +2774,46 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(result["result"], "KEEP")
         self.assertEqual(compose.migrate_calls, 1)
         checkpoint.assert_called_once()
+
+    def test_expected_pending_input_and_authorization_are_exact(self):
+        with self.assertRaisesRegex(deploy.DeployStop, "LEVEL_1_PENDING_MIGRATIONS"):
+            self.run_flow(FakeCompose(), expected_pending=("Pending",))
+        with self.assertRaisesRegex(deploy.DeployStop, "LEVEL_2_PENDING_MISMATCH"):
+            self.run_flow(FakeCompose(), level=2)
+        with self.assertRaisesRegex(deploy.DeployStop, "DUPLICATE_EXPECTED_PENDING"):
+            self.run_flow(
+                FakeCompose(), level=2, expected_pending=("Pending", "Pending")
+            )
+        with self.assertRaisesRegex(deploy.DeployStop, "INVALID_EXPECTED_PENDING"):
+            self.run_flow(FakeCompose(), level=2, expected_pending=("bad,name",))
+
+        authorization = deploy.authorization_value(
+            "a" * 16,
+            APPLICATION_SOURCE_SHA,
+            OPERATIONAL_SOURCE_SHA,
+            CANDIDATE,
+            2,
+            ("First", "Second"),
+        )
+        with self.assertRaisesRegex(
+            deploy.DeployStop, "PRODUCTION_MUTATION_NOT_AUTHORIZED"
+        ):
+            self.run_flow(
+                FakeCompose(),
+                level=2,
+                expected_pending=("Second", "First"),
+                authorization=authorization,
+            )
+
+    def test_level_two_wrong_factual_pending_stops_before_mutation(self):
+        compose = FakeCompose([(("Existing",), ("Factual",))])
+        temporary, result, _checkpoint = self.run_flow(
+            compose, level=2, expected_pending=("Authorized",)
+        )
+        self.addCleanup(temporary.cleanup)
+        self.assertEqual(result["failureReasonCode"], "LEVEL_2_PENDING_MISMATCH")
+        self.assertEqual(compose.migrate_calls, 0)
+        self.assertEqual(compose.recreate_calls, [])
 
     def test_level_two_checkpoint_and_migration_fail_before_promotion(self):
         compose = FakeCompose([(("Existing",), ("Pending",))])
@@ -2856,6 +2858,102 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(result["result"], "NOOP")
         self.assertEqual(compose.recreate_calls, [])
         checkpoint.assert_not_called()
+
+    def test_authorized_same_image_recreates_only_api_without_pointer_change(self):
+        compose = FakeCompose([((), ())])
+        temporary, result, checkpoint = self.run_flow(
+            compose, candidate=PREVIOUS, recreate_same_image=True
+        )
+        self.addCleanup(temporary.cleanup)
+        self.assertEqual(result["result"], "KEEP")
+        self.assertEqual(compose.recreate_calls, ["pointer"])
+        self.assertEqual(compose.pointer_updates, [])
+        self.assertEqual(compose.migrate_calls, 0)
+        compose.external_health_mock.assert_called_once()
+        compose.observe_mock.assert_called_once()
+        checkpoint.assert_not_called()
+
+    def test_execute_parser_exposes_explicit_same_image_intent(self):
+        parsed = deploy.build_parser().parse_args(
+            [
+                "execute",
+                "--application-source-sha",
+                APPLICATION_SOURCE_SHA,
+                "--operational-source-sha",
+                OPERATIONAL_SOURCE_SHA,
+                "--candidate-image",
+                PREVIOUS,
+                "--hostname",
+                "fixture",
+                "--run-id",
+                "a" * 16,
+                "--level",
+                "1",
+                "--recreate-same-image",
+                "--authorization",
+                "approved",
+            ]
+        )
+        self.assertTrue(parsed.recreate_same_image)
+
+    def test_same_image_intent_rejects_level_two_pending_and_wrong_candidate(self):
+        with self.assertRaisesRegex(
+            deploy.DeployStop, "SAME_IMAGE_RECREATE_REQUIRES_LEVEL_1"
+        ):
+            self.run_flow(
+                FakeCompose(),
+                level=2,
+                expected_pending=("Pending",),
+                candidate=PREVIOUS,
+                recreate_same_image=True,
+            )
+        with self.assertRaisesRegex(deploy.DeployStop, "LEVEL_1_PENDING_MIGRATIONS"):
+            self.run_flow(
+                FakeCompose(),
+                expected_pending=("Pending",),
+                candidate=PREVIOUS,
+                recreate_same_image=True,
+            )
+        temporary, result, _checkpoint = self.run_flow(
+            FakeCompose(), recreate_same_image=True
+        )
+        self.addCleanup(temporary.cleanup)
+        self.assertEqual(
+            result["failureReasonCode"],
+            "SAME_IMAGE_RECREATE_REQUIRES_CURRENT_IMAGE",
+        )
+
+    def test_same_image_intent_is_bound_and_failure_does_not_select_old_image(self):
+        authorization_without_intent = deploy.authorization_value(
+            "a" * 16,
+            APPLICATION_SOURCE_SHA,
+            OPERATIONAL_SOURCE_SHA,
+            PREVIOUS,
+            1,
+        )
+        with self.assertRaisesRegex(
+            deploy.DeployStop, "PRODUCTION_MUTATION_NOT_AUTHORIZED"
+        ):
+            self.run_flow(
+                FakeCompose(),
+                candidate=PREVIOUS,
+                recreate_same_image=True,
+                authorization=authorization_without_intent,
+            )
+
+        compose = FakeCompose([((), ())])
+        temporary, result, _checkpoint = self.run_flow(
+            compose,
+            candidate=PREVIOUS,
+            recreate_same_image=True,
+            smoke=FakeSmoke(fail_full=True),
+        )
+        self.addCleanup(temporary.cleanup)
+        self.assertEqual(result["result"], "STOP")
+        self.assertEqual(result["failureReasonCode"], "SMOKE_FAILED")
+        self.assertEqual(result["rollbackResult"], None)
+        self.assertEqual(compose.pointer_updates, [])
+        self.assertEqual(compose.recreate_calls, ["pointer"])
 
     def test_post_promotion_failure_rolls_back_and_preserves_first_failure(self):
         compose = FakeCompose([((), ())])
