@@ -22,7 +22,7 @@ migrations; Compose é a autoridade de topologia. O arquivo root-only
 nunca substitui a inspeção do runtime.
 
 Um `operational-integrity.json` vincula o `operationalSourceSha` aprovado
-externamente no Gate A e a allowlist exata de arquivos operacionais aos
+externamente e a allowlist exata de arquivos operacionais aos
 respectivos SHA-256 e modes. Sua geração exige um checkout Git limpo exatamente
 naquele commit. Ele comprova os bytes do mecanismo de deploy, não cria outra
 identidade de release. O `applicationSourceSha`, também fornecido externamente,
@@ -41,16 +41,20 @@ O operador usa um único `flock` não bloqueante. O preflight consulta um lock
 existente sem criá-lo; somente a execução já autorizada pode criá-lo. Todo
 subprocesso possui timeout fixo por categoria. Antes de qualquer promoção ele
 prova a imagem anterior e o candidate por RepoDigest e `linux/amd64`; o candidate
-também deve declarar a revisão OCI igual ao application source SHA e possuir
-evidência externa de release aprovada, incluindo os dois source SHAs e a lista
-Level 2 autorizada. Divergência
-pointer/runtime termina em STOP. A atualização do
+também deve declarar a revisão OCI igual ao application source SHA. Aprovação de
+build, scan e publicação permanece no workflow GitHub protegido; o operador VPS
+prova fatos da imagem, mas não duplica essa aprovação em arquivo local.
+`api-release-evidence.json` não é autoridade de deploy e sua eventual presença
+histórica é inerte. Divergência pointer/runtime termina em STOP. A atualização do
 pointer usa temp no mesmo diretório, `fsync(file)`, `os.replace` e
 `fsync(directory)`, sem journal ou estado intermediário próprio.
 
 ## Níveis
 
-- Level 1 exige `pending=[]`, atualiza o pointer e recria somente a API.
+- Level 1 exige `pending=[]`, atualiza o pointer e recria somente a API. Quando
+  candidate, pointer e runtime já são a mesma imagem, o comportamento padrão é
+  `NOOP`; a intenção explícita e autorizada `--recreate-same-image` permite
+  recriar somente a API sem reescrever o pointer.
 - Level 2 exige o pending exato previamente aprovado como backward-compatible,
   checkpoint pelo recovery existente, migration one-shot e inventário final
   exatamente igual ao inventário anterior concatenado ao pending aprovado.
@@ -79,6 +83,12 @@ pointer anterior, recria somente a API e confirma digest, health e smoke de
 compatibilidade. O schema não é revertido. Falha do rollback mantém a causa
 original, registra razão separada e exige escalação.
 
+Same-image recreate não seleciona uma imagem histórica em caso de falha. Ele
+termina em `STOP`, preservando a primeira causa. A recuperação restaura o último
+`production.env` aprovado pela transação config + operational existente e, sob
+nova autorização Level 1, recria o mesmo digest. O operador não contém um
+segundo mecanismo de rollback de configuração.
+
 Evidence é um JSON progressivo root-only em
 `/var/lib/genesis/deploy/evidence/<runId>.json`, reescrito atomicamente com a
 mesma sequência de durabilidade do pointer. É auditoria, não autoridade de
@@ -92,9 +102,31 @@ uma tentativa best-effort de persistir o estado terminal.
 Não existem state machine persistente, release-tree nova, bundle, staging,
 quarentena, segundo pointer ou fingerprint agregado. A autorização de mutação é
 uma confirmação explícita vinculada a run ID, application source SHA,
-operational source SHA, candidate digest e level. Aprovação externa do
-candidate, dos bytes operacionais e do CI (Gate A) não substitui autorização de
-produção (Gate B).
+operational source SHA, candidate digest, level, lista ordered de migrations
+pending e intenção booleana de same-image recreate. A representação é
+`<runId>:<applicationSourceSha>:<operationalSourceSha>:<candidateImage>:<level>:pending=<migration1,migration2|->:recreateSameImage=<true|false>`.
+A lista preserva a ordem da CLI, aceita somente `[A-Za-z0-9_.-]+`, não admite
+duplicatas, é vazia no Level 1 e não vazia no Level 2. No Level 2 ela deve ser
+exatamente igual, inclusive em ordem, ao inventário factual do candidate.
+Aprovação externa do candidate, dos bytes operacionais e do CI não substitui a
+autorização específica de produção.
+
+## Ativação pública da AUTH-V2-02
+
+A AUTH-V2-02 usa o rollout Model A. Primeiro, com
+`AUTH_OTP_PUBLIC_FLOWS_ENABLED=false`, a imagem nova é promovida em Level 2,
+aplica exclusivamente a migration autorizada e completa health, smoke e a
+observação T+0/T+60/T+300. Enquanto cadastro público não estiver acessível, a
+imagem anterior continua elegível para o rollback normal, sem migration revert.
+
+Depois do KEEP técnico, a configuração pública é ativada pela transação
+config + operational, o mesmo digest AUTH-V2-02 é recriado explicitamente em
+Level 1, e só então o Web aprovado é promovido e o fluxo público é validado.
+Quando cadastro público estiver acessível, AUTH-V2-01 deixa de ser rollback
+automático seguro porque autentica `User ACTIVE` sem exigir `emailVerifiedAt`.
+Daí em diante, recuperação significa restaurar o Web anterior, configurar
+`AUTH_OTP_PUBLIC_FLOWS_ENABLED=false`, recriar o mesmo digest AUTH-V2-02, provar
+cadastro desabilitado, executar health e smoke existentes e parar.
 
 ## Transição do mecanismo
 

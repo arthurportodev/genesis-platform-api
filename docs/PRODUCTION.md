@@ -602,20 +602,29 @@ integridade operacional, configuração, pointer/runtime, containers, volume,
 secrets, capacidade, topologia e inventário de migrations. Se o lock único
 `/run/genesis-api-deploy.lock` ainda não existe, o probe o trata como livre
 sem criá-lo; somente `execute`, depois do Gate B, pode criá-lo. Concorrência
-encerra com `DEPLOYMENT_LOCK_HELD`.
+encerra com `DEPLOYMENT_LOCK_HELD`. O arquivo histórico
+`/opt/genesis/config/api-release-evidence.json`, se existir, não participa do
+preflight nem da autorização.
 
 `execute` não é autorizado por este documento. Uma tarefa operacional futura
 deve aprovar a imagem/release, o application source SHA e o operational source
 SHA e fornecer Gate B como a string exata
-`<runId>:<applicationSourceSha>:<operationalSourceSha>:<candidate-image>:<level>`.
-A evidência root-only de Gate A contém exatamente esses dois SHAs, a imagem, o
-status aprovado e `approvedLevel2Pending`. O script aceita Level 1 somente sem
-pending e Level 2 somente com cada `--expected-pending` igual a essa lista.
-Level 2 reutiliza
+`<runId>:<applicationSourceSha>:<operationalSourceSha>:<candidate-image>:<level>:pending=<migration1,migration2|->:recreateSameImage=<true|false>`.
+Cada `--expected-pending` preserva a ordem recebida, deve corresponder a
+`[A-Za-z0-9_.-]+` e não pode se repetir. Level 1 exige `pending=-`; Level 2 exige
+uma lista não vazia exatamente igual, inclusive em ordem, ao inventário factual
+do candidate. Level 2 reutiliza
 `/opt/genesis/recovery/backup-runner.sh --mode checkpoint`, exige
 status `passed`, executa migration one-shot e exige que o inventário final seja
 exatamente o anterior concatenado ao pending aprovado. Level 3 termina em
 `LEVEL_3_REQUIRES_SEPARATE_ARCHITECTURE`.
+
+Candidate igual ao pointer e ao runtime retorna `NOOP` por padrão. O execute
+aceita `--recreate-same-image` somente em Level 1, com pending vazio e a intenção
+`recreateSameImage=true` vinculada ao Gate B. Nesse modo ele não executa
+checkpoint ou migration, não reescreve o pointer e exige o health externo atual
+antes de recriar somente a API. Um novo ID da API, IDs inalterados de PostgreSQL
+e Traefik, health, smoke e observação Level 1 são obrigatórios.
 
 A promoção escreve o pointer atomicamente e executa somente `docker compose up
 -d --no-deps --force-recreate api`. PostgreSQL e Traefik devem conservar seus
@@ -635,6 +644,12 @@ reverte migration. Falha de rollback preserva a causa inicial e termina em
 depois da promoção, a causa permanece em memória e nenhuma nova escrita de
 auditoria antecede ou interrompe o rollback; o estado terminal é persistido
 somente por uma tentativa best-effort depois da restauração do runtime.
+
+Falha de same-image recreate em recreate, health, smoke ou observation termina
+em `STOP` sem selecionar uma imagem histórica. Restaure o último
+`production.env` aprovado pela transação config + operational e obtenha nova
+autorização Level 1 para recriar o mesmo digest. Não repita automaticamente a
+ativação.
 
 ### Transição para o primeiro deploy simples
 
@@ -658,6 +673,51 @@ Se a imagem anterior não puder ser provada, o resultado é
 `STOP BEFORE MUTATION`. Se a primeira promoção falhar, o único rollback
 suportado é `previous digest -> pointer -> API-only recreate -> health`; ele não
 invoca o harness anterior. A produção permanece intocada até essa Task futura.
+
+### AUTH-V2-02 — rollout Model A
+
+O caminho canônico completo é:
+
+1. publicar a imagem AUTH-V2-02 pelo workflow protegido e registrar workflow,
+   application SHA, digest GHCR imutável, Trivy Critical aprovado, revisão OCI
+   igual ao application SHA e plataforma `linux/amd64`;
+2. materializar o deployment Web Production candidato e registrar seu ID e o ID
+   do deployment Web atualmente promovido;
+3. provar em rehearsal descartável que a imagem anterior inicia com o wrapper,
+   secrets e configuração atuais, mantendo
+   `AUTH_OTP_PUBLIC_FLOWS_ENABLED=false`;
+4. preparar e instalar a geração operacional aprovada com public flows ainda
+   desabilitados;
+5. executar preflight, obter Gate B Level 2 vinculado ao pending exato e promover
+   a imagem AUTH-V2-02;
+6. comprovar checkpoint, migration, inventário, pointer, recriação exclusiva da
+   API, health, smoke e T+0/T+60/T+300;
+7. após o KEEP técnico, instalar `AUTH_OTP_PUBLIC_FLOWS_ENABLED=true` pela
+   transação config + operational;
+8. obter Gate B Level 1 com `pending=-`, `recreateSameImage=true` e o mesmo digest
+   AUTH-V2-02; recriar somente a API e concluir health, smoke e observação;
+9. promover o deployment Web candidato exato;
+10. executar o smoke público controlado e concluir KEEP.
+
+Até o fim do passo 6, com public flows desabilitados e cadastro público
+inacessível, AUTH-V2-01 permanece elegível para o rollback normal do Level 2. A
+migration é aditiva e nunca é revertida. Assim que o cadastro público se torna
+acessível no passo 8, AUTH-V2-01 deixa de ser rollback automático seguro: ele
+autentica `User ACTIVE` sem exigir `emailVerifiedAt`.
+
+O smoke público usa um e-mail controlado e confirma, nesta ordem: cadastro;
+login bloqueado enquanto o e-mail não está verificado; resend após o cooldown;
+obtenção do OTP mais recente no inbox controlado; verificação; login; bootstrap;
+e ausência de Organization criada pelo cadastro. E-mail, OTP, credentials,
+tokens e bodies não entram em logs ou evidence. A interação com mailbox permanece
+manual e não integra o operador.
+
+Se a promoção Web ou o fluxo público falhar depois da abertura, faça Instant
+Rollback do Web para o deployment anterior, instale
+`AUTH_OTP_PUBLIC_FLOWS_ENABLED=false` pela transação canônica, obtenha nova
+autorização Level 1 para same-image recreate do mesmo digest AUTH-V2-02, prove
+que register está desabilitado, execute health e login smoke e pare. Não promova
+AUTH-V2-01 automaticamente e não faça uma segunda tentativa sem nova decisão.
 
 ## Deploy manual histórico — superseded para novos deploys
 

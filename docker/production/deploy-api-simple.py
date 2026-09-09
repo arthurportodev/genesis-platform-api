@@ -56,7 +56,6 @@ LOCK_PATH = Path("/run/genesis-api-deploy.lock")
 EVIDENCE_ROOT = Path("/var/lib/genesis/deploy/evidence")
 REGISTRY_CREDENTIALS = Path("/opt/genesis/secrets/registry-credentials.json")
 SMOKE_CREDENTIALS = Path("/opt/genesis/secrets/smoke-credentials.json")
-RELEASE_EVIDENCE = Path("/opt/genesis/config/api-release-evidence.json")
 RECOVERY_RUNNER = Path("/opt/genesis/recovery/backup-runner.sh")
 RECOVERY_ENV = Path("/opt/genesis/recovery/recovery.env")
 RECOVERY_STATUS = Path("/var/lib/genesis/recovery/status/backup-status.v1.json")
@@ -223,7 +222,6 @@ class DeploymentPaths:
     evidence_root: Path = EVIDENCE_ROOT
     registry_credentials: Path = REGISTRY_CREDENTIALS
     smoke_credentials: Path = SMOKE_CREDENTIALS
-    release_evidence: Path = RELEASE_EVIDENCE
     recovery_runner: Path = RECOVERY_RUNNER
     recovery_env: Path = RECOVERY_ENV
     recovery_status: Path = RECOVERY_STATUS
@@ -985,45 +983,6 @@ def inspect_container(runner: CommandRunner, container_id: str) -> ContainerStat
 
 def docker_child_environment() -> dict[str, str]:
     return sanitized_child_environment(os.environ, PRODUCTION_ENV_KEYS)
-
-
-def prove_release_evidence(
-    path: Path,
-    application_source_sha: str,
-    operational_source_sha: str,
-    candidate_image: str,
-    policy: MetadataPolicy,
-) -> tuple[str, ...]:
-    validate_regular_metadata(path, policy=policy, expected_mode=0o600, reason_code="RELEASE_EVIDENCE_INVALID")
-    evidence = safe_json(path, "RELEASE_EVIDENCE_INVALID")
-    require(
-        isinstance(evidence, dict)
-        and set(evidence)
-        == {
-            "applicationSourceSha",
-            "operationalSourceSha",
-            "candidateImage",
-            "status",
-            "approvedLevel2Pending",
-        }
-        and evidence["applicationSourceSha"] == application_source_sha
-        and evidence["operationalSourceSha"] == operational_source_sha
-        and evidence["candidateImage"] == candidate_image
-        and evidence["status"] == "approved",
-        "RELEASE_EVIDENCE_INVALID",
-    )
-    approved_pending = evidence["approvedLevel2Pending"]
-    require(
-        isinstance(approved_pending, list)
-        and all(
-            isinstance(name, str)
-            and re.fullmatch(r"[A-Za-z0-9_.-]+", name) is not None
-            for name in approved_pending
-        )
-        and len(set(approved_pending)) == len(approved_pending),
-        "RELEASE_EVIDENCE_INVALID",
-    )
-    return tuple(approved_pending)
 
 
 def inspect_image(runner: CommandRunner, image: str) -> Mapping[str, Any] | None:
@@ -2345,14 +2304,6 @@ def preflight(
         expected_mode=0o600,
         reason_code="SMOKE_CREDENTIALS_INVALID",
     )
-    validate_regular_metadata(paths.release_evidence, policy=policy, expected_mode=0o600, reason_code="RELEASE_EVIDENCE_INVALID")
-    prove_release_evidence(
-        paths.release_evidence,
-        application_source_sha,
-        operational_source_sha,
-        candidate_image,
-        policy,
-    )
     require(shutil.disk_usage(paths.deploy_root).free >= minimum_free_bytes, "INSUFFICIENT_DISK_SPACE")
     result = runner.run(
         ("docker", "volume", "inspect", "genesis-postgres-data"),
@@ -2521,11 +2472,28 @@ def authorization_value(
     operational_source_sha: str,
     candidate_image: str,
     level: int,
+    expected_pending: Sequence[str] = (),
+    recreate_same_image: bool = False,
 ) -> str:
+    pending = normalize_expected_pending(expected_pending)
+    require(isinstance(recreate_same_image, bool), "INVALID_RECREATE_SAME_IMAGE")
+    pending_value = ",".join(pending) if pending else "-"
+    recreate_value = "true" if recreate_same_image else "false"
     return (
         f"{run_id}:{application_source_sha}:{operational_source_sha}:"
-        f"{candidate_image}:{level}"
+        f"{candidate_image}:{level}:pending={pending_value}:"
+        f"recreateSameImage={recreate_value}"
     )
+
+
+def normalize_expected_pending(expected_pending: Sequence[str]) -> tuple[str, ...]:
+    pending = tuple(expected_pending)
+    require(
+        all(isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9_.-]+", name) for name in pending),
+        "INVALID_EXPECTED_PENDING",
+    )
+    require(len(set(pending)) == len(pending), "DUPLICATE_EXPECTED_PENDING")
+    return pending
 
 
 def execute_deployment(
@@ -2538,6 +2506,7 @@ def execute_deployment(
     candidate_image: str,
     level: int,
     expected_pending: Sequence[str],
+    recreate_same_image: bool = False,
     authorization: str,
     expected_hostname: str,
     minimum_free_bytes: int,
@@ -2556,6 +2525,15 @@ def execute_deployment(
         "INVALID_OPERATIONAL_SOURCE_SHA",
     )
     require(level in {1, 2}, "LEVEL_3_REQUIRES_SEPARATE_ARCHITECTURE")
+    pending_authorized = normalize_expected_pending(expected_pending)
+    if level == 1:
+        require(not pending_authorized, "LEVEL_1_PENDING_MIGRATIONS")
+    else:
+        require(pending_authorized, "LEVEL_2_PENDING_MISMATCH")
+    require(
+        not recreate_same_image or level == 1,
+        "SAME_IMAGE_RECREATE_REQUIRES_LEVEL_1",
+    )
     require(
         authorization
         == authorization_value(
@@ -2564,6 +2542,8 @@ def execute_deployment(
             operational_source_sha,
             candidate_image,
             level,
+            pending_authorized,
+            recreate_same_image,
         ),
         "PRODUCTION_MUTATION_NOT_AUTHORIZED",
     )
@@ -2600,13 +2580,6 @@ def execute_deployment(
             )
             previous = snapshot.previous_image
             evidence.update(previousDigest=previous)
-            approved_pending = prove_release_evidence(
-                paths.release_evidence,
-                application_source_sha,
-                operational_source_sha,
-                candidate_image,
-                policy,
-            )
             prove_image(runner, previous, credentials_path=paths.registry_credentials, policy=policy)
             prove_image(
                 runner,
@@ -2616,21 +2589,25 @@ def execute_deployment(
                 application_source_sha=application_source_sha,
             )
             compose.render(previous)
-            if candidate_image == previous:
+            require(
+                not recreate_same_image or candidate_image == previous,
+                "SAME_IMAGE_RECREATE_REQUIRES_CURRENT_IMAGE",
+            )
+            if recreate_same_image:
+                external_health()
+            if candidate_image == previous and not recreate_same_image:
                 evidence.update(result="NOOP", endedAt=utc_now())
                 return evidence.data
             before_executed, pending = compose.migration_inventory(candidate_image)
             evidence.update(migrationBefore={"executed": list(before_executed), "pending": list(pending)})
             if level == 1:
                 require(
-                    not pending and not expected_pending and not approved_pending,
+                    not pending,
                     "LEVEL_1_PENDING_MIGRATIONS",
                 )
             else:
                 require(
-                    expected_pending
-                    and tuple(expected_pending) == approved_pending
-                    and approved_pending == pending,
+                    pending_authorized == pending,
                     "LEVEL_2_PENDING_MISMATCH",
                 )
                 run_checkpoint(runner, paths, run_id, policy)
@@ -2639,14 +2616,15 @@ def execute_deployment(
                 after_executed, after_pending = compose.migration_inventory(candidate_image)
                 validate_migration_inventory_after(
                     before_executed,
-                    expected_pending,
+                    pending_authorized,
                     after_executed,
                     after_pending,
                 )
                 evidence.update(migrationAfter={"executed": list(after_executed), "pending": list(after_pending)})
             activation_time = utc_now()
             promotion_started = True
-            write_pointer(paths.pointer, candidate_image, uid=policy.uid, gid=policy.gid)
+            if candidate_image != previous:
+                write_pointer(paths.pointer, candidate_image, uid=policy.uid, gid=policy.gid)
             require(
                 read_pointer(paths.pointer, policy=policy) == candidate_image,
                 "API_IMAGE_POINTER_UPDATE_FAILED",
@@ -2688,7 +2666,7 @@ def execute_deployment(
         # cause in memory, complete rollback without evidence I/O, then make one
         # best-effort attempt to persist the terminal state.
         evidence.remember_failure(reason_code)
-        if promotion_started and previous is not None and compose is not None and snapshot is not None:
+        if promotion_started and not recreate_same_image and previous is not None and compose is not None and snapshot is not None:
             try:
                 write_pointer(paths.pointer, previous, uid=policy.uid, gid=policy.gid)
                 require(
@@ -2801,6 +2779,7 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--run-id", required=True)
             command.add_argument("--level", type=int, required=True)
             command.add_argument("--expected-pending", action="append", default=[])
+            command.add_argument("--recreate-same-image", action="store_true")
             command.add_argument("--authorization", required=True)
     return parser
 
@@ -2837,6 +2816,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             candidate_image=args.candidate_image,
             level=args.level,
             expected_pending=args.expected_pending,
+            recreate_same_image=args.recreate_same_image,
             authorization=args.authorization,
             expected_hostname=args.hostname,
             minimum_free_bytes=args.minimum_free_bytes,
