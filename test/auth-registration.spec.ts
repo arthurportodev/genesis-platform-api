@@ -22,6 +22,10 @@ const config: AuthOtpConfig = {
   registrationEmailIpMaxAttempts: 5,
   registrationIpMaxAttempts: 20,
   registrationRateLimitMaxBuckets: 10_000,
+  passwordResetPublicFlowEnabled: false,
+  passwordResetRateLimitWindowSeconds: 900,
+  passwordResetIpMaxAttempts: 20,
+  passwordResetEmailIpMaxAttempts: 5,
 };
 
 describe('PublicAuthService', () => {

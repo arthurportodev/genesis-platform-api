@@ -141,11 +141,18 @@ export class AuthService {
         `SELECT app_private.lock_auth_refresh_user($1::uuid)`,
         [user.id],
       );
-      const lockedUser = await manager.getRepository(User).findOneBy({
-        id: user.id,
-        status: UserStatus.ACTIVE,
-      });
-      if (lockedUser === null || lockedUser.emailVerifiedAt === null)
+      const lockedUser = await manager
+        .getRepository(User)
+        .createQueryBuilder('user')
+        .addSelect('user.passwordHash')
+        .where('user.id = :userId', { userId: user.id })
+        .andWhere('user.status = :status', { status: UserStatus.ACTIVE })
+        .getOne();
+      if (
+        lockedUser === null ||
+        lockedUser.emailVerifiedAt === null ||
+        lockedUser.passwordHash !== user.passwordHash
+      )
         return null;
 
       const sessionId = randomUUID();

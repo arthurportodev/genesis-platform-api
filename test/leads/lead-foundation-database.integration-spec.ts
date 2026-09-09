@@ -75,7 +75,7 @@ describe('Lead foundation database integration', () => {
   let migrationRunner: QueryRunner;
 
   beforeAll(async () => {
-    owner = createIntegrationDataSource();
+    owner = createIntegrationDataSource({ includePasswordReset: true });
     await owner.initialize();
     await prepareIntegrationRuntimeRole(owner);
     await owner.dropDatabase();
@@ -116,7 +116,7 @@ describe('Lead foundation database integration', () => {
         (array_agg(name ORDER BY id DESC))[1] AS head
         FROM public.migrations`);
       expect(inventory).toEqual({
-        count: 15,
+        count: 16,
         head: 'AllowDefaultPipelineStageConfiguration1788811200000',
       });
     } finally {
@@ -143,7 +143,7 @@ describe('Lead foundation database integration', () => {
       (array_agg(name ORDER BY id DESC))[1] AS head
       FROM public.migrations`);
     expect(inventory).toEqual({
-      count: 15,
+      count: 16,
       head: 'AllowDefaultPipelineStageConfiguration1788811200000',
     });
   });

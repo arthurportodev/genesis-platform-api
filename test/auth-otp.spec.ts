@@ -155,6 +155,10 @@ describe('OTP environment configuration', () => {
       AUTH_OTP_SEND_WINDOW_SECONDS: 3600,
       AUTH_OTP_MAX_SENDS: 5,
       AUTH_EMAIL_FROM: '',
+      AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED: 'false',
+      AUTH_PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS: 900,
+      AUTH_PASSWORD_RESET_IP_MAX_ATTEMPTS: 20,
+      AUTH_PASSWORD_RESET_EMAIL_IP_MAX_ATTEMPTS: 5,
     });
   });
 
@@ -196,6 +200,38 @@ describe('OTP environment configuration', () => {
     expect(result.ttlSeconds).toBe(600);
     expect(result.pepper).toBeNull();
     expect(result.publicFlowsEnabled).toBe(false);
+    expect(result.passwordResetPublicFlowEnabled).toBe(false);
+  });
+
+  it('requires the public OTP foundation when password reset is enabled', () => {
+    const names = [
+      'AUTH_OTP_PUBLIC_FLOWS_ENABLED',
+      'AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED',
+      'AUTH_OTP_PEPPER',
+      'AUTH_EMAIL_FROM',
+      'RESEND_API_KEY',
+      'API_PUBLIC_REPLICA_COUNT',
+    ] as const;
+    const previous = Object.fromEntries(
+      names.map((name) => [name, process.env[name]]),
+    );
+    try {
+      process.env.AUTH_OTP_PUBLIC_FLOWS_ENABLED = 'false';
+      process.env.AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED = 'true';
+      process.env.AUTH_OTP_PEPPER = randomBytes(32).toString('base64');
+      process.env.AUTH_EMAIL_FROM = 'Genesis <auth@example.test>';
+      process.env.RESEND_API_KEY = 'synthetic-key';
+      process.env.API_PUBLIC_REPLICA_COUNT = '1';
+      expect(() => authOtpConfig()).toThrow(
+        'Public password reset requires the public OTP foundation',
+      );
+    } finally {
+      for (const name of names) {
+        const value = previous[name];
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
   });
 
   it('fails closed when public flows are enabled without complete readiness', () => {

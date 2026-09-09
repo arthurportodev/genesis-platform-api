@@ -182,6 +182,13 @@ auditoria. A função de invitations permanece separada e conserva `FOR UPDATE`.
    preserva Bearer e revoga todas as sessões ativas. Ambos limpam cookies.
 9. Bootstrap consulta memberships e Organizations ativas do user autenticado,
    sem selecionar tenant, e deriva o papel exclusivamente da membership.
+10. `POST /auth/password-reset/request` usa a fundação de challenge OTP já
+    existente e responde de forma opaca, com entrega desacoplada do tempo mínimo
+    da resposta pública.
+11. `POST /auth/password-reset/complete` calcula Argon2id antes da transação e,
+    sob o lock canônico do usuário, consome o challenge corrente, chama uma
+    função privada estreita, revoga credenciais históricas e grava auditoria no
+    mesmo commit. O endpoint não cria sessão nem retorna tokens.
 
 ```mermaid
 sequenceDiagram
