@@ -1,31 +1,30 @@
 {
   "schemaVersion": "2.0.0",
-  "stateRevision": "AUTH-V2-01-PRODUCTION-KEEP-2026-09-08",
+  "stateRevision": "AUTH-V2-02-PRODUCTION-KEEP-2026-09-09",
   "phase": {
     "id": "AUTH-V2",
     "title": "Authentication V2"
   },
   "lastCompleted": {
-    "id": "AUTH-V2-01",
-    "title": "Fundação de Challenges e Envio OTP",
-    "outcome": "PRODUCTION_KEEP / AUTH-V2-01_LIVE"
+    "id": "AUTH-V2-02",
+    "title": "Cadastro e verificação de e-mail",
+    "outcome": "PRODUCTION_KEEP / AUTH-V2-02_LIVE"
   },
   "currentWork": {
     "status": "none"
   },
   "nextTask": {
-    "status": "decided",
-    "id": "AUTH-V2-02",
-    "title": "Cadastro e verificação de e-mail"
+    "status": "undecided",
+    "planningState": "PENDING-PRODUCT-PRIORITIZATION"
   },
   "live": {
     "api": {
-      "sourceSha": "9c031ff0e3790d6b0b6628a3435ca3a3d22fb48a",
-      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:80fe64c2fb563c308bc7aecf6d212aed89cbc06bffcfbcd12d4a1ee7b584fcc0"
+      "sourceSha": "f2f5d5bc6012065239fcdce223bce5dd4b590c70",
+      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:55b0ddb5b45a258941c35ddffb98c56f4848862fccb81ea4feee4a672fea6310"
     },
     "web": {
-      "sourceSha": "daab09257c335a2fb53b592a525bc5518bdf17c1",
-      "deploymentId": "dpl_ArBFkjj28BDHcrE1rFHewCyzAQKH",
+      "sourceSha": "90493f8409576de1fd40008860aea6a86c274bf7",
+      "deploymentId": "dpl_9m3fyuxkeSruWTmXyb6sbMiz1mKi",
       "domain": "https://app.agenciagenesismkt.com.br"
     }
   },
@@ -45,10 +44,6 @@
     }
   ],
   "followUps": [
-    {
-      "id": "FU-VERCEL-EXACT-IDENTITY",
-      "summary": "Before the next Web release, reconcile the Vercel runbook so exact-deployment releases use a staged Production candidate and prior Production deployments are restored through routing/Instant Rollback without rebuild."
-    },
     {
       "id": "FU-PIPELINE-CONFLICT-FEEDBACK",
       "summary": "Differentiate Pipeline configuration conflict feedback from stale-revision feedback instead of grouping HTTP 409 and 412 into the same Web message."
