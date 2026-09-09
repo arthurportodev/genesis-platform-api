@@ -22,6 +22,8 @@ import { LoginRateLimiter } from './services/login-rate-limiter.port';
 import { TokenService } from './services/token.service';
 import { WebSessionService } from './services/web-session.service';
 import { PublicAuthService } from './services/public-auth.service';
+import { PasswordResetService } from './services/password-reset.service';
+import { InMemoryPasswordResetRateLimiter } from './services/in-memory-password-reset-rate-limiter.service';
 
 @Module({
   imports: [
@@ -45,7 +47,9 @@ import { PublicAuthService } from './services/public-auth.service';
     CsrfGuard,
     WebSessionService,
     PublicAuthService,
+    PasswordResetService,
     InMemoryRegistrationRateLimiter,
+    InMemoryPasswordResetRateLimiter,
     {
       provide: LoginRateLimiter,
       useClass: InMemoryLoginRateLimiter,

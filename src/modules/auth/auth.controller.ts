@@ -24,6 +24,10 @@ import {
   EmailVerificationVerifyDto,
 } from './dto/email-verification.dto';
 import { RegisterDto } from './dto/register.dto';
+import {
+  PasswordResetCompleteDto,
+  PasswordResetRequestDto,
+} from './dto/password-reset.dto';
 import { AccessTokenGuard } from './guards/access-token.guard';
 import { CsrfGuard } from './guards/csrf.guard';
 import { WebSessionService } from './services/web-session.service';
@@ -32,6 +36,11 @@ import {
   PublicAuthService,
   VerificationRequiredResponse,
 } from './services/public-auth.service';
+import {
+  PasswordResetAcceptedResponse,
+  PasswordResetCompletedResponse,
+  PasswordResetService,
+} from './services/password-reset.service';
 import {
   AuthenticatedUser,
   AuthRequestContext,
@@ -44,6 +53,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly webSessionService: WebSessionService,
     private readonly publicAuthService: PublicAuthService,
+    private readonly passwordResetService: PasswordResetService,
   ) {}
 
   @Get('csrf')
@@ -107,6 +117,37 @@ export class AuthController {
       input.code,
       this.getContext(request),
     );
+  }
+
+  @Post('password-reset/request')
+  @UseGuards(CsrfGuard)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Header('Cache-Control', 'no-store')
+  requestPasswordReset(
+    @Body() input: PasswordResetRequestDto,
+    @Req() request: Request,
+  ): Promise<PasswordResetAcceptedResponse> {
+    return this.passwordResetService.request(
+      input.email,
+      this.getContext(request),
+    );
+  }
+
+  @Post('password-reset/complete')
+  @UseGuards(CsrfGuard)
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  async completePasswordReset(
+    @Body() input: PasswordResetCompleteDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<PasswordResetCompletedResponse> {
+    const result = await this.passwordResetService.complete(
+      input,
+      this.getContext(request),
+    );
+    this.webSessionService.clearAuthCookies(response);
+    return result;
   }
 
   @Post('refresh')

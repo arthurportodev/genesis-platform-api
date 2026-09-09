@@ -46,6 +46,10 @@ describe('OTP foundation on the complete PostgreSQL migration chain', () => {
     registrationEmailIpMaxAttempts: 5,
     registrationIpMaxAttempts: 20,
     registrationRateLimitMaxBuckets: 10_000,
+    passwordResetPublicFlowEnabled: true,
+    passwordResetRateLimitWindowSeconds: 900,
+    passwordResetIpMaxAttempts: 20,
+    passwordResetEmailIpMaxAttempts: 5,
   };
   let sender: EmailTransport;
 
@@ -64,7 +68,7 @@ describe('OTP foundation on the complete PostgreSQL migration chain', () => {
 
   beforeAll(async () => {
     configureIntegrationRuntimeEnvironment();
-    owner = createIntegrationDataSource();
+    owner = createIntegrationDataSource({ includePasswordReset: true });
     owner.setOptions({
       entities: [
         ...Object.values(owner.options.entities ?? {}),
@@ -493,6 +497,53 @@ describe('OTP foundation on the complete PostgreSQL migration chain', () => {
         .getRepository(AuthEmailChallenge)
         .findOneByOrFail({ userId: user.id }),
     ).toMatchObject({ sendCount: 1 });
+  });
+
+  it('persists password reset before returning and does not expose provider latency', async () => {
+    let releaseDelivery!: () => void;
+    const deliveryPending = new Promise<void>((resolve) => {
+      releaseDelivery = resolve;
+    });
+    const transport: EmailTransport = {
+      send: async (message) => {
+        messages.push(message);
+        await deliveryPending;
+        return { kind: 'sent', providerMessageId: 'delayed-delivery' };
+      },
+    };
+    const detached = makeService(runtime, transport);
+    const result = await detached.issuePasswordReset(user.id, 'detached');
+    expect(result.status).toBe('accepted');
+    await expect(
+      owner
+        .getRepository(AuthEmailChallenge)
+        .findOneByOrFail({ userId: user.id, purpose: 'password_reset' }),
+    ).resolves.toMatchObject({ stage: 'otp' });
+    expect(messages).toHaveLength(1);
+    releaseDelivery();
+    await detached.onModuleDestroy();
+  });
+
+  it('keeps detached password reset accepted when the provider is unavailable', async () => {
+    const unavailable = makeService(runtime, {
+      send: () => Promise.reject(new Error('SENSITIVE_PROVIDER_FAILURE')),
+    });
+    await expect(
+      unavailable.issuePasswordReset(user.id, 'detached'),
+    ).resolves.toMatchObject({ status: 'accepted' });
+    await unavailable.onModuleDestroy();
+    const logs = await runtime
+      .getRepository(AuthAuditLog)
+      .findBy({ userId: user.id });
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: 'auth.otp.delivery_failed',
+          metadata: { purpose: 'password_reset' },
+        }),
+      ]),
+    );
+    expect(JSON.stringify(logs)).not.toContain('SENSITIVE_PROVIDER_FAILURE');
   });
 
   it('fails closed for inactive and missing users and never mutates login credentials', async () => {

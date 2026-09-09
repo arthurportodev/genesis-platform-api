@@ -55,6 +55,24 @@ export const authOtpEnvironmentFields = {
     .min(2)
     .max(1_000_000)
     .default(10_000),
+  AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED: Joi.string()
+    .valid('true', 'false')
+    .default('false'),
+  AUTH_PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS: Joi.number()
+    .integer()
+    .min(1)
+    .max(86_400)
+    .default(900),
+  AUTH_PASSWORD_RESET_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(10_000)
+    .default(20),
+  AUTH_PASSWORD_RESET_EMAIL_IP_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(1_000)
+    .default(5),
 };
 
 export interface AuthOtpConfig {
@@ -70,11 +88,17 @@ export interface AuthOtpConfig {
   registrationEmailIpMaxAttempts: number;
   registrationIpMaxAttempts: number;
   registrationRateLimitMaxBuckets: number;
+  passwordResetPublicFlowEnabled: boolean;
+  passwordResetRateLimitWindowSeconds: number;
+  passwordResetIpMaxAttempts: number;
+  passwordResetEmailIpMaxAttempts: number;
 }
 
 export default registerAs('authOtp', (): AuthOtpConfig => {
   const publicFlowsEnabled =
     process.env.AUTH_OTP_PUBLIC_FLOWS_ENABLED === 'true';
+  const passwordResetPublicFlowEnabled =
+    process.env.AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED === 'true';
   const pepper = process.env.AUTH_OTP_PEPPER
     ? Buffer.from(process.env.AUTH_OTP_PEPPER, 'base64')
     : null;
@@ -82,7 +106,7 @@ export default registerAs('authOtp', (): AuthOtpConfig => {
   const resendApiKey = process.env.RESEND_API_KEY?.trim() ?? '';
   const publicReplicaCount = Number(process.env.API_PUBLIC_REPLICA_COUNT ?? 1);
   if (
-    publicFlowsEnabled &&
+    (publicFlowsEnabled || passwordResetPublicFlowEnabled) &&
     (pepper?.length !== 32 ||
       emailFrom === '' ||
       resendApiKey === '' ||
@@ -90,6 +114,11 @@ export default registerAs('authOtp', (): AuthOtpConfig => {
   ) {
     throw new Error(
       'Public OTP flows require a dedicated pepper, email sender, Resend key, and exactly one public API replica.',
+    );
+  }
+  if (passwordResetPublicFlowEnabled && !publicFlowsEnabled) {
+    throw new Error(
+      'Public password reset requires the public OTP foundation to be enabled.',
     );
   }
   return {
@@ -112,6 +141,16 @@ export default registerAs('authOtp', (): AuthOtpConfig => {
     ),
     registrationRateLimitMaxBuckets: Number(
       process.env.AUTH_REGISTRATION_RATE_LIMIT_MAX_BUCKETS ?? 10_000,
+    ),
+    passwordResetPublicFlowEnabled,
+    passwordResetRateLimitWindowSeconds: Number(
+      process.env.AUTH_PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS ?? 900,
+    ),
+    passwordResetIpMaxAttempts: Number(
+      process.env.AUTH_PASSWORD_RESET_IP_MAX_ATTEMPTS ?? 20,
+    ),
+    passwordResetEmailIpMaxAttempts: Number(
+      process.env.AUTH_PASSWORD_RESET_EMAIL_IP_MAX_ATTEMPTS ?? 5,
     ),
   };
 });

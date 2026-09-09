@@ -13,6 +13,30 @@ release, restrições atuais e observações operacionais são resolvidos em
 - Verificação de login executa hash dummy quando o usuário não possui credencial, reduzindo diferença observável.
 - `password_hash` não é selecionado por padrão nem serializado.
 - Erros de login usam mensagem genérica e usuários `inactive` não autenticam.
+- O login relê o hash selecionado depois de adquirir o lock do usuário. Se a
+  credencial mudou durante a verificação Argon2id, nenhuma sessão é criada.
+
+## Recuperação pública de senha
+
+- O fluxo tem flag própria, desabilitada por padrão, e só pode ser habilitado
+  quando a fundação OTP pública existente também está pronta.
+- A solicitação responde `202` com o mesmo formato para conta existente,
+  inexistente, inativa, em cooldown, com limite de envios atingido ou com falha
+  de entrega. Ela não retorna identificador do challenge nem estado do provider.
+- A resposta pública respeita piso de 750 ms. A entrega começa somente após a
+  persistência do challenge e não mantém transação ou lock enquanto chama o
+  provider.
+- Solicitação e conclusão usam namespaces separados de rate limit por IP e por
+  email+IP. A implementação é process-local e exige uma única réplica pública.
+- A conclusão aceita somente o challenge corrente de `password_reset`. Código
+  incorreto, expirado, consumido, substituído ou sem conta ativa retorna o mesmo
+  erro público.
+- Depois do hash Argon2id fora da transação, uma função `SECURITY DEFINER`
+  restrita conclui a operação sob locks: altera somente o hash e seu timestamp,
+  invalida o challenge e revoga sessões e refresh tokens. A role runtime não
+  recebe `UPDATE` genérico em `users`.
+- O sucesso não autentica, limpa cookies de autenticação e exige novo login. O
+  estado de verificação de email e as memberships permanecem inalterados.
 
 ## Access token
 
@@ -53,7 +77,8 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 
 - `GET /auth/csrf` gera 32 bytes aleatórios em base64url, define cookie
   host-only legível pelo frontend e responde `no-store`, sem sessão ou PII.
-- Login, refresh, logout e logout-all exigem exatamente um cookie CSRF e
+- Login, refresh, logout, logout-all e as duas mutações de recuperação de senha
+  exigem exatamente um cookie CSRF e
   `X-CSRF-Token` equivalente. A comparação usa `timingSafeEqual`; ausência,
   duplicidade, encoding inválido ou divergência retornam o mesmo `403`.
 - Quando `Origin` está presente, deve coincidir byte a byte com `FRONTEND_URL`,

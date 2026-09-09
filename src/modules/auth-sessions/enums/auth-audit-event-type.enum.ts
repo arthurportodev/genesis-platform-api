@@ -1,6 +1,7 @@
 export enum AuthAuditEventType {
   REGISTRATION_SUCCEEDED = 'auth.registration.succeeded',
   EMAIL_VERIFIED = 'auth.email.verified',
+  PASSWORD_RESET_SUCCEEDED = 'auth.password_reset.succeeded',
   OTP_ISSUED = 'auth.otp.issued',
   OTP_CONSUMED = 'auth.otp.consumed',
   OTP_REJECTED = 'auth.otp.rejected',
