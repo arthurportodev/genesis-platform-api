@@ -520,37 +520,63 @@ com hash e mode de cada arquivo, sem criar lock, staging ou evidência:
 python3 /absolute/approved-checkout/docker/production/deploy-api-simple.py prepare-operational \
   --source-root /absolute/approved-checkout \
   --current-operational-source-sha <installed-40-hex-source-sha> \
-  --operational-source-sha <target-40-hex-source-sha>
+  --operational-source-sha <target-40-hex-source-sha> \
+  --target-production-env /absolute/root-owned/target-production.env
 ```
 
-Uma autorização separada deve copiar exatamente a identidade
+`--target-production-env` é opcional para compatibilidade. Quando presente, o
+arquivo deve ser absoluto, regular, sem hardlink, `root:root 0600`, UTF-8, com
+newline final, sem CR e com o conjunto canônico completo de chaves. O operador
+não monta a configuração a partir de template e nunca imprime valores. O plano
+expõe somente os hashes atual/alvo, se a configuração muda e os nomes ordenados
+das chaves alteradas.
+
+Uma autorização separada deve copiar exatamente a identidade retornada. No modo
+transacional ela é
+`<runId>:<currentOperationalSourceSha>:<targetOperationalSourceSha>:<currentProductionConfigSha256>:<targetProductionConfigSha256>:<authorizationPlanSha256>:<path=sha256@mode,...>`.
+O digest vincula também arquivos inalterados, manifesto candidato e prova do
+filesystem, enquanto a lista final torna explícitos paths, hashes e modes
+operacionais que podem mudar. Sem configuração alvo, a tupla legada permanece
 `<runId>:<currentOperationalSourceSha>:<targetOperationalSourceSha>:<authorizationPlanSha256>:<path=sha256@mode,...>`.
-O digest vincula também unchanged files, manifest candidato e prova do
-filesystem, enquanto a lista final torna explícitos paths, hashes e modes que
-podem mudar. Somente então `install-operational` pode usar a mesma origem e a
-mesma identidade:
+Somente então `install-operational` pode usar a mesma origem, o mesmo arquivo
+alvo e a mesma identidade:
 
 ```bash
 python3 /absolute/approved-checkout/docker/production/deploy-api-simple.py install-operational \
   --source-root /absolute/approved-checkout \
   --current-operational-source-sha <installed-40-hex-source-sha> \
   --operational-source-sha <target-40-hex-source-sha> \
+  --target-production-env /absolute/root-owned/target-production.env \
   --run-id <approved-16-hex-run-id> \
   --authorization '<approved-exact-identity>'
 ```
 
-O instalador prepara a allowlist completa em um diretório root-only no mesmo
-filesystem, adquire `/run/genesis-api-deploy.lock`, revalida o plano e preserva
-em backup transitório somente os arquivos alterados e o manifesto anterior.
-Ele substitui duravelmente apenas os arquivos alterados e instala
+O instalador prepara configuração alvo, allowlist completa e manifesto em um
+diretório root-only. Ele adquire `/run/genesis-api-deploy.lock` uma vez,
+recalcula o plano e prova por `st_dev` que staging, backup, deploy e config
+suportam os replaces necessários. Antes da primeira mutação, o backup
+transitório preserva a configuração atual, os arquivos alterados e o manifesto.
+O operador substitui duravelmente a configuração e somente os arquivos
+operacionais alterados, verifica hashes e modes e instala
 `operational-integrity.json` por último. Sucesso remove staging e backup;
-reexecução da identidade já instalada retorna `ALREADY_INSTALLED` sem escrita.
+reexecução da geração já instalada ainda adquire o lock para revalidar a
+identidade e retorna `ALREADY_INSTALLED` com `mutationCount=0`.
 
-Falha restaura os bytes e o manifesto anteriores e retorna
-`INSTALL_FAILED_ROLLED_BACK`. Se a restauração não puder ser comprovada, grava
-um manifesto fail-closed, conserva staging e backup para investigação e retorna
-`INSTALL_FAILED_FAIL_CLOSED`. Diretório transitório órfão bloqueia novas
-instalações; não existe cleanup automático nem segunda tentativa implícita.
+Falha depois de uma mutação mantém o mesmo lock, instala um manifesto
+fail-closed, restaura configuração e arquivos e só então restaura o manifesto
+anterior. A geração anterior precisa passar a verificação integral para retornar
+`CONFIG_OPERATIONAL_INSTALL_FAILED_ROLLED_BACK`. Se a restauração não puder ser
+comprovada, o operador mantém o manifesto fail-closed, conserva staging e backup
+e retorna `CONFIG_OPERATIONAL_INSTALL_FAILED_FAIL_CLOSED`. Os resultados legados
+permanecem para instalações sem configuração alvo. Diretório transitório órfão
+bloqueia novas instalações; não existe cleanup automático nem segunda tentativa
+implícita. A geração antiga ou a nova podem passar integridade; qualquer estado
+intermediário para antes do deploy.
+
+O subcomando `manifest` serve somente para geração offline ou primeiro
+bootstrap. Ele recusa sobrescrever diretamente um
+`/opt/genesis/deploy/operational-integrity.json` existente; reconciliação da
+geração canônica exige `install-operational` e sua autorização conjunta.
 
 `production.env` contém exatamente a configuração não secreta aprovada, é
 `root:root 0600` e tem SHA-256 vinculado pelo manifesto. O pointer separado
