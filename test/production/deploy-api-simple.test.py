@@ -186,6 +186,16 @@ class OperationalInstallerFixture:
         self.production_env = self.config / "production.env"
         self.production_env.write_bytes(production_env_bytes())
         chmod(self.production_env, 0o600)
+        self.target_production_env = self.parent / "target-production.env"
+        self.target_production_env.write_bytes(
+            production_env_bytes(
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                    "AUTH_EMAIL_FROM": "",
+                }
+            )
+        )
+        chmod(self.target_production_env, 0o600)
         self.manifest = self.deploy_root / "operational-integrity.json"
         current_manifest = deploy._operational_manifest_payload(
             self.deploy_root,
@@ -239,7 +249,7 @@ class OperationalInstallerFixture:
         ).stdout.strip()
         self.runner.run(("git", "-C", str(self.source), "checkout", "--detach", "HEAD"))
 
-    def plan(self, *, probe_lock=None):
+    def plan(self, *, probe_lock=None, with_target_config=False):
         if probe_lock is None:
             probe_lock = deploy.fcntl is not None
         return deploy.build_operational_install_plan(
@@ -251,13 +261,29 @@ class OperationalInstallerFixture:
             policy=self.policy,
             files=self.files,
             probe_lock=probe_lock,
+            target_production_env=(
+                self.target_production_env if with_target_config else None
+            ),
         )
 
-    def authorization(self, plan=None):
-        return deploy.operational_install_authorization(plan or self.plan(), self.run_id)
+    def authorization(self, plan=None, *, with_target_config=False):
+        return deploy.operational_install_authorization(
+            plan or self.plan(with_target_config=with_target_config),
+            self.run_id,
+        )
 
-    def install(self, *, hook=None, rollback_hook=None, authorization=None):
-        plan = self.plan(probe_lock=False)
+    def install(
+        self,
+        *,
+        hook=None,
+        rollback_hook=None,
+        authorization=None,
+        with_target_config=False,
+    ):
+        plan = self.plan(
+            probe_lock=False,
+            with_target_config=with_target_config,
+        )
         lock_context = contextlib.nullcontext()
         if deploy.fcntl is None:
             class PortableLock:
@@ -281,12 +307,16 @@ class OperationalInstallerFixture:
                 run_id=self.run_id,
                 current_source_sha=self.current_source_sha,
                 target_source_sha=self.target_source_sha,
-                authorization=authorization or self.authorization(plan),
+                authorization=authorization
+                or self.authorization(plan, with_target_config=with_target_config),
                 runner=self.runner,
                 policy=self.policy,
                 files=self.files,
                 hook=hook,
                 rollback_hook=rollback_hook,
+                target_production_env=(
+                    self.target_production_env if with_target_config else None
+                ),
             )
 
     def snapshot(self):
@@ -1047,6 +1077,727 @@ class OperationalInstallerTests(unittest.TestCase):
             )
         finally:
             fixture.close()
+
+
+@unittest.skipUnless(shutil.which("git"), "Git snapshot proof")
+class ConfigOperationalTransactionTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture = OperationalInstallerFixture()
+
+    def tearDown(self):
+        self.fixture.close()
+
+    def destination_snapshot(self):
+        config = self.fixture.production_env.stat()
+        return {
+            "operational": self.fixture.snapshot(),
+            "productionEnv": (
+                self.fixture.production_env.read_bytes(),
+                config.st_mtime_ns,
+                config.st_ino,
+            ),
+        }
+
+    def install_with_counted_lock(self, plan):
+        acquisitions = []
+
+        class CountedLock:
+            def __init__(self, path, policy):
+                self.path = path
+                self.policy = policy
+
+            def __enter__(self):
+                acquisitions.append(self.path)
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        with (
+            mock.patch.object(deploy, "DeploymentLock", CountedLock),
+            mock.patch.object(deploy, "probe_deployment_lock"),
+        ):
+            result = deploy.install_operational_bytes(
+                self.fixture.source,
+                self.fixture.paths,
+                run_id=self.fixture.run_id,
+                current_source_sha=self.fixture.current_source_sha,
+                target_source_sha=self.fixture.target_source_sha,
+                authorization=self.fixture.authorization(
+                    plan,
+                    with_target_config=True,
+                ),
+                runner=self.fixture.runner,
+                policy=self.fixture.policy,
+                files=self.fixture.files,
+                target_production_env=self.fixture.target_production_env,
+            )
+        return result, acquisitions
+
+    def make_current_config_complete(self):
+        self.fixture.production_env.write_bytes(
+            self.fixture.target_production_env.read_bytes()
+        )
+        chmod(self.fixture.production_env, 0o600)
+        current_manifest = deploy._operational_manifest_payload(
+            self.fixture.deploy_root,
+            self.fixture.production_env,
+            self.fixture.current_source_sha,
+            files=self.fixture.files,
+        )
+        self.fixture.manifest.write_bytes(
+            deploy.operational_manifest_bytes(current_manifest)
+        )
+        chmod(self.fixture.manifest, 0o600)
+
+    def test_plan_binds_both_configs_without_values_and_is_read_only(self):
+        before = self.destination_snapshot()
+        first = self.fixture.plan(with_target_config=True)
+        second = self.fixture.plan(with_target_config=True)
+        self.assertEqual(first, second)
+        self.assertEqual(before, self.destination_snapshot())
+        rendered = first.as_dict()
+        self.assertEqual(
+            rendered["currentProductionConfigSha256"],
+            deploy.sha256_file(self.fixture.production_env),
+        )
+        self.assertEqual(
+            rendered["targetProductionConfigSha256"],
+            deploy.sha256_file(self.fixture.target_production_env),
+        )
+        self.assertTrue(rendered["productionConfigChange"])
+        self.assertEqual(rendered["changedConfigKeys"], [])
+        self.assertEqual(
+            first.target_manifest["productionConfig"]["path"],
+            str(self.fixture.production_env),
+        )
+        self.assertEqual(
+            rendered["targetManifestSha256"],
+            deploy.hashlib.sha256(
+                deploy.operational_manifest_bytes(first.target_manifest)
+            ).hexdigest(),
+        )
+        rendered_text = json.dumps(rendered, sort_keys=True)
+        for value in deploy.parse_env_bytes(
+            self.fixture.target_production_env.read_bytes()
+        ).values():
+            if len(value) >= 6:
+                self.assertNotIn(value, rendered_text)
+
+    def test_target_validation_rejects_content_and_unsafe_metadata(self):
+        historical = deploy.parse_env_bytes(production_env_bytes())
+        cases = {
+            "partial": production_env_bytes(),
+            "invalid-flag": production_env_bytes(
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "1",
+                    "AUTH_EMAIL_FROM": "auth@example.com",
+                }
+            ),
+            "invalid-disabled-sender": production_env_bytes(
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                    "AUTH_EMAIL_FROM": "not-an-email",
+                }
+            ),
+            "crlf": production_env_bytes(
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                    "AUTH_EMAIL_FROM": "",
+                }
+            ).replace(b"\n", b"\r\n"),
+            "no-final-newline": production_env_bytes(
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                    "AUTH_EMAIL_FROM": "",
+                }
+            ).rstrip(b"\n"),
+            "invalid-utf8": b"APP_NAME=\xff\n",
+        }
+        self.assertEqual(set(historical), deploy.PRODUCTION_ENV_KEYS_BEFORE_AUTH_WIRING)
+        for name, payload in cases.items():
+            with self.subTest(name=name):
+                self.fixture.target_production_env.write_bytes(payload)
+                chmod(self.fixture.target_production_env, 0o600)
+                with self.assertRaises(deploy.DeployStop):
+                    self.fixture.plan(with_target_config=True)
+
+        self.fixture.target_production_env.write_bytes(
+            production_env_bytes(
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                    "AUTH_EMAIL_FROM": "",
+                }
+            )
+        )
+        chmod(self.fixture.target_production_env, 0o600)
+        if os.name != "nt":
+            chmod(self.fixture.target_production_env, 0o644)
+            with self.assertRaisesRegex(
+                deploy.DeployStop,
+                "TARGET_PRODUCTION_ENV_METADATA_DIVERGED",
+            ):
+                self.fixture.plan(with_target_config=True)
+            chmod(self.fixture.target_production_env, 0o600)
+        linked = self.fixture.parent / "target-hardlink.env"
+        os.link(self.fixture.target_production_env, linked)
+        try:
+            with self.assertRaisesRegex(
+                deploy.DeployStop,
+                "TARGET_PRODUCTION_ENV_METADATA_DIVERGED",
+            ):
+                self.fixture.plan(with_target_config=True)
+        finally:
+            linked.unlink()
+        with self.assertRaisesRegex(
+            deploy.DeployStop,
+            "TARGET_PRODUCTION_ENV_PATH_NOT_ABSOLUTE",
+        ):
+            deploy.validate_target_production_env(
+                Path("relative-production.env"),
+                policy=self.fixture.policy,
+            )
+        if os.name != "nt":
+            symlink = self.fixture.parent / "target-symlink.env"
+            os.symlink(self.fixture.target_production_env, symlink)
+            try:
+                with self.assertRaisesRegex(
+                    deploy.DeployStop,
+                    "TARGET_PRODUCTION_ENV_METADATA_DIVERGED",
+                ):
+                    deploy.validate_target_production_env(
+                        symlink,
+                        policy=self.fixture.policy,
+                    )
+            finally:
+                symlink.unlink()
+
+    def test_authorization_binds_run_sources_configs_plan_and_file_identities(self):
+        plan = self.fixture.plan(with_target_config=True)
+        authorized = self.fixture.authorization(plan, with_target_config=True)
+        self.assertNotEqual(
+            authorized,
+            deploy.operational_install_authorization(plan, "fedcba9876543210"),
+        )
+        mutations = (
+            deploy.dataclasses.replace(plan, current_source_sha="d" * 40),
+            deploy.dataclasses.replace(plan, target_source_sha="e" * 40),
+            deploy.dataclasses.replace(plan, current_config_sha256="1" * 64),
+            deploy.dataclasses.replace(plan, target_config_sha256="2" * 64),
+            deploy.dataclasses.replace(plan, changed_config_keys=("APP_NAME",)),
+            deploy.dataclasses.replace(
+                plan,
+                changed=(
+                    deploy.OperationalFileIdentity("other.txt", "3" * 64, "0600"),
+                ),
+            ),
+        )
+        for changed in mutations:
+            with self.subTest(plan=changed):
+                self.assertNotEqual(
+                    authorized,
+                    deploy.operational_install_authorization(
+                        changed,
+                        self.fixture.run_id,
+                    ),
+                )
+        parts = authorized.split(":")
+        self.assertEqual(parts[3], plan.current_config_sha256)
+        self.assertEqual(parts[4], plan.target_config_sha256)
+        for entry in plan.changed:
+            self.assertIn(f"{entry.path}={entry.sha256}@{entry.mode}", authorized)
+
+    def test_combined_transaction_uses_one_lock_and_commits_manifest_last(self):
+        plan = self.fixture.plan(with_target_config=True)
+        events = []
+
+        def record(stage, path):
+            events.append((stage, path))
+
+        acquisitions = []
+
+        class CountedLock:
+            def __init__(self, path, policy):
+                self.path = path
+
+            def __enter__(self):
+                acquisitions.append(self.path)
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        stable_before = self.fixture.snapshot()["stable.txt"]
+        with (
+            mock.patch.object(deploy, "DeploymentLock", CountedLock),
+            mock.patch.object(deploy, "probe_deployment_lock"),
+        ):
+            result = deploy.install_operational_bytes(
+                self.fixture.source,
+                self.fixture.paths,
+                run_id=self.fixture.run_id,
+                current_source_sha=self.fixture.current_source_sha,
+                target_source_sha=self.fixture.target_source_sha,
+                authorization=self.fixture.authorization(
+                    plan,
+                    with_target_config=True,
+                ),
+                runner=self.fixture.runner,
+                policy=self.fixture.policy,
+                files=self.fixture.files,
+                hook=record,
+                target_production_env=self.fixture.target_production_env,
+            )
+        self.assertEqual(result["result"], "INSTALLED")
+        self.assertEqual(result["mutationCount"], 4)
+        self.assertEqual(acquisitions, [self.fixture.paths.lock])
+        config_replace = next(
+            index for index, event in enumerate(events) if event[0] == "config:after_replace"
+        )
+        file_replaces = [
+            index for index, event in enumerate(events) if event[0] == "install:after_replace"
+        ]
+        manifest_replace = next(
+            index for index, event in enumerate(events) if event[0] == "manifest:after_replace"
+        )
+        self.assertLess(config_replace, min(file_replaces))
+        self.assertLess(max(file_replaces), manifest_replace)
+        self.assertEqual(
+            self.fixture.production_env.read_bytes(),
+            self.fixture.target_production_env.read_bytes(),
+        )
+        if os.name != "nt":
+            self.assertEqual(
+                stat.S_IMODE(self.fixture.production_env.stat().st_mode),
+                0o600,
+            )
+        self.assertEqual(stable_before, self.fixture.snapshot()["stable.txt"])
+        self.fixture.verify_target()
+
+    def test_config_only_operational_only_and_noop(self):
+        config_only = OperationalInstallerFixture()
+        operational_only = OperationalInstallerFixture()
+        try:
+            for relative in config_only.files:
+                shutil.copyfile(
+                    config_only.source / relative,
+                    config_only.deploy_root / relative,
+                )
+                chmod(config_only.deploy_root / relative, 0o644)
+            current_manifest = deploy._operational_manifest_payload(
+                config_only.deploy_root,
+                config_only.production_env,
+                config_only.current_source_sha,
+                files=config_only.files,
+            )
+            config_only.manifest.write_bytes(
+                deploy.operational_manifest_bytes(current_manifest)
+            )
+            chmod(config_only.manifest, 0o600)
+            config_plan = config_only.plan(with_target_config=True)
+            self.assertEqual(config_plan.changed, ())
+            self.assertTrue(config_plan.production_config_change)
+            self.assertEqual(
+                config_only.install(with_target_config=True)["result"],
+                "INSTALLED",
+            )
+
+            operational_only.production_env.write_bytes(
+                operational_only.target_production_env.read_bytes()
+            )
+            chmod(operational_only.production_env, 0o600)
+            current_manifest = deploy._operational_manifest_payload(
+                operational_only.deploy_root,
+                operational_only.production_env,
+                operational_only.current_source_sha,
+                files=operational_only.files,
+            )
+            operational_only.manifest.write_bytes(
+                deploy.operational_manifest_bytes(current_manifest)
+            )
+            chmod(operational_only.manifest, 0o600)
+            operational_plan = operational_only.plan(with_target_config=True)
+            self.assertFalse(operational_plan.production_config_change)
+            self.assertTrue(operational_plan.changed)
+            self.assertEqual(
+                operational_only.install(with_target_config=True)["result"],
+                "INSTALLED",
+            )
+
+            noop_plan = deploy.build_operational_install_plan(
+                operational_only.source,
+                operational_only.paths,
+                operational_only.target_source_sha,
+                operational_only.target_source_sha,
+                operational_only.runner,
+                policy=operational_only.policy,
+                files=operational_only.files,
+                probe_lock=False,
+                target_production_env=operational_only.target_production_env,
+            )
+            before = operational_only.snapshot()
+            acquisitions = []
+
+            class CountedLock:
+                def __init__(self, path, policy):
+                    self.path = path
+
+                def __enter__(self):
+                    acquisitions.append(self.path)
+                    return self
+
+                def __exit__(self, *_args):
+                    return False
+
+            with mock.patch.object(deploy, "DeploymentLock", CountedLock):
+                noop = deploy.install_operational_bytes(
+                    operational_only.source,
+                    operational_only.paths,
+                    run_id=operational_only.run_id,
+                    current_source_sha=operational_only.target_source_sha,
+                    target_source_sha=operational_only.target_source_sha,
+                    authorization=deploy.operational_install_authorization(
+                        noop_plan,
+                        operational_only.run_id,
+                    ),
+                    runner=operational_only.runner,
+                    policy=operational_only.policy,
+                    files=operational_only.files,
+                    target_production_env=operational_only.target_production_env,
+                )
+            self.assertEqual(noop["result"], "ALREADY_INSTALLED")
+            self.assertEqual(noop["mutationCount"], 0)
+            self.assertEqual(acquisitions, [operational_only.paths.lock])
+            self.assertEqual(before, operational_only.snapshot())
+        finally:
+            config_only.close()
+            operational_only.close()
+
+    def test_target_drift_before_and_inside_lock_stops_without_destination_mutation(self):
+        plan = self.fixture.plan(with_target_config=True)
+        authorization = self.fixture.authorization(plan, with_target_config=True)
+        before = self.destination_snapshot()
+        changed = production_env_bytes(
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                "AUTH_EMAIL_FROM": "auth@example.com",
+            }
+        )
+        self.fixture.target_production_env.write_bytes(changed)
+        chmod(self.fixture.target_production_env, 0o600)
+        with self.assertRaisesRegex(
+            deploy.DeployStop,
+            "OPERATIONAL_INSTALL_NOT_AUTHORIZED",
+        ):
+            self.fixture.install(
+                authorization=authorization,
+                with_target_config=True,
+            )
+        self.assertEqual(before, self.destination_snapshot())
+
+        fixture = OperationalInstallerFixture()
+        try:
+            before = fixture.snapshot()
+
+            def drift(stage, _path):
+                if stage == "stage-manifest:after_replace":
+                    fixture.target_production_env.write_bytes(changed)
+                    chmod(fixture.target_production_env, 0o600)
+
+            result = fixture.install(hook=drift, with_target_config=True)
+            self.assertEqual(
+                result["result"],
+                "CONFIG_OPERATIONAL_INSTALL_FAILED_ROLLED_BACK",
+            )
+            self.assertEqual(
+                result["failureReasonCode"],
+                "OPERATIONAL_INSTALL_PLAN_DIVERGED",
+            )
+            self.assertEqual(before, fixture.snapshot())
+            fixture.verify_current()
+        finally:
+            fixture.close()
+
+    def test_current_config_drift_after_plan_stops_before_mutation(self):
+        plan = self.fixture.plan(with_target_config=True)
+        authorization = self.fixture.authorization(plan, with_target_config=True)
+        before_files = self.fixture.snapshot()
+        self.fixture.production_env.write_bytes(
+            production_env_bytes(
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                    "AUTH_EMAIL_FROM": "auth@example.com",
+                }
+            )
+        )
+        chmod(self.fixture.production_env, 0o600)
+        with self.assertRaisesRegex(deploy.DeployStop, "PRODUCTION_ENV_HASH_DIVERGED"):
+            self.fixture.install(
+                authorization=authorization,
+                with_target_config=True,
+            )
+        self.assertEqual(before_files, self.fixture.snapshot())
+
+    def test_filesystem_proof_includes_config_and_rollback_keeps_lock_held(self):
+        filesystem_calls = []
+
+        def prove(*paths):
+            filesystem_calls.append(paths)
+            return True
+
+        with mock.patch.object(deploy, "prove_same_filesystem", side_effect=prove):
+            self.fixture.plan(with_target_config=True)
+        self.assertIn(self.fixture.paths.production_env.parent, filesystem_calls[0])
+
+        active = False
+        acquisitions = 0
+        rollback_observations = []
+
+        class ObservedLock:
+            def __init__(self, _path, _policy):
+                pass
+
+            def __enter__(self):
+                nonlocal active, acquisitions
+                acquisitions += 1
+                active = True
+                return self
+
+            def __exit__(self, *_args):
+                nonlocal active
+                active = False
+
+        def fail_install(stage, path):
+            if stage == "install:after_replace" and path.name == "one.txt":
+                raise RuntimeError("install")
+
+        def observe_rollback(stage, _path):
+            if stage.startswith("rollback"):
+                rollback_observations.append(active)
+
+        plan = self.fixture.plan(with_target_config=True)
+        with (
+            mock.patch.object(deploy, "DeploymentLock", ObservedLock),
+            mock.patch.object(deploy, "probe_deployment_lock"),
+            mock.patch.object(deploy, "prove_same_filesystem", side_effect=prove),
+        ):
+            result = deploy.install_operational_bytes(
+                self.fixture.source,
+                self.fixture.paths,
+                run_id=self.fixture.run_id,
+                current_source_sha=self.fixture.current_source_sha,
+                target_source_sha=self.fixture.target_source_sha,
+                authorization=self.fixture.authorization(
+                    plan,
+                    with_target_config=True,
+                ),
+                runner=self.fixture.runner,
+                policy=self.fixture.policy,
+                files=self.fixture.files,
+                hook=fail_install,
+                rollback_hook=observe_rollback,
+                target_production_env=self.fixture.target_production_env,
+            )
+        self.assertEqual(
+            result["result"],
+            "CONFIG_OPERATIONAL_INSTALL_FAILED_ROLLED_BACK",
+        )
+        self.assertEqual(acquisitions, 1)
+        self.assertTrue(rollback_observations)
+        self.assertTrue(all(rollback_observations))
+        self.assertFalse(active)
+        install_proof = filesystem_calls[-1]
+        self.assertIn(self.fixture.paths.production_env.parent, install_proof)
+        self.assertTrue(
+            any(path.name.startswith(".operational-install-") for path in install_proof)
+        )
+        self.assertTrue(
+            any(path.name.startswith(".operational-backup-") for path in install_proof)
+        )
+
+    def test_failure_boundaries_restore_joint_generation_and_preserve_first_cause(self):
+        scenarios = (
+            ("config-before", "config:before_write", "production.env"),
+            ("config-write", "config:after_write", "production.env"),
+            ("config-after", "config:after_replace", "production.env"),
+            ("first-file", "install:before_write", "one.txt"),
+            ("middle-file", "install:after_replace", "one.txt"),
+            ("before-manifest", "before_manifest_install", "operational-integrity.json"),
+            ("manifest", "manifest:after_replace", "operational-integrity.json"),
+            ("after-manifest", "after_manifest_install", "operational-integrity.json"),
+            ("cleanup", "before_cleanup", ".operational-backup-0123456789abcdef"),
+        )
+        for name, fault_stage, filename in scenarios:
+            with self.subTest(name=name):
+                fixture = OperationalInstallerFixture()
+                try:
+                    before_config = fixture.production_env.read_bytes()
+                    before_files = fixture.snapshot()
+
+                    def fail(stage, path):
+                        if stage == fault_stage and path.name == filename:
+                            raise RuntimeError(name)
+
+                    result = fixture.install(hook=fail, with_target_config=True)
+                    self.assertEqual(
+                        result["result"],
+                        "CONFIG_OPERATIONAL_INSTALL_FAILED_ROLLED_BACK",
+                    )
+                    self.assertEqual(
+                        result["failureReasonCode"],
+                        "UNEXPECTED_OPERATIONAL_INSTALL_FAILURE",
+                    )
+                    self.assertEqual(before_config, fixture.production_env.read_bytes())
+                    self.assertEqual(
+                        {path: data[0] for path, data in before_files.items()},
+                        {path: data[0] for path, data in fixture.snapshot().items()},
+                    )
+                    fixture.verify_current()
+                finally:
+                    fixture.close()
+
+    def test_rollback_failures_leave_fail_closed_and_transients(self):
+        scenarios = (
+            ("config", "rollback-config:before_write", "production.env"),
+            ("operational", "rollback:before_write", "one.txt"),
+            ("manifest", "rollback-manifest:before_write", "operational-integrity.json"),
+        )
+        for name, rollback_stage, filename in scenarios:
+            with self.subTest(name=name):
+                fixture = OperationalInstallerFixture()
+                try:
+                    def fail_install(stage, path):
+                        if stage == "install:after_replace" and path.name == "one.txt":
+                            raise RuntimeError("first-cause")
+
+                    def fail_rollback(stage, path):
+                        if stage == rollback_stage and path.name == filename:
+                            raise RuntimeError(name)
+
+                    result = fixture.install(
+                        hook=fail_install,
+                        rollback_hook=fail_rollback,
+                        with_target_config=True,
+                    )
+                    self.assertEqual(
+                        result["result"],
+                        "CONFIG_OPERATIONAL_INSTALL_FAILED_FAIL_CLOSED",
+                    )
+                    self.assertEqual(
+                        result["failureReasonCode"],
+                        "UNEXPECTED_OPERATIONAL_INSTALL_FAILURE",
+                    )
+                    self.assertEqual(
+                        fixture.manifest.read_bytes(),
+                        deploy._fail_closed_manifest_bytes(),
+                    )
+                    self.assertTrue(
+                        (
+                            fixture.parent
+                            / f".operational-install-{fixture.run_id}"
+                        ).exists()
+                    )
+                    self.assertTrue(
+                        (
+                            fixture.parent
+                            / f".operational-backup-{fixture.run_id}"
+                        ).exists()
+                    )
+                finally:
+                    fixture.close()
+
+    def test_crash_states_accept_only_old_or_new_complete_generation(self):
+        plan = self.fixture.plan(with_target_config=True)
+        self.fixture.verify_current()
+        self.fixture.production_env.write_bytes(
+            self.fixture.target_production_env.read_bytes()
+        )
+        chmod(self.fixture.production_env, 0o600)
+        with self.assertRaisesRegex(deploy.DeployStop, "PRODUCTION_ENV_HASH_DIVERGED"):
+            self.fixture.verify_current()
+        for entry in plan.changed:
+            shutil.copyfile(
+                self.fixture.source / entry.path,
+                self.fixture.deploy_root / entry.path,
+            )
+            chmod(self.fixture.deploy_root / entry.path, int(entry.mode, 8))
+            with self.assertRaises(deploy.DeployStop):
+                self.fixture.verify_current()
+        self.fixture.manifest.write_bytes(
+            deploy.operational_manifest_bytes(plan.target_manifest)
+        )
+        chmod(self.fixture.manifest, 0o600)
+        self.fixture.verify_target()
+        self.fixture.manifest.write_bytes(deploy._fail_closed_manifest_bytes())
+        chmod(self.fixture.manifest, 0o600)
+        with self.assertRaises(deploy.DeployStop):
+            self.fixture.verify_target()
+
+    def test_manifest_command_allows_bootstrap_but_blocks_canonical_reconciliation(self):
+        args = types.SimpleNamespace(
+            source_root=self.fixture.source,
+            production_env=self.fixture.production_env,
+            operational_source_sha=self.fixture.target_source_sha,
+            output=self.fixture.manifest,
+            uid=self.fixture.policy.uid,
+            gid=self.fixture.policy.gid,
+        )
+        alias = self.fixture.deploy_root / ".." / "deploy" / self.fixture.manifest.name
+        args.output = alias
+        with mock.patch.object(deploy, "INTEGRITY_MANIFEST", self.fixture.manifest):
+            with self.assertRaisesRegex(
+                deploy.DeployStop,
+                "MANIFEST_RECONCILIATION_REQUIRES_TRANSACTION",
+            ):
+                deploy.write_manifest_command(args)
+
+        bootstrap = self.fixture.parent / "bootstrap" / "operational-integrity.json"
+        bootstrap.parent.mkdir(mode=0o700)
+        args.output = bootstrap
+        payload = deploy._operational_manifest_payload(
+            self.fixture.source,
+            self.fixture.production_env,
+            self.fixture.target_source_sha,
+            files=self.fixture.files,
+        )
+        with (
+            mock.patch.object(deploy, "INTEGRITY_MANIFEST", bootstrap),
+            mock.patch.object(deploy, "build_operational_manifest", return_value=payload),
+        ):
+            self.assertEqual(deploy.write_manifest_command(args), 0)
+        self.assertEqual(
+            bootstrap.read_bytes(),
+            deploy.operational_manifest_bytes(payload),
+        )
+
+    def test_parser_exposes_target_config_without_lock_bypasses(self):
+        parser = deploy.build_parser()
+        for command in ("prepare-operational", "install-operational"):
+            argv = [
+                command,
+                "--source-root",
+                str(self.fixture.source),
+                "--current-operational-source-sha",
+                self.fixture.current_source_sha,
+                "--operational-source-sha",
+                self.fixture.target_source_sha,
+                "--target-production-env",
+                str(self.fixture.target_production_env),
+            ]
+            if command == "install-operational":
+                argv.extend(
+                    [
+                        "--run-id",
+                        self.fixture.run_id,
+                        "--authorization",
+                        self.fixture.authorization(with_target_config=True),
+                    ]
+                )
+            parsed = parser.parse_args(argv)
+            self.assertEqual(parsed.target_production_env, self.fixture.target_production_env)
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("--skip-lock", source)
+        self.assertNotIn("--already-locked", source)
 
 
 class PointerAndEnvironmentTests(unittest.TestCase):
