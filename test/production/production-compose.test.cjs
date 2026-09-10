@@ -82,10 +82,15 @@ test('renders auth runtime configuration only from the canonical env file', () =
     AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED:
       process.env.AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED,
     AUTH_EMAIL_FROM: process.env.AUTH_EMAIL_FROM,
+    AUTH_GOOGLE_PUBLIC_FLOW_ENABLED:
+      process.env.AUTH_GOOGLE_PUBLIC_FLOW_ENABLED,
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
   };
   process.env.AUTH_OTP_PUBLIC_FLOWS_ENABLED = 'true';
   process.env.AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED = 'true';
   process.env.AUTH_EMAIL_FROM = 'attacker@example.com';
+  process.env.AUTH_GOOGLE_PUBLIC_FLOW_ENABLED = 'true';
+  process.env.GOOGLE_CLIENT_ID = 'attacker.apps.googleusercontent.com';
   try {
     withProductionEnv(`${historical}\n`, (envFile) => {
       const historicalLoaded = loadMode('base', undefined, { envFile });
@@ -93,6 +98,15 @@ test('renders auth runtime configuration only from the canonical env file', () =
         historicalLoaded.config.services.api.environment
           .AUTH_OTP_PUBLIC_FLOWS_ENABLED,
         'false',
+      );
+      assert.equal(
+        historicalLoaded.config.services.api.environment
+          .AUTH_GOOGLE_PUBLIC_FLOW_ENABLED,
+        'false',
+      );
+      assert.equal(
+        historicalLoaded.config.services.api.environment.GOOGLE_CLIENT_ID,
+        '',
       );
       assert.equal(
         historicalLoaded.config.services.api.environment.AUTH_EMAIL_FROM,
@@ -168,6 +182,42 @@ test('renders auth runtime configuration only from the canonical env file', () =
       );
     }
   });
+
+  const googleEnabled = targetEnabled
+    .replace(
+      'AUTH_GOOGLE_PUBLIC_FLOW_ENABLED=false',
+      'AUTH_GOOGLE_PUBLIC_FLOW_ENABLED=true',
+    )
+    .replace(
+      'GOOGLE_CLIENT_ID=',
+      'GOOGLE_CLIENT_ID=public.apps.googleusercontent.com',
+    );
+  withProductionEnv(googleEnabled, (envFile) => {
+    const targetLoaded = loadMode('base', undefined, { envFile });
+    assert.equal(
+      targetLoaded.status,
+      'passed',
+      targetLoaded.failures.join('\n'),
+    );
+    assert.equal(
+      targetLoaded.config.services.api.environment
+        .AUTH_GOOGLE_PUBLIC_FLOW_ENABLED,
+      'true',
+    );
+    assert.equal(
+      targetLoaded.config.services.api.environment.GOOGLE_CLIENT_ID,
+      'public.apps.googleusercontent.com',
+    );
+    for (const service of ['migrate', 'postgres', 'traefik']) {
+      assert.equal(
+        Object.hasOwn(
+          targetLoaded.config.services[service].environment ?? {},
+          'GOOGLE_CLIENT_ID',
+        ),
+        false,
+      );
+    }
+  });
 });
 
 test('rejects invalid auth flag renders and preserves canonical interpolation', () => {
@@ -184,6 +234,14 @@ test('rejects invalid auth flag renders and preserves canonical interpolation', 
       .AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED,
     '${AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED:-false}',
   );
+  assert.equal(
+    loaded.rawConfig.services.api.environment.AUTH_GOOGLE_PUBLIC_FLOW_ENABLED,
+    '${AUTH_GOOGLE_PUBLIC_FLOW_ENABLED:-false}',
+  );
+  assert.equal(
+    loaded.rawConfig.services.api.environment.GOOGLE_CLIENT_ID,
+    '${GOOGLE_CLIENT_ID:-}',
+  );
   const invalid = structuredClone(loaded.config);
   invalid.services.api.environment.AUTH_OTP_PUBLIC_FLOWS_ENABLED = '1';
   assert.equal(
@@ -195,6 +253,17 @@ test('rejects invalid auth flag renders and preserves canonical interpolation', 
     '1';
   assert.equal(
     validateProductionCompose(invalidReset, loaded.rawConfig).status,
+    'failed',
+  );
+  const googleWithoutOtp = structuredClone(loaded.config);
+  googleWithoutOtp.services.api.environment.AUTH_GOOGLE_PUBLIC_FLOW_ENABLED =
+    'true';
+  googleWithoutOtp.services.api.environment.GOOGLE_CLIENT_ID =
+    'public.apps.googleusercontent.com';
+  googleWithoutOtp.services.api.environment.AUTH_OTP_PUBLIC_FLOWS_ENABLED =
+    'false';
+  assert.equal(
+    validateProductionCompose(googleWithoutOtp, loaded.rawConfig).status,
     'failed',
   );
 });

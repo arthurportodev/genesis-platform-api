@@ -44,7 +44,10 @@ describe('custom pipelines database foundation', () => {
   let migrationRunner: QueryRunner;
 
   beforeAll(async () => {
-    owner = createIntegrationDataSource({ includePasswordReset: true });
+    owner = createIntegrationDataSource({
+      includePasswordReset: true,
+      includeGoogleIdentity: true,
+    });
     await owner.initialize();
     await prepareIntegrationRuntimeRole(owner);
     await owner.dropDatabase();

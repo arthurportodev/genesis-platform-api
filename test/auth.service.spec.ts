@@ -5,6 +5,7 @@ import { LoginRateLimiter } from '../src/modules/auth/services/login-rate-limite
 import { PasswordService } from '../src/modules/auth/services/password.service';
 import { TokenService } from '../src/modules/auth/services/token.service';
 import { PublicAuthService } from '../src/modules/auth/services/public-auth.service';
+import { GenesisSessionIssuer } from '../src/modules/auth/services/genesis-session-issuer.service';
 import { User } from '../src/modules/users/entities/user.entity';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
 
@@ -49,6 +50,7 @@ describe('AuthService', () => {
     auditService,
     rateLimiter,
     publicAuth,
+    {} as GenesisSessionIssuer,
   );
   const context = { ipAddress: '127.0.0.1', userAgent: 'test-agent' };
   const credentials = { email: 'user@example.com', password: 'not-disclosed' };

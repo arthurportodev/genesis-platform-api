@@ -3,6 +3,7 @@ import { AuthService } from '../src/modules/auth/auth.service';
 import { AuthAuditService } from '../src/modules/auth/services/auth-audit.service';
 import { LoginRateLimiter } from '../src/modules/auth/services/login-rate-limiter.port';
 import { PublicAuthService } from '../src/modules/auth/services/public-auth.service';
+import { GenesisSessionIssuer } from '../src/modules/auth/services/genesis-session-issuer.service';
 import { TokenService } from '../src/modules/auth/services/token.service';
 import { PasswordLoginVerifier } from '../src/modules/credentials/ports/password-login-verifier.port';
 import { User } from '../src/modules/users/entities/user.entity';
@@ -75,6 +76,7 @@ describe('login versus password-reset credential race', () => {
       audit,
       rateLimiter,
       {} as PublicAuthService,
+      {} as GenesisSessionIssuer,
     );
 
     await expect(

@@ -1,8 +1,10 @@
 import Joi from 'joi';
 import { authOtpEnvironmentFields } from './auth-otp.config';
+import { authGoogleEnvironmentFields } from './auth-google.config';
 
 export const environmentValidationSchema = Joi.object({
   ...authOtpEnvironmentFields,
+  ...authGoogleEnvironmentFields,
   NODE_ENV: Joi.string()
     .valid('development', 'test', 'production')
     .default('development'),

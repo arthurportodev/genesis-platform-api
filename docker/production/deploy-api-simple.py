@@ -95,6 +95,8 @@ PRODUCTION_ENV_KEYS = frozenset(
         "AUTH_OTP_PUBLIC_FLOWS_ENABLED",
         "AUTH_EMAIL_FROM",
         "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED",
+        "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED",
+        "GOOGLE_CLIENT_ID",
         "LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION",
         "API_CPUS",
         "API_MEMORY_LIMIT",
@@ -116,18 +118,24 @@ TRANSITIONAL_PRODUCTION_ENV_DEFAULTS = {
     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
     "AUTH_EMAIL_FROM": "",
     "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
+    "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "false",
+    "GOOGLE_CLIENT_ID": "",
 }
 TRANSITIONAL_PRODUCTION_ENV_KEYS = frozenset(TRANSITIONAL_PRODUCTION_ENV_DEFAULTS)
 PRODUCTION_ENV_KEYS_BEFORE_AUTH_WIRING = PRODUCTION_ENV_KEYS - TRANSITIONAL_PRODUCTION_ENV_KEYS
 PRODUCTION_ENV_KEYS_AUTH_V2_02 = PRODUCTION_ENV_KEYS - frozenset(
-    {"AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED"}
+    {"AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED", "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED", "GOOGLE_CLIENT_ID"}
+)
+PRODUCTION_ENV_KEYS_AUTH_V2_03 = PRODUCTION_ENV_KEYS - frozenset(
+    {"AUTH_GOOGLE_PUBLIC_FLOW_ENABLED", "GOOGLE_CLIENT_ID"}
 )
 SUPPORTED_PRODUCTION_ENV_KEY_SHAPES = (
     PRODUCTION_ENV_KEYS_BEFORE_AUTH_WIRING,
     PRODUCTION_ENV_KEYS_AUTH_V2_02,
+    PRODUCTION_ENV_KEYS_AUTH_V2_03,
     PRODUCTION_ENV_KEYS,
 )
-EMPTY_PRODUCTION_ENV_KEYS = frozenset({"AUTH_EMAIL_FROM"})
+EMPTY_PRODUCTION_ENV_KEYS = frozenset({"AUTH_EMAIL_FROM", "GOOGLE_CLIENT_ID"})
 EMAIL_ADDRESS_PATTERN = r"[^<>\s@]+@[^<>\s@]+(?:\.[^<>\s@]+)+"
 EMAIL_FROM_PATTERN = re.compile(
     rf"(?:{EMAIL_ADDRESS_PATTERN}|[^<>\r\n]+\s+<{EMAIL_ADDRESS_PATTERN}>)"
@@ -361,12 +369,24 @@ def validate_production_values(values: Mapping[str, str]) -> dict[str, str]:
     password_reset_public_flow = normalized[
         "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED"
     ]
+    google_public_flow = normalized["AUTH_GOOGLE_PUBLIC_FLOW_ENABLED"]
+    google_client_id = normalized["GOOGLE_CLIENT_ID"]
     email_from = normalized["AUTH_EMAIL_FROM"]
     require(public_flows in {"true", "false"}, "INVALID_PRODUCTION_ENV_VALUE")
     require(
         password_reset_public_flow in {"true", "false"},
         "INVALID_PRODUCTION_ENV_VALUE",
     )
+    require(google_public_flow in {"true", "false"}, "INVALID_PRODUCTION_ENV_VALUE")
+    require(
+        google_public_flow != "true" or (0 < len(google_client_id) <= 512),
+        "INVALID_PRODUCTION_ENV_VALUE",
+    )
+    require(
+        google_public_flow != "true" or public_flows == "true",
+        "INVALID_PRODUCTION_ENV_VALUE",
+    )
+    require("\r" not in google_client_id and "\n" not in google_client_id, "INVALID_PRODUCTION_ENV_VALUE")
     require(
         password_reset_public_flow != "true" or public_flows == "true",
         "INVALID_PRODUCTION_ENV_VALUE",

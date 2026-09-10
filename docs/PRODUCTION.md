@@ -531,13 +531,19 @@ não monta a configuração a partir de template e nunca imprime valores. O plan
 expõe somente os hashes atual/alvo, se a configuração muda e os nomes ordenados
 das chaves alteradas.
 
-O operador reconhece estritamente três gerações de `production.env`: o shape
-legacy anterior ao wiring público de OTP; o shape AUTH-V2-02, que acrescenta
+O operador reconhece estritamente as gerações versionadas de `production.env`:
+o shape legacy anterior ao wiring público de OTP; o shape AUTH-V2-02, que acrescenta
 `AUTH_OTP_PUBLIC_FLOWS_ENABLED` e `AUTH_EMAIL_FROM`; e o shape AUTH-V2-03, que
-acrescenta `AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED`. Chaves ausentes nos shapes
-históricos são normalizadas somente em memória para `false`, `""` e `false`,
-respectivamente; os bytes instalados não são reescritos. Configuração alvo exige
-sempre o shape AUTH-V2-03 completo. As flags aceitam somente `true` ou `false`, e
+acrescenta `AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED`; e o shape AUTH-V2-04, que
+acrescenta `AUTH_GOOGLE_PUBLIC_FLOW_ENABLED` e o `GOOGLE_CLIENT_ID` público.
+Google permanece desativado por padrão e o client ID pode ficar vazio enquanto
+o flag estiver `false`. Ativar Google exige também
+`AUTH_OTP_PUBLIC_FLOWS_ENABLED=true` e os pré-requisitos já existentes de entrega
+OTP, pois contas Google com e-mail externo continuam pela verificação Gênesis.
+Chaves ausentes nos shapes
+históricos são normalizadas somente em memória para seus defaults seguros; os
+bytes instalados não são reescritos. Configuração alvo exige sempre o shape
+AUTH-V2-04 completo. As flags aceitam somente `true` ou `false`, e
 password reset público em `true` exige OTP público em `true`.
 
 Uma autorização separada deve copiar exatamente a identidade retornada. No modo

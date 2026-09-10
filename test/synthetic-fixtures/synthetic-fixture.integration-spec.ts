@@ -32,6 +32,7 @@ import { AuthSession } from '../../src/modules/auth-sessions/entities/auth-sessi
 import { AuthAuditEventType } from '../../src/modules/auth-sessions/enums/auth-audit-event-type.enum';
 import { AuthService } from '../../src/modules/auth/auth.service';
 import { AuthAuditService } from '../../src/modules/auth/services/auth-audit.service';
+import { GenesisSessionIssuer } from '../../src/modules/auth/services/genesis-session-issuer.service';
 import { LoginRateLimiter } from '../../src/modules/auth/services/login-rate-limiter.port';
 import { TokenService } from '../../src/modules/auth/services/token.service';
 import { verifyPassword } from '../../src/modules/credentials/password-policy';
@@ -752,6 +753,7 @@ describe('Synthetic fixture tooling database integration', () => {
       auditService,
       rateLimiter,
       { continuationForLogin: jest.fn() } as never,
+      new GenesisSessionIssuer(tokenService, auditService),
     );
   }
 

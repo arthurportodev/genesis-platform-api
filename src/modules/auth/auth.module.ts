@@ -24,11 +24,25 @@ import { WebSessionService } from './services/web-session.service';
 import { PublicAuthService } from './services/public-auth.service';
 import { PasswordResetService } from './services/password-reset.service';
 import { InMemoryPasswordResetRateLimiter } from './services/in-memory-password-reset-rate-limiter.service';
+import { AuthIdentity } from './entities/auth-identity.entity';
+import { AuthGoogleChallenge } from './entities/auth-google-challenge.entity';
+import { GoogleAuthService } from './services/google-auth.service';
+import { GoogleChallengeService } from './services/google-challenge.service';
+import { GoogleIdentityVerifierService } from './services/google-identity-verifier.service';
+import { InMemoryGoogleAuthRateLimiter } from './services/in-memory-google-auth-rate-limiter.service';
+import { GenesisSessionIssuer } from './services/genesis-session-issuer.service';
+import { GOOGLE_IDENTITY_VERIFIER } from './ports/google-identity-verifier.port';
 
 @Module({
   imports: [
     JwtModule.register({}),
-    TypeOrmModule.forFeature([User, AuthSession, Membership]),
+    TypeOrmModule.forFeature([
+      User,
+      AuthSession,
+      Membership,
+      AuthIdentity,
+      AuthGoogleChallenge,
+    ]),
     AuthSessionsModule,
     AuthEmailChallengesModule,
     CredentialsModule,
@@ -50,6 +64,15 @@ import { InMemoryPasswordResetRateLimiter } from './services/in-memory-password-
     PasswordResetService,
     InMemoryRegistrationRateLimiter,
     InMemoryPasswordResetRateLimiter,
+    GoogleAuthService,
+    GoogleChallengeService,
+    InMemoryGoogleAuthRateLimiter,
+    GenesisSessionIssuer,
+    GoogleIdentityVerifierService,
+    {
+      provide: GOOGLE_IDENTITY_VERIFIER,
+      useExisting: GoogleIdentityVerifierService,
+    },
     {
       provide: LoginRateLimiter,
       useClass: InMemoryLoginRateLimiter,

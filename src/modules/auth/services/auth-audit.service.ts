@@ -16,14 +16,19 @@ export interface AuthAuditInput extends AuthRequestContext {
 }
 
 const SENSITIVE_METADATA_KEY =
-  /password|token|secret|hash|authorization|otp|code|grant/i;
+  /password|token|secret|hash|authorization|otp|code|grant|credential|nonce|challenge|subject|claims|email/i;
+const SAFE_SENSITIVE_METADATA_KEYS = new Set(['revokedRefreshCredentials']);
 
 export function sanitizeAuditMetadata(
   metadata: AuthAuditMetadata = {},
 ): AuthAuditMetadata {
   return Object.fromEntries(
     Object.entries(metadata)
-      .filter(([key]) => !SENSITIVE_METADATA_KEY.test(key))
+      .filter(
+        ([key]) =>
+          SAFE_SENSITIVE_METADATA_KEYS.has(key) ||
+          !SENSITIVE_METADATA_KEY.test(key),
+      )
       .map(([key, value]) => [
         key,
         typeof value === 'string' ? value.slice(0, 256) : value,

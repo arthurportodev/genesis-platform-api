@@ -8,6 +8,9 @@ import { ManageMembershipOwnership1785260400000 } from '../../src/database/migra
 import { CreateAuthEmailChallenges1788900000000 } from '../../src/database/migrations/1788900000000-CreateAuthEmailChallenges';
 import { DeliverPublicEmailVerification1788986400000 } from '../../src/database/migrations/1788986400000-DeliverPublicEmailVerification';
 import { DeliverPasswordReset1789072800000 } from '../../src/database/migrations/1789072800000-DeliverPasswordReset';
+import { DeliverGoogleIdentity1789159200000 } from '../../src/database/migrations/1789159200000-DeliverGoogleIdentity';
+import { AuthIdentity } from '../../src/modules/auth/entities/auth-identity.entity';
+import { AuthGoogleChallenge } from '../../src/modules/auth/entities/auth-google-challenge.entity';
 import { createBasePostgresOptions } from '../../src/database/typeorm-base.options';
 import { AuthAuditLog } from '../../src/modules/auth-sessions/entities/auth-audit-log.entity';
 import { AuthRefreshToken } from '../../src/modules/auth-sessions/entities/auth-refresh-token.entity';
@@ -35,10 +38,15 @@ const integrationEntities = [
   OrganizationCommandIdempotency,
   OrganizationAuditLog,
   AuthEmailChallenge,
+  AuthIdentity,
+  AuthGoogleChallenge,
 ];
 
 export function createIntegrationDataSource(
-  options: { includePasswordReset?: boolean } = {},
+  options: {
+    includePasswordReset?: boolean;
+    includeGoogleIdentity?: boolean;
+  } = {},
 ): DataSource {
   process.env.DATABASE_RUNTIME_ROLE ??= 'genesis_runtime_test';
   const databaseName =
@@ -70,6 +78,9 @@ export function createIntegrationDataSource(
       DeliverPublicEmailVerification1788986400000,
       ...(options.includePasswordReset
         ? [DeliverPasswordReset1789072800000]
+        : []),
+      ...(options.includeGoogleIdentity
+        ? [DeliverGoogleIdentity1789159200000]
         : []),
     ],
     migrationsTableName: 'migrations',
