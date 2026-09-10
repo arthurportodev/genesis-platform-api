@@ -73,14 +73,18 @@ test('renders auth runtime configuration only from the canonical env file', () =
     .filter(
       (line) =>
         !line.startsWith('AUTH_OTP_PUBLIC_FLOWS_ENABLED=') &&
+        !line.startsWith('AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED=') &&
         !line.startsWith('AUTH_EMAIL_FROM='),
     )
     .join('\n');
   const inherited = {
     AUTH_OTP_PUBLIC_FLOWS_ENABLED: process.env.AUTH_OTP_PUBLIC_FLOWS_ENABLED,
+    AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED:
+      process.env.AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED,
     AUTH_EMAIL_FROM: process.env.AUTH_EMAIL_FROM,
   };
   process.env.AUTH_OTP_PUBLIC_FLOWS_ENABLED = 'true';
+  process.env.AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED = 'true';
   process.env.AUTH_EMAIL_FROM = 'attacker@example.com';
   try {
     withProductionEnv(`${historical}\n`, (envFile) => {
@@ -93,6 +97,11 @@ test('renders auth runtime configuration only from the canonical env file', () =
       assert.equal(
         historicalLoaded.config.services.api.environment.AUTH_EMAIL_FROM,
         '',
+      );
+      assert.equal(
+        historicalLoaded.config.services.api.environment
+          .AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED,
+        'false',
       );
     });
   } finally {
@@ -125,10 +134,39 @@ test('renders auth runtime configuration only from the canonical env file', () =
       'Genesis <auth@example.com>',
     );
     assert.equal(
+      enabledLoaded.config.services.api.environment
+        .AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED,
+      'false',
+    );
+    assert.equal(
       validateProductionCompose(enabledLoaded.config, enabledLoaded.rawConfig)
         .status,
       'passed',
     );
+  });
+
+  const targetEnabled = `${enabled}AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED=true\n`;
+  withProductionEnv(targetEnabled, (envFile) => {
+    const targetLoaded = loadMode('base', undefined, { envFile });
+    assert.equal(
+      targetLoaded.status,
+      'passed',
+      targetLoaded.failures.join('\n'),
+    );
+    assert.equal(
+      targetLoaded.config.services.api.environment
+        .AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED,
+      'true',
+    );
+    for (const service of ['migrate', 'postgres', 'traefik']) {
+      assert.equal(
+        Object.hasOwn(
+          targetLoaded.config.services[service].environment ?? {},
+          'AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED',
+        ),
+        false,
+      );
+    }
   });
 });
 
@@ -141,12 +179,35 @@ test('rejects invalid auth flag renders and preserves canonical interpolation', 
     loaded.rawConfig.services.api.environment.AUTH_EMAIL_FROM,
     '${AUTH_EMAIL_FROM:-}',
   );
+  assert.equal(
+    loaded.rawConfig.services.api.environment
+      .AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED,
+    '${AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED:-false}',
+  );
   const invalid = structuredClone(loaded.config);
   invalid.services.api.environment.AUTH_OTP_PUBLIC_FLOWS_ENABLED = '1';
   assert.equal(
     validateProductionCompose(invalid, loaded.rawConfig).status,
     'failed',
   );
+  const invalidReset = structuredClone(loaded.config);
+  invalidReset.services.api.environment.AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED =
+    '1';
+  assert.equal(
+    validateProductionCompose(invalidReset, loaded.rawConfig).status,
+    'failed',
+  );
+});
+
+test('does not add password-reset rate-limit tuning keys to Production', () => {
+  const source = readFileSync('compose.production.yml', 'utf8');
+  for (const key of [
+    'AUTH_PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS',
+    'AUTH_PASSWORD_RESET_IP_MAX_ATTEMPTS',
+    'AUTH_PASSWORD_RESET_EMAIL_IP_MAX_ATTEMPTS',
+  ]) {
+    assert.equal(source.includes(key), false);
+  }
 });
 
 test('pins every image by approved digest for linux/amd64', () => {

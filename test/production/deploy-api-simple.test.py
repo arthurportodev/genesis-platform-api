@@ -191,6 +191,7 @@ class OperationalInstallerFixture:
                 {
                     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
                     "AUTH_EMAIL_FROM": "",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
                 }
             )
         )
@@ -358,25 +359,48 @@ class ProductionEnvironmentContractTests(unittest.TestCase):
         self.assertEqual(set(normalized), deploy.PRODUCTION_ENV_KEYS)
         self.assertEqual(normalized["AUTH_OTP_PUBLIC_FLOWS_ENABLED"], "false")
         self.assertEqual(normalized["AUTH_EMAIL_FROM"], "")
+        self.assertEqual(
+            normalized["AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED"], "false"
+        )
 
-    def test_accepts_complete_disabled_and_enabled_auth_config(self):
-        for auth_values in (
-            {
-                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
-                "AUTH_EMAIL_FROM": "",
-            },
-            {
-                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
-                "AUTH_EMAIL_FROM": "auth@example.com",
-            },
-            {
-                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
-                "AUTH_EMAIL_FROM": "Genesis <auth@example.com>",
-            },
-        ):
-            with self.subTest(auth_values=auth_values):
+    def test_accepts_exact_legacy_current_and_target_auth_config_shapes(self):
+        cases = (
+            ("legacy", {}),
+            (
+                "auth-v2-02-current",
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                    "AUTH_EMAIL_FROM": "Genesis <auth@example.com>",
+                },
+            ),
+            (
+                "auth-v2-03-target-false",
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                    "AUTH_EMAIL_FROM": "Genesis <auth@example.com>",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
+                },
+            ),
+            (
+                "auth-v2-03-target-true",
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                    "AUTH_EMAIL_FROM": "Genesis <auth@example.com>",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
+                },
+            ),
+        )
+        for name, auth_values in cases:
+            with self.subTest(name=name):
                 parsed = deploy.parse_env_bytes(production_env_bytes(auth_values))
-                self.assertEqual(deploy.validate_production_values(parsed), parsed)
+                normalized = deploy.validate_production_values(parsed)
+                self.assertEqual(set(normalized), deploy.PRODUCTION_ENV_KEYS)
+                self.assertEqual(
+                    normalized["AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED"],
+                    auth_values.get(
+                        "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED", "false"
+                    ),
+                )
 
     def test_rejects_partial_invalid_or_unsafe_auth_config(self):
         invalid_cases = (
@@ -385,6 +409,22 @@ class ProductionEnvironmentContractTests(unittest.TestCase):
             {
                 "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "1",
                 "AUTH_EMAIL_FROM": "auth@example.com",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "auth@example.com",
+                "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "1",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                "AUTH_EMAIL_FROM": "",
+                "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "auth@example.com",
+                "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
+                "UNKNOWN_PRODUCTION_KEY": "false",
             },
             {
                 "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
@@ -1190,24 +1230,42 @@ class ConfigOperationalTransactionTests(unittest.TestCase):
                 {
                     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "1",
                     "AUTH_EMAIL_FROM": "auth@example.com",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
+                }
+            ),
+            "invalid-reset-flag": production_env_bytes(
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                    "AUTH_EMAIL_FROM": "auth@example.com",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "1",
+                }
+            ),
+            "reset-requires-otp": production_env_bytes(
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                    "AUTH_EMAIL_FROM": "",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
                 }
             ),
             "invalid-disabled-sender": production_env_bytes(
                 {
                     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
                     "AUTH_EMAIL_FROM": "not-an-email",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
                 }
             ),
             "crlf": production_env_bytes(
                 {
                     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
                     "AUTH_EMAIL_FROM": "",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
                 }
             ).replace(b"\n", b"\r\n"),
             "no-final-newline": production_env_bytes(
                 {
                     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
                     "AUTH_EMAIL_FROM": "",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
                 }
             ).rstrip(b"\n"),
             "invalid-utf8": b"APP_NAME=\xff\n",
@@ -1225,6 +1283,7 @@ class ConfigOperationalTransactionTests(unittest.TestCase):
                 {
                     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
                     "AUTH_EMAIL_FROM": "",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
                 }
             )
         )
@@ -1479,6 +1538,7 @@ class ConfigOperationalTransactionTests(unittest.TestCase):
             {
                 "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
                 "AUTH_EMAIL_FROM": "auth@example.com",
+                "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
             }
         )
         self.fixture.target_production_env.write_bytes(changed)
@@ -1844,6 +1904,7 @@ class PointerAndEnvironmentTests(unittest.TestCase):
             "API_IMAGE": PREVIOUS,
             "DATABASE_NAME": "hostile",
             "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+            "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
             "AUTH_EMAIL_FROM": "attacker@example.com",
             "COMPOSE_FILE": "hostile.yml",
             "DOCKER_HOST": "tcp://hostile",
@@ -1876,6 +1937,7 @@ def rendered(
     auth_values = auth_values or {
         "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
         "AUTH_EMAIL_FROM": "",
+        "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
     }
     return {
         "name": "genesis",
@@ -1925,6 +1987,7 @@ class ComposeTests(unittest.TestCase):
             {
                 "API_IMAGE": PREVIOUS,
                 "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
                 "AUTH_EMAIL_FROM": "attacker@example.com",
                 "COMPOSE_FILE": "hostile",
                 "SAFE": "yes",
@@ -1950,6 +2013,9 @@ class ComposeTests(unittest.TestCase):
         self.assertEqual(options["env"]["SAFE"], "yes")
         self.assertNotIn("COMPOSE_FILE", options["env"])
         self.assertNotIn("AUTH_OTP_PUBLIC_FLOWS_ENABLED", options["env"])
+        self.assertNotIn(
+            "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED", options["env"]
+        )
         self.assertNotIn("AUTH_EMAIL_FROM", options["env"])
         runner.output = "[X] 1 Existing\n"
         compose.migration_inventory(CANDIDATE)
@@ -1971,6 +2037,7 @@ class ComposeTests(unittest.TestCase):
                     {
                         "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
                         "AUTH_EMAIL_FROM": "Genesis <auth@example.com>",
+                        "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
                     }
                 )
             )

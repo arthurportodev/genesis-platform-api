@@ -94,6 +94,7 @@ PRODUCTION_ENV_KEYS = frozenset(
         "REFRESH_TOKEN_EXPIRES_IN_DAYS",
         "AUTH_OTP_PUBLIC_FLOWS_ENABLED",
         "AUTH_EMAIL_FROM",
+        "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED",
         "LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION",
         "API_CPUS",
         "API_MEMORY_LIMIT",
@@ -114,9 +115,18 @@ PRODUCTION_ENV_KEYS = frozenset(
 TRANSITIONAL_PRODUCTION_ENV_DEFAULTS = {
     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
     "AUTH_EMAIL_FROM": "",
+    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
 }
 TRANSITIONAL_PRODUCTION_ENV_KEYS = frozenset(TRANSITIONAL_PRODUCTION_ENV_DEFAULTS)
 PRODUCTION_ENV_KEYS_BEFORE_AUTH_WIRING = PRODUCTION_ENV_KEYS - TRANSITIONAL_PRODUCTION_ENV_KEYS
+PRODUCTION_ENV_KEYS_AUTH_V2_02 = PRODUCTION_ENV_KEYS - frozenset(
+    {"AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED"}
+)
+SUPPORTED_PRODUCTION_ENV_KEY_SHAPES = (
+    PRODUCTION_ENV_KEYS_BEFORE_AUTH_WIRING,
+    PRODUCTION_ENV_KEYS_AUTH_V2_02,
+    PRODUCTION_ENV_KEYS,
+)
 EMPTY_PRODUCTION_ENV_KEYS = frozenset({"AUTH_EMAIL_FROM"})
 EMAIL_ADDRESS_PATTERN = r"[^<>\s@]+@[^<>\s@]+(?:\.[^<>\s@]+)+"
 EMAIL_FROM_PATTERN = re.compile(
@@ -326,7 +336,7 @@ def parse_env_bytes(source: bytes) -> dict[str, str]:
 def validate_production_values(values: Mapping[str, str]) -> dict[str, str]:
     keys = set(values)
     require(
-        keys in {PRODUCTION_ENV_KEYS_BEFORE_AUTH_WIRING, PRODUCTION_ENV_KEYS},
+        keys in SUPPORTED_PRODUCTION_ENV_KEY_SHAPES,
         "PRODUCTION_ENV_KEYS_DIVERGED",
     )
     normalized = {**TRANSITIONAL_PRODUCTION_ENV_DEFAULTS, **values}
@@ -348,8 +358,19 @@ def validate_production_values(values: Mapping[str, str]) -> dict[str, str]:
         require(re.fullmatch(r"[1-9][0-9]*[kKmMgG]", normalized[key]) is not None, "INVALID_PRODUCTION_ENV_VALUE")
     require(re.fullmatch(r"[1-9][0-9]*[smhd]", normalized["JWT_ACCESS_EXPIRES_IN"]) is not None, "INVALID_PRODUCTION_ENV_VALUE")
     public_flows = normalized["AUTH_OTP_PUBLIC_FLOWS_ENABLED"]
+    password_reset_public_flow = normalized[
+        "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED"
+    ]
     email_from = normalized["AUTH_EMAIL_FROM"]
     require(public_flows in {"true", "false"}, "INVALID_PRODUCTION_ENV_VALUE")
+    require(
+        password_reset_public_flow in {"true", "false"},
+        "INVALID_PRODUCTION_ENV_VALUE",
+    )
+    require(
+        password_reset_public_flow != "true" or public_flows == "true",
+        "INVALID_PRODUCTION_ENV_VALUE",
+    )
     require(
         len(email_from) <= 320 and "\r" not in email_from and "\n" not in email_from,
         "INVALID_PRODUCTION_ENV_VALUE",

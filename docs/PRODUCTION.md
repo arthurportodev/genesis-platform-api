@@ -531,6 +531,15 @@ não monta a configuração a partir de template e nunca imprime valores. O plan
 expõe somente os hashes atual/alvo, se a configuração muda e os nomes ordenados
 das chaves alteradas.
 
+O operador reconhece estritamente três gerações de `production.env`: o shape
+legacy anterior ao wiring público de OTP; o shape AUTH-V2-02, que acrescenta
+`AUTH_OTP_PUBLIC_FLOWS_ENABLED` e `AUTH_EMAIL_FROM`; e o shape AUTH-V2-03, que
+acrescenta `AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED`. Chaves ausentes nos shapes
+históricos são normalizadas somente em memória para `false`, `""` e `false`,
+respectivamente; os bytes instalados não são reescritos. Configuração alvo exige
+sempre o shape AUTH-V2-03 completo. As flags aceitam somente `true` ou `false`, e
+password reset público em `true` exige OTP público em `true`.
+
 Uma autorização separada deve copiar exatamente a identidade retornada. No modo
 transacional ela é
 `<runId>:<currentOperationalSourceSha>:<targetOperationalSourceSha>:<currentProductionConfigSha256>:<targetProductionConfigSha256>:<authorizationPlanSha256>:<path=sha256@mode,...>`.
@@ -586,6 +595,12 @@ tem exatamente uma linha:
 ```text
 API_IMAGE=ghcr.io/arthurportodev/genesis-platform-api@sha256:<64-hex>
 ```
+
+O Compose injeta `AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED` somente no serviço
+`api`, com default seguro `false`; `migrate`, PostgreSQL e Traefik não recebem a
+flag. Os limites de password reset continuam nos defaults da aplicação
+(`900` segundos, `20` tentativas por IP e `5` por e-mail/IP) e não são chaves de
+Production nesta geração.
 
 Compose é sempre chamado com `-p genesis`, `--project-directory
 /opt/genesis/deploy`, os env files `production.env` e `api-image.env` nessa

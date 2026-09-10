@@ -836,6 +836,19 @@ test(
             inspection.Config.Env.includes('AUTH_EMAIL_FROM='),
             true,
           );
+          assert.equal(
+            inspection.Config.Env.includes(
+              'AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED=false',
+            ),
+            true,
+          );
+        } else {
+          assert.equal(
+            inspection.Config.Env.some((entry) =>
+              entry.startsWith('AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED='),
+            ),
+            false,
+          );
         }
         const secretTargets = inspection.Mounts.filter((mount) =>
           mount.Destination.startsWith('/run/secrets/'),
