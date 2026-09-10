@@ -334,6 +334,10 @@ test('builds a deterministic non-operational candidate with historical bindings'
       'ManageLeadCommercialCycleExpectedValue1788289200000',
       'AddCustomPipelinesAndStages1788375600000',
       'AllowDefaultPipelineStageConfiguration1788811200000',
+      'CreateAuthEmailChallenges1788900000000',
+      'DeliverPublicEmailVerification1788986400000',
+      'DeliverPasswordReset1789072800000',
+      'DeliverGoogleIdentity1789159200000',
     ],
   });
   assert.deepEqual(builtFirst.manifest.releaseTree, RELEASE_TREE);

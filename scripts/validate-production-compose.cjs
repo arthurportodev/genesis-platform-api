@@ -143,6 +143,8 @@ const FORBIDDEN_SECRET_ENV = new Set([
 const AUTH_RUNTIME_CONFIG_KEYS = [
   'AUTH_OTP_PUBLIC_FLOWS_ENABLED',
   'AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED',
+  'AUTH_GOOGLE_PUBLIC_FLOW_ENABLED',
+  'GOOGLE_CLIENT_ID',
   'AUTH_EMAIL_FROM',
 ];
 const REQUIRED_BINDINGS = [
@@ -552,6 +554,25 @@ function validateProductionCompose(
     failures,
   );
   check(
+    ['true', 'false'].includes(
+      String(api.environment?.AUTH_GOOGLE_PUBLIC_FLOW_ENABLED),
+    ),
+    'AUTH_GOOGLE_PUBLIC_FLOW_ENABLED must render as true or false',
+    failures,
+  );
+  check(
+    api.environment?.AUTH_GOOGLE_PUBLIC_FLOW_ENABLED !== 'true' ||
+      String(api.environment?.GOOGLE_CLIENT_ID ?? '').length > 0,
+    'GOOGLE_CLIENT_ID is required when Google auth is enabled',
+    failures,
+  );
+  check(
+    api.environment?.AUTH_GOOGLE_PUBLIC_FLOW_ENABLED !== 'true' ||
+      api.environment?.AUTH_OTP_PUBLIC_FLOWS_ENABLED === 'true',
+    'Google auth requires the public OTP foundation',
+    failures,
+  );
+  check(
     String(api.environment?.LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) === '1',
     'Lead idempotency key version must be 1',
     failures,
@@ -663,6 +684,18 @@ function validateTraefikSources(cwd, failures) {
       sources.base,
     ),
     'AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED must use the canonical safe-default interpolation',
+    failures,
+  );
+  check(
+    /^\s+AUTH_GOOGLE_PUBLIC_FLOW_ENABLED:\s+\$\{AUTH_GOOGLE_PUBLIC_FLOW_ENABLED:-false\}$/mu.test(
+      sources.base,
+    ),
+    'AUTH_GOOGLE_PUBLIC_FLOW_ENABLED must use the canonical safe-default interpolation',
+    failures,
+  );
+  check(
+    /^\s+GOOGLE_CLIENT_ID:\s+\$\{GOOGLE_CLIENT_ID:-\}$/mu.test(sources.base),
+    'GOOGLE_CLIENT_ID must use the canonical optional interpolation',
     failures,
   );
   check(

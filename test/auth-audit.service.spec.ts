@@ -12,11 +12,16 @@ describe('AuthAuditService', () => {
       reason: 'invalid_credentials',
       password: 'must-not-be-stored',
       refreshTokenHash: 'must-not-be-stored',
+      googleCredential: 'must-not-be-stored',
+      providerSubject: 'must-not-be-stored',
+      providerEmail: 'must-not-be-stored',
+      revokedRefreshCredentials: 2,
       detail: 'x'.repeat(300),
     });
 
     expect(sanitized).toEqual({
       reason: 'invalid_credentials',
+      revokedRefreshCredentials: 2,
       detail: 'x'.repeat(256),
     });
   });

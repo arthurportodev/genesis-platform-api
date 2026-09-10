@@ -46,6 +46,16 @@ import {
   AuthRequestContext,
   PublicUser,
 } from './types/authenticated-user.type';
+import {
+  GoogleAuthenticateDto,
+  GoogleLinkDto,
+  GoogleProfileDto,
+} from './dto/google-auth.dto';
+import {
+  GoogleAuthService,
+  GooglePublicConfigResponse,
+} from './services/google-auth.service';
+import { IssuedGoogleChallenge } from './services/google-challenge.service';
 
 @Controller('auth')
 export class AuthController {
@@ -54,12 +64,91 @@ export class AuthController {
     private readonly webSessionService: WebSessionService,
     private readonly publicAuthService: PublicAuthService,
     private readonly passwordResetService: PasswordResetService,
+    private readonly googleAuthService: GoogleAuthService,
   ) {}
 
   @Get('csrf')
   @Header('Cache-Control', 'no-store')
   csrf(@Res({ passthrough: true }) response: Response): { csrfToken: string } {
     return { csrfToken: this.webSessionService.issueCsrfToken(response) };
+  }
+
+  @Get('google/config')
+  @Header('Cache-Control', 'no-store')
+  googleConfig(): GooglePublicConfigResponse {
+    return this.googleAuthService.getPublicConfig();
+  }
+
+  @Post('google/challenge')
+  @UseGuards(CsrfGuard)
+  @HttpCode(HttpStatus.CREATED)
+  @Header('Cache-Control', 'no-store')
+  googleChallenge(@Req() request: Request): Promise<IssuedGoogleChallenge> {
+    return this.googleAuthService.issueChallenge(this.getContext(request));
+  }
+
+  @Post('google')
+  @UseGuards(CsrfGuard)
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  async googleAuthenticate(
+    @Body() input: GoogleAuthenticateDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthTokenResponse> {
+    const result = await this.googleAuthService.authenticate(
+      input.challengeToken,
+      input.credential,
+      this.getContext(request),
+    );
+    this.webSessionService.setRefreshCookie(
+      response,
+      result.refreshToken,
+      result.refreshExpiresAt,
+    );
+    return result.response;
+  }
+
+  @Post('google/profile')
+  @UseGuards(CsrfGuard)
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  async googleProfile(
+    @Body() input: GoogleProfileDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthTokenResponse> {
+    const result = await this.googleAuthService.completeProfile(
+      input,
+      this.getContext(request),
+    );
+    this.webSessionService.setRefreshCookie(
+      response,
+      result.refreshToken,
+      result.refreshExpiresAt,
+    );
+    return result.response;
+  }
+
+  @Post('google/link')
+  @UseGuards(CsrfGuard)
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  async googleLink(
+    @Body() input: GoogleLinkDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthTokenResponse> {
+    const result = await this.googleAuthService.link(
+      input,
+      this.getContext(request),
+    );
+    this.webSessionService.setRefreshCookie(
+      response,
+      result.refreshToken,
+      result.refreshExpiresAt,
+    );
+    return result.response;
   }
 
   @Post('login')

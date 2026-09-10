@@ -28,6 +28,7 @@ import { LoginDto } from './dto/login.dto';
 import { AuthAuditService } from './services/auth-audit.service';
 import { LoginRateLimiter } from './services/login-rate-limiter.port';
 import { PublicAuthService } from './services/public-auth.service';
+import { GenesisSessionIssuer } from './services/genesis-session-issuer.service';
 import { TokenService } from './services/token.service';
 import {
   AuthenticatedUser,
@@ -42,7 +43,7 @@ export interface AuthTokenResponse {
   user: PublicUser;
 }
 
-interface AuthOperationResult {
+export interface AuthOperationResult {
   response: AuthTokenResponse;
   refreshToken: string;
   refreshExpiresAt: Date;
@@ -86,6 +87,7 @@ export class AuthService {
     private readonly auditService: AuthAuditService,
     private readonly rateLimiter: LoginRateLimiter,
     private readonly publicAuth: PublicAuthService,
+    private readonly sessionIssuer: GenesisSessionIssuer,
   ) {}
 
   async login(
@@ -155,53 +157,7 @@ export class AuthService {
       )
         return null;
 
-      const sessionId = randomUUID();
-      const refreshToken = this.tokenService.generateRefreshToken(sessionId);
-      const access = await this.tokenService.issueAccessToken(
-        lockedUser.id,
-        sessionId,
-      );
-      const refreshExpiresAt = this.tokenService.getRefreshExpiration();
-      const sessions = manager.getRepository(AuthSession);
-      await sessions.save(
-        sessions.create({
-          id: sessionId,
-          userId: lockedUser.id,
-          status: AuthSessionStatus.ACTIVE,
-          expiresAt: refreshExpiresAt,
-          lastUsedAt: null,
-          revokedAt: null,
-          revokeReason: null,
-          ipAddress: context.ipAddress,
-          userAgent: context.userAgent?.slice(0, 512) ?? null,
-        }),
-      );
-      const refreshTokens = manager.getRepository(AuthRefreshToken);
-      await refreshTokens.save(
-        refreshTokens.create({
-          sessionId,
-          tokenHash: this.tokenService.hashRefreshToken(refreshToken),
-          status: AuthRefreshTokenStatus.ACTIVE,
-          expiresAt: refreshExpiresAt,
-          consumedAt: null,
-          revokedAt: null,
-          replacedByTokenId: null,
-        }),
-      );
-      await this.auditService.record(
-        {
-          ...context,
-          eventType: AuthAuditEventType.LOGIN_SUCCEEDED,
-          userId: lockedUser.id,
-          sessionId,
-        },
-        manager,
-      );
-      return {
-        response: this.buildTokenResponse(access, lockedUser),
-        refreshToken,
-        refreshExpiresAt,
-      };
+      return this.sessionIssuer.issue(manager, lockedUser, context, 'password');
     });
 
     if (operation === null) {

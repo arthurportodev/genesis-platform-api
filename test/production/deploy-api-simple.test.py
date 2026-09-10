@@ -192,6 +192,8 @@ class OperationalInstallerFixture:
                     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
                     "AUTH_EMAIL_FROM": "",
                     "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
+                    "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "false",
+                    "GOOGLE_CLIENT_ID": "",
                 }
             )
         )
@@ -362,6 +364,8 @@ class ProductionEnvironmentContractTests(unittest.TestCase):
         self.assertEqual(
             normalized["AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED"], "false"
         )
+        self.assertEqual(normalized["AUTH_GOOGLE_PUBLIC_FLOW_ENABLED"], "false")
+        self.assertEqual(normalized["GOOGLE_CLIENT_ID"], "")
 
     def test_accepts_exact_legacy_current_and_target_auth_config_shapes(self):
         cases = (
@@ -389,6 +393,26 @@ class ProductionEnvironmentContractTests(unittest.TestCase):
                     "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
                 },
             ),
+            (
+                "auth-v2-04-target-false",
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                    "AUTH_EMAIL_FROM": "Genesis <auth@example.com>",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
+                    "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "false",
+                    "GOOGLE_CLIENT_ID": "",
+                },
+            ),
+            (
+                "auth-v2-04-target-true",
+                {
+                    "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                    "AUTH_EMAIL_FROM": "Genesis <auth@example.com>",
+                    "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
+                    "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "true",
+                    "GOOGLE_CLIENT_ID": "123456.apps.googleusercontent.com",
+                },
+            ),
         )
         for name, auth_values in cases:
             with self.subTest(name=name):
@@ -400,6 +424,10 @@ class ProductionEnvironmentContractTests(unittest.TestCase):
                     auth_values.get(
                         "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED", "false"
                     ),
+                )
+                self.assertEqual(
+                    normalized["AUTH_GOOGLE_PUBLIC_FLOW_ENABLED"],
+                    auth_values.get("AUTH_GOOGLE_PUBLIC_FLOW_ENABLED", "false"),
                 )
 
     def test_rejects_partial_invalid_or_unsafe_auth_config(self):
@@ -414,6 +442,13 @@ class ProductionEnvironmentContractTests(unittest.TestCase):
                 "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
                 "AUTH_EMAIL_FROM": "auth@example.com",
                 "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "1",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
+                "AUTH_EMAIL_FROM": "",
+                "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
+                "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "true",
+                "GOOGLE_CLIENT_ID": "123456.apps.googleusercontent.com",
             },
             {
                 "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
@@ -437,6 +472,27 @@ class ProductionEnvironmentContractTests(unittest.TestCase):
             {
                 "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
                 "AUTH_EMAIL_FROM": "auth@example.com\r\nBcc: attacker@example.com",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "auth@example.com",
+                "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
+                "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "1",
+                "GOOGLE_CLIENT_ID": "",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "auth@example.com",
+                "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
+                "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "true",
+                "GOOGLE_CLIENT_ID": "",
+            },
+            {
+                "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
+                "AUTH_EMAIL_FROM": "auth@example.com",
+                "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
+                "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "true",
+                "GOOGLE_CLIENT_ID": "id\r\nINJECTED=value",
             },
             {
                 "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
@@ -1259,6 +1315,8 @@ class ConfigOperationalTransactionTests(unittest.TestCase):
                     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
                     "AUTH_EMAIL_FROM": "",
                     "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
+                    "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "false",
+                    "GOOGLE_CLIENT_ID": "",
                 }
             ).replace(b"\n", b"\r\n"),
             "no-final-newline": production_env_bytes(
@@ -1284,6 +1342,8 @@ class ConfigOperationalTransactionTests(unittest.TestCase):
                     "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
                     "AUTH_EMAIL_FROM": "",
                     "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
+                    "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "false",
+                    "GOOGLE_CLIENT_ID": "",
                 }
             )
         )
@@ -1539,6 +1599,8 @@ class ConfigOperationalTransactionTests(unittest.TestCase):
                 "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
                 "AUTH_EMAIL_FROM": "auth@example.com",
                 "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
+                "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "false",
+                "GOOGLE_CLIENT_ID": "",
             }
         )
         self.fixture.target_production_env.write_bytes(changed)
@@ -1938,6 +2000,8 @@ def rendered(
         "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "false",
         "AUTH_EMAIL_FROM": "",
         "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "false",
+        "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "false",
+        "GOOGLE_CLIENT_ID": "",
     }
     return {
         "name": "genesis",
@@ -1988,6 +2052,8 @@ class ComposeTests(unittest.TestCase):
                 "API_IMAGE": PREVIOUS,
                 "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
                 "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
+                "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "true",
+                "GOOGLE_CLIENT_ID": "attacker.apps.googleusercontent.com",
                 "AUTH_EMAIL_FROM": "attacker@example.com",
                 "COMPOSE_FILE": "hostile",
                 "SAFE": "yes",
@@ -2016,6 +2082,8 @@ class ComposeTests(unittest.TestCase):
         self.assertNotIn(
             "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED", options["env"]
         )
+        self.assertNotIn("AUTH_GOOGLE_PUBLIC_FLOW_ENABLED", options["env"])
+        self.assertNotIn("GOOGLE_CLIENT_ID", options["env"])
         self.assertNotIn("AUTH_EMAIL_FROM", options["env"])
         runner.output = "[X] 1 Existing\n"
         compose.migration_inventory(CANDIDATE)
@@ -2038,6 +2106,8 @@ class ComposeTests(unittest.TestCase):
                         "AUTH_OTP_PUBLIC_FLOWS_ENABLED": "true",
                         "AUTH_EMAIL_FROM": "Genesis <auth@example.com>",
                         "AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED": "true",
+                        "AUTH_GOOGLE_PUBLIC_FLOW_ENABLED": "true",
+                        "GOOGLE_CLIENT_ID": "123456.apps.googleusercontent.com",
                     }
                 )
             )

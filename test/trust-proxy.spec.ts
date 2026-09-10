@@ -25,6 +25,8 @@ import { InMemoryLoginRateLimiter } from '../src/modules/auth/services/in-memory
 import { LoginRateLimiter } from '../src/modules/auth/services/login-rate-limiter.port';
 import { PasswordResetService } from '../src/modules/auth/services/password-reset.service';
 import { PublicAuthService } from '../src/modules/auth/services/public-auth.service';
+import { GenesisSessionIssuer } from '../src/modules/auth/services/genesis-session-issuer.service';
+import { GoogleAuthService } from '../src/modules/auth/services/google-auth.service';
 import { TokenService } from '../src/modules/auth/services/token.service';
 import { WebSessionService } from '../src/modules/auth/services/web-session.service';
 import { PASSWORD_LOGIN_VERIFIER } from '../src/modules/credentials/ports/password-login-verifier.port';
@@ -252,6 +254,14 @@ async function createAuthHarness(hops: number): Promise<AuthHarness> {
         useValue: {
           requireEmailVerification: jest.fn(),
         },
+      },
+      {
+        provide: GenesisSessionIssuer,
+        useValue: {},
+      },
+      {
+        provide: GoogleAuthService,
+        useValue: {},
       },
       {
         provide: PasswordResetService,

@@ -610,3 +610,16 @@ de OAuth externo `In production` para `admreserva433@gmail.com` com scope exato
 Scope amplo exige novo gate e prova de conta dedicada vazia; purge permanente é
 inválido. Restore e cleanup aceitam apenas recursos
 isolados rotulados por run, negam o volume ativo e publicam zero portas.
+
+## Google identity boundary
+
+O Google `sub` é a identidade externa canônica e nunca o e-mail. O ID token é
+validado pela biblioteca oficial contra assinatura, issuer, audience, expiração,
+`email_verified` e nonce; ele não é persistido, auditado ou retornado. Challenge
+token e nonce têm 256 bits, somente seus hashes chegam ao banco e a cerimônia é
+curta, limitada e de uso único.
+
+Uma conta existente nunca é vinculada apenas por e-mail: o linking exige a
+senha atual e revalidação transacional do User. Escritas de User e identity usam
+funções `app_private` estreitas; o runtime não recebe mutação genérica nessas
+tabelas. O fluxo emite a mesma sessão Gênesis usada pelo login por senha.
