@@ -91,3 +91,26 @@ pública pode não precisar de feature flag. Outra feature pode exigir uma ordem
 diferente da usada na AUTH-V2-02.
 
 Reutilizamos princípios; não copiamos mecanicamente o processo.
+
+## Refinamento após AUTH-V2-03 — redução de fragmentação
+
+**NON-NORMATIVE LESSONS:** estes aprendizados continuam não normativos. Uma release pode ser organizada
+em quatro macro-tarefas: Feature Delivery, Release Readiness, Production
+Rollout e Memory Closeout. Task é um objetivo que produz um resultado; Gate é
+uma autorização humana dentro da Task; checkpoint é uma prova ou observação; e
+exception é um desvio inesperado. Gate, checkpoint e exception não se tornam
+automaticamente novas Tasks.
+
+Uma análise que encontra uma solução pequena, determinada e dentro do escopo
+deve continuar para implementação e validação até uma fronteira real. Assim,
+deploy-fit e um gap operacional pequeno podem permanecer na mesma Release
+Readiness; materialização dos candidates, baseline factual de Production,
+rollback e congelamento de identidades formam uma única preparação; e um KEEP
+técnico é checkpoint, sem encerrar a macro-tarefa.
+
+Quando identidades exatas já estiverem congeladas, a transação de configuração
+e a autorização Level 1 podem ser aprovadas de forma condicional ao preflight
+factual. Um Web exato também pode ser pré-autorizado para promoção somente após
+o Level 1 KEEP. Erros de execução, reporte ou precondição de smoke não criam
+processo permanente. Essa simplificação preserva preflight, autorização,
+observação, rollback e comportamento fail-closed.
