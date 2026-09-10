@@ -142,6 +142,7 @@ const FORBIDDEN_SECRET_ENV = new Set([
 ]);
 const AUTH_RUNTIME_CONFIG_KEYS = [
   'AUTH_OTP_PUBLIC_FLOWS_ENABLED',
+  'AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED',
   'AUTH_EMAIL_FROM',
 ];
 const REQUIRED_BINDINGS = [
@@ -544,6 +545,13 @@ function validateProductionCompose(
     failures,
   );
   check(
+    ['true', 'false'].includes(
+      String(api.environment?.AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED),
+    ),
+    'AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED must render as true or false',
+    failures,
+  );
+  check(
     String(api.environment?.LEAD_IDEMPOTENCY_KEY_CURRENT_VERSION) === '1',
     'Lead idempotency key version must be 1',
     failures,
@@ -648,6 +656,13 @@ function validateTraefikSources(cwd, failures) {
       sources.base,
     ),
     'AUTH_OTP_PUBLIC_FLOWS_ENABLED must use the canonical safe-default interpolation',
+    failures,
+  );
+  check(
+    /^\s+AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED:\s+\$\{AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED:-false\}$/mu.test(
+      sources.base,
+    ),
+    'AUTH_PASSWORD_RESET_PUBLIC_FLOW_ENABLED must use the canonical safe-default interpolation',
     failures,
   );
   check(
