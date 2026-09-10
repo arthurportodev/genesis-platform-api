@@ -1,14 +1,14 @@
 {
   "schemaVersion": "2.0.0",
-  "stateRevision": "AUTH-V2-02-PRODUCTION-KEEP-2026-09-09",
+  "stateRevision": "AUTH-V2-03-PRODUCTION-KEEP-2026-09-10",
   "phase": {
     "id": "AUTH-V2",
     "title": "Authentication V2"
   },
   "lastCompleted": {
-    "id": "AUTH-V2-02",
-    "title": "Cadastro e verificação de e-mail",
-    "outcome": "PRODUCTION_KEEP / AUTH-V2-02_LIVE"
+    "id": "AUTH-V2-03",
+    "title": "Recuperação de senha e UX de senha",
+    "outcome": "PRODUCTION_KEEP / AUTH-V2-03_LIVE"
   },
   "currentWork": {
     "status": "none"
@@ -19,12 +19,12 @@
   },
   "live": {
     "api": {
-      "sourceSha": "f2f5d5bc6012065239fcdce223bce5dd4b590c70",
-      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:55b0ddb5b45a258941c35ddffb98c56f4848862fccb81ea4feee4a672fea6310"
+      "sourceSha": "c137ff1fb81ac5fc9b94a4b52f4190786477354e",
+      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:49e52a62de67cb0a37afaa88a70d2da71404c6e8736429716922b91592453759"
     },
     "web": {
-      "sourceSha": "90493f8409576de1fd40008860aea6a86c274bf7",
-      "deploymentId": "dpl_9m3fyuxkeSruWTmXyb6sbMiz1mKi",
+      "sourceSha": "8aeb682c6608ba467a47560d751ae51a271abe64",
+      "deploymentId": "dpl_AMKoVRsWx3cpzZfYyRyTLH1aHabT",
       "domain": "https://app.agenciagenesismkt.com.br"
     }
   },
