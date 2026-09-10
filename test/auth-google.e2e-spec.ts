@@ -1,7 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Server } from 'node:http';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
@@ -15,8 +15,12 @@ import { AuthGoogleChallenge } from '../src/modules/auth/entities/auth-google-ch
 import { GoogleAuthService } from '../src/modules/auth/services/google-auth.service';
 import {
   GOOGLE_IDENTITY_VERIFIER,
+  GoogleIdentityVerificationError,
+  GoogleIdentityVerificationFailure,
   VerifiedGoogleIdentity,
 } from '../src/modules/auth/ports/google-identity-verifier.port';
+import { AuthAuditLog } from '../src/modules/auth-sessions/entities/auth-audit-log.entity';
+import { AuthAuditEventType } from '../src/modules/auth-sessions/enums/auth-audit-event-type.enum';
 import { hashPassword } from '../src/modules/credentials/password-policy';
 import { User } from '../src/modules/users/entities/user.entity';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
@@ -38,6 +42,10 @@ describe('Google identity public API', () => {
   let app: NestExpressApplication;
   let owner: DataSource;
   const assertions = new Map<string, VerifiedGoogleIdentity>();
+  const verificationFailures = new Map<
+    string,
+    GoogleIdentityVerificationFailure
+  >();
   const messages: EmailMessage[] = [];
   const transport: EmailTransport = {
     send: (message) => {
@@ -83,10 +91,14 @@ describe('Google identity public API', () => {
       .overrideProvider(GOOGLE_IDENTITY_VERIFIER)
       .useValue({
         verify: (credential: string) => {
+          const failure = verificationFailures.get(credential);
+          if (failure !== undefined) {
+            return Promise.reject(new GoogleIdentityVerificationError(failure));
+          }
           const claims = assertions.get(credential);
           return claims
             ? Promise.resolve(claims)
-            : Promise.reject(new Error('invalid'));
+            : Promise.reject(new GoogleIdentityVerificationError('invalid'));
         },
       })
       .compile();
@@ -236,24 +248,35 @@ describe('Google identity public API', () => {
   it('maps controlled assertion failures and exhausts the challenge budget', async () => {
     const server = app.getHttpServer();
     const csrf = await csrfContext(server);
+    const invalidCredentials: string[] = [];
     for (const reason of ['audience', 'issuer', 'expiration']) {
       const isolated = await issue(server, csrf);
+      const credential = `invalid-${reason}-${randomUUID()}`;
+      invalidCredentials.push(credential);
       await mutate(server, csrf, 'google')
         .send({
           challengeToken: isolated.challengeToken,
-          credential: `invalid-${reason}-${randomUUID()}`,
+          credential,
         })
-        .expect(400);
+        .expect(401)
+        .expect(({ body }: { body: { code?: string } }) =>
+          expect(body.code).toBe('AUTH_GOOGLE_INVALID'),
+        );
     }
 
     const challenge = await issue(server, csrf);
     for (let attempt = 0; attempt < 5; attempt += 1) {
+      const credential = `invalid-${randomUUID()}`;
+      invalidCredentials.push(credential);
       await mutate(server, csrf, 'google')
         .send({
           challengeToken: challenge.challengeToken,
-          credential: `invalid-${randomUUID()}`,
+          credential,
         })
-        .expect(400);
+        .expect(401)
+        .expect(({ body }: { body: { code?: string } }) =>
+          expect(body.code).toBe('AUTH_GOOGLE_INVALID'),
+        );
     }
     const exhausted = await owner
       .getRepository(AuthGoogleChallenge)
@@ -262,6 +285,21 @@ describe('Google identity public API', () => {
       .orderBy('challenge.createdAt', 'DESC')
       .getOneOrFail();
     expect(exhausted.failedAttempts).toBe(5);
+    const invalidAudits = await owner.getRepository(AuthAuditLog).findBy({
+      eventType: AuthAuditEventType.LOGIN_FAILED,
+      ipAddress: csrf.ip,
+    });
+    expect(invalidAudits).toHaveLength(invalidCredentials.length);
+    for (const audit of invalidAudits) {
+      expect(audit.metadata).toEqual({
+        method: 'google',
+        reason: 'invalid_assertion',
+      });
+    }
+    const serializedAudits = JSON.stringify(invalidAudits);
+    for (const credential of invalidCredentials) {
+      expect(serializedAudits).not.toContain(credential);
+    }
     const validCredential = `credential-${randomUUID()}`;
     assertions.set(
       validCredential,
@@ -282,6 +320,56 @@ describe('Google identity public API', () => {
       .expect(400);
   });
 
+  it('preserves a challenge and audit classification across provider unavailability', async () => {
+    const server = app.getHttpServer();
+    const csrf = await csrfContext(server);
+    const challenge = await issue(server, csrf);
+    const sensitiveMarker = `credential-provider-secret-${randomUUID()}`;
+    verificationFailures.set(sensitiveMarker, 'unavailable');
+
+    const unavailable = await mutate(server, csrf, 'google')
+      .send({
+        challengeToken: challenge.challengeToken,
+        credential: sensitiveMarker,
+      })
+      .expect(503);
+    expect(unavailable.body).toMatchObject({
+      statusCode: 503,
+      code: 'AUTH_GOOGLE_UNAVAILABLE',
+    });
+    expect(JSON.stringify(unavailable.body)).not.toContain(sensitiveMarker);
+
+    const preserved = await storedChallenge(owner, challenge.challengeToken);
+    expect(preserved).toMatchObject({
+      stage: 'issued',
+      failedAttempts: 0,
+      consumedAt: null,
+    });
+    const failedAudits = await owner.getRepository(AuthAuditLog).findBy({
+      eventType: AuthAuditEventType.LOGIN_FAILED,
+      ipAddress: csrf.ip,
+    });
+    expect(failedAudits).toHaveLength(0);
+    expect(JSON.stringify(failedAudits)).not.toContain(sensitiveMarker);
+
+    verificationFailures.delete(sensitiveMarker);
+    assertions.set(
+      sensitiveMarker,
+      claims(
+        `subject-${randomUUID()}`,
+        `${randomUUID()}@gmail.com`,
+        challenge.nonce,
+        { name: 'Recovered Provider Person' },
+      ),
+    );
+    await mutate(server, csrf, 'google')
+      .send({
+        challengeToken: challenge.challengeToken,
+        credential: sensitiveMarker,
+      })
+      .expect(200);
+  });
+
   it('allows a corrected nonce once and rejects challenge replay', async () => {
     const server = app.getHttpServer();
     const csrf = await csrfContext(server);
@@ -295,7 +383,17 @@ describe('Google identity public API', () => {
     );
     await mutate(server, csrf, 'google')
       .send({ challengeToken: challenge.challengeToken, credential: wrong })
-      .expect(400);
+      .expect(401)
+      .expect(({ body }: { body: { code?: string } }) =>
+        expect(body.code).toBe('AUTH_GOOGLE_INVALID'),
+      );
+    expect(
+      await storedChallenge(owner, challenge.challengeToken),
+    ).toMatchObject({
+      stage: 'issued',
+      failedAttempts: 1,
+      consumedAt: null,
+    });
     const correct = `credential-${randomUUID()}`;
     assertions.set(
       correct,
@@ -710,6 +808,19 @@ async function issue(
     nonce: string;
     expiresAt: string;
   };
+}
+
+async function storedChallenge(
+  owner: DataSource,
+  challengeToken: string,
+): Promise<AuthGoogleChallenge> {
+  const tokenHash = createHash('sha256').update(challengeToken).digest('hex');
+  return owner
+    .getRepository(AuthGoogleChallenge)
+    .createQueryBuilder('challenge')
+    .addSelect('challenge.tokenHash')
+    .where('challenge.tokenHash=:tokenHash', { tokenHash })
+    .getOneOrFail();
 }
 
 function mutate(

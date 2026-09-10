@@ -16,6 +16,7 @@ import { InMemoryGoogleAuthRateLimiter } from '../src/modules/auth/services/in-m
 import { GenesisSessionIssuer } from '../src/modules/auth/services/genesis-session-issuer.service';
 import { UserStatus } from '../src/modules/users/enums/user-status.enum';
 import { User } from '../src/modules/users/entities/user.entity';
+import { GoogleIdentityVerificationError } from '../src/modules/auth/ports/google-identity-verifier.port';
 
 const config: AuthGoogleConfig = {
   publicFlowEnabled: true,
@@ -94,9 +95,34 @@ describe('Google authentication foundation', () => {
       const harness = realVerifierHarness();
       await expect(
         harness.service.verify(harness.token(claim)),
-      ).rejects.toThrow();
+      ).rejects.toMatchObject<GoogleIdentityVerificationError>({
+        name: 'GoogleIdentityVerificationError',
+        kind: 'invalid',
+        message: 'Google identity verification failed.',
+      });
     },
   );
+
+  it('classifies certificate acquisition failure as unavailable without leaking its cause', async () => {
+    const sensitiveMarker = 'synthetic-provider-secret-marker';
+    jest
+      .spyOn(OAuth2Client.prototype, 'getFederatedSignonCertsAsync')
+      .mockRejectedValue(new Error(sensitiveMarker));
+    const service = new GoogleIdentityVerifierService(
+      new ConfigService({ authGoogle: config }),
+    );
+
+    const failure = await service
+      .verify('synthetic-credential')
+      .catch((error: unknown) => error);
+
+    expect(failure).toMatchObject<GoogleIdentityVerificationError>({
+      name: 'GoogleIdentityVerificationError',
+      kind: 'unavailable',
+      message: 'Google identity verification failed.',
+    });
+    expect(JSON.stringify(failure)).not.toContain(sensitiveMarker);
+  });
 
   it('enforces separate bounded challenge and verification rate limits', () => {
     const limiter = new InMemoryGoogleAuthRateLimiter(

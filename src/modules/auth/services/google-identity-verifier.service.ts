@@ -5,6 +5,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { normalizeEmail } from '../../../common/normalization/email.normalizer';
 import { AuthGoogleConfig } from '../../../config/auth-google.config';
 import {
+  GoogleIdentityVerificationError,
   GoogleIdentityVerifier,
   VerifiedGoogleIdentity,
 } from '../ports/google-identity-verifier.port';
@@ -20,12 +21,30 @@ export class GoogleIdentityVerifierService implements GoogleIdentityVerifier {
 
   async verify(credential: string): Promise<VerifiedGoogleIdentity> {
     if (!this.config.publicFlowEnabled || this.config.clientId === null) {
-      throw new Error('Google authentication is unavailable.');
+      throw new GoogleIdentityVerificationError('unavailable');
     }
-    const ticket = await this.client.verifyIdToken({
-      idToken: credential,
-      audience: this.config.clientId,
-    });
+    let certificates: Awaited<
+      ReturnType<OAuth2Client['getFederatedSignonCertsAsync']>
+    >['certs'];
+    try {
+      ({ certs: certificates } =
+        await this.client.getFederatedSignonCertsAsync());
+    } catch {
+      throw new GoogleIdentityVerificationError('unavailable');
+    }
+    let ticket: Awaited<
+      ReturnType<OAuth2Client['verifySignedJwtWithCertsAsync']>
+    >;
+    try {
+      ticket = await this.client.verifySignedJwtWithCertsAsync(
+        credential,
+        certificates,
+        this.config.clientId,
+        ['accounts.google.com', 'https://accounts.google.com'],
+      );
+    } catch {
+      throw new GoogleIdentityVerificationError('invalid');
+    }
     const payload = ticket.getPayload();
     const subject = payload?.sub?.trim() ?? '';
     const email =
@@ -46,7 +65,7 @@ export class GoogleIdentityVerifierService implements GoogleIdentityVerifier {
       typeof payload.nonce !== 'string' ||
       payload.nonce === ''
     ) {
-      throw new Error('Google identity assertion is invalid.');
+      throw new GoogleIdentityVerificationError('invalid');
     }
     return {
       subject,

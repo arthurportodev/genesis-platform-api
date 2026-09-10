@@ -23,6 +23,7 @@ import { AuthGoogleChallenge } from '../entities/auth-google-challenge.entity';
 import { AuthIdentity } from '../entities/auth-identity.entity';
 import {
   GOOGLE_IDENTITY_VERIFIER,
+  GoogleIdentityVerificationError,
   GoogleIdentityVerifier,
   VerifiedGoogleIdentity,
 } from '../ports/google-identity-verifier.port';
@@ -95,14 +96,20 @@ export class GoogleAuthService {
     let claims: VerifiedGoogleIdentity;
     try {
       claims = await this.verifier.verify(credential);
-    } catch {
+    } catch (error) {
+      if (
+        !(error instanceof GoogleIdentityVerificationError) ||
+        error.kind === 'unavailable'
+      ) {
+        this.unavailable();
+      }
       await this.debitFailedChallenge(challengeToken, ['issued']);
       await this.audit.record({
         ...context,
         eventType: AuthAuditEventType.LOGIN_FAILED,
         metadata: { method: 'google', reason: 'invalid_assertion' },
       });
-      this.invalid();
+      this.invalidAssertion();
     }
     const operation = async (manager: EntityManager) => {
       const challenge = await this.challenges.resolve(manager, challengeToken, [
@@ -111,11 +118,19 @@ export class GoogleAuthService {
       if (!this.challenges.nonceMatches(challenge, claims.nonce)) {
         this.challenges.markFailed(challenge);
         await manager.save(challenge);
-        return { kind: 'invalid' as const };
+        return { kind: 'invalid_assertion' as const };
       }
       return this.resolveValidatedIdentity(manager, challenge, claims, context);
     };
     const result = await this.transactionWithRaceRetry(operation);
+    if (result.kind === 'invalid_assertion') {
+      await this.audit.record({
+        ...context,
+        eventType: AuthAuditEventType.LOGIN_FAILED,
+        metadata: { method: 'google', reason: 'invalid_assertion' },
+      });
+      this.invalidAssertion();
+    }
     if (result.kind === 'invalid') {
       await this.audit.record({
         ...context,
@@ -557,6 +572,14 @@ export class GoogleAuthService {
   private invalid(): never {
     throw new BadRequestException({
       statusCode: 400,
+      code: 'AUTH_GOOGLE_INVALID',
+      message: 'Google authentication is invalid.',
+    });
+  }
+
+  private invalidAssertion(): never {
+    throw new UnauthorizedException({
+      statusCode: 401,
       code: 'AUTH_GOOGLE_INVALID',
       message: 'Google authentication is invalid.',
     });
