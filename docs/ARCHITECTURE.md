@@ -118,7 +118,8 @@ shutdown não concluir. As respostas são mínimas, sanitizadas e `no-store`.
 - `HealthModule`: mantém o estado de runtime e expõe liveness e readiness; só
   readiness verifica PostgreSQL com `SELECT 1`.
 - `UsersModule`: registra a entidade global `User`.
-- `OrganizationsModule`: registra `Organization`.
+- `OrganizationsModule`: registra `Organization` e expõe a criação
+  self-service autenticada com idempotência.
 - `MembershipsModule`: registra o vínculo e o papel por organização.
 - `AuthSessionsModule`: registra sessões, refresh tokens e auditoria.
 - `AuthModule`: CSRF, login, refresh por cookie, logout, usuário atual,
@@ -131,9 +132,11 @@ shutdown não concluir. As respostas são mínimas, sanitizadas e `no-store`.
 - `OrganizationAuditModule`: registra eventos de organização em tabela
   append-only separada da auditoria de autenticação.
 
-Users e organizations ainda não têm controllers de CRUD. Memberships expõe
-um diretório paginado e comandos explícitos de papel/ciclo de vida; a mutação
-é centralizada em uma única função privada tipada no PostgreSQL.
+Users não possuem controller de CRUD. Organizations expõe somente
+`POST /api/v1/organizations` para criação self-service autenticada, sem
+selecionar tenant; não existe CRUD genérico. Memberships expõe um diretório
+paginado e comandos explícitos de papel/ciclo de vida; as mutações críticas são
+centralizadas em funções privadas tipadas no PostgreSQL.
 
 ## Persistência e multi-tenancy
 
@@ -163,6 +166,13 @@ inativação global por `app_private.lock_auth_refresh_user(uuid)`, função
 lock continua bloqueando update, delete e mudança da chave do user, mas é
 compatível com `KEY SHARE` usado pelas foreign keys de novas linhas de
 auditoria. A função de invitations permanece separada e conserva `FOR UPDATE`.
+
+A criação self-service de Organization atravessa exclusivamente
+`app_private.create_self_service_organization`. A função bloqueia e relê o User
+global, reclama a chave idempotente, cria Organization e Membership `owner`,
+deixa o trigger existente criar o Pipeline default e seus cinco Stages e grava
+`organization.created` na mesma transação. A role runtime recebe somente
+`EXECUTE` nessa assinatura, sem DML direto nas tabelas centrais.
 
 ## Autenticação implementada
 

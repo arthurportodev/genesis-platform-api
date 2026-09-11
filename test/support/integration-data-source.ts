@@ -5,10 +5,18 @@ import { CreateOrganizationInvitations1785004800000 } from '../../src/database/m
 import { DeliverInvitationAcceptance1785087600000 } from '../../src/database/migrations/1785087600000-DeliverInvitationAcceptance';
 import { ActivateNewInvitationUser1785174000000 } from '../../src/database/migrations/1785174000000-ActivateNewInvitationUser';
 import { ManageMembershipOwnership1785260400000 } from '../../src/database/migrations/1785260400000-ManageMembershipOwnership';
+import { CreateLeadFoundation1785346800000 } from '../../src/database/migrations/1785346800000-CreateLeadFoundation';
+import { ManageLeadCommercialPipeline1785433200000 } from '../../src/database/migrations/1785433200000-ManageLeadCommercialPipeline';
+import { ManageLeadActivitiesFollowUp1785519600000 } from '../../src/database/migrations/1785519600000-ManageLeadActivitiesFollowUp';
+import { AddLeadOperationalReadIndexes1785606000000 } from '../../src/database/migrations/1785606000000-AddLeadOperationalReadIndexes';
+import { ManageLeadCommercialCycleExpectedValue1788289200000 } from '../../src/database/migrations/1788289200000-ManageLeadCommercialCycleExpectedValue';
+import { AddCustomPipelinesAndStages1788375600000 } from '../../src/database/migrations/1788375600000-AddCustomPipelinesAndStages';
+import { AllowDefaultPipelineStageConfiguration1788811200000 } from '../../src/database/migrations/1788811200000-AllowDefaultPipelineStageConfiguration';
 import { CreateAuthEmailChallenges1788900000000 } from '../../src/database/migrations/1788900000000-CreateAuthEmailChallenges';
 import { DeliverPublicEmailVerification1788986400000 } from '../../src/database/migrations/1788986400000-DeliverPublicEmailVerification';
 import { DeliverPasswordReset1789072800000 } from '../../src/database/migrations/1789072800000-DeliverPasswordReset';
 import { DeliverGoogleIdentity1789159200000 } from '../../src/database/migrations/1789159200000-DeliverGoogleIdentity';
+import { CreateSelfServiceOrganizations1789245600000 } from '../../src/database/migrations/1789245600000-CreateSelfServiceOrganizations';
 import { AuthIdentity } from '../../src/modules/auth/entities/auth-identity.entity';
 import { AuthGoogleChallenge } from '../../src/modules/auth/entities/auth-google-challenge.entity';
 import { createBasePostgresOptions } from '../../src/database/typeorm-base.options';
@@ -46,6 +54,7 @@ export function createIntegrationDataSource(
   options: {
     includePasswordReset?: boolean;
     includeGoogleIdentity?: boolean;
+    includeOrganizationCreation?: boolean;
   } = {},
 ): DataSource {
   process.env.DATABASE_RUNTIME_ROLE ??= 'genesis_runtime_test';
@@ -74,13 +83,27 @@ export function createIntegrationDataSource(
       DeliverInvitationAcceptance1785087600000,
       ActivateNewInvitationUser1785174000000,
       ManageMembershipOwnership1785260400000,
+      ...(options.includeOrganizationCreation
+        ? [
+            CreateLeadFoundation1785346800000,
+            ManageLeadCommercialPipeline1785433200000,
+            ManageLeadActivitiesFollowUp1785519600000,
+            AddLeadOperationalReadIndexes1785606000000,
+            ManageLeadCommercialCycleExpectedValue1788289200000,
+            AddCustomPipelinesAndStages1788375600000,
+            AllowDefaultPipelineStageConfiguration1788811200000,
+          ]
+        : []),
       CreateAuthEmailChallenges1788900000000,
       DeliverPublicEmailVerification1788986400000,
-      ...(options.includePasswordReset
+      ...(options.includePasswordReset || options.includeOrganizationCreation
         ? [DeliverPasswordReset1789072800000]
         : []),
-      ...(options.includeGoogleIdentity
+      ...(options.includeGoogleIdentity || options.includeOrganizationCreation
         ? [DeliverGoogleIdentity1789159200000]
+        : []),
+      ...(options.includeOrganizationCreation
+        ? [CreateSelfServiceOrganizations1789245600000]
         : []),
     ],
     migrationsTableName: 'migrations',

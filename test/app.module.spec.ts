@@ -60,7 +60,7 @@ describe('AppModule', () => {
     expect(WEB_EXPOSED_HEADERS).not.toContain('*');
   });
 
-  it('marks auth and tenant-context responses as non-cacheable', () => {
+  it('marks auth, organization creation and tenant responses as non-cacheable', () => {
     expect(isSensitiveWebResponse('/api/v1/auth/bootstrap', undefined)).toBe(
       true,
     );
@@ -68,6 +68,9 @@ describe('AppModule', () => {
       true,
     );
     expect(isSensitiveWebResponse('/api/v1/leads', undefined)).toBe(true);
+    expect(isSensitiveWebResponse('/api/v1/organizations', undefined)).toBe(
+      true,
+    );
     expect(isSensitiveWebResponse('/api/v1/members/member-id', undefined)).toBe(
       true,
     );

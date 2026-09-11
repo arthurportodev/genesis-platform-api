@@ -22,6 +22,21 @@ Este documento resume conceitos implementados; as migrations são a fonte do sch
 - **Status:** `active` ou `inactive`.
 - **Constraints:** slug globalmente único em formato minúsculo adequado para URL; nome válido.
 - **Escopo:** raiz do tenant, selecionada por request pela infraestrutura implementada.
+- **Criação self-service:** um User global ativo e com email verificado cria uma
+  Organization ativa e sua Membership `owner` ativa em uma única transação. O
+  trigger canônico também cria o Pipeline default com cinco Stages; o cadastro
+  do User continua separado e não cria Organization automaticamente.
+
+## OrganizationCreationIdempotency
+
+- **Propósito:** tornar a criação self-service reiniciável e segura sob retry.
+- **Identidade lógica:** par imutável de User ator e `Idempotency-Key` UUID v4.
+- **Fingerprint:** SHA-256 da versão do contrato e do nome NFC canônico.
+- **Resultado:** snapshot mínimo de Organization e Membership `owner`; replay
+  com o mesmo fingerprint retorna os mesmos IDs, enquanto payload divergente é
+  conflito e não cria efeitos adicionais.
+- **Escopo:** global por User; não seleciona tenant e não aceita
+  `X-Organization-Id`.
 
 ## Membership
 
