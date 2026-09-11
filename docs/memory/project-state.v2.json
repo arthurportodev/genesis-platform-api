@@ -1,14 +1,14 @@
 {
   "schemaVersion": "2.0.0",
-  "stateRevision": "AUTH-V2-03-PRODUCTION-KEEP-2026-09-10",
+  "stateRevision": "AUTH-V2-04-PRODUCTION-KEEP-2026-09-10",
   "phase": {
     "id": "AUTH-V2",
     "title": "Authentication V2"
   },
   "lastCompleted": {
-    "id": "AUTH-V2-03",
-    "title": "Recuperação de senha e UX de senha",
-    "outcome": "PRODUCTION_KEEP / AUTH-V2-03_LIVE"
+    "id": "AUTH-V2-04",
+    "title": "Google + identidade única",
+    "outcome": "PRODUCTION_KEEP / AUTH-V2-04_LIVE"
   },
   "currentWork": {
     "status": "none"
@@ -19,12 +19,12 @@
   },
   "live": {
     "api": {
-      "sourceSha": "c137ff1fb81ac5fc9b94a4b52f4190786477354e",
-      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:49e52a62de67cb0a37afaa88a70d2da71404c6e8736429716922b91592453759"
+      "sourceSha": "f6a68930fcd472951ee063390c998a28988d31ff",
+      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:51590836e65d74ecb14ced583f2702b6e1d47ba77b947018c15f3e8911260bc9"
     },
     "web": {
-      "sourceSha": "8aeb682c6608ba467a47560d751ae51a271abe64",
-      "deploymentId": "dpl_AMKoVRsWx3cpzZfYyRyTLH1aHabT",
+      "sourceSha": "3db482c91cf2c767c1bcba34f7069c1b194f986a",
+      "deploymentId": "dpl_59AJgPRJoVbFgJWgpUxcv8SQMTvx",
       "domain": "https://app.agenciagenesismkt.com.br"
     }
   },
@@ -51,6 +51,14 @@
     {
       "id": "FU-TASK-VALIDATE-DATABASE-ENV",
       "summary": "Make surface-mode task validation provide the PostgreSQL DATABASE_* environment to database suites so explicit reruns are not required."
+    },
+    {
+      "id": "FU-WEB-PRODUCTION-STAGED-PROMOTION",
+      "summary": "Align Web release tooling with Vercel Production-staged semantics: materialize the approved candidate with the Production environment and no canonical domain assignment before human promotion, then validate provenance and canonical content without assuming the deployment ID remains unchanged."
+    },
+    {
+      "id": "FU-WEB-LEAD-CONTRACT-TYPE-NARROWING",
+      "summary": "Resolve the pre-existing TypeScript TS2345 in src/server/api-proxy.ts by narrowing the validated lead contract value before passing it to buildUpstreamHeaders."
     }
   ]
 }
