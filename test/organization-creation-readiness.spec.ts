@@ -16,13 +16,21 @@ describe('OperationalOrganizationCreationReadiness', () => {
 
   beforeEach(() => query.mockReset());
 
-  it('passes only with the hardened function and exact runtime allowlist', async () => {
+  it('passes only with the command surface and exact runtime allowlist', async () => {
     query.mockResolvedValue([validBoundary]);
 
     await expect(readiness().assertReady()).resolves.toBeUndefined();
     expect(query.mock.calls[0]?.[0]).toContain(
       'app_private.create_self_service_organization(uuid,uuid,text,text,text,inet,text,boolean)',
     );
+    expect(query.mock.calls[0]?.[0]).toContain(
+      'app_private.execute_organization_creation_command()',
+    );
+    expect(query.mock.calls[0]?.[0]).toContain(
+      'public.organization_creation_commands',
+    );
+    expect(query.mock.calls[0]?.[0]).toContain('has_column_privilege');
+    expect(query.mock.calls[0]?.[0]).toContain('WHERE false');
     expect(query.mock.calls[0]?.[0]).toContain(
       "'organization_creation_idempotency'",
     );

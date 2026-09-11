@@ -21,6 +21,10 @@ const PREVIOUS_ORGANIZATION_AUDIT_EVENTS = [
 const ORGANIZATION_CREATED_EVENT = 'organization.created';
 const CREATION_SIGNATURE =
   'app_private.create_self_service_organization(uuid,uuid,text,text,text,inet,text,boolean)';
+const COMMAND_TRIGGER_FUNCTION_SIGNATURE =
+  'app_private.execute_organization_creation_command()';
+const COMMAND_VIEW = 'public.organization_creation_commands';
+const COMMAND_TRIGGER = 'trg_organization_creation_commands_insert';
 
 export class CreateSelfServiceOrganizations1789245600000 implements MigrationInterface {
   name = 'CreateSelfServiceOrganizations1789245600000';
@@ -284,7 +288,85 @@ export class CreateSelfServiceOrganizations1789245600000 implements MigrationInt
       `REVOKE ALL ON FUNCTION ${CREATION_SIGNATURE} FROM PUBLIC, "${runtime}"`,
     );
     await queryRunner.query(
-      `GRANT EXECUTE ON FUNCTION ${CREATION_SIGNATURE} TO "${runtime}"`,
+      `
+        CREATE VIEW ${COMMAND_VIEW} AS
+        SELECT
+          NULL::uuid AS actor_user_id,
+          NULL::uuid AS idempotency_key,
+          NULL::text AS request_fingerprint,
+          NULL::text AS organization_name,
+          NULL::text AS slug_base,
+          NULL::inet AS ip_address,
+          NULL::text AS user_agent,
+          NULL::boolean AS create_permitted,
+          NULL::uuid AS result_organization_id,
+          NULL::text AS result_organization_name,
+          NULL::text AS result_organization_slug,
+          NULL::uuid AS result_membership_id,
+          NULL::public.membership_role_enum AS result_membership_role,
+          NULL::boolean AS result_replayed
+        WHERE false
+      `,
+    );
+    await queryRunner.query(
+      `REVOKE ALL ON TABLE ${COMMAND_VIEW} FROM PUBLIC, "${runtime}"`,
+    );
+    await queryRunner.query(`
+      CREATE FUNCTION ${COMMAND_TRIGGER_FUNCTION_SIGNATURE}
+      RETURNS trigger
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      CALLED ON NULL INPUT
+      VOLATILE
+      PARALLEL UNSAFE
+      SET search_path = pg_catalog, app_private, pg_temp
+      AS $$
+      DECLARE
+        creation_result record;
+      BEGIN
+        SELECT result.* INTO STRICT creation_result
+        FROM app_private.create_self_service_organization(
+          NEW.actor_user_id,
+          NEW.idempotency_key,
+          NEW.request_fingerprint,
+          NEW.organization_name,
+          NEW.slug_base,
+          NEW.ip_address,
+          NEW.user_agent,
+          NEW.create_permitted
+        ) AS result;
+
+        NEW.result_organization_id := creation_result.organization_id;
+        NEW.result_organization_name := creation_result.organization_name;
+        NEW.result_organization_slug := creation_result.organization_slug;
+        NEW.result_membership_id := creation_result.membership_id;
+        NEW.result_membership_role := creation_result.membership_role;
+        NEW.result_replayed := creation_result.replayed;
+        RETURN NEW;
+      END;
+      $$
+    `);
+    await queryRunner.query(
+      `REVOKE ALL ON FUNCTION ${COMMAND_TRIGGER_FUNCTION_SIGNATURE} FROM PUBLIC, "${runtime}"`,
+    );
+    await queryRunner.query(`
+      CREATE TRIGGER ${COMMAND_TRIGGER}
+      INSTEAD OF INSERT ON ${COMMAND_VIEW}
+      FOR EACH ROW
+      EXECUTE FUNCTION ${COMMAND_TRIGGER_FUNCTION_SIGNATURE}
+    `);
+    await queryRunner.query(
+      `GRANT INSERT (
+        actor_user_id, idempotency_key, request_fingerprint, organization_name,
+        slug_base, ip_address, user_agent, create_permitted
+      ) ON ${COMMAND_VIEW} TO "${runtime}"`,
+    );
+    await queryRunner.query(
+      `GRANT SELECT (
+        result_organization_id, result_organization_name,
+        result_organization_slug, result_membership_id,
+        result_membership_role, result_replayed
+      ) ON ${COMMAND_VIEW} TO "${runtime}"`,
     );
     await this.assertLeastPrivilege(queryRunner, runtime);
   }
@@ -306,7 +388,14 @@ export class CreateSelfServiceOrganizations1789245600000 implements MigrationInt
       );
     }
     await queryRunner.query(
-      `REVOKE EXECUTE ON FUNCTION ${CREATION_SIGNATURE} FROM "${runtime}"`,
+      `REVOKE ALL ON TABLE ${COMMAND_VIEW} FROM PUBLIC, "${runtime}"`,
+    );
+    await queryRunner.query(
+      `DROP TRIGGER ${COMMAND_TRIGGER} ON ${COMMAND_VIEW}`,
+    );
+    await queryRunner.query(`DROP VIEW ${COMMAND_VIEW}`);
+    await queryRunner.query(
+      `DROP FUNCTION ${COMMAND_TRIGGER_FUNCTION_SIGNATURE}`,
     );
     await queryRunner.query(`DROP FUNCTION ${CREATION_SIGNATURE}`);
     await queryRunner.query(
@@ -366,50 +455,177 @@ export class CreateSelfServiceOrganizations1789245600000 implements MigrationInt
     runtime: string,
   ): Promise<void> {
     const [row] = (await queryRunner.query(
-      `SELECT
-        has_function_privilege($1, '${CREATION_SIGNATURE}', 'EXECUTE')
-          AS "canCreate",
-        has_schema_privilege($1, 'app_private', 'CREATE')
-          AS "canCreateSchema",
-        pg_has_role($1, current_user, 'MEMBER') AS "canAssumeOwner",
-        EXISTS (
-          SELECT 1 FROM pg_catalog.unnest(ARRAY[
-            'organizations', 'memberships', 'pipelines', 'pipeline_stages',
-            'organization_creation_idempotency'
-          ]) AS central(table_name)
-          WHERE has_table_privilege(
-            $1, 'public.' || central.table_name,
-            'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'
-          ) OR has_any_column_privilege(
-            $1, 'public.' || central.table_name,
-            'INSERT,UPDATE,REFERENCES'
-          )
-        ) AS "canMutateCentral",
-        EXISTS (
-          SELECT 1
-          FROM pg_proc AS procedure
-          JOIN pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
-          CROSS JOIN LATERAL aclexplode(
-            COALESCE(procedure.proacl, acldefault('f', procedure.proowner))
-          ) AS acl
-          WHERE procedure.oid = to_regprocedure('${CREATION_SIGNATURE}')
-            AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
-        ) AS "publicCanExecute"`,
+      `WITH runtime_role AS (
+         SELECT oid FROM pg_catalog.pg_roles WHERE rolname = $1
+       ), target_functions AS (
+         SELECT procedure.*
+         FROM pg_catalog.pg_proc AS procedure
+         WHERE procedure.oid = ANY(ARRAY[
+           pg_catalog.to_regprocedure('${CREATION_SIGNATURE}'),
+           pg_catalog.to_regprocedure('${COMMAND_TRIGGER_FUNCTION_SIGNATURE}')
+         ])
+       ), command_relation AS (
+         SELECT relation.*,
+                pg_catalog.pg_get_viewdef(relation.oid, false) AS definition
+         FROM pg_catalog.pg_class AS relation
+         WHERE relation.oid = pg_catalog.to_regclass('${COMMAND_VIEW}')
+       ), command_columns AS (
+         SELECT attribute.attname, attribute.attacl
+         FROM pg_catalog.pg_attribute AS attribute
+         WHERE attribute.attrelid = pg_catalog.to_regclass('${COMMAND_VIEW}')
+           AND attribute.attnum > 0 AND NOT attribute.attisdropped
+       )
+       SELECT
+         (SELECT count(*) = 2 FROM target_functions)
+         AND NOT EXISTS (
+           SELECT 1 FROM target_functions
+           WHERE NOT prosecdef OR provolatile <> 'v' OR proparallel <> 'u'
+             OR proconfig <> ARRAY[
+               'search_path=pg_catalog, app_private, pg_temp'
+             ]::text[]
+             OR pg_catalog.pg_has_role($1, proowner, 'MEMBER')
+             OR pg_catalog.has_function_privilege($1, oid, 'EXECUTE')
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM target_functions
+           CROSS JOIN LATERAL pg_catalog.aclexplode(
+             COALESCE(proacl, pg_catalog.acldefault('f', proowner))
+           ) AS acl
+           WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
+         )
+         AND (SELECT count(*) = 1 FROM command_relation
+              WHERE relkind = 'v'
+                AND pg_catalog.strpos(definition, 'WHERE false') > 0
+                AND NOT pg_catalog.pg_has_role($1, relowner, 'MEMBER'))
+         AND (SELECT ARRAY(
+           SELECT attribute.attname
+           FROM pg_catalog.pg_attribute AS attribute
+           WHERE attribute.attrelid = pg_catalog.to_regclass('${COMMAND_VIEW}')
+             AND attribute.attnum > 0 AND NOT attribute.attisdropped
+           ORDER BY attribute.attnum
+         )) = ARRAY[
+           'actor_user_id','idempotency_key','request_fingerprint',
+           'organization_name','slug_base','ip_address','user_agent',
+           'create_permitted','result_organization_id',
+           'result_organization_name','result_organization_slug',
+           'result_membership_id','result_membership_role','result_replayed'
+         ]::name[]
+         AND NOT EXISTS (
+           SELECT 1 FROM command_relation
+           CROSS JOIN LATERAL pg_catalog.aclexplode(
+             COALESCE(relacl, '{}'::aclitem[])
+           ) AS acl
+           JOIN runtime_role ON true
+           WHERE acl.grantee IN (0, runtime_role.oid)
+         )
+         AND (SELECT count(*) = 14
+              FROM command_columns
+              CROSS JOIN LATERAL pg_catalog.aclexplode(
+                COALESCE(attacl, '{}'::aclitem[])
+              ) AS acl
+              JOIN runtime_role ON acl.grantee = runtime_role.oid
+              WHERE NOT acl.is_grantable
+                AND (
+                  (attname = ANY(ARRAY[
+                    'actor_user_id','idempotency_key','request_fingerprint',
+                    'organization_name','slug_base','ip_address','user_agent',
+                    'create_permitted'
+                  ]::name[]) AND acl.privilege_type = 'INSERT')
+                  OR
+                  (attname = ANY(ARRAY[
+                    'result_organization_id','result_organization_name',
+                    'result_organization_slug','result_membership_id',
+                    'result_membership_role','result_replayed'
+                  ]::name[]) AND acl.privilege_type = 'SELECT')
+                ))
+         AND NOT EXISTS (
+           SELECT 1 FROM command_columns
+           CROSS JOIN LATERAL pg_catalog.aclexplode(
+             COALESCE(attacl, '{}'::aclitem[])
+           ) AS acl
+           CROSS JOIN runtime_role
+           WHERE acl.grantee = 0 OR acl.grantee <> runtime_role.oid
+             OR acl.is_grantable
+             OR NOT (
+               (attname = ANY(ARRAY[
+                 'actor_user_id','idempotency_key','request_fingerprint',
+                 'organization_name','slug_base','ip_address','user_agent',
+                 'create_permitted'
+               ]::name[]) AND acl.privilege_type = 'INSERT')
+               OR
+               (attname = ANY(ARRAY[
+                 'result_organization_id','result_organization_name',
+                 'result_organization_slug','result_membership_id',
+                 'result_membership_role','result_replayed'
+               ]::name[]) AND acl.privilege_type = 'SELECT')
+             )
+         )
+         AND NOT pg_catalog.has_table_privilege(
+           $1, '${COMMAND_VIEW}',
+           'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'
+         )
+         AND NOT pg_catalog.has_any_column_privilege(
+           $1, '${COMMAND_VIEW}', 'UPDATE,REFERENCES'
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM pg_catalog.unnest(ARRAY[
+             'actor_user_id','idempotency_key','request_fingerprint',
+             'organization_name','slug_base','ip_address','user_agent',
+             'create_permitted'
+           ]) AS input(column_name)
+           WHERE NOT pg_catalog.has_column_privilege(
+             $1, '${COMMAND_VIEW}', input.column_name, 'INSERT'
+           ) OR pg_catalog.has_column_privilege(
+             $1, '${COMMAND_VIEW}', input.column_name, 'SELECT'
+           )
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM pg_catalog.unnest(ARRAY[
+             'result_organization_id','result_organization_name',
+             'result_organization_slug','result_membership_id',
+             'result_membership_role','result_replayed'
+           ]) AS output(column_name)
+           WHERE NOT pg_catalog.has_column_privilege(
+             $1, '${COMMAND_VIEW}', output.column_name, 'SELECT'
+           ) OR pg_catalog.has_column_privilege(
+             $1, '${COMMAND_VIEW}', output.column_name, 'INSERT'
+           )
+         )
+         AND (SELECT count(*) = 1
+              FROM pg_catalog.pg_trigger AS command_trigger
+              WHERE command_trigger.tgrelid =
+                      pg_catalog.to_regclass('${COMMAND_VIEW}')
+                AND NOT command_trigger.tgisinternal
+                AND command_trigger.tgname = '${COMMAND_TRIGGER}'
+                AND command_trigger.tgfoid = pg_catalog.to_regprocedure(
+                  '${COMMAND_TRIGGER_FUNCTION_SIGNATURE}'
+                )
+                AND command_trigger.tgtype = 69
+                AND command_trigger.tgenabled = 'O')
+         AND NOT EXISTS (
+           SELECT 1 FROM pg_catalog.pg_trigger AS extra_trigger
+           WHERE extra_trigger.tgrelid = pg_catalog.to_regclass('${COMMAND_VIEW}')
+             AND NOT extra_trigger.tgisinternal
+             AND extra_trigger.tgname <> '${COMMAND_TRIGGER}'
+         )
+         AND NOT pg_catalog.has_schema_privilege($1, 'app_private', 'CREATE')
+         AND NOT pg_catalog.pg_has_role($1, current_user, 'MEMBER')
+         AND NOT EXISTS (
+           SELECT 1 FROM pg_catalog.unnest(ARRAY[
+             'organizations', 'memberships', 'pipelines', 'pipeline_stages',
+             'organization_creation_idempotency'
+           ]) AS central(table_name)
+           WHERE pg_catalog.has_table_privilege(
+             $1, 'public.' || central.table_name,
+             'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'
+           ) OR pg_catalog.has_any_column_privilege(
+             $1, 'public.' || central.table_name,
+             'INSERT,UPDATE,REFERENCES'
+           )
+         ) AS ready`,
       [runtime],
-    )) as Array<{
-      canCreate: boolean;
-      canCreateSchema: boolean;
-      canAssumeOwner: boolean;
-      canMutateCentral: boolean;
-      publicCanExecute: boolean;
-    }>;
-    if (
-      row?.canCreate !== true ||
-      row.canCreateSchema ||
-      row.canAssumeOwner ||
-      row.canMutateCentral ||
-      row.publicCanExecute
-    ) {
+    )) as Array<{ ready: boolean }>;
+    if (row?.ready !== true) {
       throw new Error(
         'Runtime self-service organization boundary is not least-privilege.',
       );

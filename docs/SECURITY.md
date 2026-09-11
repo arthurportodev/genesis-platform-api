@@ -348,13 +348,17 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
 - Novas intenções têm limites fixos de 5/User/hora e 20/IP/hora. A autoridade
   idempotente permanece no PostgreSQL, portanto replay continua válido após
   restart e mesmo quando um bucket local está cheio.
-- A função privada relê User ativo e verificado, cria Organization,
-  Membership `owner`, Pipeline default, cinco Stages e audit na mesma transação.
-  Falha em qualquer etapa reverte todos os efeitos.
-- Readiness confere a assinatura e metadata `SECURITY DEFINER`, `search_path`,
-  constraints da claim/audit, índice único, revogação de `PUBLIC`, allowlist
-  executável exata, réplica pública única e ausência de DML runtime nas tabelas
-  centrais; qualquer drift fecha a rota com `503`.
+- A runtime insere somente as colunas de comando na view sem storage
+  `public.organization_creation_commands` e pode selecionar somente suas colunas
+  de resultado. O trigger `INSTEAD OF INSERT` chama a função privada, que relê o
+  User ativo e verificado, cria Organization, Membership `owner`, Pipeline
+  default, cinco Stages e audit na mesma transação. Falha em qualquer etapa
+  reverte todos os efeitos.
+- Runtime e `PUBLIC` não recebem `EXECUTE` na função interna nem na trigger
+  function. Readiness confere view zero-row, colunas e ACLs exatas, trigger,
+  metadata `SECURITY DEFINER`, owners e `search_path`, constraints da claim/audit,
+  índice único, allowlist executável exata, réplica pública única e ausência de
+  DML runtime nas tabelas centrais; qualquer drift fecha a rota com `503`.
 
 ## Autorização por papel implementada
 
