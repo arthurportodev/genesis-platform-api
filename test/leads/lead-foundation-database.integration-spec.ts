@@ -9,6 +9,7 @@ import { AddLeadOperationalReadIndexes1785606000000 } from '../../src/database/m
 import { ManageLeadCommercialCycleExpectedValue1788289200000 } from '../../src/database/migrations/1788289200000-ManageLeadCommercialCycleExpectedValue';
 import { AddCustomPipelinesAndStages1788375600000 } from '../../src/database/migrations/1788375600000-AddCustomPipelinesAndStages';
 import { AllowDefaultPipelineStageConfiguration1788811200000 } from '../../src/database/migrations/1788811200000-AllowDefaultPipelineStageConfiguration';
+import { CreateSelfServiceOrganizations1789245600000 } from '../../src/database/migrations/1789245600000-CreateSelfServiceOrganizations';
 import { OperationalInvitationActivationReadiness } from '../../src/modules/invitations/ports/invitation-activation-readiness.port';
 import { Membership } from '../../src/modules/memberships/entities/membership.entity';
 import { MembershipRole } from '../../src/modules/memberships/enums/membership-role.enum';
@@ -102,6 +103,7 @@ describe('Lead foundation database integration', () => {
       migrations: [
         AddCustomPipelinesAndStages1788375600000,
         AllowDefaultPipelineStageConfiguration1788811200000,
+        CreateSelfServiceOrganizations1789245600000,
       ],
     });
     await productionPath.initialize();
@@ -112,6 +114,7 @@ describe('Lead foundation database integration', () => {
       expect(applied.map((entry) => entry.name)).toEqual([
         'AddCustomPipelinesAndStages1788375600000',
         'AllowDefaultPipelineStageConfiguration1788811200000',
+        'CreateSelfServiceOrganizations1789245600000',
       ]);
       const [inventory] = await productionPath.query<
         Array<{ count: number; head: string }>
@@ -119,8 +122,8 @@ describe('Lead foundation database integration', () => {
         (array_agg(name ORDER BY id DESC))[1] AS head
         FROM public.migrations`);
       expect(inventory).toEqual({
-        count: 17,
-        head: 'AllowDefaultPipelineStageConfiguration1788811200000',
+        count: 18,
+        head: 'CreateSelfServiceOrganizations1789245600000',
       });
     } finally {
       await productionPath.destroy();
@@ -146,8 +149,8 @@ describe('Lead foundation database integration', () => {
       (array_agg(name ORDER BY id DESC))[1] AS head
       FROM public.migrations`);
     expect(inventory).toEqual({
-      count: 17,
-      head: 'AllowDefaultPipelineStageConfiguration1788811200000',
+      count: 18,
+      head: 'CreateSelfServiceOrganizations1789245600000',
     });
   });
 

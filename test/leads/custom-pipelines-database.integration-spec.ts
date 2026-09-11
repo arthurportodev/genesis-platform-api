@@ -9,6 +9,7 @@ import { ManageLeadCommercialPipeline1785433200000 } from '../../src/database/mi
 import { ManageLeadActivitiesFollowUp1785519600000 } from '../../src/database/migrations/1785519600000-ManageLeadActivitiesFollowUp';
 import { AddLeadOperationalReadIndexes1785606000000 } from '../../src/database/migrations/1785606000000-AddLeadOperationalReadIndexes';
 import { ManageLeadCommercialCycleExpectedValue1788289200000 } from '../../src/database/migrations/1788289200000-ManageLeadCommercialCycleExpectedValue';
+import { CreateSelfServiceOrganizations1789245600000 } from '../../src/database/migrations/1789245600000-CreateSelfServiceOrganizations';
 import {
   LeadListSort,
   LeadSource,
@@ -64,6 +65,7 @@ describe('custom pipelines database foundation', () => {
     await new AllowDefaultPipelineStageConfiguration1788811200000().up(
       migrationRunner,
     );
+    await new CreateSelfServiceOrganizations1789245600000().up(migrationRunner);
     configureIntegrationRuntimeEnvironment();
     runtime = createIntegrationRuntimeDataSource();
     await runtime.initialize();

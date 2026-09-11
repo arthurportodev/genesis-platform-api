@@ -1,4 +1,5 @@
 export enum OrganizationAuditEventType {
+  ORGANIZATION_CREATED = 'organization.created',
   INVITATION_CREATED = 'organization.invitation.created',
   INVITATION_REPLACED = 'organization.invitation.replaced',
   INVITATION_REVOKED = 'organization.invitation.revoked',

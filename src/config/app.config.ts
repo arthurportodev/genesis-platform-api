@@ -21,6 +21,7 @@ const TENANT_SCOPED_PATH_PREFIXES = [
   '/api/v1/invitations',
   '/api/v1/leads',
   '/api/v1/members',
+  '/api/v1/organizations',
 ] as const;
 
 export function buildWebCorsOptions(frontendUrl: string): CorsOptions {

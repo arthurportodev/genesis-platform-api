@@ -334,6 +334,28 @@ UPDATE`: inativação, delete e mudança de chave permanecem bloqueados até
   ativas do user autenticado, com papel persistido e ordem determinística.
 - A infraestrutura de tenant context e a autorização genérica por papel protegem as rotas administrativas de invitations, primeira entidade de domínio com `organization_id`.
 
+## Criação self-service de organização
+
+- `POST /api/v1/organizations` exige access token validado e
+  `Idempotency-Key` UUID v4, mas não aceita nem requer contexto de tenant.
+- O body contém somente `name`; whitelist rejeita campos extras. O nome é NFC,
+  trimado, limitado a 160 caracteres Unicode e rejeita caracteres de controle,
+  surrogates, separadores de linha/parágrafo e os code points bidi invisíveis
+  U+061C, U+200E/U+200F, U+202A..U+202E e U+2066..U+2069.
+- A chave pertence ao User ator. Mesmo fingerprint devolve replay persistido;
+  fingerprint diferente devolve `409` antes de qualquer nova criação e não é
+  contado como nova intenção pelo limiter process-local.
+- Novas intenções têm limites fixos de 5/User/hora e 20/IP/hora. A autoridade
+  idempotente permanece no PostgreSQL, portanto replay continua válido após
+  restart e mesmo quando um bucket local está cheio.
+- A função privada relê User ativo e verificado, cria Organization,
+  Membership `owner`, Pipeline default, cinco Stages e audit na mesma transação.
+  Falha em qualquer etapa reverte todos os efeitos.
+- Readiness confere a assinatura e metadata `SECURITY DEFINER`, `search_path`,
+  constraints da claim/audit, índice único, revogação de `PUBLIC`, allowlist
+  executável exata, réplica pública única e ausência de DML runtime nas tabelas
+  centrais; qualquer drift fecha a rota com `503`.
+
 ## Autorização por papel implementada
 
 - A cadeia tenant-scoped implementada executa `AccessTokenGuard`, `TenantContextGuard` e `RoleGuard`, nessa ordem.
