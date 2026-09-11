@@ -67,10 +67,21 @@ export class OrganizationsService {
 
     try {
       const rows = await this.dataSource.query<CreationRow[]>(
-        `SELECT * FROM app_private.create_self_service_organization(
+        `INSERT INTO public.organization_creation_commands (
+           actor_user_id, idempotency_key, request_fingerprint,
+           organization_name, slug_base, ip_address, user_agent,
+           create_permitted
+         ) VALUES (
            $1::uuid, $2::uuid, $3::text, $4::text, $5::text, $6::inet, $7::text,
            $8::boolean
-         )`,
+         )
+         RETURNING
+           result_organization_id AS organization_id,
+           result_organization_name AS organization_name,
+           result_organization_slug AS organization_slug,
+           result_membership_id AS membership_id,
+           result_membership_role AS membership_role,
+           result_replayed AS replayed`,
         [
           actorUserId,
           idempotencyKey,

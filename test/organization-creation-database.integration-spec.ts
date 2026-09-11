@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
+import { CreateSelfServiceOrganizations1789245600000 } from '../src/database/migrations/1789245600000-CreateSelfServiceOrganizations';
 import { CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS } from '../src/database/runtime-executable-functions';
 import { OperationalOrganizationCreationReadiness } from '../src/modules/organizations/ports/organization-creation-readiness.port';
 import {
@@ -585,6 +586,37 @@ describe('Self-service organization database boundary', () => {
       `);
     }
     await expect(readiness.assertReady()).resolves.toBeUndefined();
+    await owner.query(
+      `DROP TRIGGER trg_organization_creation_commands_insert
+       ON public.organization_creation_commands`,
+    );
+    try {
+      await expect(readiness.assertReady()).rejects.toMatchObject({
+        status: 503,
+      });
+    } finally {
+      await owner.query(
+        `CREATE TRIGGER trg_organization_creation_commands_insert
+         INSTEAD OF INSERT ON public.organization_creation_commands
+         FOR EACH ROW EXECUTE FUNCTION
+           app_private.execute_organization_creation_command()`,
+      );
+    }
+    await owner.query(
+      `GRANT SELECT (actor_user_id)
+       ON public.organization_creation_commands TO "${runtimeRole}"`,
+    );
+    try {
+      await expect(readiness.assertReady()).rejects.toMatchObject({
+        status: 503,
+      });
+    } finally {
+      await owner.query(
+        `REVOKE SELECT (actor_user_id)
+         ON public.organization_creation_commands FROM "${runtimeRole}"`,
+      );
+    }
+    await expect(readiness.assertReady()).resolves.toBeUndefined();
 
     const userId = await createVerifiedUser('hostile-path');
     const queryRunner = runtime.createQueryRunner();
@@ -592,9 +624,17 @@ describe('Self-service organization database boundary', () => {
     try {
       await queryRunner.query(`SET search_path = public, pg_temp`);
       const rows = (await queryRunner.query(
-        `SELECT * FROM app_private.create_self_service_organization(
-          $1,$2,$3,$4,$5,$6,$7,$8
-        )`,
+        `INSERT INTO public.organization_creation_commands (
+          actor_user_id,idempotency_key,request_fingerprint,organization_name,
+          slug_base,ip_address,user_agent,create_permitted
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        RETURNING
+          result_organization_id AS organization_id,
+          result_organization_name AS organization_name,
+          result_organization_slug AS organization_slug,
+          result_membership_id AS membership_id,
+          result_membership_role AS membership_role,
+          result_replayed AS replayed`,
         [
           userId,
           randomUUID(),
@@ -610,6 +650,209 @@ describe('Self-service organization database boundary', () => {
     } finally {
       await queryRunner.release();
     }
+  });
+
+  it('exposes only the approved command columns and exact trigger boundary', async () => {
+    const runtimeRole = process.env.DATABASE_RUNTIME_ROLE!;
+    const [boundary] = await owner.query<
+      Array<{
+        relationKind: string;
+        visibleRows: number;
+        triggerCount: number;
+        runtimeInternalExecute: boolean;
+        runtimeTriggerExecute: boolean;
+        publicFunctionExecute: boolean;
+        publicViewAccess: boolean;
+        broadViewPrivilege: boolean;
+        forbiddenColumnPrivilege: boolean;
+        inputPrivileges: boolean;
+        outputPrivileges: boolean;
+        columnAclCount: number;
+      }>
+    >(
+      `WITH target_functions AS (
+         SELECT procedure.* FROM pg_proc AS procedure
+         WHERE procedure.oid = ANY(ARRAY[
+           'app_private.create_self_service_organization(uuid,uuid,text,text,text,inet,text,boolean)'::regprocedure,
+           'app_private.execute_organization_creation_command()'::regprocedure
+         ])
+       ), command_columns AS (
+         SELECT attribute.attname, attribute.attacl
+         FROM pg_attribute AS attribute
+         WHERE attribute.attrelid = 'public.organization_creation_commands'::regclass
+           AND attribute.attnum > 0 AND NOT attribute.attisdropped
+       )
+       SELECT
+         (SELECT relkind FROM pg_class
+          WHERE oid = 'public.organization_creation_commands'::regclass)
+           AS "relationKind",
+         (SELECT count(*)::int FROM public.organization_creation_commands)
+           AS "visibleRows",
+         (SELECT count(*)::int FROM pg_trigger
+          WHERE tgrelid = 'public.organization_creation_commands'::regclass
+            AND NOT tgisinternal
+            AND tgname = 'trg_organization_creation_commands_insert'
+            AND tgfoid =
+              'app_private.execute_organization_creation_command()'::regprocedure
+            AND tgtype = 69 AND tgenabled = 'O') AS "triggerCount",
+         has_function_privilege(
+           $1,
+           'app_private.create_self_service_organization(uuid,uuid,text,text,text,inet,text,boolean)',
+           'EXECUTE'
+         ) AS "runtimeInternalExecute",
+         has_function_privilege(
+           $1, 'app_private.execute_organization_creation_command()', 'EXECUTE'
+         ) AS "runtimeTriggerExecute",
+         EXISTS(
+           SELECT 1 FROM target_functions
+           CROSS JOIN LATERAL aclexplode(
+             COALESCE(proacl, acldefault('f', proowner))
+           ) AS acl
+           WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
+         ) AS "publicFunctionExecute",
+         EXISTS(
+           SELECT 1 FROM pg_class AS relation
+           CROSS JOIN LATERAL aclexplode(
+             COALESCE(relation.relacl, '{}'::aclitem[])
+           ) AS acl
+           WHERE relation.oid = 'public.organization_creation_commands'::regclass
+             AND acl.grantee = 0
+         ) OR EXISTS(
+           SELECT 1 FROM command_columns
+           CROSS JOIN LATERAL aclexplode(
+             COALESCE(attacl, '{}'::aclitem[])
+           ) AS acl
+           WHERE acl.grantee = 0
+         ) AS "publicViewAccess",
+         has_table_privilege(
+           $1, 'public.organization_creation_commands',
+           'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'
+         ) AS "broadViewPrivilege",
+         has_any_column_privilege(
+           $1, 'public.organization_creation_commands', 'UPDATE,REFERENCES'
+         ) AS "forbiddenColumnPrivilege",
+         NOT EXISTS(
+           SELECT 1 FROM unnest(ARRAY[
+             'actor_user_id','idempotency_key','request_fingerprint',
+             'organization_name','slug_base','ip_address','user_agent',
+             'create_permitted'
+           ]) AS input(column_name)
+           WHERE NOT has_column_privilege(
+             $1, 'public.organization_creation_commands', input.column_name,
+             'INSERT'
+           ) OR has_column_privilege(
+             $1, 'public.organization_creation_commands', input.column_name,
+             'SELECT'
+           )
+         ) AS "inputPrivileges",
+         NOT EXISTS(
+           SELECT 1 FROM unnest(ARRAY[
+             'result_organization_id','result_organization_name',
+             'result_organization_slug','result_membership_id',
+             'result_membership_role','result_replayed'
+           ]) AS output(column_name)
+           WHERE NOT has_column_privilege(
+             $1, 'public.organization_creation_commands', output.column_name,
+             'SELECT'
+           ) OR has_column_privilege(
+             $1, 'public.organization_creation_commands', output.column_name,
+             'INSERT'
+           )
+         ) AS "outputPrivileges",
+         (SELECT count(*)::int FROM command_columns
+          CROSS JOIN LATERAL aclexplode(
+            COALESCE(attacl, '{}'::aclitem[])
+          ) AS acl
+          WHERE acl.grantee = (SELECT oid FROM pg_roles WHERE rolname = $1)
+            AND NOT acl.is_grantable) AS "columnAclCount"`,
+      [runtimeRole],
+    );
+    expect(boundary).toEqual({
+      relationKind: 'v',
+      visibleRows: 0,
+      triggerCount: 1,
+      runtimeInternalExecute: false,
+      runtimeTriggerExecute: false,
+      publicFunctionExecute: false,
+      publicViewAccess: false,
+      broadViewPrivilege: false,
+      forbiddenColumnPrivilege: false,
+      inputPrivileges: true,
+      outputPrivileges: true,
+      columnAclCount: 14,
+    });
+
+    await expect(
+      runtime.query(
+        'SELECT actor_user_id FROM public.organization_creation_commands',
+      ),
+    ).rejects.toMatchObject({ driverError: { code: '42501' } });
+    await expect(
+      runtime.query(
+        'SELECT result_organization_id FROM public.organization_creation_commands',
+      ),
+    ).resolves.toEqual([]);
+    await expect(
+      runtime.query(
+        `INSERT INTO public.organization_creation_commands (
+           result_organization_id
+         ) VALUES ($1::uuid)`,
+        [randomUUID()],
+      ),
+    ).rejects.toMatchObject({ driverError: { code: '42501' } });
+    await expect(
+      runtime.query(
+        `UPDATE public.organization_creation_commands
+         SET organization_name = 'forbidden'`,
+      ),
+    ).rejects.toBeDefined();
+    await expect(
+      runtime.query('DELETE FROM public.organization_creation_commands'),
+    ).rejects.toBeDefined();
+    await expect(
+      runtime.query('TRUNCATE public.organization_creation_commands'),
+    ).rejects.toBeDefined();
+    await expect(
+      runtime.query(
+        `SELECT * FROM app_private.create_self_service_organization(
+           $1,$2,$3,$4,$5,$6,$7,$8
+         )`,
+        [
+          randomUUID(),
+          randomUUID(),
+          'a'.repeat(64),
+          'Forbidden',
+          'forbidden',
+          '127.0.0.1',
+          'integration-test',
+          true,
+        ],
+      ),
+    ).rejects.toMatchObject({ driverError: { code: '42501' } });
+    await expect(
+      runtime.query(
+        'SELECT app_private.execute_organization_creation_command()',
+      ),
+    ).rejects.toMatchObject({ driverError: { code: '42501' } });
+  });
+
+  it('refuses destructive down after organization creation facts exist', async () => {
+    const queryRunner = owner.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      await expect(
+        new CreateSelfServiceOrganizations1789245600000().down(queryRunner),
+      ).rejects.toThrow(
+        'Self-service organization rollback requires empty creation data.',
+      );
+    } finally {
+      await queryRunner.release();
+    }
+    await expect(
+      runtime.query(
+        'SELECT result_organization_id FROM public.organization_creation_commands',
+      ),
+    ).resolves.toEqual([]);
   });
 
   async function createVerifiedUser(label: string): Promise<string> {
@@ -635,7 +878,7 @@ describe('Self-service organization database boundary', () => {
           WHERE datname = pg_catalog.current_database()
             AND pid <> pg_catalog.pg_backend_pid()
             AND wait_event_type = 'Lock'
-            AND query LIKE '%create_self_service_organization%'
+            AND query LIKE '%organization_creation_commands%'
         ) AS blocked
       `);
       if (state?.blocked) return;
@@ -690,9 +933,17 @@ describe('Self-service organization database boundary', () => {
     createPermitted = true,
   ): Promise<CreationRow[]> {
     return runtime.query(
-      `SELECT * FROM app_private.create_self_service_organization(
-        $1,$2,$3,$4,$5,$6,$7,$8
-      )`,
+      `INSERT INTO public.organization_creation_commands (
+        actor_user_id,idempotency_key,request_fingerprint,organization_name,
+        slug_base,ip_address,user_agent,create_permitted
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      RETURNING
+        result_organization_id AS organization_id,
+        result_organization_name AS organization_name,
+        result_organization_slug AS organization_slug,
+        result_membership_id AS membership_id,
+        result_membership_role AS membership_role,
+        result_replayed AS replayed`,
       [
         userId,
         key,

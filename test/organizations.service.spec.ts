@@ -62,7 +62,9 @@ describe('OrganizationsService', () => {
       idempotencyKey,
     );
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('create_self_service_organization'),
+      expect.stringContaining(
+        'INSERT INTO public.organization_creation_commands',
+      ),
       [
         actorUserId,
         idempotencyKey,

@@ -35,17 +35,12 @@ export const AUTH_GOOGLE_RUNTIME_EXECUTABLE_FUNCTIONS = [
   'app_private.touch_google_identity(uuid,text)',
 ] as const;
 
-export const ORGANIZATION_CREATION_RUNTIME_EXECUTABLE_FUNCTIONS = [
-  'app_private.create_self_service_organization(uuid,uuid,text,text,text,inet,text,boolean)',
-] as const;
-
 export const CURRENT_RUNTIME_EXECUTABLE_FUNCTIONS = [
   ...RUNTIME_EXECUTABLE_FUNCTIONS,
   ...LEAD_RUNTIME_EXECUTABLE_FUNCTIONS,
   ...AUTH_REGISTRATION_RUNTIME_EXECUTABLE_FUNCTIONS,
   ...AUTH_PASSWORD_RESET_RUNTIME_EXECUTABLE_FUNCTIONS,
   ...AUTH_GOOGLE_RUNTIME_EXECUTABLE_FUNCTIONS,
-  ...ORGANIZATION_CREATION_RUNTIME_EXECUTABLE_FUNCTIONS,
   'app_private.archive_pipeline_stage(uuid,uuid,uuid,uuid,uuid,bigint)',
   'app_private.create_pipeline(uuid,uuid,uuid,uuid,text,jsonb)',
   'app_private.create_pipeline_stage(uuid,uuid,uuid,uuid,uuid,bigint,text)',

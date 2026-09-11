@@ -167,12 +167,14 @@ lock continua bloqueando update, delete e mudança da chave do user, mas é
 compatível com `KEY SHARE` usado pelas foreign keys de novas linhas de
 auditoria. A função de invitations permanece separada e conserva `FOR UPDATE`.
 
-A criação self-service de Organization atravessa exclusivamente
-`app_private.create_self_service_organization`. A função bloqueia e relê o User
-global, reclama a chave idempotente, cria Organization e Membership `owner`,
-deixa o trigger existente criar o Pipeline default e seus cinco Stages e grava
-`organization.created` na mesma transação. A role runtime recebe somente
-`EXECUTE` nessa assinatura, sem DML direto nas tabelas centrais.
+A criação self-service de Organization insere um comando na view sem storage
+`public.organization_creation_commands`. Um trigger `INSTEAD OF INSERT` chama a
+função interna `app_private.create_self_service_organization`, que bloqueia e
+relê o User global, reclama a chave idempotente, cria Organization e Membership
+`owner`, deixa o trigger existente criar o Pipeline default e seus cinco Stages
+e grava `organization.created` na mesma transação. A role runtime recebe somente
+`INSERT` nas colunas de entrada e `SELECT` nas colunas de resultado da view, sem
+`EXECUTE` nas funções internas e sem DML direto nas tabelas centrais.
 
 ## Autenticação implementada
 

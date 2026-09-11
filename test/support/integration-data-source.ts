@@ -54,6 +54,7 @@ export function createIntegrationDataSource(
   options: {
     includePasswordReset?: boolean;
     includeGoogleIdentity?: boolean;
+    includeOrganizationCreationBase?: boolean;
     includeOrganizationCreation?: boolean;
   } = {},
 ): DataSource {
@@ -83,7 +84,8 @@ export function createIntegrationDataSource(
       DeliverInvitationAcceptance1785087600000,
       ActivateNewInvitationUser1785174000000,
       ManageMembershipOwnership1785260400000,
-      ...(options.includeOrganizationCreation
+      ...(options.includeOrganizationCreationBase ||
+      options.includeOrganizationCreation
         ? [
             CreateLeadFoundation1785346800000,
             ManageLeadCommercialPipeline1785433200000,
@@ -96,10 +98,14 @@ export function createIntegrationDataSource(
         : []),
       CreateAuthEmailChallenges1788900000000,
       DeliverPublicEmailVerification1788986400000,
-      ...(options.includePasswordReset || options.includeOrganizationCreation
+      ...(options.includePasswordReset ||
+      options.includeOrganizationCreationBase ||
+      options.includeOrganizationCreation
         ? [DeliverPasswordReset1789072800000]
         : []),
-      ...(options.includeGoogleIdentity || options.includeOrganizationCreation
+      ...(options.includeGoogleIdentity ||
+      options.includeOrganizationCreationBase ||
+      options.includeOrganizationCreation
         ? [DeliverGoogleIdentity1789159200000]
         : []),
       ...(options.includeOrganizationCreation
