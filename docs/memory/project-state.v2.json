@@ -1,14 +1,14 @@
 {
   "schemaVersion": "2.0.0",
-  "stateRevision": "AUTH-V2-04-PRODUCTION-KEEP-2026-09-10",
+  "stateRevision": "ONBOARDING-V1-01-PRODUCTION-KEEP-2026-09-11",
   "phase": {
-    "id": "AUTH-V2",
-    "title": "Authentication V2"
+    "id": "ONBOARDING-V1",
+    "title": "Onboarding self-service"
   },
   "lastCompleted": {
-    "id": "AUTH-V2-04",
-    "title": "Google + identidade única",
-    "outcome": "PRODUCTION_KEEP / AUTH-V2-04_LIVE"
+    "id": "ONBOARDING-V1-01",
+    "title": "Criação self-service de organização",
+    "outcome": "PRODUCTION_KEEP / ONBOARDING-V1-01_LIVE"
   },
   "currentWork": {
     "status": "none"
@@ -19,12 +19,12 @@
   },
   "live": {
     "api": {
-      "sourceSha": "f6a68930fcd472951ee063390c998a28988d31ff",
-      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:51590836e65d74ecb14ced583f2702b6e1d47ba77b947018c15f3e8911260bc9"
+      "sourceSha": "d2bf1e1d2e1a1cfa8f4181d2b14f739f72a4e85d",
+      "image": "ghcr.io/arthurportodev/genesis-platform-api@sha256:1e2572e4248d5f533a740bd885cdadee5f5431023e8e44f58f449153daf248f0"
     },
     "web": {
-      "sourceSha": "3db482c91cf2c767c1bcba34f7069c1b194f986a",
-      "deploymentId": "dpl_59AJgPRJoVbFgJWgpUxcv8SQMTvx",
+      "sourceSha": "74d1ce2d7c3b0a430a78c7ff2e11e35ad678f3cb",
+      "deploymentId": "dpl_DKswBb4CWdmMYvdELYNUqJWn7hmV",
       "domain": "https://app.agenciagenesismkt.com.br"
     }
   },

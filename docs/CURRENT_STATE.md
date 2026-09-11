@@ -4,19 +4,19 @@
 
 This is a deterministic projection. Edit [project-state.v2.json](memory/project-state.v2.json), then regenerate this file.
 
-- **State revision:** AUTH-V2-04-PRODUCTION-KEEP-2026-09-10
-- **Phase:** AUTH-V2 — Authentication V2
-- **Last completed product work:** AUTH-V2-04 — Google + identidade única
-- **Outcome:** PRODUCTION_KEEP / AUTH-V2-04_LIVE
+- **State revision:** ONBOARDING-V1-01-PRODUCTION-KEEP-2026-09-11
+- **Phase:** ONBOARDING-V1 — Onboarding self-service
+- **Last completed product work:** ONBOARDING-V1-01 — Criação self-service de organização
+- **Outcome:** PRODUCTION_KEEP / ONBOARDING-V1-01_LIVE
 - **Current work:** none
 - **Next task:** undecided — PENDING-PRODUCT-PRIORITIZATION
 
 ## Live bindings
 
-- **API source:** f6a68930fcd472951ee063390c998a28988d31ff
-- **API image:** ghcr.io/arthurportodev/genesis-platform-api@sha256:51590836e65d74ecb14ced583f2702b6e1d47ba77b947018c15f3e8911260bc9
-- **Web source:** 3db482c91cf2c767c1bcba34f7069c1b194f986a
-- **Web deployment:** dpl_59AJgPRJoVbFgJWgpUxcv8SQMTvx
+- **API source:** d2bf1e1d2e1a1cfa8f4181d2b14f739f72a4e85d
+- **API image:** ghcr.io/arthurportodev/genesis-platform-api@sha256:1e2572e4248d5f533a740bd885cdadee5f5431023e8e44f58f449153daf248f0
+- **Web source:** 74d1ce2d7c3b0a430a78c7ff2e11e35ad678f3cb
+- **Web deployment:** dpl_DKswBb4CWdmMYvdELYNUqJWn7hmV
 - **Web domain:** https://app.agenciagenesismkt.com.br
 
 ## Open blockers
