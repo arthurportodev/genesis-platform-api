@@ -995,3 +995,20 @@ runtime e concorrência otimista não foram alterados.
   alteração de autorização, deploy ou operação remota.
 - Operação: manifesto e Task Packet V2 ignorados; fallback documental aplicado
   porque as Skills Genesis não estavam expostas pelo runtime.
+
+## ONBOARDING-V1-01 — criação self-service de organização
+
+Em 11 de setembro de 2026, a Feature Delivery e sua correção de compatibilidade
+foram concluídas antes da primeira aplicação do schema 18 em Production. A API
+terminou o rollout Level 2 em KEEP com a migration
+`CreateSelfServiceOrganizations1789245600000`; o Web foi materializado como
+Production-staged, promovido após autorização humana e encerrou em KEEP.
+
+O product smoke real passou, incluindo criação atômica e idempotente de uma
+Organization ACTIVE, Membership ACTIVE/OWNER, slug collision-safe, audit
+`organization.created`, Pipeline Comercial e os cinco Stages default (Novo,
+Qualificação, Diagnóstico, Proposta e Negociação). O rebootstrap selecionou a
+nova Organization e abriu `/app`; refresh e novo login preservaram o contexto.
+Os invariantes confirmaram uma única Organization, Membership e intenção, sem
+duplicatas. O resultado terminal foi `PRODUCTION_KEEP /
+ONBOARDING-V1-01_LIVE`.
